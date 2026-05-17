@@ -52,9 +52,10 @@ def _load_track2p_registration_backend() -> tuple[Any, Any]:
         raise ImportError(
             "Track2p-compatible affine/rigid registration requires the 'track2p' "
             "package and its ITK/elastix stack. Install that backend for "
-            "transform_type='affine' or transform_type='rigid', or request "
-            "transform_type='fov-translation' explicitly to use BayesCaTrack's "
-            "integer FOV phase-correlation fallback."
+            "transform_type='rigid', or use transform_type='affine' to fall back "
+            "to BayesCaTrack's NumPy FOV-affine registration when Track2p is "
+            "unavailable. Request transform_type='fov-translation' explicitly "
+            "for the integer phase-correlation fallback."
         ) from exc
     return reg_img_elastix, itk_reg_all_roi
 
@@ -95,6 +96,20 @@ def _fov_translation_registered_plane(
     )
 
 
+def _fov_affine_registered_plane(
+    reference_plane: CalciumPlaneData,
+    moving_plane: CalciumPlaneData,
+) -> CalciumPlaneData:
+    from bayescatrack.fov_affine_registration import (
+        register_measurement_plane_by_fov_affine,
+    )
+
+    return register_measurement_plane_by_fov_affine(
+        reference_plane,
+        moving_plane,
+    ).registered_measurement_plane
+
+
 def register_plane_pair(
     reference_plane: CalciumPlaneData,
     moving_plane: CalciumPlaneData,
@@ -113,7 +128,13 @@ def register_plane_pair(
     if transform_type == "fov-translation":
         return _fov_translation_registered_plane(reference_plane, moving_plane)
 
-    reg_img_elastix, itk_reg_all_roi = _load_track2p_registration_backend()
+    try:
+        reg_img_elastix, itk_reg_all_roi = _load_track2p_registration_backend()
+    except ImportError:
+        if transform_type == "affine":
+            return _fov_affine_registered_plane(reference_plane, moving_plane)
+        raise
+
     registered_fov, reg_params = reg_img_elastix(
         np.asarray(reference_plane.fov),
         np.asarray(moving_plane.fov),
