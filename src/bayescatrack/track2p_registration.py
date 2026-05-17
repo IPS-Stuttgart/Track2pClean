@@ -120,15 +120,27 @@ def _fov_translation_registered_plane(
 def _fov_affine_registered_plane(
     reference_plane: CalciumPlaneData,
     moving_plane: CalciumPlaneData,
+    *,
+    transform_type: str = "fov-affine",
+    reason: str = "explicit transform_type='fov-affine'",
 ) -> CalciumPlaneData:
     from bayescatrack.fov_affine_registration import (
         register_measurement_plane_by_fov_affine,
     )
 
-    return register_measurement_plane_by_fov_affine(
+    registered_plane = register_measurement_plane_by_fov_affine(
         reference_plane,
         moving_plane,
     ).registered_measurement_plane
+    registration_reason = str(
+        (registered_plane.ops or {}).get("registration_backend_reason") or reason
+    )
+    return _with_registration_backend_metadata(
+        registered_plane,
+        backend="fov-affine",
+        transform_type=transform_type,
+        reason=registration_reason,
+    )
 
 
 def _nonrigid_registered_plane(
