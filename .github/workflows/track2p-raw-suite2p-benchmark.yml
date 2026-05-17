@@ -34,6 +34,16 @@ on:
         type: boolean
         default: true
         required: true
+      run_fov_affine_soft_iou_only:
+        description: "Run only the FOV-affine registered-IoU soft-overlap sweep"
+        type: boolean
+        default: false
+        required: true
+      soft_iou_radii:
+        description: "Comma-separated soft-IoU radii for FOV-affine sweep"
+        type: string
+        default: "1,2,3"
+        required: true
       exclude_subjects:
         description: "Comma-separated manual-GT subjects to exclude"
         type: string
@@ -134,7 +144,41 @@ jobs:
       - name: Add raw-data diagnostics to job summary
         run: cat results/raw_suite2p_roi_diagnostics.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Run FOV-affine soft-IoU registered-IoU sweep
+        if: ${{ inputs.run_fov_affine_soft_iou_only }}
+        env:
+          MAX_GAP: ${{ inputs.max_gap }}
+          SOFT_IOU_RADII: ${{ inputs.soft_iou_radii }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra radii <<< "$SOFT_IOU_RADII"
+          compare_args=()
+          for radius in "${radii[@]}"; do
+            radius="$(echo "$radius" | xargs)"
+            if [[ -z "$radius" ]]; then
+              continue
+            fi
+            output="results/global_registered_iou_fov_affine_soft_iou_r${radius}_gap${MAX_GAP}.csv"
+            python -m bayescatrack.experiments.track2p_fov_affine_benchmark \
+              --data "${{ steps.prep.outputs.data_root }}" \
+              --reference "${{ steps.prep.outputs.reference_root }}" \
+              --reference-kind "${{ steps.prep.outputs.reference_kind }}" \
+              --input-format suite2p \
+              --include-non-cells \
+              --no-include-behavior \
+              --method global-assignment \
+              --cost registered-iou \
+              --max-gap "$MAX_GAP" \
+              --soft-iou-radius "$radius" \
+              --format csv \
+              --output "$output"
+            compare_args+=(--input "FOV-affine soft-r${radius}=${output}")
+          done
+          bayescatrack benchmark compare "${compare_args[@]}" --output results/fov_affine_soft_iou_comparison.md
+          bayescatrack benchmark compare "${compare_args[@]}" --format csv --output results/fov_affine_soft_iou_comparison.csv
+
       - name: Run Track2p baseline
+        if: ${{ !inputs.run_fov_affine_soft_iou_only }}
         run: |
           bayescatrack benchmark track2p \
             --data "${{ steps.prep.outputs.data_root }}" \
@@ -148,6 +192,7 @@ jobs:
             --output results/track2p_baseline.csv
 
       - name: Run registered-IoU global assignment
+        if: ${{ !inputs.run_fov_affine_soft_iou_only }}
         run: |
           bayescatrack benchmark track2p \
             --data "${{ steps.prep.outputs.data_root }}" \
@@ -164,6 +209,7 @@ jobs:
             --output results/global_registered_iou_gap${{ inputs.max_gap }}.csv
 
       - name: Run ROI-aware global assignment
+        if: ${{ !inputs.run_fov_affine_soft_iou_only }}
         run: |
           bayescatrack benchmark track2p \
             --data "${{ steps.prep.outputs.data_root }}" \
@@ -182,7 +228,7 @@ jobs:
             --output results/global_roi_aware_gap${{ inputs.max_gap }}.csv
 
       - name: Run calibrated LOSO global assignment
-        if: inputs.run_calibrated_loso
+        if: ${{ inputs.run_calibrated_loso && !inputs.run_fov_affine_soft_iou_only }}
         run: |
           bayescatrack benchmark track2p \
             --data "${{ steps.prep.outputs.data_root }}" \
@@ -200,6 +246,7 @@ jobs:
             --output results/global_calibrated_loso_gap${{ inputs.max_gap }}.csv
 
       - name: Aggregate benchmark comparison
+        if: ${{ !inputs.run_fov_affine_soft_iou_only }}
         env:
           MAX_GAP: ${{ inputs.max_gap }}
           RUN_LOSO: ${{ inputs.run_calibrated_loso }}
@@ -214,6 +261,19 @@ jobs:
           fi
           bayescatrack benchmark compare "${args[@]}" --output results/comparison.md
           bayescatrack benchmark compare "${args[@]}" --format csv --output results/comparison.csv
+
+      - name: Add FOV-affine soft-IoU comparison to job summary
+        if: always() && hashFiles('results/fov_affine_soft_iou_comparison.md') != ''
+        run: |
+          {
+            echo "## FOV-affine soft-IoU registered-IoU sweep"
+            echo "Included usable manual-GT subjects: ${{ steps.prep.outputs.included }}"
+            echo "Excluded by user: ${{ steps.prep.outputs.excluded_by_user }}"
+            echo "include_non_cells: true"
+            echo "max_gap: ${{ inputs.max_gap }}"
+            echo "soft_iou_radii: ${{ inputs.soft_iou_radii }}"
+            cat results/fov_affine_soft_iou_comparison.md
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Add comparison to job summary
         if: always() && hashFiles('results/comparison.md') != ''
