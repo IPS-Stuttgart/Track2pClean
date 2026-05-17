@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # pylint: disable=protected-access
 
+from bayescatrack.experiments import oracle_affine_registration_qa
 from bayescatrack.experiments import registration_qa_report
 from bayescatrack.experiments import track2p_benchmark
 from bayescatrack.experiments import track2p_calibration_export
@@ -67,3 +68,15 @@ def test_registration_qa_cli_accepts_fov_translation_transform():
     config = registration_qa_report._config_from_args(args)
 
     assert config.transform_type == "fov-translation"
+
+
+def test_oracle_affine_qa_cli_accepts_fov_translation_transform():
+    args = oracle_affine_registration_qa.build_arg_parser().parse_args(
+        ["--data", "dataset", "--transform-type", "fov-translation"]
+    )
+
+    config = oracle_affine_registration_qa.OracleAffineQAConfig(
+        registration=registration_qa_report._config_from_args(args)
+    )
+
+    assert config.registration.transform_type == "fov-translation"
