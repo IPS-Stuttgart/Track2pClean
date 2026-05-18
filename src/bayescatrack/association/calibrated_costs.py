@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.association._pyrecest_feature_compat import (
     CalibratedPairwiseAssociationModel,
     FeatureTransform,

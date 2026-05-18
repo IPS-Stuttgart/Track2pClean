@@ -10,9 +10,7 @@ from bayescatrack.core._roi_stat_features import SPLIT_ROI_STAT_FEATURES
 from . import calibrated_costs as _calibrated_costs
 
 _ORIGINAL_DEFAULT_ASSOCIATION_FEATURES = _calibrated_costs.DEFAULT_ASSOCIATION_FEATURES
-_ORIGINAL_FEATURE_TRANSFORMS_FOR_ATTR = (
-    "_bayescatrack_original_feature_transforms_for"
-)
+_ORIGINAL_FEATURE_TRANSFORMS_FOR_ATTR = "_bayescatrack_original_feature_transforms_for"
 
 _patched_default_association_features: list[str] = []
 for _feature_name in _ORIGINAL_DEFAULT_ASSOCIATION_FEATURES:
@@ -21,7 +19,9 @@ for _feature_name in _ORIGINAL_DEFAULT_ASSOCIATION_FEATURES:
     if _feature_name == "cell_probability_cost":
         _patched_default_association_features.extend(SPLIT_ROI_STAT_FEATURES)
     _patched_default_association_features.append(_feature_name)
-DEFAULT_ASSOCIATION_FEATURES: tuple[str, ...] = tuple(_patched_default_association_features)
+DEFAULT_ASSOCIATION_FEATURES: tuple[str, ...] = tuple(
+    _patched_default_association_features
+)
 
 if not hasattr(_calibrated_costs, _ORIGINAL_FEATURE_TRANSFORMS_FOR_ATTR):
     setattr(
@@ -55,9 +55,11 @@ def _replace_default_feature_tuple(function: Any) -> None:
     defaults = getattr(function, "__defaults__", None)
     if defaults:
         function.__defaults__ = tuple(
-            DEFAULT_ASSOCIATION_FEATURES
-            if value == _ORIGINAL_DEFAULT_ASSOCIATION_FEATURES
-            else value
+            (
+                DEFAULT_ASSOCIATION_FEATURES
+                if value == _ORIGINAL_DEFAULT_ASSOCIATION_FEATURES
+                else value
+            )
             for value in defaults
         )
     keyword_defaults = getattr(function, "__kwdefaults__", None)
@@ -82,7 +84,9 @@ def _patch_dataclass_default(class_object: Any, field_name: str) -> None:
 
 setattr(_calibrated_costs, "SPLIT_ROI_STAT_FEATURES", SPLIT_ROI_STAT_FEATURES)
 setattr(_calibrated_costs, "DEFAULT_ASSOCIATION_FEATURES", DEFAULT_ASSOCIATION_FEATURES)
-_calibrated_costs._feature_transforms_for = _feature_transforms_for  # pylint: disable=protected-access
+_calibrated_costs._feature_transforms_for = (
+    _feature_transforms_for  # pylint: disable=protected-access
+)
 
 _patch_dataclass_default(_calibrated_costs.CalibratedAssociationModel, "feature_names")
 _patch_dataclass_default(_calibrated_costs.ReferenceTrainingOptions, "feature_names")

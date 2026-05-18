@@ -5,7 +5,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-
 from bayescatrack.experiments import solver_prior_tuning as tuning
 from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
 from bayescatrack.experiments.track2p_solver_prior_tuning import (

@@ -29,5 +29,7 @@ def activity_tie_breaker_cost_matrix(
         raise KeyError(f"Pairwise components do not contain {component_name!r}")
     values = np.asarray(pairwise_components[component_name], dtype=float)
     if values.ndim != 2:
-        raise ValueError(f"Pairwise component {component_name!r} must be two-dimensional")
+        raise ValueError(
+            f"Pairwise component {component_name!r} must be two-dimensional"
+        )
     return weight * np.nan_to_num(values, nan=0.5, posinf=1.0e6, neginf=0.0)

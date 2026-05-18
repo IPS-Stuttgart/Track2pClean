@@ -66,7 +66,9 @@ def register_measurement_plane_by_nonrigid_fov(
     del unused_options
     method = _canonical_nonrigid_transform(transform_type)
     if reference_plane.fov is None or measurement_plane.fov is None:
-        raise ValueError("Both planes must provide FOV images for nonrigid registration")
+        raise ValueError(
+            "Both planes must provide FOV images for nonrigid registration"
+        )
     if grid_shape[0] < 2 or grid_shape[1] < 2:
         raise ValueError("grid_shape must contain at least two tiles per axis")
     if tps_regularization < 0.0:
@@ -154,24 +156,34 @@ def register_measurement_plane_by_nonrigid_fov(
     )
     registered_fov = _warp_image_bilinear(measurement, inverse_y, inverse_x)
     ops = {} if measurement_plane.ops is None else dict(measurement_plane.ops)
-    valid_fraction = float(np.mean(_valid_sample_mask(inverse_y, inverse_x, measurement.shape)))
+    valid_fraction = float(
+        np.mean(_valid_sample_mask(inverse_y, inverse_x, measurement.shape))
+    )
     ops.update(
         {
             "registration_backend": "bayescatrack-nonrigid",
             "registration_transform_type": method,
             "registration_backend_reason": "image-driven dense inverse FOV warp",
             "nonrigid_registration_backend": backend,
-            "nonrigid_registration_grid_shape": tuple(int(value) for value in grid_shape),
+            "nonrigid_registration_grid_shape": tuple(
+                int(value) for value in grid_shape
+            ),
             "nonrigid_registration_landmarks": int(reference_xy.shape[0]),
             "nonrigid_registration_fit_rmse": float(estimate.fit_rmse),
-            "nonrigid_registration_fallback_translation": bool(estimate.fallback_translation),
+            "nonrigid_registration_fallback_translation": bool(
+                estimate.fallback_translation
+            ),
             "nonrigid_registration_inverse_warp_valid_fraction": valid_fraction,
             "nonrigid_registration_tps_regularization": float(tps_regularization),
-            "nonrigid_registration_bspline_regularization": float(bspline_regularization),
+            "nonrigid_registration_bspline_regularization": float(
+                bspline_regularization
+            ),
             "nonrigid_registration_bspline_control_shape": tuple(
                 int(value) for value in bspline_control_shape
             ),
-            "nonrigid_registration_optical_flow_iterations": int(optical_flow_iterations),
+            "nonrigid_registration_optical_flow_iterations": int(
+                optical_flow_iterations
+            ),
             "nonrigid_registration_optical_flow_alpha": float(optical_flow_alpha),
         }
     )
@@ -188,7 +200,9 @@ def register_measurement_plane_by_nonrigid_fov(
         transform_type=method,
         landmark_points_reference_xy=reference_xy,
         landmark_points_measurement_xy=measurement_xy,
-        landmark_peak_correlations=np.asarray(estimate.tile_peak_correlation, dtype=float),
+        landmark_peak_correlations=np.asarray(
+            estimate.tile_peak_correlation, dtype=float
+        ),
         inverse_y=inverse_y,
         inverse_x=inverse_x,
     )
@@ -242,7 +256,9 @@ def _idw_inverse_grid(
 ) -> tuple[np.ndarray, np.ndarray]:
     yy, xx = np.indices(output_shape, dtype=float)
     query = np.column_stack((xx.ravel(), yy.ravel()))
-    displacement = np.asarray(measurement_xy, dtype=float) - np.asarray(reference_xy, dtype=float)
+    displacement = np.asarray(measurement_xy, dtype=float) - np.asarray(
+        reference_xy, dtype=float
+    )
     result = np.empty_like(query)
     chunk_size = 65536
     smooth_scale = _landmark_spacing(reference_xy)
@@ -256,10 +272,13 @@ def _idw_inverse_grid(
             selected_dist2 = dist2[rows, keep]
             selected_disp = displacement[keep]
             weights = 1.0 / np.maximum(selected_dist2 + smooth_scale**2, 1.0e-6)
-            disp = np.sum(weights[:, :, None] * selected_disp, axis=1) / np.sum(
-                weights,
-                axis=1,
-            )[:, None]
+            disp = (
+                np.sum(weights[:, :, None] * selected_disp, axis=1)
+                / np.sum(
+                    weights,
+                    axis=1,
+                )[:, None]
+            )
         else:
             weights = 1.0 / np.maximum(dist2 + smooth_scale**2, 1.0e-6)
             disp = weights @ displacement / np.sum(weights, axis=1)[:, None]
@@ -413,7 +432,9 @@ def _bspline_control_positions(
     return np.column_stack((x, y))
 
 
-def _sample_scalar_field_bilinear(field: np.ndarray, points_xy: np.ndarray) -> np.ndarray:
+def _sample_scalar_field_bilinear(
+    field: np.ndarray, points_xy: np.ndarray
+) -> np.ndarray:
     field = np.asarray(field, dtype=float)
     x = np.clip(points_xy[:, 0], 0.0, max(field.shape[1] - 1, 0))
     y = np.clip(points_xy[:, 1], 0.0, max(field.shape[0] - 1, 0))
@@ -437,8 +458,7 @@ def _cubic_bspline_weights(fraction: np.ndarray) -> np.ndarray:
         (
             ((1.0 - fraction) ** 3) / 6.0,
             (3.0 * fraction**3 - 6.0 * fraction**2 + 4.0) / 6.0,
-            (-3.0 * fraction**3 + 3.0 * fraction**2 + 3.0 * fraction + 1.0)
-            / 6.0,
+            (-3.0 * fraction**3 + 3.0 * fraction**2 + 3.0 * fraction + 1.0) / 6.0,
             fraction**3 / 6.0,
         )
     )
@@ -473,7 +493,9 @@ def _tps_inverse_grid(
         )
 
 
-def _fit_tps(points_xy: np.ndarray, values: np.ndarray, regularization: float) -> np.ndarray:
+def _fit_tps(
+    points_xy: np.ndarray, values: np.ndarray, regularization: float
+) -> np.ndarray:
     points_xy = np.asarray(points_xy, dtype=float)
     values = np.asarray(values, dtype=float)
     distances = np.linalg.norm(points_xy[:, None, :] - points_xy[None, :, :], axis=2)
@@ -492,7 +514,9 @@ def _fit_tps(points_xy: np.ndarray, values: np.ndarray, regularization: float) -
     return np.linalg.solve(system, rhs)
 
 
-def _eval_tps(query_xy: np.ndarray, control_xy: np.ndarray, params: np.ndarray) -> np.ndarray:
+def _eval_tps(
+    query_xy: np.ndarray, control_xy: np.ndarray, params: np.ndarray
+) -> np.ndarray:
     n_control = control_xy.shape[0]
     distances = np.linalg.norm(query_xy[:, None, :] - control_xy[None, :, :], axis=2)
     polynomial = np.column_stack((np.ones(query_xy.shape[0], dtype=float), query_xy))
@@ -550,7 +574,9 @@ def _warp_mask_stack_nearest(
     return result
 
 
-def _warp_image_bilinear(image: np.ndarray, inverse_y: np.ndarray, inverse_x: np.ndarray) -> np.ndarray:
+def _warp_image_bilinear(
+    image: np.ndarray, inverse_y: np.ndarray, inverse_x: np.ndarray
+) -> np.ndarray:
     image = np.asarray(image, dtype=float)
     output = np.zeros(inverse_y.shape, dtype=float)
     valid = _valid_sample_mask(inverse_y, inverse_x, image.shape)
@@ -573,7 +599,9 @@ def _warp_image_bilinear(image: np.ndarray, inverse_y: np.ndarray, inverse_x: np
     return output
 
 
-def _valid_sample_mask(inverse_y: np.ndarray, inverse_x: np.ndarray, image_shape: tuple[int, int]) -> np.ndarray:
+def _valid_sample_mask(
+    inverse_y: np.ndarray, inverse_x: np.ndarray, image_shape: tuple[int, int]
+) -> np.ndarray:
     return (
         np.isfinite(inverse_y)
         & np.isfinite(inverse_x)

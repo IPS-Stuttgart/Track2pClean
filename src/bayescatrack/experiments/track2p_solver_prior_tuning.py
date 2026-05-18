@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
-
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     fit_logistic_association_model,

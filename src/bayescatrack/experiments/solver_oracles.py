@@ -6,7 +6,6 @@ from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
 import numpy as np
-
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,

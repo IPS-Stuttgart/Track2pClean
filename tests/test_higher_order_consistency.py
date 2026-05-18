@@ -2,7 +2,6 @@
 
 import numpy as np
 import numpy.testing as npt
-
 from bayescatrack.association.higher_order_consistency import (
     HigherOrderConsistencyConfig,
     apply_higher_order_consistency,

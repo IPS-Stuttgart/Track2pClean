@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack import CalciumPlaneData
 from bayescatrack.fov_affine_registration import (
     apply_affine_roi_mask_warp,
@@ -12,7 +11,9 @@ from bayescatrack.fov_registration import apply_integer_image_translation
 from bayescatrack.track2p_registration import register_plane_pair
 
 
-def _spot_image(shape: tuple[int, int], centers: tuple[tuple[int, int], ...]) -> np.ndarray:
+def _spot_image(
+    shape: tuple[int, int], centers: tuple[tuple[int, int], ...]
+) -> np.ndarray:
     image = np.zeros(shape, dtype=float)
     for y, x in centers:
         y0, y1 = y - 1, y + 2
@@ -35,7 +36,9 @@ def test_apply_affine_roi_mask_warp_applies_translation():
 
 def test_fov_affine_estimate_contains_residual_metadata():
     reference = _spot_image((96, 96), ((20, 20), (20, 75), (72, 24), (75, 78)))
-    measurement = apply_integer_image_translation(reference, [-4, 5], output_shape=(96, 96))
+    measurement = apply_integer_image_translation(
+        reference, [-4, 5], output_shape=(96, 96)
+    )
 
     estimate = estimate_fov_affine_transform(reference, measurement)
 
@@ -47,33 +50,60 @@ def test_fov_affine_estimate_contains_residual_metadata():
 
 def test_fov_affine_registration_recovers_translation_like_fallback():
     reference_fov = _spot_image((96, 96), ((20, 22), (28, 72), (68, 28), (72, 75)))
-    measurement_fov = apply_integer_image_translation(reference_fov, [-3, 4], output_shape=(96, 96))
+    measurement_fov = apply_integer_image_translation(
+        reference_fov, [-3, 4], output_shape=(96, 96)
+    )
     reference_mask = reference_fov[None, :, :] > 0.0
-    measurement_mask = apply_integer_image_translation(
-        reference_mask[0], [-3, 4], output_shape=(96, 96)
-    )[None, :, :] > 0
-    reference_plane = CalciumPlaneData(reference_mask, fov=reference_fov, source="reference")
-    measurement_plane = CalciumPlaneData(measurement_mask, fov=measurement_fov, source="measurement")
+    measurement_mask = (
+        apply_integer_image_translation(
+            reference_mask[0], [-3, 4], output_shape=(96, 96)
+        )[None, :, :]
+        > 0
+    )
+    reference_plane = CalciumPlaneData(
+        reference_mask, fov=reference_fov, source="reference"
+    )
+    measurement_plane = CalciumPlaneData(
+        measurement_mask, fov=measurement_fov, source="measurement"
+    )
 
-    registration = register_measurement_plane_by_fov_affine(reference_plane, measurement_plane)
+    registration = register_measurement_plane_by_fov_affine(
+        reference_plane, measurement_plane
+    )
     registered_mask = registration.registered_measurement_plane.roi_masks[0]
 
-    assert registration.registered_measurement_plane.ops["registration_backend"] == "fov-affine"
-    assert np.count_nonzero(registered_mask & reference_mask[0]) >= np.count_nonzero(reference_mask[0]) // 2
+    assert (
+        registration.registered_measurement_plane.ops["registration_backend"]
+        == "fov-affine"
+    )
+    assert (
+        np.count_nonzero(registered_mask & reference_mask[0])
+        >= np.count_nonzero(reference_mask[0]) // 2
+    )
 
 
 def test_register_plane_pair_affine_falls_back_to_fov_affine(monkeypatch):
     reference_fov = _spot_image((96, 96), ((20, 20), (24, 72), (70, 30), (74, 78)))
-    measurement_fov = apply_integer_image_translation(reference_fov, [2, -3], output_shape=(96, 96))
-    reference_plane = CalciumPlaneData(reference_fov[None, :, :] > 0.0, fov=reference_fov, source="reference")
-    measurement_plane = CalciumPlaneData(measurement_fov[None, :, :] > 0.0, fov=measurement_fov, source="measurement")
+    measurement_fov = apply_integer_image_translation(
+        reference_fov, [2, -3], output_shape=(96, 96)
+    )
+    reference_plane = CalciumPlaneData(
+        reference_fov[None, :, :] > 0.0, fov=reference_fov, source="reference"
+    )
+    measurement_plane = CalciumPlaneData(
+        measurement_fov[None, :, :] > 0.0, fov=measurement_fov, source="measurement"
+    )
 
     import bayescatrack.track2p_registration as registration_module
 
     def _raise_import_error():
         raise ImportError("missing Track2p backend")
 
-    monkeypatch.setattr(registration_module, "_load_track2p_registration_backend", _raise_import_error)
-    registered = register_plane_pair(reference_plane, measurement_plane, transform_type="affine")
+    monkeypatch.setattr(
+        registration_module, "_load_track2p_registration_backend", _raise_import_error
+    )
+    registered = register_plane_pair(
+        reference_plane, measurement_plane, transform_type="affine"
+    )
 
     assert registered.ops["registration_backend"] == "fov-affine"

@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.experiments.track2p_benchmark import (
     _config_from_args,
@@ -19,7 +18,9 @@ from bayescatrack.experiments.track2p_benchmark import (
     run_track2p_benchmark,
     write_results,
 )
-from bayescatrack.fov_affine_registration import register_measurement_plane_by_fov_affine
+from bayescatrack.fov_affine_registration import (
+    register_measurement_plane_by_fov_affine,
+)
 
 
 def _register_plane_pair_with_fov_affine(
@@ -45,9 +46,17 @@ def _register_plane_pair_with_fov_affine(
 def _enable_fov_affine_choice(parser: Any) -> None:
     for action in parser._actions:  # pylint: disable=protected-access
         if action.dest == "transform_type":
-            action.choices = ("affine", "rigid", "fov-affine", "fov-translation", "none")
+            action.choices = (
+                "affine",
+                "rigid",
+                "fov-affine",
+                "fov-translation",
+                "none",
+            )
             action.default = "fov-affine"
-            action.help = "Registration transform; fov-affine is the default for this wrapper"
+            action.help = (
+                "Registration transform; fov-affine is the default for this wrapper"
+            )
             return
     raise RuntimeError("Could not find --transform-type action")
 
@@ -108,7 +117,9 @@ def _soft_iou_pairwise_cost_matrix(
     iou_cost = -np.log(np.clip(effective_iou, similarity_epsilon, 1.0))
     total_cost = np.asarray(base_cost, dtype=float) + iou_weight * iou_cost
     if "gated" in components:
-        total_cost = np.where(np.asarray(components["gated"], dtype=bool), large_cost, total_cost)
+        total_cost = np.where(
+            np.asarray(components["gated"], dtype=bool), large_cost, total_cost
+        )
     total_cost = _ensure_finite_cost_matrix(total_cost, large_cost=large_cost)
 
     if return_components:
@@ -173,11 +184,19 @@ def _pairwise_iou_matrix_sparse(
     measurement_masks: np.ndarray,
 ) -> np.ndarray:
     try:
-        from scipy import sparse  # type: ignore[import-not-found]  # pylint: disable=import-outside-toplevel
-    except ImportError:  # pragma: no cover - SciPy is available in benchmark environments.
-        from bayescatrack.core import _bridge_impl  # pylint: disable=import-outside-toplevel,protected-access
+        from scipy import (
+            sparse,  # type: ignore[import-not-found]  # pylint: disable=import-outside-toplevel
+        )
+    except (
+        ImportError
+    ):  # pragma: no cover - SciPy is available in benchmark environments.
+        from bayescatrack.core import (  # pylint: disable=import-outside-toplevel,protected-access
+            _bridge_impl,
+        )
 
-        return _bridge_impl._pairwise_iou_matrix(reference_masks, measurement_masks)  # pylint: disable=protected-access
+        return _bridge_impl._pairwise_iou_matrix(
+            reference_masks, measurement_masks
+        )  # pylint: disable=protected-access
 
     reference_array = np.asarray(reference_masks) > 0
     measurement_array = np.asarray(measurement_masks) > 0
@@ -244,7 +263,9 @@ def _dilate_mask_stack(masks: np.ndarray, *, radius: int) -> np.ndarray:
     return result
 
 
-def _ensure_finite_cost_matrix(cost_matrix: np.ndarray, *, large_cost: float) -> np.ndarray:
+def _ensure_finite_cost_matrix(
+    cost_matrix: np.ndarray, *, large_cost: float
+) -> np.ndarray:
     sanitized = np.asarray(cost_matrix, dtype=float).copy()
     invalid = ~np.isfinite(sanitized)
     if np.any(invalid):

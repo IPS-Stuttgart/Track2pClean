@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
 from bayescatrack.association.monotone_ranker import (
     MonotoneRankerTrainingOptions,

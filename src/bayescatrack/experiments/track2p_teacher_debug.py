@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
-
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     _load_pyrecest_multisession_solver,
@@ -28,7 +27,6 @@ from bayescatrack.association.pyrecest_global_assignment import (
 )
 from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.evaluation.track2p_metrics import normalize_track_matrix
-from bayescatrack.reference import Track2pReference, load_track2p_reference
 
 # pylint: disable=protected-access,too-many-locals,too-many-arguments,too-many-branches
 from bayescatrack.experiments.track2p_benchmark import (
@@ -44,6 +42,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     _validate_reference_roi_indices,
     discover_subject_dirs,
 )
+from bayescatrack.reference import Track2pReference, load_track2p_reference
 
 CSVValue = str | int | float | bool | None
 CSVRow = dict[str, CSVValue]
@@ -165,9 +164,14 @@ class _BayesEdgeCostLookup:
         gap_penalty: float,
         cost_threshold: float | None,
     ) -> "_BayesEdgeCostLookup":
-        loaded_to_suite2p = tuple(_suite2p_roi_indices_for_session(session) for session in sessions)
+        loaded_to_suite2p = tuple(
+            _suite2p_roi_indices_for_session(session) for session in sessions
+        )
         suite2p_to_loaded = tuple(
-            {int(suite2p_index): int(loaded_index) for loaded_index, suite2p_index in enumerate(indices)}
+            {
+                int(suite2p_index): int(loaded_index)
+                for loaded_index, suite2p_index in enumerate(indices)
+            }
             for indices in loaded_to_suite2p
         )
         return cls(
@@ -202,7 +206,10 @@ class _BayesEdgeCostLookup:
         cost = float(cost_matrix[loaded_a, loaded_b])
         adjusted_cost = float(adjusted[loaded_a, loaded_b])
         candidate_present = bool(np.isfinite(adjusted_cost))
-        eligible = bool(candidate_present and (self.cost_threshold is None or adjusted_cost <= self.cost_threshold))
+        eligible = bool(
+            candidate_present
+            and (self.cost_threshold is None or adjusted_cost <= self.cost_threshold)
+        )
 
         row = adjusted[loaded_a, :]
         col = adjusted[:, loaded_b]
@@ -234,37 +241,59 @@ class _BayesEdgeCostLookup:
         }
 
 
-def run_track2p_teacher_debug(config: Track2pTeacherDebugConfig) -> Track2pTeacherDebugReport:
+def run_track2p_teacher_debug(
+    config: Track2pTeacherDebugConfig,
+) -> Track2pTeacherDebugReport:
     """Run teacher/debug diagnostics and write the configured CSV outputs."""
 
     benchmark = config.benchmark
     if benchmark.method != "global-assignment":
-        raise ValueError("Track2p teacher/debug diagnostics require method='global-assignment'")
+        raise ValueError(
+            "Track2p teacher/debug diagnostics require method='global-assignment'"
+        )
     if benchmark.split != "subject":
-        raise ValueError("Track2p teacher/debug diagnostics currently support split='subject' only")
+        raise ValueError(
+            "Track2p teacher/debug diagnostics currently support split='subject' only"
+        )
     if benchmark.cost == "calibrated":
-        raise ValueError("cost='calibrated' needs LOSO training and is not supported by this diagnostic")
+        raise ValueError(
+            "cost='calibrated' needs LOSO training and is not supported by this diagnostic"
+        )
     if config.cost_scale <= 0.0 or not np.isfinite(config.cost_scale):
         raise ValueError("cost_scale must be a positive finite number")
 
     subject_dirs = discover_subject_dirs(benchmark.data)
     if not subject_dirs:
-        raise ValueError(f"No Track2p-style subject directories found under {benchmark.data}")
+        raise ValueError(
+            f"No Track2p-style subject directories found under {benchmark.data}"
+        )
 
     detail_rows: list[CSVRow] = []
     metric_rows: list[CSVRow] = []
-    progress = ProgressReporter(len(subject_dirs), enabled=benchmark.progress, label="teacher-debug")
+    progress = ProgressReporter(
+        len(subject_dirs), enabled=benchmark.progress, label="teacher-debug"
+    )
     for subject_dir in subject_dirs:
         progress.step(f"running {subject_dir.name}")
-        manual_reference = _load_reference_for_subject(subject_dir, data_root=benchmark.data, config=benchmark)
-        _validate_reference_for_benchmark(manual_reference, subject_dir=subject_dir, config=benchmark)
+        manual_reference = _load_reference_for_subject(
+            subject_dir, data_root=benchmark.data, config=benchmark
+        )
+        _validate_reference_for_benchmark(
+            manual_reference, subject_dir=subject_dir, config=benchmark
+        )
         if manual_reference.source != GROUND_TRUTH_REFERENCE_SOURCE:
-            raise ValueError("Teacher/debug diagnostics require independent manual ground truth")
+            raise ValueError(
+                "Teacher/debug diagnostics require independent manual ground truth"
+            )
 
         sessions = _load_subject_sessions(subject_dir, benchmark)
         _validate_reference_roi_indices(manual_reference, sessions)
-        track2p_reference = _load_track2p_teacher_reference(subject_dir, data_root=benchmark.data, config=config)
-        _validate_teacher_reference(track2p_reference, manual_reference, subject=subject_dir.name)
+        track2p_reference = _load_track2p_teacher_reference(
+            subject_dir, data_root=benchmark.data, config=config
+        )
+        _validate_teacher_reference(
+            track2p_reference, manual_reference, subject=subject_dir.name
+        )
 
         base_costs = build_registered_pairwise_costs(
             sessions,
@@ -288,7 +317,9 @@ def run_track2p_teacher_debug(config: Track2pTeacherDebugConfig) -> Track2pTeach
         )
         bayes_matrix = tracks_to_suite2p_index_matrix(solver_result.tracks, sessions)
         track2p_matrix = normalize_track_matrix(track2p_reference.suite2p_indices)
-        manual_matrix = _reference_matrix(manual_reference, curated_only=benchmark.curated_only)
+        manual_matrix = _reference_matrix(
+            manual_reference, curated_only=benchmark.curated_only
+        )
 
         metric_rows.extend(
             _subject_metric_rows(
@@ -321,17 +352,25 @@ def run_track2p_teacher_debug(config: Track2pTeacherDebugConfig) -> Track2pTeach
         )
 
     summary_rows = _summary_rows(detail_rows)
-    report = Track2pTeacherDebugReport(tuple(detail_rows), tuple(summary_rows), tuple(metric_rows))
+    report = Track2pTeacherDebugReport(
+        tuple(detail_rows), tuple(summary_rows), tuple(metric_rows)
+    )
     write_teacher_debug_report(report, config)
     return report
 
 
-def write_teacher_debug_report(report: Track2pTeacherDebugReport, config: Track2pTeacherDebugConfig) -> dict[str, Path]:
+def write_teacher_debug_report(
+    report: Track2pTeacherDebugReport, config: Track2pTeacherDebugConfig
+) -> dict[str, Path]:
     """Write detail, summary, and actor metric CSV files."""
 
     output_dir = Path(config.output_dir)
-    details_path = config.details_output or output_dir / "teacher_disagreement_edges.csv"
-    summary_path = config.summary_output or output_dir / "teacher_disagreement_summary.csv"
+    details_path = (
+        config.details_output or output_dir / "teacher_disagreement_edges.csv"
+    )
+    summary_path = (
+        config.summary_output or output_dir / "teacher_disagreement_summary.csv"
+    )
     metrics_path = config.metrics_output or output_dir / "teacher_actor_metrics.csv"
     _write_csv(details_path, report.detail_rows, DETAIL_FIELDNAMES)
     _write_csv(summary_path, report.summary_rows, SUMMARY_FIELDNAMES)
@@ -346,16 +385,52 @@ def build_arg_parser() -> argparse.ArgumentParser:
         prog="bayescatrack benchmark track2p-teacher-debug",
         description="Export Bayes/Track2p/manual-GT disagreement diagnostics.",
     )
-    parser.add_argument("--data", required=True, type=Path, help="Track2p dataset root or one subject directory")
-    parser.add_argument("--plane", dest="plane_name", default="plane0", help="Plane name such as plane0")
-    parser.add_argument("--input-format", default="auto", choices=("auto", "suite2p", "npy"))
-    parser.add_argument("--reference", type=Path, default=None, help="Manual-GT CSV/root for the benchmark reference")
-    parser.add_argument("--reference-kind", default="manual-gt", choices=("auto", "manual-gt"))
-    parser.add_argument("--track2p-reference", type=Path, default=None, help="Optional Track2p output root/folder used as teacher")
-    parser.add_argument("--curated-only", action="store_true", help="Evaluate only curated manual-GT reference tracks")
-    parser.add_argument("--seed-session", type=int, default=0, help="Seed session used by benchmark scoring")
-    parser.add_argument("--restrict-to-reference-seed-rois", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--cost", default="registered-iou", choices=("registered-iou", "roi-aware"))
+    parser.add_argument(
+        "--data",
+        required=True,
+        type=Path,
+        help="Track2p dataset root or one subject directory",
+    )
+    parser.add_argument(
+        "--plane", dest="plane_name", default="plane0", help="Plane name such as plane0"
+    )
+    parser.add_argument(
+        "--input-format", default="auto", choices=("auto", "suite2p", "npy")
+    )
+    parser.add_argument(
+        "--reference",
+        type=Path,
+        default=None,
+        help="Manual-GT CSV/root for the benchmark reference",
+    )
+    parser.add_argument(
+        "--reference-kind", default="manual-gt", choices=("auto", "manual-gt")
+    )
+    parser.add_argument(
+        "--track2p-reference",
+        type=Path,
+        default=None,
+        help="Optional Track2p output root/folder used as teacher",
+    )
+    parser.add_argument(
+        "--curated-only",
+        action="store_true",
+        help="Evaluate only curated manual-GT reference tracks",
+    )
+    parser.add_argument(
+        "--seed-session",
+        type=int,
+        default=0,
+        help="Seed session used by benchmark scoring",
+    )
+    parser.add_argument(
+        "--restrict-to-reference-seed-rois",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--cost", default="registered-iou", choices=("registered-iou", "roi-aware")
+    )
     parser.add_argument("--max-gap", type=int, default=2)
     parser.add_argument(
         "--transform-type",
@@ -368,20 +443,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gap-penalty", type=float, default=1.0)
     parser.add_argument("--cost-threshold", type=float, default=6.0)
     parser.add_argument("--no-cost-threshold", action="store_true")
-    parser.add_argument("--cost-scale", type=float, default=1.0, help="Multiplier applied to Bayes pairwise costs before solving")
-    parser.add_argument("--edge-scope", choices=("solver", "consecutive", "all-pairs"), default="solver")
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--cost-scale",
+        type=float,
+        default=1.0,
+        help="Multiplier applied to Bayes pairwise costs before solving",
+    )
+    parser.add_argument(
+        "--edge-scope", choices=("solver", "consecutive", "all-pairs"), default="solver"
+    )
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--include-non-cells", action="store_true")
     parser.add_argument("--cell-probability-threshold", type=float, default=0.5)
     parser.add_argument("--weighted-masks", action="store_true")
-    parser.add_argument("--exclude-overlapping-pixels", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--exclude-overlapping-pixels",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument("--order", default="xy", choices=("xy", "yx"))
     parser.add_argument("--weighted-centroids", action="store_true")
     parser.add_argument("--velocity-variance", type=float, default=25.0)
     parser.add_argument("--regularization", type=float, default=1.0e-6)
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
-    parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--output-dir", type=Path, default=Path("track2p_teacher_debug"))
+    parser.add_argument(
+        "--progress", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--output-dir", type=Path, default=Path("track2p_teacher_debug")
+    )
     parser.add_argument("--details-output", type=Path, default=None)
     parser.add_argument("--summary-output", type=Path, default=None)
     parser.add_argument("--metrics-output", type=Path, default=None)
@@ -449,21 +541,35 @@ def _config_from_args(args: argparse.Namespace) -> Track2pTeacherDebugConfig:
     )
 
 
-def _load_track2p_teacher_reference(subject_dir: Path, *, data_root: Path, config: Track2pTeacherDebugConfig) -> Track2pReference:
+def _load_track2p_teacher_reference(
+    subject_dir: Path, *, data_root: Path, config: Track2pTeacherDebugConfig
+) -> Track2pReference:
     reference_root = config.track2p_reference
     if reference_root is None:
         reference_root = subject_dir / "track2p"
-    reference_path = _resolve_track2p_reference_path(subject_dir, data_root=data_root, reference_root=reference_root)
+    reference_path = _resolve_track2p_reference_path(
+        subject_dir, data_root=data_root, reference_root=reference_root
+    )
     if reference_path is None:
-        raise FileNotFoundError(f"Could not resolve Track2p teacher output for subject {subject_dir.name!r} under {reference_root}")
-    return load_track2p_reference(reference_path, plane_name=config.benchmark.plane_name)
+        raise FileNotFoundError(
+            f"Could not resolve Track2p teacher output for subject {subject_dir.name!r} under {reference_root}"
+        )
+    return load_track2p_reference(
+        reference_path, plane_name=config.benchmark.plane_name
+    )
 
 
-def _validate_teacher_reference(teacher: Track2pReference, manual: Track2pReference, *, subject: str) -> None:
+def _validate_teacher_reference(
+    teacher: Track2pReference, manual: Track2pReference, *, subject: str
+) -> None:
     if teacher.n_sessions != manual.n_sessions:
-        raise ValueError(f"Subject {subject!r}: Track2p teacher has {teacher.n_sessions} sessions, manual GT has {manual.n_sessions}")
+        raise ValueError(
+            f"Subject {subject!r}: Track2p teacher has {teacher.n_sessions} sessions, manual GT has {manual.n_sessions}"
+        )
     if teacher.session_names != manual.session_names:
-        raise ValueError(f"Subject {subject!r}: Track2p teacher session order does not match manual GT")
+        raise ValueError(
+            f"Subject {subject!r}: Track2p teacher session order does not match manual GT"
+        )
 
 
 def _subject_metric_rows(
@@ -480,7 +586,9 @@ def _subject_metric_rows(
         ("track2p", track2p_matrix, "Track2p teacher output"),
         ("bayescatrack", bayes_matrix, "BayesCaTrack global assignment"),
     ):
-        scores = _score_prediction_against_reference(matrix, manual_reference, config=benchmark)
+        scores = _score_prediction_against_reference(
+            matrix, manual_reference, config=benchmark
+        )
         row: CSVRow = {
             "subject": subject,
             "actor": actor,
@@ -511,7 +619,9 @@ def _subject_detail_rows(
     config: Track2pTeacherDebugConfig,
     lookup: _BayesEdgeCostLookup,
 ) -> list[CSVRow]:
-    edges = _edge_pairs(manual_matrix.shape[1], max_gap=benchmark.max_gap, scope=config.edge_scope)
+    edges = _edge_pairs(
+        manual_matrix.shape[1], max_gap=benchmark.max_gap, scope=config.edge_scope
+    )
     manual_edges = _track_matrix_edge_set(manual_matrix, edges=edges)
     track2p_edges = _track_matrix_edge_set(track2p_matrix, edges=edges)
     bayes_edges = _track_matrix_edge_set(bayes_matrix, edges=edges)
@@ -565,17 +675,25 @@ def classify_teacher_edge(manual_gt: bool, track2p: bool, bayescatrack: bool) ->
     return "unobserved_true_negative"
 
 
-def _edge_pairs(n_sessions: int, *, max_gap: int, scope: EdgeScope) -> tuple[tuple[int, int], ...]:
+def _edge_pairs(
+    n_sessions: int, *, max_gap: int, scope: EdgeScope
+) -> tuple[tuple[int, int], ...]:
     if scope == "solver":
         return session_edge_pairs(n_sessions, max_gap=max_gap)
     if scope == "consecutive":
         return tuple((idx, idx + 1) for idx in range(max(0, n_sessions - 1)))
     if scope == "all-pairs":
-        return tuple((i, j) for i in range(max(0, n_sessions - 1)) for j in range(i + 1, n_sessions))
+        return tuple(
+            (i, j)
+            for i in range(max(0, n_sessions - 1))
+            for j in range(i + 1, n_sessions)
+        )
     raise ValueError(f"Unsupported edge scope: {scope!r}")
 
 
-def _track_matrix_edge_set(track_matrix: np.ndarray, *, edges: Sequence[tuple[int, int]]) -> set[EdgeKey]:
+def _track_matrix_edge_set(
+    track_matrix: np.ndarray, *, edges: Sequence[tuple[int, int]]
+) -> set[EdgeKey]:
     matrix = normalize_track_matrix(track_matrix)
     edge_set: set[EdgeKey] = set()
     for row in matrix:
@@ -591,7 +709,9 @@ def _summary_rows(detail_rows: Sequence[CSVRow]) -> tuple[CSVRow, ...]:
     groups: dict[tuple[Any, ...], list[CSVRow]] = defaultdict(list)
     for row in detail_rows:
         groups[("dataset", "", "", "", "", "", "", row["category"])].append(row)
-        groups[("subject", row["subject"], "", "", "", "", "", row["category"])].append(row)
+        groups[("subject", row["subject"], "", "", "", "", "", row["category"])].append(
+            row
+        )
         groups[
             (
                 "session_edge",
@@ -606,8 +726,19 @@ def _summary_rows(detail_rows: Sequence[CSVRow]) -> tuple[CSVRow, ...]:
         ].append(row)
 
     summary: list[CSVRow] = []
-    for key, rows in sorted(groups.items(), key=lambda item: tuple(str(value) for value in item[0])):
-        scope, subject, session_a, session_b, session_a_name, session_b_name, gap, category = key
+    for key, rows in sorted(
+        groups.items(), key=lambda item: tuple(str(value) for value in item[0])
+    ):
+        (
+            scope,
+            subject,
+            session_a,
+            session_b,
+            session_a_name,
+            session_b_name,
+            gap,
+            category,
+        ) = key
         summary.append(
             {
                 "scope": scope,
@@ -619,20 +750,39 @@ def _summary_rows(detail_rows: Sequence[CSVRow]) -> tuple[CSVRow, ...]:
                 "gap": gap,
                 "category": category,
                 "count": len(rows),
-                "manual_gt_label": _uniform_or_blank(row["manual_gt_label"] for row in rows),
-                "track2p_label": _uniform_or_blank(row["track2p_label"] for row in rows),
-                "bayescatrack_label": _uniform_or_blank(row["bayescatrack_label"] for row in rows),
-                "candidate_present_rate": _mean_bool(row.get("bayes_candidate_present") for row in rows),
-                "eligible_after_threshold_rate": _mean_bool(row.get("bayes_eligible_after_threshold") for row in rows),
-                "median_bayes_row_rank": _median_numeric(row.get("bayes_row_rank") for row in rows),
-                "median_bayes_adjusted_cost": _median_numeric(row.get("bayes_adjusted_cost") for row in rows),
+                "manual_gt_label": _uniform_or_blank(
+                    row["manual_gt_label"] for row in rows
+                ),
+                "track2p_label": _uniform_or_blank(
+                    row["track2p_label"] for row in rows
+                ),
+                "bayescatrack_label": _uniform_or_blank(
+                    row["bayescatrack_label"] for row in rows
+                ),
+                "candidate_present_rate": _mean_bool(
+                    row.get("bayes_candidate_present") for row in rows
+                ),
+                "eligible_after_threshold_rate": _mean_bool(
+                    row.get("bayes_eligible_after_threshold") for row in rows
+                ),
+                "median_bayes_row_rank": _median_numeric(
+                    row.get("bayes_row_rank") for row in rows
+                ),
+                "median_bayes_adjusted_cost": _median_numeric(
+                    row.get("bayes_adjusted_cost") for row in rows
+                ),
             }
         )
     return tuple(summary)
 
 
-def _scale_pairwise_costs(pairwise_costs: Mapping[tuple[int, int], np.ndarray], scale: float) -> dict[tuple[int, int], np.ndarray]:
-    return {edge: np.asarray(costs, dtype=float) * float(scale) for edge, costs in pairwise_costs.items()}
+def _scale_pairwise_costs(
+    pairwise_costs: Mapping[tuple[int, int], np.ndarray], scale: float
+) -> dict[tuple[int, int], np.ndarray]:
+    return {
+        edge: np.asarray(costs, dtype=float) * float(scale)
+        for edge, costs in pairwise_costs.items()
+    }
 
 
 def _suite2p_roi_indices_for_session(session: Track2pSession) -> np.ndarray:
@@ -699,7 +849,12 @@ def _mean_bool(values: Iterable[CSVValue]) -> float | None:
 
 
 def _median_numeric(values: Iterable[CSVValue]) -> float | None:
-    numeric_values = [float(value) for value in values if isinstance(value, (int, float, np.integer, np.floating)) and np.isfinite(float(value))]
+    numeric_values = [
+        float(value)
+        for value in values
+        if isinstance(value, (int, float, np.integer, np.floating))
+        and np.isfinite(float(value))
+    ]
     if not numeric_values:
         return None
     return float(np.median(np.asarray(numeric_values, dtype=float)))
