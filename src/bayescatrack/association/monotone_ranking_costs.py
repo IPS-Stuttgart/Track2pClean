@@ -270,7 +270,7 @@ def _hard_negative_indices(
 
 
 def _hardness_score(
-    block: ReferencePairwiseExamples,
+    _block: ReferencePairwiseExamples,
     selected_features: np.ndarray,
     feature_names: tuple[str, ...],
     directions: np.ndarray,
