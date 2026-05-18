@@ -2,9 +2,10 @@
 
 import numpy as np
 import numpy.testing as npt
-
 from bayescatrack import CalciumPlaneData
-from bayescatrack.association.pyrecest_global_assignment import registered_iou_cost_kwargs
+from bayescatrack.association.pyrecest_global_assignment import (
+    registered_iou_cost_kwargs,
+)
 from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
     pairwise_shifted_overlap_matrices,

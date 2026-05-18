@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 
 import numpy as np
-
 from bayescatrack.evaluation.track2p_teacher_audit import (
     audit_track2p_teacher_edges,
     build_track_edge_index,
@@ -75,13 +74,17 @@ def test_teacher_audit_emits_requested_debug_categories() -> None:
     assert result.summary["track2p_f1"] == 2 / 3
     assert result.summary["bayes_f1"] == 1 / 3
 
-    teacher_found_bayes_missed = [row for row in result.rows if row.category == "GT+Track2p+Bayes-"]
+    teacher_found_bayes_missed = [
+        row for row in result.rows if row.category == "GT+Track2p+Bayes-"
+    ]
     assert teacher_found_bayes_missed[0].bayes_targets_for_source == (9,)
 
 
 def test_teacher_audit_csv_writers(tmp_path) -> None:
     matrix = np.asarray([[1, 2]], dtype=object)
-    result = audit_track2p_teacher_edges(matrix, matrix, matrix, subject="jm_test", session_names=("s0", "s1"))
+    result = audit_track2p_teacher_edges(
+        matrix, matrix, matrix, subject="jm_test", session_names=("s0", "s1")
+    )
     rows_path = tmp_path / "edges.csv"
     summary_path = tmp_path / "summary.csv"
 

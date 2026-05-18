@@ -4,13 +4,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
+from bayescatrack.experiments.registration_qa_report import RegistrationQAConfig
 from bayescatrack.experiments.registration_residual_oracle_qa import (
     RegistrationResidualOracleQAConfig,
     run_registration_residual_oracle_qa_report,
     summarize_registration_residual_oracle_qa_links,
 )
-from bayescatrack.experiments.registration_qa_report import RegistrationQAConfig
 
 
 def _write_ground_truth_csv(
@@ -95,7 +94,10 @@ def test_registration_residual_oracle_qa_reports_residuals_and_rank_upper_bound(
     assert len(summary) == 1
     assert summary[0]["median_baseline_iou"] == pytest.approx(0.0)
     assert summary[0]["median_oracle_iou"] == pytest.approx(1.0)
-    assert summary[0]["baseline_iou_row_hit1_rate"] < summary[0]["oracle_iou_row_hit1_rate"]
+    assert (
+        summary[0]["baseline_iou_row_hit1_rate"]
+        < summary[0]["oracle_iou_row_hit1_rate"]
+    )
     assert summary[0]["oracle_iou_row_hit1_rate"] == pytest.approx(1.0)
     assert summary[0]["oracle_iou_mutual_hit1_rate"] == pytest.approx(1.0)
     assert summary[0]["median_oracle_residual_norm"] == pytest.approx(0.0)
