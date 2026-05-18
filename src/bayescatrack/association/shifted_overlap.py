@@ -98,16 +98,26 @@ def shifted_iou_pairwise_cost_matrix(
         base_cost = base_result
         components = {}
 
+    needs_shifted_cosine = (
+        return_components
+        or use_shifted_mask_cosine_for_mask_cosine_cost
+        or shifted_mask_cosine_weight > 0.0
+    )
     shifted = pairwise_shifted_overlap_matrices(
         self.roi_masks,
         other.roi_masks,
         radius=shifted_iou_radius,
+        include_mask_cosine=needs_shifted_cosine,
         similarity_epsilon=similarity_epsilon,
     )
     shifted_iou = shifted["shifted_iou"]
     shifted_iou_cost = -np.log(np.clip(shifted_iou, similarity_epsilon, 1.0))
-    shifted_cosine = shifted["shifted_mask_cosine_similarity"]
-    shifted_cosine_cost = 1.0 - np.clip(shifted_cosine, 0.0, 1.0)
+    if needs_shifted_cosine:
+        shifted_cosine = shifted["shifted_mask_cosine_similarity"]
+        shifted_cosine_cost = 1.0 - np.clip(shifted_cosine, 0.0, 1.0)
+    else:
+        shifted_cosine = np.zeros_like(shifted_iou, dtype=float)
+        shifted_cosine_cost = np.zeros_like(shifted_iou, dtype=float)
 
     total_cost = np.asarray(base_cost, dtype=float).copy()
     if use_shifted_iou_for_iou_cost and iou_weight > 0.0:
@@ -129,6 +139,24 @@ def shifted_iou_pairwise_cost_matrix(
 
     exact_iou = components.get("iou")
     exact_cosine = components.get("mask_cosine_similarity")
+    iou_for_cost = (
+        shifted_iou
+        if use_shifted_iou_for_iou_cost
+        else np.asarray(
+            exact_iou if exact_iou is not None else np.zeros_like(total_cost),
+            dtype=float,
+        )
+    )
+    mask_cosine_for_cost = (
+        shifted_cosine
+        if use_shifted_mask_cosine_for_mask_cosine_cost
+        else np.asarray(
+            exact_cosine
+            if exact_cosine is not None
+            else np.zeros_like(total_cost),
+            dtype=float,
+        )
+    )
     components.update(
         {
             "pairwise_cost_matrix": total_cost,
@@ -140,12 +168,8 @@ def shifted_iou_pairwise_cost_matrix(
             "shifted_mask_cosine_similarity": shifted_cosine,
             "shifted_mask_cosine_cost": shifted_cosine_cost,
             "shifted_iou_radius": np.full_like(total_cost, shifted_iou_radius, dtype=float),
-            "iou_for_cost": shifted_iou if use_shifted_iou_for_iou_cost else exact_iou,
-            "mask_cosine_for_cost": (
-                shifted_cosine
-                if use_shifted_mask_cosine_for_mask_cosine_cost
-                else exact_cosine
-            ),
+            "iou_for_cost": iou_for_cost,
+            "mask_cosine_for_cost": mask_cosine_for_cost,
         }
     )
     return total_cost, components
@@ -156,6 +180,7 @@ def pairwise_shifted_overlap_matrices(
     measurement_masks: np.ndarray,
     *,
     radius: int,
+    include_mask_cosine: bool = True,
     similarity_epsilon: float = 1.0e-6,
 ) -> dict[str, np.ndarray]:
     """Return best local integer-shift IoU/cosine matrices for all ROI pairs."""
@@ -172,11 +197,13 @@ def pairwise_shifted_overlap_matrices(
         raise ValueError("Mask stacks must have matching spatial shapes")
 
     cost_shape = (int(reference_array.shape[0]), int(measurement_array.shape[0]))
-    best_iou = np.zeros(cost_shape, dtype=float)
-    best_cosine = np.zeros(cost_shape, dtype=float)
-    best_shift_y = np.zeros(cost_shape, dtype=float)
-    best_shift_x = np.zeros(cost_shape, dtype=float)
-    best_shift_norm = np.zeros(cost_shape, dtype=float)
+    best_iou: np.ndarray = np.zeros(cost_shape, dtype=float)
+    best_cosine: np.ndarray | None = (
+        np.zeros(cost_shape, dtype=float) if include_mask_cosine else None
+    )
+    best_shift_y: np.ndarray = np.zeros(cost_shape, dtype=float)
+    best_shift_x: np.ndarray = np.zeros(cost_shape, dtype=float)
+    best_shift_norm: np.ndarray = np.zeros(cost_shape, dtype=float)
 
     for dy, dx in shift_offsets(radius):
         shifted_measurement = shift_mask_stack(measurement_array, dy=dy, dx=dx)
@@ -192,20 +219,25 @@ def pairwise_shifted_overlap_matrices(
             best_shift_x[improved] = float(dx)
             best_shift_norm[improved] = shift_norm
 
-        cosine = _bridge_impl._pairwise_mask_cosine_similarity(  # pylint: disable=protected-access
-            reference_array,
-            shifted_measurement,
-            similarity_epsilon=similarity_epsilon,
-        )
-        np.maximum(best_cosine, cosine, out=best_cosine)
+        if include_mask_cosine:
+            assert best_cosine is not None
+            cosine = _bridge_impl._pairwise_mask_cosine_similarity(  # pylint: disable=protected-access
+                reference_array,
+                shifted_measurement,
+                similarity_epsilon=similarity_epsilon,
+            )
+            np.maximum(best_cosine, cosine, out=best_cosine)
 
-    return {
+    result: dict[str, np.ndarray] = {
         "shifted_iou": best_iou,
-        "shifted_mask_cosine_similarity": best_cosine,
         "shifted_iou_shift_y": best_shift_y,
         "shifted_iou_shift_x": best_shift_x,
         "shifted_iou_shift_norm": best_shift_norm,
     }
+    if include_mask_cosine:
+        assert best_cosine is not None
+        result["shifted_mask_cosine_similarity"] = best_cosine
+    return result
 
 
 def shift_offsets(radius: int) -> tuple[tuple[int, int], ...]:

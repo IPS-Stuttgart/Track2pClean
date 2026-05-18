@@ -9,6 +9,7 @@ from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
     pairwise_shifted_overlap_matrices,
     shift_offsets,
+    shifted_iou_pairwise_cost_matrix,
 )
 
 
@@ -76,6 +77,42 @@ def test_shifted_iou_patch_replaces_registered_iou_cost():
     assert components["iou"][0, 0] == 0.0
     assert components["shifted_iou"][0, 0] == 1.0
     assert components["iou_for_cost"][0, 0] == 1.0
+    npt.assert_allclose(cost, np.zeros((1, 1)))
+
+
+def test_shifted_iou_skips_shifted_cosine_when_unused(monkeypatch):
+    reference = np.zeros((1, 10, 10), dtype=bool)
+    measurement = np.zeros((1, 10, 10), dtype=bool)
+    reference[0, 2:4, 2:4] = True
+    measurement[0, 2:4, 4:6] = True
+
+    def fail_shifted_cosine(*args, **kwargs):
+        raise AssertionError("shifted mask cosine should not be computed")
+
+    monkeypatch.setattr(
+        "bayescatrack.association.shifted_overlap._bridge_impl."
+        "_pairwise_mask_cosine_similarity",
+        fail_shifted_cosine,
+    )
+
+    reference_plane = CalciumPlaneData(reference)
+    measurement_plane = CalciumPlaneData(measurement)
+
+    def original_method(self, other, **kwargs):
+        assert self is reference_plane
+        assert other is measurement_plane
+        assert kwargs["return_components"] is False
+        return np.zeros((1, 1), dtype=float)
+
+    cost = shifted_iou_pairwise_cost_matrix(
+        original_method,
+        reference_plane,
+        measurement_plane,
+        shifted_iou_radius=2,
+        use_shifted_iou_for_iou_cost=True,
+        return_components=False,
+    )
+
     npt.assert_allclose(cost, np.zeros((1, 1)))
 
 
