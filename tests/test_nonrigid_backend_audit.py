@@ -59,9 +59,7 @@ def test_nonrigid_backend_audit_surfaces_dense_warp_diagnostics():
     assert len(audit_rows) == 1
     row = audit_rows[0]
     assert row["registration_backend"] == "bayescatrack-nonrigid"
-    assert row["nonrigid_registration_backend"] == (
-        "thin-plate-spline-landmark-warp"
-    )
+    assert row["nonrigid_registration_backend"] == ("thin-plate-spline-landmark-warp")
     assert row["nonrigid_registration_grid_shape"] == "5x5"
     assert row["edge_count"] == 2
     assert row["gt_link_rows"] == 12
@@ -71,18 +69,14 @@ def test_nonrigid_backend_audit_surfaces_dense_warp_diagnostics():
     assert row[
         "median_nonrigid_registration_inverse_warp_valid_fraction"
     ] == pytest.approx(0.9)
-    assert row["nonrigid_registration_fallback_translation_rate"] == pytest.approx(
-        0.5
-    )
+    assert row["nonrigid_registration_fallback_translation_rate"] == pytest.approx(0.5)
     assert row["median_nonrigid_registration_tps_regularization"] == pytest.approx(
         1.0e-3
     )
-    assert row[
-        "median_nonrigid_registration_optical_flow_iterations"
-    ] == pytest.approx(12.0)
-    assert row["median_nonrigid_registration_optical_flow_alpha"] == pytest.approx(
-        25.0
+    assert row["median_nonrigid_registration_optical_flow_iterations"] == pytest.approx(
+        12.0
     )
+    assert row["median_nonrigid_registration_optical_flow_alpha"] == pytest.approx(25.0)
 
     table = format_nonrigid_registration_backend_audit_table(audit_rows)
     assert "median_nonrigid_registration_fit_rmse" in table

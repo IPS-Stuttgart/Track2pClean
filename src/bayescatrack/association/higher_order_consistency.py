@@ -82,7 +82,9 @@ def apply_higher_order_consistency(
             continue
         admissible = _admissible_cost_mask(matrix, large_cost=resolved.large_cost)
         edge_costs = matrix.copy()
-        edge_costs[admissible] = edge_costs[admissible] + resolved.triplet_weight * penalty[admissible]
+        edge_costs[admissible] = (
+            edge_costs[admissible] + resolved.triplet_weight * penalty[admissible]
+        )
         adjusted[edge] = edge_costs
     return adjusted
 
@@ -159,7 +161,9 @@ def _triplet_support_contexts(
             contexts.append((source_to_middle, middle_to_target.T))
 
     # Forward support: source -> future and target -> future share the same future ROI.
-    max_session_index = max((max(edge_key) for edge_key in pairwise_costs), default=target)
+    max_session_index = max(
+        (max(edge_key) for edge_key in pairwise_costs), default=target
+    )
     for future in range(target + 1, max_session_index + 1):
         source_to_future = pairwise_costs.get((source, future))
         target_to_future = pairwise_costs.get((target, future))
@@ -184,7 +188,9 @@ def _sparse_min_shared_support_cost(
     if left.ndim != 2 or right.ndim != 2:
         raise ValueError("Triplet support inputs must be two-dimensional matrices")
     if left.shape[1] != right.shape[1]:
-        raise ValueError("Triplet support matrices must have the same number of shared columns")
+        raise ValueError(
+            "Triplet support matrices must have the same number of shared columns"
+        )
 
     support = np.full((left.shape[0], right.shape[0]), np.inf, dtype=float)
     for shared_index in range(left.shape[1]):
@@ -202,9 +208,14 @@ def _sparse_min_shared_support_cost(
         )
         if left_indices.size == 0 or right_indices.size == 0:
             continue
-        candidate_support = left[left_indices, shared_index][:, None] + right[right_indices, shared_index][None, :]
+        candidate_support = (
+            left[left_indices, shared_index][:, None]
+            + right[right_indices, shared_index][None, :]
+        )
         current = support[np.ix_(left_indices, right_indices)]
-        support[np.ix_(left_indices, right_indices)] = np.minimum(current, candidate_support)
+        support[np.ix_(left_indices, right_indices)] = np.minimum(
+            current, candidate_support
+        )
     return support
 
 
@@ -241,7 +252,9 @@ def _validate_pairwise_shapes(
     for edge, matrix in pairwise_costs.items():
         source, target = _normalise_edge(edge)
         if source >= len(sizes) or target >= len(sizes):
-            raise ValueError(f"Edge {edge!r} is out of bounds for {len(sizes)} sessions")
+            raise ValueError(
+                f"Edge {edge!r} is out of bounds for {len(sizes)} sessions"
+            )
         expected_shape = (sizes[source], sizes[target])
         if np.asarray(matrix).shape != expected_shape:
             raise ValueError(

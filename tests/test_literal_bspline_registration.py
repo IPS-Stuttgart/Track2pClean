@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.core.bridge import CalciumPlaneData
-from bayescatrack.nonrigid_registration import register_measurement_plane_by_nonrigid_fov
+from bayescatrack.nonrigid_registration import (
+    register_measurement_plane_by_nonrigid_fov,
+)
 
 
 def _spot(shape: tuple[int, int], center_yx: tuple[int, int]) -> np.ndarray:

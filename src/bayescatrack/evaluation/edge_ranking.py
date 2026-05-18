@@ -82,7 +82,9 @@ def rank_labeled_edges(
         measurement_roi_index = int(measurement_indices[column_index])
         for score_name, matrix in matrices.items():
             direction = directions[score_name]
-            row_details = _rank_details(matrix[row_index, :], int(column_index), direction)
+            row_details = _rank_details(
+                matrix[row_index, :], int(column_index), direction
+            )
             column_details = _rank_details(
                 matrix[:, column_index], int(row_index), direction
             )
@@ -104,13 +106,13 @@ def rank_labeled_edges(
                 "column_tie_count": int(column_details["tie_count"]),
                 "row_candidate_count": int(row_details["candidate_count"]),
                 "column_candidate_count": int(column_details["candidate_count"]),
-                "row_finite_candidate_count": int(row_details["finite_candidate_count"]),
+                "row_finite_candidate_count": int(
+                    row_details["finite_candidate_count"]
+                ),
                 "column_finite_candidate_count": int(
                     column_details["finite_candidate_count"]
                 ),
-                "best_false_row_score": _float_or_nan(
-                    row_details["best_false_score"]
-                ),
+                "best_false_row_score": _float_or_nan(row_details["best_false_score"]),
                 "best_false_column_score": _float_or_nan(
                     column_details["best_false_score"]
                 ),
@@ -138,8 +140,13 @@ def missing_reference_edge_rows(
 ) -> list[dict[str, float | int | str]]:
     """Return diagnostic rows for manual-GT edges absent from the candidate matrix."""
 
-    reference_indices = {int(value) for value in np.asarray(reference_roi_indices, dtype=int).reshape(-1)}
-    measurement_indices = {int(value) for value in np.asarray(measurement_roi_indices, dtype=int).reshape(-1)}
+    reference_indices = {
+        int(value) for value in np.asarray(reference_roi_indices, dtype=int).reshape(-1)
+    }
+    measurement_indices = {
+        int(value)
+        for value in np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
+    }
     base_metadata = dict(metadata or {})
     directions = {
         score_name: _score_direction(score_name, score_directions)
@@ -218,7 +225,9 @@ def summarize_edge_ranking_rows(
     summaries: list[dict[str, float | int | str]] = []
     for key, group_rows in groups.items():
         summary: dict[str, float | int | str] = dict(zip(group_keys, key))
-        present_rows = [_row for _row in group_rows if _truthy_int(_row.get("edge_present", 0))]
+        present_rows = [
+            _row for _row in group_rows if _truthy_int(_row.get("edge_present", 0))
+        ]
         finite_rows = [
             _row for _row in present_rows if _truthy_int(_row.get("true_is_finite", 0))
         ]
@@ -296,7 +305,9 @@ def score_matrices_from_feature_tensor(
     feature_array = np.asarray(features, dtype=float)
     names = tuple(feature_names)
     if feature_array.ndim != 3:
-        raise ValueError("features must have shape (n_reference, n_measurement, n_features)")
+        raise ValueError(
+            "features must have shape (n_reference, n_measurement, n_features)"
+        )
     if feature_array.shape[-1] != len(names):
         raise ValueError("feature_names length must match the last feature dimension")
     return {
@@ -464,7 +475,9 @@ def _float_or_nan(value: Any) -> float:
 
 
 def _finite_values(rows: Sequence[Mapping[str, Any]], field_name: str) -> np.ndarray:
-    values = np.asarray([_finite_float(row.get(field_name)) for row in rows], dtype=float)
+    values = np.asarray(
+        [_finite_float(row.get(field_name)) for row in rows], dtype=float
+    )
     return values[np.isfinite(values)]
 
 

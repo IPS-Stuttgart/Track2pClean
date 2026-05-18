@@ -476,9 +476,9 @@ def _bench_cfg(
     reference_kind: "ReferenceKind",
     allow_track2p_as_reference_for_smoke_test: bool = False,
 ) -> "Track2pBenchmarkConfig":
-    from bayescatrack.experiments.track2p_benchmark import (
+    from bayescatrack.experiments.track2p_benchmark import (  # pylint: disable=import-outside-toplevel
         Track2pBenchmarkConfig,
-    )  # pylint: disable=import-outside-toplevel
+    )
 
     return Track2pBenchmarkConfig(
         data=config.data,

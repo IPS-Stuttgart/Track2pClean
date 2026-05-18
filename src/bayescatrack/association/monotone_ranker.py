@@ -100,14 +100,18 @@ class MonotoneRankingAssociationModel:
         self, pairwise_components: Mapping[str, Any]
     ) -> np.ndarray:
         return self.pairwise_cost_matrix(
-            pairwise_feature_tensor(pairwise_components, feature_names=self.feature_names)
+            pairwise_feature_tensor(
+                pairwise_components, feature_names=self.feature_names
+            )
         )
 
     def pairwise_probability_matrix_from_components(
         self, pairwise_components: Mapping[str, Any]
     ) -> np.ndarray:
         return self.predict_match_probability(
-            pairwise_feature_tensor(pairwise_components, feature_names=self.feature_names)
+            pairwise_feature_tensor(
+                pairwise_components, feature_names=self.feature_names
+            )
         )
 
     def pairwise_cost_matrix_from_bundle(
@@ -128,7 +132,9 @@ class MonotoneRankingAssociationModel:
         array = np.asarray(features, dtype=float)
         if array.shape[-1] != len(self.feature_names):
             raise ValueError("Feature tensor does not match model feature schema")
-        indices = [self.feature_names.index(name) for name in self.monotone_feature_names]
+        indices = [
+            self.feature_names.index(name) for name in self.monotone_feature_names
+        ]
         selected = np.nan_to_num(
             array[..., indices], nan=0.0, posinf=1.0e6, neginf=-1.0e6
         )
@@ -178,7 +184,9 @@ def fit_monotone_ranking_association_model_from_blocks(
     )
 
 
-def _shared_feature_names(blocks: Sequence[ReferencePairwiseExamples]) -> tuple[str, ...]:
+def _shared_feature_names(
+    blocks: Sequence[ReferencePairwiseExamples],
+) -> tuple[str, ...]:
     feature_names = tuple(blocks[0].feature_names)
     if not feature_names:
         raise ValueError("At least one feature is required")
@@ -227,7 +235,10 @@ def _collect_training_arrays(
     seen_examples: set[tuple[int, int, int]] = set()
     for block_index, block in enumerate(blocks):
         features = np.nan_to_num(
-            np.asarray(block.features, dtype=float), nan=0.0, posinf=1.0e6, neginf=-1.0e6
+            np.asarray(block.features, dtype=float),
+            nan=0.0,
+            posinf=1.0e6,
+            neginf=-1.0e6,
         )
         labels = np.asarray(block.labels, dtype=int)
         if features.ndim != 3 or labels.shape != features.shape[:2]:
@@ -286,7 +297,10 @@ def _hard_negative_positions(
         columns = np.flatnonzero(labels[positive_row] == 0)
         order = np.lexsort((columns, hardness[positive_row, columns]))
         add_candidates([(positive_row, int(col)) for col in columns[order]])
-    if len(positions) < options.max_negatives_per_positive and options.include_column_negatives:
+    if (
+        len(positions) < options.max_negatives_per_positive
+        and options.include_column_negatives
+    ):
         rows = np.flatnonzero(labels[:, positive_col] == 0)
         order = np.lexsort((rows, hardness[rows, positive_col]))
         add_candidates([(int(row), positive_col) for row in rows[order]])
@@ -345,14 +359,19 @@ def _fit_projected_ranker(
             + options.binary_loss_weight * binary_loss
             + 0.5 * options.l2_regularization * float(weights @ weights)
         )
-        if np.isfinite(previous_loss) and abs(previous_loss - loss) <= options.tolerance:
+        if (
+            np.isfinite(previous_loss)
+            and abs(previous_loss - loss) <= options.tolerance
+        ):
             break
         previous_loss = loss
     scores = examples @ weights
     offset = _fit_offset(scores, labels, sample_weights, initial_offset=offset)
     probabilities = _sigmoid(offset - scores)
     binary_loss = _weighted_log_loss(probabilities, labels, sample_weights)
-    rank_loss = float(np.mean(np.maximum(0.0, options.margin + constraints @ weights) ** 2))
+    rank_loss = float(
+        np.mean(np.maximum(0.0, options.margin + constraints @ weights) ** 2)
+    )
     return weights.astype(float), float(offset), rank_loss, binary_loss
 
 
@@ -365,7 +384,11 @@ def _initial_offset(scores: np.ndarray, labels: np.ndarray) -> float:
 
 
 def _fit_offset(
-    scores: np.ndarray, labels: np.ndarray, sample_weights: np.ndarray, *, initial_offset: float
+    scores: np.ndarray,
+    labels: np.ndarray,
+    sample_weights: np.ndarray,
+    *,
+    initial_offset: float,
 ) -> float:
     offset = float(initial_offset)
     targets = labels.astype(float)
@@ -393,10 +416,15 @@ def _balanced_binary_weights(labels: np.ndarray) -> np.ndarray:
     return weights
 
 
-def _weighted_log_loss(probabilities: np.ndarray, labels: np.ndarray, weights: np.ndarray) -> float:
+def _weighted_log_loss(
+    probabilities: np.ndarray, labels: np.ndarray, weights: np.ndarray
+) -> float:
     p = np.clip(np.asarray(probabilities, dtype=float), 1.0e-12, 1.0 - 1.0e-12)
     y = np.asarray(labels, dtype=float)
-    return float(np.sum(weights * (-y * np.log(p) - (1.0 - y) * np.log(1.0 - p))) / max(float(np.sum(weights)), 1.0))
+    return float(
+        np.sum(weights * (-y * np.log(p) - (1.0 - y) * np.log(1.0 - p)))
+        / max(float(np.sum(weights)), 1.0)
+    )
 
 
 def _sigmoid(values: Any) -> np.ndarray:

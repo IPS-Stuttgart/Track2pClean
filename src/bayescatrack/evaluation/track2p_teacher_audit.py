@@ -150,7 +150,9 @@ ROW_FIELDNAMES = (
 )
 
 
-def build_track_edge_index(track_matrix: Any, *, max_gap: int | None = None) -> TrackEdgeIndex:
+def build_track_edge_index(
+    track_matrix: Any, *, max_gap: int | None = None
+) -> TrackEdgeIndex:
     """Index all pairwise ROI edges in a longitudinal track matrix.
 
     The expected layout is one track per row and one session per column. Missing
@@ -179,16 +181,26 @@ def build_track_edge_index(track_matrix: Any, *, max_gap: int | None = None) -> 
                 roi_b = row_rois[session_b]
                 if roi_b is None:
                     continue
-                edge = EdgeKey(session_a=session_a, session_b=session_b, roi_a=roi_a, roi_b=roi_b)
+                edge = EdgeKey(
+                    session_a=session_a, session_b=session_b, roi_a=roi_a, roi_b=roi_b
+                )
                 rows_by_edge.setdefault(edge, set()).add(row_index)
-                targets_by_source.setdefault((session_a, session_b, roi_a), set()).add(roi_b)
-                sources_by_target.setdefault((session_a, session_b, roi_b), set()).add(roi_a)
+                targets_by_source.setdefault((session_a, session_b, roi_a), set()).add(
+                    roi_b
+                )
+                sources_by_target.setdefault((session_a, session_b, roi_b), set()).add(
+                    roi_a
+                )
 
     return TrackEdgeIndex(
         edges=frozenset(rows_by_edge),
         rows_by_edge={edge: tuple(sorted(rows)) for edge, rows in rows_by_edge.items()},
-        targets_by_source={key: tuple(sorted(values)) for key, values in targets_by_source.items()},
-        sources_by_target={key: tuple(sorted(values)) for key, values in sources_by_target.items()},
+        targets_by_source={
+            key: tuple(sorted(values)) for key, values in targets_by_source.items()
+        },
+        sources_by_target={
+            key: tuple(sorted(values)) for key, values in sources_by_target.items()
+        },
         n_tracks=n_tracks,
         n_sessions=n_sessions,
     )
@@ -240,7 +252,9 @@ def audit_track2p_teacher_edges(
         n_bayes_tracks=bayes_index.n_tracks,
         max_gap=max_gap,
     )
-    return TeacherAuditResult(subject=subject, session_names=names, rows=rows, summary=summary)
+    return TeacherAuditResult(
+        subject=subject, session_names=names, rows=rows, summary=summary
+    )
 
 
 def summarize_teacher_audit(
@@ -262,8 +276,12 @@ def summarize_teacher_audit(
     teacher_edge_set = frozenset(teacher_edges)
     bayes_edge_set = frozenset(bayes_edges)
     counts = Counter(row.category for row in rows)
-    track2p_precision, track2p_recall, track2p_f1 = _precision_recall_f1(teacher_edge_set, gt_edge_set)
-    bayes_precision, bayes_recall, bayes_f1 = _precision_recall_f1(bayes_edge_set, gt_edge_set)
+    track2p_precision, track2p_recall, track2p_f1 = _precision_recall_f1(
+        teacher_edge_set, gt_edge_set
+    )
+    bayes_precision, bayes_recall, bayes_f1 = _precision_recall_f1(
+        bayes_edge_set, gt_edge_set
+    )
     both = gt_edge_set & teacher_edge_set & bayes_edge_set
     teacher_only = (gt_edge_set & teacher_edge_set) - bayes_edge_set
     bayes_only = (gt_edge_set & bayes_edge_set) - teacher_edge_set
@@ -295,7 +313,9 @@ def summarize_teacher_audit(
     return summary
 
 
-def write_teacher_audit_rows_csv(rows: Sequence[TeacherAuditRow], path: str | Path) -> None:
+def write_teacher_audit_rows_csv(
+    rows: Sequence[TeacherAuditRow], path: str | Path
+) -> None:
     """Write edge-level teacher-audit rows to CSV."""
 
     path = Path(path)
@@ -306,7 +326,9 @@ def write_teacher_audit_rows_csv(rows: Sequence[TeacherAuditRow], path: str | Pa
         writer.writerows(row.to_dict() for row in rows)
 
 
-def write_teacher_audit_summary_csv(summaries: Sequence[Mapping[str, object]], path: str | Path) -> None:
+def write_teacher_audit_summary_csv(
+    summaries: Sequence[Mapping[str, object]], path: str | Path
+) -> None:
     """Write one or more teacher-audit summaries to CSV."""
 
     path = Path(path)
@@ -355,7 +377,9 @@ def _audit_one_edge(
     )
 
 
-def _precision_recall_f1(predicted: frozenset[EdgeKey], reference: frozenset[EdgeKey]) -> tuple[float, float, float]:
+def _precision_recall_f1(
+    predicted: frozenset[EdgeKey], reference: frozenset[EdgeKey]
+) -> tuple[float, float, float]:
     true_positives = len(predicted & reference)
     precision = true_positives / len(predicted) if predicted else 0.0
     recall = true_positives / len(reference) if reference else 0.0
@@ -366,7 +390,9 @@ def _precision_recall_f1(predicted: frozenset[EdgeKey], reference: frozenset[Edg
 def _as_object_matrix(track_matrix: Any) -> np.ndarray:
     matrix = np.asarray(track_matrix, dtype=object)
     if matrix.ndim != 2:
-        raise ValueError("track_matrix must be a two-dimensional tracks-by-sessions matrix")
+        raise ValueError(
+            "track_matrix must be a two-dimensional tracks-by-sessions matrix"
+        )
     return matrix
 
 
@@ -389,7 +415,9 @@ def _coerce_roi_index(value: Any) -> int | None:
     return roi
 
 
-def _normalize_session_names(session_names: Sequence[str] | None, n_sessions: int) -> tuple[str, ...]:
+def _normalize_session_names(
+    session_names: Sequence[str] | None, n_sessions: int
+) -> tuple[str, ...]:
     if session_names is None:
         return tuple(str(index) for index in range(n_sessions))
     names = tuple(str(name) for name in session_names)
@@ -401,7 +429,9 @@ def _normalize_session_names(session_names: Sequence[str] | None, n_sessions: in
 def _validate_compatible_session_count(*indices: TrackEdgeIndex) -> None:
     counts = {index.n_sessions for index in indices}
     if len(counts) != 1:
-        raise ValueError(f"track matrices must have the same number of sessions, got {sorted(counts)}")
+        raise ValueError(
+            f"track matrices must have the same number of sessions, got {sorted(counts)}"
+        )
 
 
 def _category(gt_edge: bool, teacher_edge: bool, bayes_edge: bool) -> str:

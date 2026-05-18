@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import numpy as np
-
 from bayescatrack.experiments.track2p_teacher_debug import (
     _BayesEdgeCostLookup,
     _edge_pairs,
@@ -21,9 +20,14 @@ def test_classify_teacher_edge_covers_all_disagreement_buckets() -> None:
     assert classify_teacher_edge(True, True, False) == "bayes_missed_teacher_edge"
     assert classify_teacher_edge(True, False, True) == "bayes_found_track2p_missed_edge"
     assert classify_teacher_edge(True, False, False) == "both_missed_manual_edge"
-    assert classify_teacher_edge(False, True, False) == "track2p_false_positive_bayes_rejected"
+    assert (
+        classify_teacher_edge(False, True, False)
+        == "track2p_false_positive_bayes_rejected"
+    )
     assert classify_teacher_edge(False, False, True) == "bayes_hard_false_positive"
-    assert classify_teacher_edge(False, True, True) == "teacher_and_bayes_false_positive"
+    assert (
+        classify_teacher_edge(False, True, True) == "teacher_and_bayes_false_positive"
+    )
     assert classify_teacher_edge(False, False, False) == "unobserved_true_negative"
 
 
@@ -65,8 +69,14 @@ def test_track_matrix_edge_set_uses_requested_edges_and_skips_missing_rois() -> 
 
 def test_bayes_cost_lookup_reports_rank_threshold_and_missing_reason() -> None:
     sessions = [
-        SimpleNamespace(plane_data=SimpleNamespace(roi_indices=np.asarray([10, 20]), n_rois=2)),
-        SimpleNamespace(plane_data=SimpleNamespace(roi_indices=np.asarray([100, 200, 300]), n_rois=3)),
+        SimpleNamespace(
+            plane_data=SimpleNamespace(roi_indices=np.asarray([10, 20]), n_rois=2)
+        ),
+        SimpleNamespace(
+            plane_data=SimpleNamespace(
+                roi_indices=np.asarray([100, 200, 300]), n_rois=3
+            )
+        ),
     ]
     lookup = _BayesEdgeCostLookup.from_sessions(
         cast(list[Any], sessions),

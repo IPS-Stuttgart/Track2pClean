@@ -112,7 +112,9 @@ def activity_similarity_components(
         getattr(measurement_plane, "traces", None)
     )
     spike_reference = _as_trace_matrix(getattr(reference_plane, "spike_traces", None))
-    spike_measurement = _as_trace_matrix(getattr(measurement_plane, "spike_traces", None))
+    spike_measurement = _as_trace_matrix(
+        getattr(measurement_plane, "spike_traces", None)
+    )
     neuropil_reference = _as_trace_matrix(
         getattr(reference_plane, "neuropil_traces", None)
     )
@@ -264,7 +266,9 @@ def _row_normalized_trace_vectors(
     return normalized, valid
 
 
-def _per_roi_trace_std(traces: np.ndarray | None) -> tuple[np.ndarray, np.ndarray] | None:
+def _per_roi_trace_std(
+    traces: np.ndarray | None,
+) -> tuple[np.ndarray, np.ndarray] | None:
     if traces is None:
         return None
     traces = np.asarray(traces, dtype=float)
@@ -347,7 +351,9 @@ def _per_roi_neuropil_ratio(
     neuropil_values = np.where(finite, neuropil, 0.0)
     fluorescence_mean = np.zeros(fluorescence.shape[0], dtype=float)
     neuropil_mean = np.zeros(neuropil.shape[0], dtype=float)
-    fluorescence_mean[valid] = np.sum(fluorescence_values[valid], axis=1) / counts[valid]
+    fluorescence_mean[valid] = (
+        np.sum(fluorescence_values[valid], axis=1) / counts[valid]
+    )
     neuropil_mean[valid] = np.sum(neuropil_values[valid], axis=1) / counts[valid]
     denominator = np.maximum(np.abs(fluorescence_mean), similarity_epsilon)
     values = neuropil_mean / denominator
@@ -399,7 +405,10 @@ def _pooled_robust_scale(
     scale_epsilon: float,
 ) -> float:
     pooled = np.concatenate(
-        [np.asarray(reference_values, dtype=float), np.asarray(measurement_values, dtype=float)]
+        [
+            np.asarray(reference_values, dtype=float),
+            np.asarray(measurement_values, dtype=float),
+        ]
     )
     pooled = pooled[np.isfinite(pooled)]
     if pooled.size <= 1:
@@ -447,7 +456,9 @@ def _activity_tiebreaker_components(
     }
 
 
-def _neutral_similarity_components(prefix: str, shape: tuple[int, int]) -> dict[str, np.ndarray]:
+def _neutral_similarity_components(
+    prefix: str, shape: tuple[int, int]
+) -> dict[str, np.ndarray]:
     return {
         f"{prefix}_correlation": np.zeros(shape, dtype=float),
         f"{prefix}_similarity": np.zeros(shape, dtype=float),

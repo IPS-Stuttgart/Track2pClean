@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack import CalciumPlaneData
 from bayescatrack.soft_overlap_costs import registered_soft_iou_cost_kwargs
 
@@ -28,8 +27,10 @@ def test_soft_overlap_components_capture_near_miss_with_zero_exact_iou():
         distance_transform_overlap_weight=1.0,
     )
     pairwise_kwargs["return_components"] = True
-    _, components = reference.build_pairwise_cost_matrix(  # pylint: disable=unexpected-keyword-arg
-        measurement, **pairwise_kwargs
+    _, components = (
+        reference.build_pairwise_cost_matrix(  # pylint: disable=unexpected-keyword-arg
+            measurement, **pairwise_kwargs
+        )
     )
 
     assert components["iou"][0, 0] == 0.0

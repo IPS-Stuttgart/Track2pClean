@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.evaluation.edge_ranking import (
     missing_reference_edge_rows,
     rank_labeled_edges,
@@ -19,7 +18,12 @@ def test_rank_labeled_edges_reports_row_column_ranks_and_margins():
         {"cost": costs},
         reference_roi_indices=np.array([10, 11]),
         measurement_roi_indices=np.array([20, 21, 22]),
-        metadata={"subject": "jm_test", "session_a": 0, "session_b": 1, "session_gap": 1},
+        metadata={
+            "subject": "jm_test",
+            "session_a": 0,
+            "session_b": 1,
+            "session_gap": 1,
+        },
     )
 
     first = next(row for row in rows if row["reference_roi_index"] == 10)
@@ -59,14 +63,24 @@ def test_missing_reference_edges_are_counted_in_summary_denominator():
         {"cost": np.array([[0.0]])},
         reference_roi_indices=np.array([1]),
         measurement_roi_indices=np.array([2]),
-        metadata={"subject": "jm_test", "session_a": 0, "session_b": 1, "session_gap": 1},
+        metadata={
+            "subject": "jm_test",
+            "session_a": 0,
+            "session_b": 1,
+            "session_gap": 1,
+        },
     )
     missing_rows = missing_reference_edge_rows(
         [(1, 2), (3, 4)],
         reference_roi_indices=np.array([1]),
         measurement_roi_indices=np.array([2]),
         score_names=("cost",),
-        metadata={"subject": "jm_test", "session_a": 0, "session_b": 1, "session_gap": 1},
+        metadata={
+            "subject": "jm_test",
+            "session_a": 0,
+            "session_b": 1,
+            "session_gap": 1,
+        },
     )
 
     summary = summarize_edge_ranking_rows(present_rows + missing_rows)

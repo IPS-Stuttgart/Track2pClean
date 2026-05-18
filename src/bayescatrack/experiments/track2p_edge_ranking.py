@@ -154,7 +154,9 @@ def run_track2p_edge_ranking(
 
     subject_dirs = tuple(discover_subject_dirs(config.data))
     if not subject_dirs:
-        raise ValueError(f"No Track2p-style subject directories found under {config.data}")
+        raise ValueError(
+            f"No Track2p-style subject directories found under {config.data}"
+        )
 
     feature_names = tuple(dict.fromkeys(str(feature) for feature in feature_names))
     if not feature_names:
@@ -173,7 +175,9 @@ def run_track2p_edge_ranking(
         reference = _load_reference_for_subject(
             subject_dir, data_root=config.data, config=config
         )
-        _validate_reference_for_benchmark(reference, subject_dir=subject_dir, config=config)
+        _validate_reference_for_benchmark(
+            reference, subject_dir=subject_dir, config=config
+        )
         sessions = _load_subject_sessions(subject_dir, config)
         _validate_reference_roi_indices(reference, sessions)
         options = _reference_training_options(config, feature_names)
@@ -266,7 +270,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="manual-gt",
         choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
     )
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
     parser.add_argument("--plane", dest="plane_name", default="plane0")
     parser.add_argument(
         "--input-format", default="auto", choices=("auto", "suite2p", "npy")
@@ -369,7 +375,9 @@ def _reference_training_options(
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         feature_names=tuple(feature_names),
-        pairwise_cost_kwargs=_pairwise_cost_kwargs_for_config(config.cost, config.pairwise_cost_kwargs),
+        pairwise_cost_kwargs=_pairwise_cost_kwargs_for_config(
+            config.cost, config.pairwise_cost_kwargs
+        ),
     )
 
 
@@ -446,7 +454,9 @@ def _fieldnames(
     rows: Sequence[Mapping[str, float | int | str]], preferred: Sequence[str]
 ) -> list[str]:
     row_keys = {key for row in rows for key in row}
-    return [key for key in preferred if key in row_keys] + sorted(row_keys - set(preferred))
+    return [key for key in preferred if key in row_keys] + sorted(
+        row_keys - set(preferred)
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover
