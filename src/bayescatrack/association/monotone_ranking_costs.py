@@ -221,7 +221,7 @@ def _collect_training_arrays(
         labels = np.asarray(block.labels, dtype=int)
         if labels.shape != features.shape[:2]:
             raise ValueError("Pairwise labels must match feature tensor shape")
-        hardness = _hardness_score(block, features, feature_names, directions, options)
+        hardness = _hardness_score(features, feature_names, directions, options)
         for row, col in np.argwhere(labels != 0):
             positive = features[row, col]
             binary_features.append(positive)
@@ -270,7 +270,6 @@ def _hard_negative_indices(
 
 
 def _hardness_score(
-    block: ReferencePairwiseExamples,
     selected_features: np.ndarray,
     feature_names: tuple[str, ...],
     directions: np.ndarray,
