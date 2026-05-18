@@ -92,6 +92,21 @@ def write_reference_gap_csv(
         )
 
 
+def write_metric_csv(
+    rows: Sequence[dict[str, float | int | str]],
+    output_path: Path,
+    *,
+    reference_approach: str | None,
+) -> None:
+    """Write long-format metric values, ranks, and reference gaps to CSV."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=_metric_columns())
+        writer.writeheader()
+        writer.writerows(build_metric_rows(rows, reference_approach=reference_approach))
+
+
 def format_markdown_table(
     rows: Sequence[dict[str, float | int | str]],
     *,
@@ -210,6 +225,44 @@ def build_reference_gap_rows(
     return gap_rows
 
 
+def build_metric_rows(
+    rows: Sequence[dict[str, float | int | str]],
+    *,
+    reference_approach: str | None,
+) -> list[dict[str, float | int | str]]:
+    """Build long-format metric rows with ranks and reference deltas."""
+
+    if not rows:
+        raise ValueError("At least one aggregate row is required")
+
+    reference = _reference_row(rows, reference_approach=reference_approach)
+    reference_name = str(reference["approach"])
+    metric_rows: list[dict[str, float | int | str]] = []
+    for column in _best_metric_columns():
+        reference_value = _as_float(reference[column])
+        best_value = max(_as_float(row[column]) for row in rows)
+        ranks = _descending_competition_ranks([_as_float(row[column]) for row in rows])
+        for row in rows:
+            value = _as_float(row[column])
+            approach = str(row["approach"])
+            metric_rows.append(
+                {
+                    "metric": _best_metric_headers()[column],
+                    "metric_column": column,
+                    "approach": approach,
+                    "subjects": int(row["subjects"]),
+                    "value": value,
+                    "rank": ranks[value],
+                    "is_best": _format_bool(_value_is_best(value, best_value)),
+                    "reference_approach": reference_name,
+                    "reference_value": reference_value,
+                    "gap_to_reference": value - reference_value,
+                    "is_reference": _format_bool(approach == reference_name),
+                }
+            )
+    return metric_rows
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the comparison-table CLI parser."""
 
@@ -262,6 +315,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional CSV path for best non-reference gaps to the reference approach",
     )
+    parser.add_argument(
+        "--metric-output",
+        type=Path,
+        default=None,
+        help="Optional long-format CSV path for metric ranks and reference gaps",
+    )
     return parser
 
 
@@ -276,6 +335,12 @@ def main(argv: list[str] | None = None) -> int:
         write_reference_gap_csv(
             rows,
             args.reference_gap_output,
+            reference_approach=args.reference_approach,
+        )
+    if args.metric_output is not None:
+        write_metric_csv(
+            rows,
+            args.metric_output,
             reference_approach=args.reference_approach,
         )
     if args.output is not None:
@@ -395,6 +460,22 @@ def _reference_gap_columns() -> list[str]:
     ]
 
 
+def _metric_columns() -> list[str]:
+    return [
+        "metric",
+        "metric_column",
+        "approach",
+        "subjects",
+        "value",
+        "rank",
+        "is_best",
+        "reference_approach",
+        "reference_value",
+        "gap_to_reference",
+        "is_reference",
+    ]
+
+
 def _best_metric_columns() -> tuple[str, ...]:
     return (
         "pairwise_f1_macro",
@@ -477,6 +558,18 @@ def _best_competitor_rows(
 
 def _value_is_best(actual: float, expected: float) -> bool:
     return abs(actual - expected) < 1e-12
+
+
+def _descending_competition_ranks(values: Sequence[float]) -> dict[float, int]:
+    unique_values = sorted(set(values), reverse=True)
+    return {
+        value: sum(1 for candidate in values if candidate > value) + 1
+        for value in unique_values
+    }
+
+
+def _format_bool(value: bool) -> str:
+    return "true" if value else "false"
 
 
 def _format_value(value: float | int | str, *, bold: bool = False) -> str:

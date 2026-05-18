@@ -6,11 +6,13 @@ import pytest
 from bayescatrack.experiments.benchmark_comparison import (
     ComparisonInput,
     aggregate_rows,
+    build_metric_rows,
     build_reference_gap_rows,
     format_best_summary,
     format_markdown_table,
     format_reference_gap_summary,
     load_labeled_rows,
+    write_metric_csv,
     write_reference_gap_csv,
 )
 
@@ -217,3 +219,60 @@ def test_reference_gap_csv_is_machine_readable(tmp_path):
     assert csv_rows[0]["reference_approach"] == "Track2p"
     assert csv_rows[0]["best_non_reference_approach"] == "Tuned"
     assert float(csv_rows[0]["gap_to_reference"]) == pytest.approx(-0.25)
+
+
+def test_metric_csv_reports_ranks_and_reference_gaps(tmp_path):
+    rows: list[dict[str, float | int | str]] = [
+        {
+            "approach": "Track2p",
+            "subjects": 2,
+            "pairwise_f1_macro": 0.95,
+            "pairwise_f1_sd": 0.01,
+            "pairwise_f1_micro": 0.96,
+            "complete_track_f1_macro": 0.90,
+            "complete_track_f1_sd": 0.03,
+            "complete_track_f1_micro": 0.91,
+        },
+        {
+            "approach": "Tuned-A",
+            "subjects": 2,
+            "pairwise_f1_macro": 0.80,
+            "pairwise_f1_sd": 0.02,
+            "pairwise_f1_micro": 0.72,
+            "complete_track_f1_macro": 0.60,
+            "complete_track_f1_sd": 0.04,
+            "complete_track_f1_micro": 0.62,
+        },
+        {
+            "approach": "Tuned-B",
+            "subjects": 2,
+            "pairwise_f1_macro": 0.80,
+            "pairwise_f1_sd": 0.02,
+            "pairwise_f1_micro": 0.70,
+            "complete_track_f1_macro": 0.58,
+            "complete_track_f1_sd": 0.04,
+            "complete_track_f1_micro": 0.60,
+        },
+    ]
+
+    metric_rows = build_metric_rows(rows, reference_approach="Track2p")
+    output_path = tmp_path / "metrics.csv"
+    write_metric_csv(rows, output_path, reference_approach="Track2p")
+
+    with output_path.open("r", encoding="utf-8", newline="") as handle:
+        csv_rows = list(csv.DictReader(handle))
+
+    pairwise_rows = [
+        row for row in metric_rows if row["metric_column"] == "pairwise_f1_macro"
+    ]
+    tuned_rows = [
+        row for row in pairwise_rows if str(row["approach"]).startswith("Tuned")
+    ]
+    assert len(metric_rows) == 12
+    assert {row["rank"] for row in tuned_rows} == {2}
+    assert all(row["gap_to_reference"] == pytest.approx(-0.15) for row in tuned_rows)
+    assert csv_rows[0]["metric_column"] == "pairwise_f1_macro"
+    assert csv_rows[0]["approach"] == "Track2p"
+    assert csv_rows[0]["rank"] == "1"
+    assert csv_rows[0]["is_best"] == "true"
+    assert csv_rows[0]["is_reference"] == "true"
