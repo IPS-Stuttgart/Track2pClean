@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
+
 from ._bridge_impl import (
     _estimate_default_centroid_scale,
     _mask_support_areas,

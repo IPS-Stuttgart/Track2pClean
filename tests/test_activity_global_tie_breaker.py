@@ -16,14 +16,10 @@ from bayescatrack.association.pyrecest_global_assignment import (
 
 def test_activity_tie_breaker_cost_matrix_scales_selected_component() -> None:
     pairwise_components = {
-        "activity_tiebreaker_cost": np.array(
-            [[0.0, 0.5], [1.0, np.nan]], dtype=float
-        )
+        "activity_tiebreaker_cost": np.array([[0.0, 0.5], [1.0, np.nan]], dtype=float)
     }
 
-    tie_breaker_cost = activity_tie_breaker_cost_matrix(
-        pairwise_components, weight=0.1
-    )
+    tie_breaker_cost = activity_tie_breaker_cost_matrix(pairwise_components, weight=0.1)
 
     npt.assert_allclose(tie_breaker_cost, np.array([[0.0, 0.05], [0.1, 0.05]]))
 
@@ -42,7 +38,10 @@ def test_activity_tie_breaker_cost_matrix_validates_inputs() -> None:
 
 
 def test_global_assignment_exposes_activity_tie_breaker_parameters() -> None:
-    for function in (build_registered_pairwise_costs, solve_global_assignment_for_sessions):
+    for function in (
+        build_registered_pairwise_costs,
+        solve_global_assignment_for_sessions,
+    ):
         signature = inspect.signature(function)
         assert "activity_tie_breaker_weight" in signature.parameters
         assert "activity_tie_breaker_component" in signature.parameters

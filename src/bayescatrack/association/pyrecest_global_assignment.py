@@ -166,7 +166,9 @@ def build_registered_pairwise_costs(
         else:
             cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
         if activity_tie_breaker_weight > 0.0:
-            cost_matrix = np.asarray(cost_matrix, dtype=float) + activity_tie_breaker_cost_matrix(
+            cost_matrix = np.asarray(
+                cost_matrix, dtype=float
+            ) + activity_tie_breaker_cost_matrix(
                 bundle.pairwise_components,
                 component_name=activity_tie_breaker_component,
                 weight=activity_tie_breaker_weight,
@@ -202,9 +204,9 @@ def solve_global_assignment_for_sessions(
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
     activity_trace_source: str = "auto",
     activity_event_threshold: float = 0.0,
-    higher_order_consistency_config: HigherOrderConsistencyConfig
-    | Mapping[str, Any]
-    | None = None,
+    higher_order_consistency_config: (
+        HigherOrderConsistencyConfig | Mapping[str, Any] | None
+    ) = None,
 ) -> GlobalAssignmentRun:
     """Run PyRecEst's global path-cover assignment on registered BayesCaTrack costs."""
 

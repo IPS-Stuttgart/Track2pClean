@@ -13,11 +13,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.core import _bridge_impl  # pylint: disable=protected-access
 from bayescatrack.core.bridge import CalciumPlaneData
 
-PairwiseCostMethod = Callable[..., np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]]
+PairwiseCostMethod = Callable[
+    ..., np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]
+]
 
 
 def shifted_iou_pairwise_cost_matrix(
@@ -66,14 +67,11 @@ def shifted_iou_pairwise_cost_matrix(
     if shifted_mask_cosine_weight < 0.0:
         raise ValueError("shifted_mask_cosine_weight must be non-negative")
 
-    uses_shifted_overlap = (
-        shifted_iou_radius > 0
-        and (
-            use_shifted_iou_for_iou_cost
-            or shifted_iou_weight > 0.0
-            or use_shifted_mask_cosine_for_mask_cosine_cost
-            or shifted_mask_cosine_weight > 0.0
-        )
+    uses_shifted_overlap = shifted_iou_radius > 0 and (
+        use_shifted_iou_for_iou_cost
+        or shifted_iou_weight > 0.0
+        or use_shifted_mask_cosine_for_mask_cosine_cost
+        or shifted_mask_cosine_weight > 0.0
     )
     if not uses_shifted_overlap:
         return original_method(self, other, **kwargs)
@@ -130,7 +128,9 @@ def shifted_iou_pairwise_cost_matrix(
     if shifted_mask_cosine_weight > 0.0:
         total_cost += shifted_mask_cosine_weight * shifted_cosine_cost
 
-    gated = np.asarray(components.get("gated", total_cost >= 0.5 * large_cost), dtype=bool)
+    gated = np.asarray(
+        components.get("gated", total_cost >= 0.5 * large_cost), dtype=bool
+    )
     if gated.shape == total_cost.shape:
         total_cost = np.where(gated, large_cost, total_cost)
     total_cost = _ensure_finite_cost_matrix(total_cost, large_cost=large_cost)
@@ -152,9 +152,7 @@ def shifted_iou_pairwise_cost_matrix(
         shifted_cosine
         if use_shifted_mask_cosine_for_mask_cosine_cost
         else np.asarray(
-            exact_cosine
-            if exact_cosine is not None
-            else np.zeros_like(total_cost),
+            exact_cosine if exact_cosine is not None else np.zeros_like(total_cost),
             dtype=float,
         )
     )
@@ -168,7 +166,9 @@ def shifted_iou_pairwise_cost_matrix(
             "shifted_iou_shift_norm": shifted["shifted_iou_shift_norm"],
             "shifted_mask_cosine_similarity": shifted_cosine,
             "shifted_mask_cosine_cost": shifted_cosine_cost,
-            "shifted_iou_radius": np.full_like(total_cost, shifted_iou_radius, dtype=float),
+            "shifted_iou_radius": np.full_like(
+                total_cost, shifted_iou_radius, dtype=float
+            ),
             "iou_for_cost": iou_for_cost,
             "mask_cosine_for_cost": mask_cosine_for_cost,
         }
@@ -294,9 +294,7 @@ def _pairwise_shifted_iou_from_support(
             reference_is_sorted=True,
         )
         unions = (
-            reference_support.areas[:, None]
-            + shifted_areas[None, :]
-            - intersections
+            reference_support.areas[:, None] + shifted_areas[None, :] - intersections
         )
         iou: np.ndarray = np.zeros(cost_shape, dtype=float)
         valid_unions = unions > 0.0
@@ -481,7 +479,9 @@ def install_shifted_overlap_cost_patch() -> PairwiseCostMethod:
     return original_method
 
 
-def _ensure_finite_cost_matrix(cost_matrix: np.ndarray, *, large_cost: float) -> np.ndarray:
+def _ensure_finite_cost_matrix(
+    cost_matrix: np.ndarray, *, large_cost: float
+) -> np.ndarray:
     sanitized = np.asarray(cost_matrix, dtype=float).copy()
     invalid = ~np.isfinite(sanitized)
     if np.any(invalid):

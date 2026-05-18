@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.association.calibrated_costs import (
     CalibratedAssociationModel,
     ReferencePairwiseExamples,

@@ -4,7 +4,9 @@
 
 from . import cli as _cli
 from .core import bridge as _bridge
-from .soft_overlap_costs import install_soft_overlap_costs as _install_soft_overlap_costs
+from .soft_overlap_costs import (
+    install_soft_overlap_costs as _install_soft_overlap_costs,
+)
 
 
 def _install_registration_transform_argparse_patch() -> None:
@@ -87,7 +89,9 @@ _install_registration_transform_argparse_patch()
 CalciumPlaneData = _bridge.CalciumPlaneData
 SessionAssociationBundle = _bridge.SessionAssociationBundle
 Track2pSession = _bridge.Track2pSession
-build_consecutive_session_association_bundles = _bridge.build_consecutive_session_association_bundles
+build_consecutive_session_association_bundles = (
+    _bridge.build_consecutive_session_association_bundles
+)
 build_session_pair_association_bundle = _bridge.build_session_pair_association_bundle
 export_subject_to_npz = _bridge.export_subject_to_npz
 find_track2p_session_dirs = _bridge.find_track2p_session_dirs

@@ -13,7 +13,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from bayescatrack.association.calibrated_costs import DEFAULT_ASSOCIATION_FEATURES
+from bayescatrack.association.calibrated_costs import (
+    DEFAULT_ASSOCIATION_FEATURES,
+    collect_reference_pairwise_example_blocks,
+    collect_reference_training_examples,
+)
 from bayescatrack.association.monotone_ranker import (
     MonotoneRankerOptions,
     fit_monotone_ranking_association_model_from_blocks,
@@ -39,10 +43,6 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     SubjectCalibrationData,
     _load_subject_calibration_data,
     _reference_training_options,
-)
-from bayescatrack.association.calibrated_costs import (
-    collect_reference_pairwise_example_blocks,
-    collect_reference_training_examples,
 )
 
 

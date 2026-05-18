@@ -19,7 +19,6 @@ from bayescatrack.nonrigid_registration import (
     register_measurement_plane_by_nonrigid_fov,
 )
 
-
 RegistrationTransform = Literal[
     "affine",
     "rigid",

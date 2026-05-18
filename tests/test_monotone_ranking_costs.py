@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
 from bayescatrack.association.monotone_ranking_costs import (
     MonotoneRankerOptions,

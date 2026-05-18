@@ -2,7 +2,6 @@ import json
 
 import numpy as np
 import numpy.testing as npt
-
 from bayescatrack import CalciumPlaneData
 from bayescatrack.association.calibrated_costs import (
     LOCAL_EVIDENCE_ASSOCIATION_FEATURES,

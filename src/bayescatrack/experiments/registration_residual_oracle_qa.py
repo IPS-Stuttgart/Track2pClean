@@ -19,10 +19,11 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
-
-from bayescatrack.core._bridge_impl import _pairwise_iou_matrix as _pairwise_iou_matrix  # pylint: disable=protected-access
-from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.association.pyrecest_global_assignment import session_edge_pairs
+from bayescatrack.core._bridge_impl import (
+    _pairwise_iou_matrix as _pairwise_iou_matrix,  # pylint: disable=protected-access
+)
+from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.experiments.oracle_affine_registration_qa import (  # pylint: disable=protected-access
     _fit_affine_xy,
     _oracle_affine_registered_plane,
@@ -93,7 +94,9 @@ def summarize_registration_residual_oracle_qa_links(
 ) -> list[dict[str, Any]]:
     """Aggregate link-level residual/oracle diagnostics by subject and edge."""
 
-    grouped: dict[tuple[str, str, str, int], list[Mapping[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, int], list[Mapping[str, Any]]] = defaultdict(
+        list
+    )
     for row in rows:
         grouped[
             (
@@ -105,7 +108,9 @@ def summarize_registration_residual_oracle_qa_links(
         ].append(row)
 
     summary: list[dict[str, Any]] = []
-    for (subject, source_name, target_name, session_gap), group in sorted(grouped.items()):
+    for (subject, source_name, target_name, session_gap), group in sorted(
+        grouped.items()
+    ):
         summary.append(
             {
                 "subject": subject,
@@ -117,20 +122,38 @@ def summarize_registration_residual_oracle_qa_links(
                 "median_raw_iou": _stat(group, "raw_iou"),
                 "median_baseline_iou": _stat(group, "baseline_iou"),
                 "median_oracle_iou": _stat(group, "oracle_iou"),
-                "baseline_iou_row_hit1_rate": _mean_bool(group, "baseline_iou_row_rank_is_1"),
-                "oracle_iou_row_hit1_rate": _mean_bool(group, "oracle_iou_row_rank_is_1"),
-                "baseline_iou_column_hit1_rate": _mean_bool(group, "baseline_iou_column_rank_is_1"),
-                "oracle_iou_column_hit1_rate": _mean_bool(group, "oracle_iou_column_rank_is_1"),
-                "baseline_iou_mutual_hit1_rate": _mean_bool(group, "baseline_iou_mutual_rank_is_1"),
-                "oracle_iou_mutual_hit1_rate": _mean_bool(group, "oracle_iou_mutual_rank_is_1"),
+                "baseline_iou_row_hit1_rate": _mean_bool(
+                    group, "baseline_iou_row_rank_is_1"
+                ),
+                "oracle_iou_row_hit1_rate": _mean_bool(
+                    group, "oracle_iou_row_rank_is_1"
+                ),
+                "baseline_iou_column_hit1_rate": _mean_bool(
+                    group, "baseline_iou_column_rank_is_1"
+                ),
+                "oracle_iou_column_hit1_rate": _mean_bool(
+                    group, "oracle_iou_column_rank_is_1"
+                ),
+                "baseline_iou_mutual_hit1_rate": _mean_bool(
+                    group, "baseline_iou_mutual_rank_is_1"
+                ),
+                "oracle_iou_mutual_hit1_rate": _mean_bool(
+                    group, "oracle_iou_mutual_rank_is_1"
+                ),
                 "median_baseline_iou_row_rank": _stat(group, "baseline_iou_row_rank"),
                 "median_oracle_iou_row_rank": _stat(group, "oracle_iou_row_rank"),
-                "median_baseline_iou_row_margin": _stat(group, "baseline_iou_row_margin"),
+                "median_baseline_iou_row_margin": _stat(
+                    group, "baseline_iou_row_margin"
+                ),
                 "median_oracle_iou_row_margin": _stat(group, "oracle_iou_row_margin"),
                 "median_baseline_residual_norm": _stat(group, "baseline_residual_norm"),
                 "median_oracle_residual_norm": _stat(group, "oracle_residual_norm"),
-                "median_abs_baseline_residual_x": _stat(group, "baseline_abs_residual_x"),
-                "median_abs_baseline_residual_y": _stat(group, "baseline_abs_residual_y"),
+                "median_abs_baseline_residual_x": _stat(
+                    group, "baseline_abs_residual_x"
+                ),
+                "median_abs_baseline_residual_y": _stat(
+                    group, "baseline_abs_residual_y"
+                ),
                 "median_abs_baseline_radial_residual": _stat(
                     group,
                     "baseline_abs_residual_radial_component",
@@ -193,7 +216,9 @@ def write_registration_residual_oracle_qa_results(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
-        output_path.write_text(json.dumps(list(rows), indent=2) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(list(rows), indent=2) + "\n", encoding="utf-8"
+        )
         return
     if output_format == "csv":
         with output_path.open("w", newline="", encoding="utf-8") as handle:
@@ -250,7 +275,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "none",
         ),
     )
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--include-non-cells", action="store_true")
     parser.add_argument("--cell-probability-threshold", type=float, default=0.5)
     parser.add_argument("--weighted-masks", action="store_true")
@@ -264,7 +291,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-rank-deficient-fit", action="store_true")
     parser.add_argument("--ridge", type=float, default=0.0)
     parser.add_argument("--level", default="summary", choices=("summary", "links"))
-    parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--progress", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", default="table", choices=("table", "json", "csv"))
     return parser
@@ -410,8 +439,12 @@ def _audit_edge(
     oracle_target_centroids = _mask_centroids_xy(oracle_plane.roi_masks)
 
     raw_iou_matrix = _maybe_pairwise_iou(source_plane.roi_masks, target_plane.roi_masks)
-    baseline_iou_matrix = _pairwise_iou_matrix(source_plane.roi_masks, baseline_plane.roi_masks)
-    oracle_iou_matrix = _pairwise_iou_matrix(source_plane.roi_masks, oracle_plane.roi_masks)
+    baseline_iou_matrix = _pairwise_iou_matrix(
+        source_plane.roi_masks, baseline_plane.roi_masks
+    )
+    oracle_iou_matrix = _pairwise_iou_matrix(
+        source_plane.roi_masks, oracle_plane.roi_masks
+    )
 
     rows: list[dict[str, Any]] = []
     for link_index, (source_local, target_local, source_roi, target_roi) in enumerate(
@@ -528,7 +561,9 @@ def _roi_lookup(plane: CalciumPlaneData) -> dict[int, int]:
         if plane.roi_indices is None
         else np.asarray(plane.roi_indices, dtype=int).reshape(-1)
     )
-    return {int(roi_index): local_index for local_index, roi_index in enumerate(indices)}
+    return {
+        int(roi_index): local_index for local_index, roi_index in enumerate(indices)
+    }
 
 
 def _plane_centroids_xy(plane: CalciumPlaneData, *, weighted: bool) -> np.ndarray:
@@ -545,7 +580,9 @@ def _mask_centroids_xy(masks: np.ndarray) -> np.ndarray:
     return centroids
 
 
-def _maybe_pairwise_iou(source_masks: np.ndarray, target_masks: np.ndarray) -> np.ndarray:
+def _maybe_pairwise_iou(
+    source_masks: np.ndarray, target_masks: np.ndarray
+) -> np.ndarray:
     if np.asarray(source_masks).shape[1:] != np.asarray(target_masks).shape[1:]:
         return np.full(
             (np.asarray(source_masks).shape[0], np.asarray(target_masks).shape[0]),
@@ -638,7 +675,9 @@ def _centroid_residual_metrics(
         f"{prefix}residual_x": float(residual_xy[0]),
         f"{prefix}residual_y": float(residual_xy[1]),
         f"{prefix}residual_norm": float(np.linalg.norm(residual_xy)),
-        f"{prefix}residual_angle_rad": float(np.arctan2(residual_xy[1], residual_xy[0])),
+        f"{prefix}residual_angle_rad": float(
+            np.arctan2(residual_xy[1], residual_xy[0])
+        ),
         f"{prefix}residual_radial_component": radial_component,
         f"{prefix}residual_tangential_component": tangential_component,
         f"{prefix}abs_residual_x": float(abs(residual_xy[0])),
