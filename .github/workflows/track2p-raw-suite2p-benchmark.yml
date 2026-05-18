@@ -40,6 +40,11 @@ on:
         type: boolean
         default: true
         required: true
+      run_monotone_loso:
+        description: "Run monotone-ranking leave-one-subject-out variant"
+        type: boolean
+        default: true
+        required: true
       run_fov_affine_soft_iou_only:
         description: "Run only the FOV-affine registered-IoU soft-overlap sweep"
         type: boolean
@@ -142,10 +147,14 @@ jobs:
           METADATA_DATA_PATH: ${{ inputs.metadata_data_path }}
           EXCLUDE_SUBJECTS: ${{ inputs.exclude_subjects }}
           RUN_CALIBRATED_LOSO: ${{ inputs.run_calibrated_loso }}
+          RUN_MONOTONE_LOSO: ${{ inputs.run_monotone_loso }}
+          RUN_FOV_AFFINE_SOFT_IOU_ONLY: ${{ inputs.run_fov_affine_soft_iou_only }}
+          RUN_SHIFTED_IOU_ONLY: ${{ inputs.run_shifted_iou_only }}
         run: |
           set -euo pipefail
           min_subjects=1
-          if [[ "$RUN_CALIBRATED_LOSO" == "true" ]]; then
+          if [[ "$RUN_FOV_AFFINE_SOFT_IOU_ONLY" != "true" && "$RUN_SHIFTED_IOU_ONLY" != "true" ]] \
+            && [[ "$RUN_CALIBRATED_LOSO" == "true" || "$RUN_MONOTONE_LOSO" == "true" ]]; then
             min_subjects=2
           fi
           mkdir -p results
@@ -330,11 +339,27 @@ jobs:
             --format csv \
             --output results/global_calibrated_loso_gap${{ inputs.max_gap }}.csv
 
+      - name: Run monotone-ranking LOSO global assignment
+        if: ${{ inputs.run_monotone_loso && !inputs.run_fov_affine_soft_iou_only && !inputs.run_shifted_iou_only }}
+        run: |
+          bayescatrack benchmark track2p-monotone-loso \
+            --data "${{ steps.prep.outputs.data_root }}" \
+            --reference "${{ steps.prep.outputs.reference_root }}" \
+            --reference-kind "${{ steps.prep.outputs.reference_kind }}" \
+            --input-format suite2p \
+            --include-non-cells \
+            --no-include-behavior \
+            --transform-type "${{ inputs.transform_type }}" \
+            --max-gap "${{ inputs.max_gap }}" \
+            --format csv \
+            --output results/global_monotone_loso_gap${{ inputs.max_gap }}.csv
+
       - name: Aggregate benchmark comparison
         if: ${{ !inputs.run_fov_affine_soft_iou_only && !inputs.run_shifted_iou_only }}
         env:
           MAX_GAP: ${{ inputs.max_gap }}
           RUN_LOSO: ${{ inputs.run_calibrated_loso }}
+          RUN_MONOTONE_LOSO: ${{ inputs.run_monotone_loso }}
         run: |
           args=(
             --input "Track2p=results/track2p_baseline.csv"
@@ -343,6 +368,9 @@ jobs:
           )
           if [[ "$RUN_LOSO" == "true" ]]; then
             args+=(--input "Calibrated-LOSO=results/global_calibrated_loso_gap${MAX_GAP}.csv")
+          fi
+          if [[ "$RUN_MONOTONE_LOSO" == "true" ]]; then
+            args+=(--input "Monotone-LOSO=results/global_monotone_loso_gap${MAX_GAP}.csv")
           fi
           bayescatrack benchmark compare "${args[@]}" --output results/comparison.md
           bayescatrack benchmark compare "${args[@]}" --format csv --output results/comparison.csv
@@ -388,6 +416,7 @@ jobs:
             echo "include_non_cells: true"
             echo "transform_type: ${{ inputs.transform_type }}"
             echo "run_calibrated_loso: ${{ inputs.run_calibrated_loso }}"
+            echo "run_monotone_loso: ${{ inputs.run_monotone_loso }}"
             cat results/comparison.md
           } >> "$GITHUB_STEP_SUMMARY"
 
