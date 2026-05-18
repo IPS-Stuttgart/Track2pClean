@@ -410,9 +410,7 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--write-incrementally requires --output")
         if args.format != "csv":
             parser.error("--write-incrementally currently supports --format csv only")
-        write_sweep_results_incrementally(
-            iter_track2p_cost_sweep(config), args.output
-        )
+        write_sweep_results_incrementally(iter_track2p_cost_sweep(config), args.output)
         return 0
 
     rows = [result.to_dict() for result in run_track2p_cost_sweep(config)]
@@ -558,7 +556,9 @@ def _defaulted_nonnegative_values(
     return _normalise_nonnegative_values(values or defaults, name="Solver penalties")
 
 
-def _normalise_positive_values(values: Sequence[float], *, name: str) -> tuple[float, ...]:
+def _normalise_positive_values(
+    values: Sequence[float], *, name: str
+) -> tuple[float, ...]:
     normalised = tuple(float(value) for value in values)
     if not normalised:
         raise ValueError(f"At least one {name} value is required")

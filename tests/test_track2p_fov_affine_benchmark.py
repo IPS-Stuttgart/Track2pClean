@@ -4,9 +4,10 @@
 
 import numpy as np
 import numpy.testing as npt
-
 from bayescatrack import CalciumPlaneData
-from bayescatrack.association.pyrecest_global_assignment import registered_iou_cost_kwargs
+from bayescatrack.association.pyrecest_global_assignment import (
+    registered_iou_cost_kwargs,
+)
 from bayescatrack.core import _bridge_impl
 from bayescatrack.experiments.track2p_fov_affine_benchmark import (
     _dilate_mask_stack,

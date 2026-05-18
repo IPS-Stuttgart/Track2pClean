@@ -70,10 +70,14 @@ def register_measurement_plane_by_nonrigid_fov(
             "registration_transform_type": method,
             "registration_backend_reason": "image-driven tile landmark growth registration",
             "nonrigid_registration_backend": "tile-landmark-affine-initialization",
-            "nonrigid_registration_grid_shape": tuple(int(value) for value in grid_shape),
+            "nonrigid_registration_grid_shape": tuple(
+                int(value) for value in grid_shape
+            ),
             "nonrigid_registration_landmarks": int(estimate.tile_reference_xy.shape[0]),
             "nonrigid_registration_fit_rmse": float(estimate.fit_rmse),
-            "nonrigid_registration_fallback_translation": bool(estimate.fallback_translation),
+            "nonrigid_registration_fallback_translation": bool(
+                estimate.fallback_translation
+            ),
         }
     )
     registered_plane = registered_plane.with_replaced_masks(
@@ -87,9 +91,15 @@ def register_measurement_plane_by_nonrigid_fov(
         measurement_plane=measurement_plane,
         registered_measurement_plane=registered_plane,
         transform_type=method,
-        landmark_points_reference_xy=np.asarray(estimate.tile_reference_xy, dtype=float),
-        landmark_points_measurement_xy=np.asarray(estimate.tile_measurement_xy, dtype=float),
-        landmark_peak_correlations=np.asarray(estimate.tile_peak_correlation, dtype=float),
+        landmark_points_reference_xy=np.asarray(
+            estimate.tile_reference_xy, dtype=float
+        ),
+        landmark_points_measurement_xy=np.asarray(
+            estimate.tile_measurement_xy, dtype=float
+        ),
+        landmark_peak_correlations=np.asarray(
+            estimate.tile_peak_correlation, dtype=float
+        ),
     )
 
 

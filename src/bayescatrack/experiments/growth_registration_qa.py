@@ -13,14 +13,16 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.association.pyrecest_global_assignment import (
     registered_iou_cost_kwargs,
     roi_aware_cost_kwargs,
     session_edge_pairs,
 )
 from bayescatrack.association.registered_masks import replace_empty_registered_masks
-from bayescatrack.core.bridge import Track2pSession, build_session_pair_association_bundle
+from bayescatrack.core.bridge import (
+    Track2pSession,
+    build_session_pair_association_bundle,
+)
 from bayescatrack.experiments.oracle_affine_registration_qa import (
     OracleAffineFit,
     _fit_affine_xy,
@@ -31,9 +33,15 @@ from bayescatrack.experiments.oracle_affine_registration_qa import (
 )
 from bayescatrack.experiments.registration_qa_report import (
     _benchmark_config,
+)
+from bayescatrack.experiments.registration_qa_report import (
     _config_from_args as _registration_config_from_args,
+)
+from bayescatrack.experiments.registration_qa_report import (
     _csv_fieldnames,
     _format_value,
+)
+from bayescatrack.experiments.registration_qa_report import (
     build_arg_parser as _registration_qa_arg_parser,
 )
 from bayescatrack.experiments.track2p_benchmark import (
@@ -57,40 +65,58 @@ class GrowthRegistrationQAConfig:
     ridge: float = 0.0
 
 
-def run_growth_registration_qa_report(config: GrowthRegistrationQAConfig) -> list[dict[str, Any]]:
+def run_growth_registration_qa_report(
+    config: GrowthRegistrationQAConfig,
+) -> list[dict[str, Any]]:
     """Return one row per manual-GT link with spatial residual diagnostics."""
 
     if config.min_fit_links < 3:
         raise ValueError("min_fit_links must be at least 3")
     if config.registration.cost == "calibrated":
-        raise ValueError("growth-registration-qa supports registered-iou and roi-aware costs only")
+        raise ValueError(
+            "growth-registration-qa supports registered-iou and roi-aware costs only"
+        )
 
     subject_dirs = discover_subject_dirs(config.registration.data)
     if not subject_dirs:
-        raise ValueError(f"No Track2p-style subject directories found under {config.registration.data}")
+        raise ValueError(
+            f"No Track2p-style subject directories found under {config.registration.data}"
+        )
 
     benchmark_config = _benchmark_config(config.registration)
     rows: list[dict[str, Any]] = []
     for subject_dir in subject_dirs:
         if config.registration.progress:
-            print(f"growth-registration-qa: {subject_dir.name}", file=sys.stderr, flush=True)
+            print(
+                f"growth-registration-qa: {subject_dir.name}",
+                file=sys.stderr,
+                flush=True,
+            )
         reference = _load_reference_for_subject(
             subject_dir, data_root=config.registration.data, config=benchmark_config
         )
-        _validate_reference_for_benchmark(reference, subject_dir=subject_dir, config=benchmark_config)
+        _validate_reference_for_benchmark(
+            reference, subject_dir=subject_dir, config=benchmark_config
+        )
         sessions = _load_subject_sessions(subject_dir, benchmark_config)
         _validate_reference_roi_indices(reference, sessions)
         reference_matrix = _reference_matrix(
             reference, curated_only=config.registration.curated_only
         )
-        rows.extend(_audit_subject(subject_dir.name, sessions, reference_matrix, config))
+        rows.extend(
+            _audit_subject(subject_dir.name, sessions, reference_matrix, config)
+        )
     return rows
 
 
-def summarize_growth_registration_qa(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def summarize_growth_registration_qa(
+    rows: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """Aggregate link rows by edge and source-image quadrant."""
 
-    grouped: dict[tuple[str, str, str, str, str], list[Mapping[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, str, str], list[Mapping[str, Any]]] = (
+        defaultdict(list)
+    )
     for row in rows:
         grouped[
             (
@@ -103,7 +129,9 @@ def summarize_growth_registration_qa(rows: Sequence[Mapping[str, Any]]) -> list[
         ].append(row)
 
     summary: list[dict[str, Any]] = []
-    for (cost, subject, source_name, target_name, quadrant), group in sorted(grouped.items()):
+    for (cost, subject, source_name, target_name, quadrant), group in sorted(
+        grouped.items()
+    ):
         summary.append(
             {
                 "cost": cost,
@@ -115,14 +143,24 @@ def summarize_growth_registration_qa(rows: Sequence[Mapping[str, Any]]) -> list[
                 "transform_type": _mode(group, "transform_type"),
                 "median_raw_iou": _stat(group, "raw_iou"),
                 "median_registered_iou": _stat(group, "registered_iou"),
-                "nonzero_registered_iou_rate": _mean_bool(group, "registered_iou_positive"),
+                "nonzero_registered_iou_rate": _mean_bool(
+                    group, "registered_iou_positive"
+                ),
                 "median_raw_residual_norm": _stat(group, "raw_residual_norm"),
-                "median_registered_residual_norm": _stat(group, "registered_residual_norm"),
-                "p90_registered_residual_norm": _stat(group, "registered_residual_norm", 90),
+                "median_registered_residual_norm": _stat(
+                    group, "registered_residual_norm"
+                ),
+                "p90_registered_residual_norm": _stat(
+                    group, "registered_residual_norm", 90
+                ),
                 "median_gt_rank": _stat(group, "gt_rank"),
                 "gt_admissible_rate": _mean_bool(group, "gt_candidate_admissible"),
-                "empty_registered_mask_rate": _mean_bool(group, "target_empty_registered_mask"),
-                "median_lower_left_distance_norm": _stat(group, "source_lower_left_distance_norm"),
+                "empty_registered_mask_rate": _mean_bool(
+                    group, "target_empty_registered_mask"
+                ),
+                "median_lower_left_distance_norm": _stat(
+                    group, "source_lower_left_distance_norm"
+                ),
                 "oracle_affine_rmse": _stat(group, "oracle_affine_rmse"),
                 "oracle_affine_scale_1": _stat(group, "oracle_affine_scale_1"),
                 "oracle_affine_scale_2": _stat(group, "oracle_affine_scale_2"),
@@ -161,7 +199,9 @@ def format_growth_registration_qa_table(rows: Sequence[Mapping[str, Any]]) -> st
         "| " + " | ".join(["---"] * len(columns)) + " |",
     ]
     for row in rows:
-        lines.append("| " + " | ".join(_format_value(row.get(col, "")) for col in columns) + " |")
+        lines.append(
+            "| " + " | ".join(_format_value(row.get(col, "")) for col in columns) + " |"
+        )
     return "\n".join(lines)
 
 
@@ -180,7 +220,9 @@ def write_growth_registration_qa_results(
             writer.writeheader()
             writer.writerows(rows)
         return
-    output.write_text(format_growth_registration_qa_table(rows) + "\n", encoding="utf-8")
+    output.write_text(
+        format_growth_registration_qa_table(rows) + "\n", encoding="utf-8"
+    )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -188,14 +230,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     parser = _registration_qa_arg_parser()
     parser.prog = "bayescatrack benchmark growth-registration-qa"
-    parser.description = (
-        "Report spatially resolved growth/deformation registration QA on manual-GT links."
-    )
-    level_action = parser._option_string_actions["--level"]  # pylint: disable=protected-access
+    parser.description = "Report spatially resolved growth/deformation registration QA on manual-GT links."
+    level_action = parser._option_string_actions[
+        "--level"
+    ]  # pylint: disable=protected-access
     level_action.choices = ("links", "spatial-summary")
     level_action.default = "spatial-summary"
-    transform_action = parser._option_string_actions["--transform-type"]  # pylint: disable=protected-access
-    transform_action.choices = ("affine", "rigid", "fov-translation", "none", "gt-affine-oracle")
+    transform_action = parser._option_string_actions[
+        "--transform-type"
+    ]  # pylint: disable=protected-access
+    transform_action.choices = (
+        "affine",
+        "rigid",
+        "fov-translation",
+        "none",
+        "gt-affine-oracle",
+    )
     transform_action.default = "gt-affine-oracle"
     parser.add_argument("--min-fit-links", type=int, default=3)
     parser.add_argument("--allow-rank-deficient-fit", action="store_true")
@@ -305,7 +355,8 @@ def _edge_link_rows(
             source_session.plane_data.roi_masks[source_locals],
             target_session.plane_data.roi_masks[target_locals],
         )
-        if source_session.plane_data.image_shape == target_session.plane_data.image_shape
+        if source_session.plane_data.image_shape
+        == target_session.plane_data.image_shape
         else np.full(len(links), np.nan)
     )
     registered_iou = _linked_iou(
@@ -313,9 +364,13 @@ def _edge_link_rows(
         registered_plane.roi_masks[target_locals],
     )
     cost_plane, empty_registered_rois = replace_empty_registered_masks(registered_plane)
-    cost_matrix = _pairwise_cost_matrix(source_session, target_session, cost_plane, config)
+    cost_matrix = _pairwise_cost_matrix(
+        source_session, target_session, cost_plane, config
+    )
     if empty_registered_rois.size:
-        cost_matrix[:, empty_registered_rois] = float(_cost_kwargs(config).get("large_cost", 1.0e6))
+        cost_matrix[:, empty_registered_rois] = float(
+            _cost_kwargs(config).get("large_cost", 1.0e6)
+        )
 
     affine_values = _affine_summary(fit, source_session.plane_data.image_shape)
     rows: list[dict[str, Any]] = []
@@ -324,12 +379,18 @@ def _edge_link_rows(
         gt_cost = float(cost_row[target_local])
         finite_costs = cost_row[np.isfinite(cost_row)]
         gt_rank = int(1 + np.count_nonzero(cost_row < gt_cost))
-        below_threshold = True if config.registration.cost_threshold is None else bool(
-            gt_cost <= float(config.registration.cost_threshold)
+        below_threshold = (
+            True
+            if config.registration.cost_threshold is None
+            else bool(gt_cost <= float(config.registration.cost_threshold))
         )
         raw_residual = raw_target_xy[link_index] - source_xy[link_index]
         registered_residual = registered_target_xy[link_index] - source_xy[link_index]
-        target_empty = bool(empty_registered_rois[target_local]) if empty_registered_rois.size else False
+        target_empty = (
+            bool(empty_registered_rois[target_local])
+            if empty_registered_rois.size
+            else False
+        )
         rows.append(
             {
                 "cost": config.registration.cost,
@@ -344,7 +405,9 @@ def _edge_link_rows(
                 "target_local_index": int(target_local),
                 "source_x": float(source_xy[link_index, 0]),
                 "source_y": float(source_xy[link_index, 1]),
-                "source_quadrant": _quadrant(source_xy[link_index], source_session.plane_data.image_shape),
+                "source_quadrant": _quadrant(
+                    source_xy[link_index], source_session.plane_data.image_shape
+                ),
                 "source_lower_left_distance_norm": _lower_left_distance_norm(
                     source_xy[link_index], source_session.plane_data.image_shape
                 ),
@@ -412,7 +475,9 @@ def _lower_left_distance_norm(xy: np.ndarray, image_shape: tuple[int, int]) -> f
     return float(np.linalg.norm(np.asarray(xy, dtype=float) - anchor) / diagonal)
 
 
-def _affine_summary(fit: OracleAffineFit | None, image_shape: tuple[int, int]) -> dict[str, float | int]:
+def _affine_summary(
+    fit: OracleAffineFit | None, image_shape: tuple[int, int]
+) -> dict[str, float | int]:
     if fit is None:
         return {
             "oracle_affine_n_links": 0,
@@ -428,16 +493,18 @@ def _affine_summary(fit: OracleAffineFit | None, image_shape: tuple[int, int]) -
     height, width = int(image_shape[0]), int(image_shape[1])
     lower_left = np.asarray([0.0, float(height - 1)])
     upper_right = np.asarray([float(width - 1), 0.0])
-    displacement_delta = _affine_displacement(fit.matrix_xy, upper_right) - _affine_displacement(
-        fit.matrix_xy, lower_left
-    )
+    displacement_delta = _affine_displacement(
+        fit.matrix_xy, upper_right
+    ) - _affine_displacement(fit.matrix_xy, lower_left)
     return {
         "oracle_affine_n_links": int(fit.residual_norm.size),
         "oracle_affine_rmse": fit.rms_residual,
         "oracle_affine_scale_1": float(scales[0]),
         "oracle_affine_scale_2": float(scales[-1]),
         "oracle_affine_shear_norm": shear_norm,
-        "affine_lower_left_to_upper_right_delta_norm": float(np.linalg.norm(displacement_delta)),
+        "affine_lower_left_to_upper_right_delta_norm": float(
+            np.linalg.norm(displacement_delta)
+        ),
     }
 
 
@@ -449,10 +516,16 @@ def _affine_displacement(matrix_xy: np.ndarray, point_xy: np.ndarray) -> np.ndar
 def _cost_percentile(finite_costs: np.ndarray, gt_cost: float) -> float:
     if not np.isfinite(gt_cost) or finite_costs.size <= 1:
         return float("nan")
-    return float(100.0 * np.count_nonzero(finite_costs < gt_cost) / max(int(finite_costs.size) - 1, 1))
+    return float(
+        100.0
+        * np.count_nonzero(finite_costs < gt_cost)
+        / max(int(finite_costs.size) - 1, 1)
+    )
 
 
-def _stat(group: Sequence[Mapping[str, Any]], key: str, percentile: float = 50.0) -> float:
+def _stat(
+    group: Sequence[Mapping[str, Any]], key: str, percentile: float = 50.0
+) -> float:
     values = np.asarray([row.get(key, np.nan) for row in group], dtype=float)
     values = values[np.isfinite(values)]
     if not values.size:
