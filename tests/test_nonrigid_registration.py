@@ -4,13 +4,15 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
-
 from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.nonrigid_registration import (
     NONRIGID_REGISTRATION_TRANSFORM_TYPES,
     register_measurement_plane_by_nonrigid_fov,
 )
-from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES, register_plane_pair
+from bayescatrack.track2p_registration import (
+    REGISTRATION_TRANSFORM_TYPES,
+    register_plane_pair,
+)
 
 
 def _spot_image(shape: tuple[int, int], center_yx: tuple[int, int]) -> np.ndarray:

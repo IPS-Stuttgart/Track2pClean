@@ -14,7 +14,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-
 from bayescatrack.evaluation.track2p_teacher_audit import (
     audit_track2p_teacher_edges,
     write_teacher_audit_rows_csv,
@@ -26,13 +25,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manual-gt", required=True, type=Path, help="Manual-GT track matrix CSV.")
-    parser.add_argument("--track2p", required=True, type=Path, help="Track2p teacher track matrix CSV.")
-    parser.add_argument("--bayes", required=True, type=Path, help="BayesCaTrack track matrix CSV.")
-    parser.add_argument("--output", required=True, type=Path, help="Output edge-level audit CSV.")
-    parser.add_argument("--summary-output", type=Path, help="Optional output summary CSV.")
-    parser.add_argument("--subject", default="", help="Subject identifier copied into output rows.")
-    parser.add_argument("--max-gap", type=int, help="Maximum audited session gap. Defaults to all gaps.")
+    parser.add_argument(
+        "--manual-gt", required=True, type=Path, help="Manual-GT track matrix CSV."
+    )
+    parser.add_argument(
+        "--track2p", required=True, type=Path, help="Track2p teacher track matrix CSV."
+    )
+    parser.add_argument(
+        "--bayes", required=True, type=Path, help="BayesCaTrack track matrix CSV."
+    )
+    parser.add_argument(
+        "--output", required=True, type=Path, help="Output edge-level audit CSV."
+    )
+    parser.add_argument(
+        "--summary-output", type=Path, help="Optional output summary CSV."
+    )
+    parser.add_argument(
+        "--subject", default="", help="Subject identifier copied into output rows."
+    )
+    parser.add_argument(
+        "--max-gap", type=int, help="Maximum audited session gap. Defaults to all gaps."
+    )
     parser.add_argument(
         "--session-names",
         help="Comma-separated session names. Defaults to numeric session indices.",

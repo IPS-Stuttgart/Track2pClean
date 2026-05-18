@@ -156,7 +156,9 @@ def build_registered_pairwise_costs(
         else:
             cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
         if activity_tie_breaker_weight > 0.0:
-            cost_matrix = np.asarray(cost_matrix, dtype=float) + activity_tie_breaker_cost_matrix(
+            cost_matrix = np.asarray(
+                cost_matrix, dtype=float
+            ) + activity_tie_breaker_cost_matrix(
                 bundle.pairwise_components,
                 component_name=activity_tie_breaker_component,
                 weight=activity_tie_breaker_weight,

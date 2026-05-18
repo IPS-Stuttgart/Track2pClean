@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.core import _bridge_impl
 from bayescatrack.core.bridge import CalciumPlaneData
 
@@ -79,15 +78,11 @@ def _install_cost_matrix_patch() -> None:
         if soft_iou_weight < 0.0:
             raise ValueError("soft_iou_weight must be non-negative")
         if distance_transform_overlap_weight < 0.0:
-            raise ValueError(
-                "distance_transform_overlap_weight must be non-negative"
-            )
+            raise ValueError("distance_transform_overlap_weight must be non-negative")
         if soft_iou_radius < 0:
             raise ValueError("soft_iou_radius must be non-negative")
         if distance_transform_overlap_radius < 0:
-            raise ValueError(
-                "distance_transform_overlap_radius must be non-negative"
-            )
+            raise ValueError("distance_transform_overlap_radius must be non-negative")
         if (
             distance_transform_overlap_scale is not None
             and distance_transform_overlap_scale <= 0.0
@@ -97,9 +92,8 @@ def _install_cost_matrix_patch() -> None:
             )
 
         return_components = bool(kwargs.pop("return_components", False))
-        needs_soft_components = (
-            return_components
-            and (soft_iou_radius > 0 or distance_transform_overlap_radius > 0)
+        needs_soft_components = return_components and (
+            soft_iou_radius > 0 or distance_transform_overlap_radius > 0
         )
         needs_soft_cost = (
             soft_iou_weight > 0.0 or distance_transform_overlap_weight > 0.0
@@ -159,9 +153,11 @@ def _install_cost_matrix_patch() -> None:
             distance_transform_overlap_cost = np.zeros_like(total_cost)
 
         large_cost = float(kwargs.get("large_cost", 1.0e6))
-        total_cost = _bridge_impl._ensure_finite_cost_matrix(  # pylint: disable=protected-access
-            total_cost,
-            large_cost=large_cost,
+        total_cost = (
+            _bridge_impl._ensure_finite_cost_matrix(  # pylint: disable=protected-access
+                total_cost,
+                large_cost=large_cost,
+            )
         )
         if not return_components:
             return total_cost
@@ -334,7 +330,9 @@ def _pairwise_one_sided_distance_overlap(
         raise ValueError("Mask stacks must have matching spatial shapes")
     scores = np.zeros((source_support.shape[0], query_support.shape[0]), dtype=float)
     query_areas = np.maximum(
-        _bridge_impl._mask_support_areas(query_support),  # pylint: disable=protected-access
+        _bridge_impl._mask_support_areas(
+            query_support
+        ),  # pylint: disable=protected-access
         1.0,
     )
     covered = np.zeros_like(source_support, dtype=bool)
@@ -344,13 +342,14 @@ def _pairwise_one_sided_distance_overlap(
         covered |= dilated
         if not np.any(band):
             continue
-        weight = float(
-            np.exp(-0.5 * (float(distance) / float(distance_scale)) ** 2)
-        )
-        scores += weight * _bridge_impl._pairwise_sparse_mask_dot(  # pylint: disable=protected-access
-            band,
-            query_support,
-            binary=True,
+        weight = float(np.exp(-0.5 * (float(distance) / float(distance_scale)) ** 2))
+        scores += (
+            weight
+            * _bridge_impl._pairwise_sparse_mask_dot(  # pylint: disable=protected-access
+                band,
+                query_support,
+                binary=True,
+            )
         )
     return np.clip(scores / query_areas[None, :], 0.0, 1.0)
 

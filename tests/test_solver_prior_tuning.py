@@ -55,7 +55,9 @@ def test_tune_solver_priors_selects_best_training_candidate(monkeypatch):
     def fake_solver(_pairwise_costs, **kwargs):
         return Result(kwargs["start_cost"])
 
-    monkeypatch.setattr(tuning, "_load_pyrecest_multisession_solver", lambda: fake_solver)
+    monkeypatch.setattr(
+        tuning, "_load_pyrecest_multisession_solver", lambda: fake_solver
+    )
     monkeypatch.setattr(
         tuning,
         "tracks_to_suite2p_index_matrix",

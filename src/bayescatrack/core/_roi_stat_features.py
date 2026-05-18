@@ -120,9 +120,11 @@ def _pairwise_roi_feature_components(
     missing_radius = np.zeros(component_shape, dtype=bool)
     missing_any_stat = np.zeros(component_shape, dtype=bool)
 
-    for raw_feature_name, component_name, transform_name in (
-        _SPLIT_ROI_FEATURE_COMPONENT_SPECS
-    ):
+    for (
+        raw_feature_name,
+        component_name,
+        transform_name,
+    ) in _SPLIT_ROI_FEATURE_COMPONENT_SPECS:
         reference_values = _roi_feature_vector(reference_plane, raw_feature_name)
         measurement_values = _roi_feature_vector(measurement_plane, raw_feature_name)
 
@@ -170,9 +172,10 @@ def _pairwise_scaled_absdiff(
     *,
     scale_epsilon: float,
 ) -> tuple[np.ndarray, np.ndarray]:
-    valid = np.isfinite(reference_values)[:, None] & np.isfinite(measurement_values)[
-        None, :
-    ]
+    valid = (
+        np.isfinite(reference_values)[:, None]
+        & np.isfinite(measurement_values)[None, :]
+    )
     diff = np.zeros(valid.shape, dtype=float)
     if np.any(valid):
         scale = _roi_feature_scale(
