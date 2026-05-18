@@ -237,9 +237,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ]
     level_action.choices = ("links", "spatial-summary")
     level_action.default = "spatial-summary"
-    transform_action = parser._option_string_actions[  # pylint: disable=protected-access
-        "--transform-type"
-    ]
+    transform_action = (
+        parser._option_string_actions[  # pylint: disable=protected-access
+            "--transform-type"
+        ]
+    )
     transform_action.choices = (
         "affine",
         "rigid",
