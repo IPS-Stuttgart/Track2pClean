@@ -40,7 +40,6 @@ from bayescatrack.experiments.track2p_benchmark import (
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
     discover_subject_dirs,
-    solve_configured_global_assignment,
 )
 from bayescatrack.reference import Track2pReference
 
@@ -262,12 +261,11 @@ def run_track2p_loso_calibration(
             }
 
         progress.step(f"solving {held_out.subject_name}")
-        assignment = solve_configured_global_assignment(
+        assignment = _solve_loso_global_assignment(
             held_out.sessions,
-            config,
-            cost="calibrated",
+            config=config,
             calibrated_model=calibrated_model,
-            **solver_kwargs,
+            solver_kwargs=solver_kwargs,
         )
         predicted_matrix = tracks_to_suite2p_index_matrix(
             assignment.result.tracks, held_out.sessions
@@ -373,6 +371,36 @@ def _score_holdout_calibration(
         calibrated_model.model.predict_match_probability(features), dtype=float
     ).reshape(-1)
     return calibration_summary(probabilities, np.asarray(labels).reshape(-1))
+
+
+def _solve_loso_global_assignment(
+    sessions: Sequence[Track2pSession],
+    *,
+    config: Track2pBenchmarkConfig,
+    calibrated_model: Any,
+    solver_kwargs: Mapping[str, float | None],
+) -> Any:
+    pairwise_costs = build_registered_pairwise_costs(
+        sessions,
+        max_gap=config.max_gap,
+        cost="calibrated",
+        calibrated_model=calibrated_model,
+        transform_type=config.transform_type,
+        order=config.order,
+        weighted_centroids=config.weighted_centroids,
+        velocity_variance=config.velocity_variance,
+        regularization=config.regularization,
+        pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+    )
+    return solve_global_assignment_from_pairwise_costs(
+        pairwise_costs,
+        session_sizes=tuple(int(session.plane_data.n_rois) for session in sessions),
+        session_edges=session_edge_pairs(len(sessions), max_gap=config.max_gap),
+        start_cost=float(solver_kwargs["start_cost"]),
+        end_cost=float(solver_kwargs["end_cost"]),
+        gap_penalty=float(solver_kwargs["gap_penalty"]),
+        cost_threshold=solver_kwargs["cost_threshold"],
+    )
 
 
 def _load_subject_calibration_data(
