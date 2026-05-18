@@ -375,7 +375,9 @@ def _dilate_binary_mask_stack(masks: np.ndarray, radius: int) -> np.ndarray:
                 continue
             y_start = radius + offset_y
             x_start = radius + offset_x
-            dilated |= padded[:, y_start:y_start + height, x_start:x_start + width]
+            y_slice = slice(y_start, y_start + height)
+            x_slice = slice(x_start, x_start + width)
+            dilated |= padded[:, y_slice, x_slice]
     return dilated
 
 
