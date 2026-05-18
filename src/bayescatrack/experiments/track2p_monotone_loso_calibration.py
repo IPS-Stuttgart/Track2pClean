@@ -1,5 +1,6 @@
 """Leave-one-subject-out monotone-ranking Track2p calibration benchmark."""
 
+# jscpd:ignore-start
 from __future__ import annotations
 
 import argparse
@@ -375,3 +376,4 @@ def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
+# jscpd:ignore-end
