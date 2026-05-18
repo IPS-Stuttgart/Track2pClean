@@ -22,18 +22,12 @@ def test_soft_overlap_components_capture_near_miss_with_zero_exact_iou():
     reference = _single_roi_plane(reference_mask)
     measurement = _single_roi_plane(measurement_mask)
 
-    pairwise_kwargs = {
-        "centroid_weight": 0.0,
-        "iou_weight": 0.0,
-        "soft_iou_weight": 1.0,
-        "soft_iou_radius": 2,
-        "distance_transform_overlap_weight": 1.0,
-        "distance_transform_overlap_radius": 3,
-        "mask_cosine_weight": 0.0,
-        "area_weight": 0.0,
-        "roi_feature_weight": 0.0,
-        "return_components": True,
-    }
+    pairwise_kwargs = registered_soft_iou_cost_kwargs(
+        soft_iou_radius=2,
+        distance_transform_overlap_radius=3,
+        distance_transform_overlap_weight=1.0,
+    )
+    pairwise_kwargs["return_components"] = True
     _, components = reference.build_pairwise_cost_matrix(  # pylint: disable=unexpected-keyword-arg
         measurement, **pairwise_kwargs
     )
