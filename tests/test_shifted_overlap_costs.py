@@ -48,6 +48,37 @@ def test_shifted_overlap_finds_coherent_translated_match():
     assert components["shifted_iou_shift_norm"][0, 0] == 2.0
 
 
+def test_shifted_iou_sparse_path_matches_component_path():
+    reference = np.zeros((2, 10, 10), dtype=bool)
+    measurement = np.zeros((2, 10, 10), dtype=bool)
+    reference[0, 2:4, 2:4] = True
+    reference[1, 5:7, 5:8] = True
+    measurement[0, 2:4, 4:6] = True
+    measurement[1, 6:8, 5:8] = True
+
+    with_cosine = pairwise_shifted_overlap_matrices(
+        reference,
+        measurement,
+        radius=2,
+        include_mask_cosine=True,
+    )
+    without_cosine = pairwise_shifted_overlap_matrices(
+        reference,
+        measurement,
+        radius=2,
+        include_mask_cosine=False,
+    )
+
+    assert "shifted_mask_cosine_similarity" not in without_cosine
+    for key in (
+        "shifted_iou",
+        "shifted_iou_shift_y",
+        "shifted_iou_shift_x",
+        "shifted_iou_shift_norm",
+    ):
+        npt.assert_allclose(with_cosine[key], without_cosine[key])
+
+
 def test_shifted_iou_patch_replaces_registered_iou_cost():
     reference = np.zeros((1, 10, 10), dtype=bool)
     measurement = np.zeros((1, 10, 10), dtype=bool)

@@ -9,6 +9,7 @@ whole measurement ROI, so shape selectivity is preserved in crowded fields.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -195,6 +196,12 @@ def pairwise_shifted_overlap_matrices(
         raise ValueError("ROI masks must have shape (n_roi, height, width)")
     if reference_array.shape[1:] != measurement_array.shape[1:]:
         raise ValueError("Mask stacks must have matching spatial shapes")
+    if not include_mask_cosine:
+        return _pairwise_shifted_iou_from_support(
+            reference_array,
+            measurement_array,
+            radius=radius,
+        )
 
     cost_shape = (int(reference_array.shape[0]), int(measurement_array.shape[0]))
     best_iou: np.ndarray = np.zeros(cost_shape, dtype=float)
@@ -238,6 +245,151 @@ def pairwise_shifted_overlap_matrices(
         assert best_cosine is not None
         result["shifted_mask_cosine_similarity"] = best_cosine
     return result
+
+
+def _pairwise_shifted_iou_from_support(
+    reference_masks: np.ndarray,
+    measurement_masks: np.ndarray,
+    *,
+    radius: int,
+) -> dict[str, np.ndarray]:
+    reference_support = _mask_support(reference_masks)
+    measurement_support = _mask_support(measurement_masks)
+    n_reference, height, width = reference_masks.shape
+    n_measurement = int(measurement_masks.shape[0])
+    cost_shape = (int(n_reference), n_measurement)
+    best_iou: np.ndarray = np.zeros(cost_shape, dtype=float)
+    best_shift_y: np.ndarray = np.zeros(cost_shape, dtype=float)
+    best_shift_x: np.ndarray = np.zeros(cost_shape, dtype=float)
+    best_shift_norm: np.ndarray = np.zeros(cost_shape, dtype=float)
+
+    for dy, dx in shift_offsets(radius):
+        shifted_y: np.ndarray = measurement_support.y + dy
+        shifted_x: np.ndarray = measurement_support.x + dx
+        valid = (
+            (shifted_y >= 0)
+            & (shifted_y < height)
+            & (shifted_x >= 0)
+            & (shifted_x < width)
+        )
+        if not np.any(valid):
+            continue
+        shifted_pixels = shifted_y[valid] * width + shifted_x[valid]
+        shifted_rois = measurement_support.roi[valid]
+        shifted_areas = np.bincount(
+            shifted_rois,
+            minlength=n_measurement,
+        ).astype(float)
+        intersections = _pairwise_binary_intersections_from_support(
+            reference_support.pixel,
+            reference_support.roi,
+            shifted_pixels,
+            shifted_rois,
+            num_reference=int(n_reference),
+            num_measurement=n_measurement,
+        )
+        unions = (
+            reference_support.areas[:, None]
+            + shifted_areas[None, :]
+            - intersections
+        )
+        iou: np.ndarray = np.zeros(cost_shape, dtype=float)
+        valid_unions = unions > 0.0
+        iou[valid_unions] = intersections[valid_unions] / unions[valid_unions]
+        improved = iou > best_iou
+        if np.any(improved):
+            shift_norm = float(np.hypot(dy, dx))
+            best_iou[improved] = iou[improved]
+            best_shift_y[improved] = float(dy)
+            best_shift_x[improved] = float(dx)
+            best_shift_norm[improved] = shift_norm
+
+    return {
+        "shifted_iou": best_iou,
+        "shifted_iou_shift_y": best_shift_y,
+        "shifted_iou_shift_x": best_shift_x,
+        "shifted_iou_shift_norm": best_shift_norm,
+    }
+
+
+@dataclass(frozen=True)
+class _MaskSupport:
+    roi: np.ndarray
+    pixel: np.ndarray
+    y: np.ndarray
+    x: np.ndarray
+    areas: np.ndarray
+
+
+def _mask_support(masks: np.ndarray) -> _MaskSupport:
+    mask_array = np.asarray(masks)
+    n_rois, _, width = mask_array.shape
+    flat_masks = mask_array.reshape(n_rois, -1)
+    roi, pixel = np.nonzero(flat_masks > 0)
+    roi = roi.astype(int, copy=False)
+    pixel = pixel.astype(int, copy=False)
+    y = (pixel // width).astype(int, copy=False)
+    x = (pixel % width).astype(int, copy=False)
+    areas = np.bincount(roi, minlength=int(n_rois)).astype(float)
+    return _MaskSupport(roi=roi, pixel=pixel, y=y, x=x, areas=areas)
+
+
+def _pairwise_binary_intersections_from_support(
+    reference_pixel: np.ndarray,
+    reference_roi: np.ndarray,
+    measurement_pixel: np.ndarray,
+    measurement_roi: np.ndarray,
+    *,
+    num_reference: int,
+    num_measurement: int,
+) -> np.ndarray:
+    result: np.ndarray = np.zeros((num_reference, num_measurement), dtype=float)
+    if reference_pixel.size == 0 or measurement_pixel.size == 0:
+        return result
+
+    reference_order = np.argsort(reference_pixel, kind="stable")
+    measurement_order = np.argsort(measurement_pixel, kind="stable")
+    reference_pixel = reference_pixel[reference_order]
+    reference_roi = reference_roi[reference_order]
+    measurement_pixel = measurement_pixel[measurement_order]
+    measurement_roi = measurement_roi[measurement_order]
+
+    reference_index = 0
+    measurement_index = 0
+    while (
+        reference_index < reference_pixel.size
+        and measurement_index < measurement_pixel.size
+    ):
+        reference_current_pixel = reference_pixel[reference_index]
+        measurement_current_pixel = measurement_pixel[measurement_index]
+        if reference_current_pixel < measurement_current_pixel:
+            reference_index = _advance_equal_values(reference_pixel, reference_index)
+            continue
+        if measurement_current_pixel < reference_current_pixel:
+            measurement_index = _advance_equal_values(
+                measurement_pixel, measurement_index
+            )
+            continue
+
+        reference_stop = _advance_equal_values(reference_pixel, reference_index)
+        measurement_stop = _advance_equal_values(measurement_pixel, measurement_index)
+        result[
+            np.ix_(
+                reference_roi[reference_index:reference_stop],
+                measurement_roi[measurement_index:measurement_stop],
+            )
+        ] += 1.0
+        reference_index = reference_stop
+        measurement_index = measurement_stop
+    return result
+
+
+def _advance_equal_values(values: np.ndarray, start_index: int) -> int:
+    current_value = values[start_index]
+    stop_index = start_index + 1
+    while stop_index < values.size and values[stop_index] == current_value:
+        stop_index += 1
+    return stop_index
 
 
 def shift_offsets(radius: int) -> tuple[tuple[int, int], ...]:
