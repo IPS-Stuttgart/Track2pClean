@@ -226,6 +226,7 @@ jobs:
             --end-cost 1 \
             --gap-penalty 0.6 \
             --cost-threshold 2 \
+            --progress \
             --format csv \
             --output "results/global_registered_iou_fov_affine_tuned_gap${MAX_GAP}.csv"
 
@@ -253,6 +254,7 @@ jobs:
               --gap-penalty 0.6 \
               --cost-threshold 2 \
               --shifted-iou-radius "$radius" \
+              --progress \
               --format csv \
               --output "$output"
             compare_args+=(--input "FOV-affine-shifted-r${radius}-tuned=${output}")
