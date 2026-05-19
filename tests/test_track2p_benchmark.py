@@ -8,8 +8,10 @@ import numpy as np
 import pytest
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
+    build_arg_parser,
     format_benchmark_table,
     run_track2p_benchmark,
+    _config_from_args,  # pylint: disable=protected-access
 )
 
 
@@ -369,10 +371,16 @@ def test_global_assignment_benchmark_uses_skip_edges(
 
     from bayescatrack.association import pyrecest_global_assignment as global_assignment
 
+    seen_registration_kwargs = []
+
+    def _fake_register_plane_pair(_reference, moving, **kwargs):
+        seen_registration_kwargs.append(kwargs)
+        return moving
+
     monkeypatch.setattr(
         global_assignment,
         "register_plane_pair",
-        lambda _reference, moving, **_kwargs: moving,
+        _fake_register_plane_pair,
     )
 
     rows = run_track2p_benchmark(
@@ -381,6 +389,8 @@ def test_global_assignment_benchmark_uses_skip_edges(
             method="global-assignment",
             cost="registered-iou",
             max_gap=2,
+            transform_type="tps",
+            registration_kwargs={"grid_shape": [5, 5], "tps_regularization": 0.001},
             allow_track2p_as_reference_for_smoke_test=True,
         )
     )
@@ -391,3 +401,31 @@ def test_global_assignment_benchmark_uses_skip_edges(
     assert result["pairwise_f1"] == pytest.approx(2 / 3)
     assert result["complete_track_f1"] == pytest.approx(2 / 3)
     assert result["complete_tracks"] == 1
+    assert seen_registration_kwargs
+    assert all(
+        kwargs["transform_type"] == "tps"
+        and kwargs["registration_kwargs"]
+        == {"grid_shape": [5, 5], "tps_regularization": 0.001}
+        for kwargs in seen_registration_kwargs
+    )
+
+
+def test_track2p_benchmark_parser_accepts_nonrigid_registration_kwargs(tmp_path):
+    parser = build_arg_parser()
+    args = parser.parse_args(
+        [
+            "--data",
+            str(tmp_path),
+            "--method",
+            "global-assignment",
+            "--transform-type",
+            "local-affine-grid",
+            "--registration-kwargs-json",
+            '{"grid_shape":[4,5],"min_tile_size":16}',
+            "--no-progress",
+        ]
+    )
+    config = _config_from_args(args)
+
+    assert config.transform_type == "local-affine-grid"
+    assert config.registration_kwargs == {"grid_shape": [4, 5], "min_tile_size": 16}

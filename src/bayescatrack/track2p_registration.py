@@ -99,6 +99,7 @@ def _fov_translation_registered_plane(
     *,
     transform_type: str = "fov-translation",
     reason: str = "explicit transform_type='fov-translation'",
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
     from bayescatrack.fov_registration import (
         register_measurement_plane_by_fov_translation,
@@ -107,6 +108,7 @@ def _fov_translation_registered_plane(
     registered_plane = register_measurement_plane_by_fov_translation(
         reference_plane,
         moving_plane,
+        **_registration_kwargs_dict(registration_kwargs),
     ).registered_measurement_plane
     return _with_registration_backend_metadata(
         registered_plane,
@@ -122,6 +124,7 @@ def _fov_affine_registered_plane(
     *,
     transform_type: str = "fov-affine",
     reason: str = "explicit transform_type='fov-affine'",
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
     from bayescatrack.fov_affine_registration import (
         register_measurement_plane_by_fov_affine,
@@ -130,6 +133,7 @@ def _fov_affine_registered_plane(
     registered_plane = register_measurement_plane_by_fov_affine(
         reference_plane,
         moving_plane,
+        **_registration_kwargs_dict(registration_kwargs),
     ).registered_measurement_plane
     registration_reason = str(
         (registered_plane.ops or {}).get("registration_backend_reason") or reason
@@ -147,12 +151,20 @@ def _nonrigid_registered_plane(
     moving_plane: CalciumPlaneData,
     *,
     transform_type: str,
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
     return register_measurement_plane_by_nonrigid_fov(
         reference_plane,
         moving_plane,
         transform_type=transform_type,
+        **_registration_kwargs_dict(registration_kwargs),
     ).registered_measurement_plane
+
+
+def _registration_kwargs_dict(
+    registration_kwargs: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    return {} if registration_kwargs is None else dict(registration_kwargs)
 
 
 def register_plane_pair(
@@ -160,38 +172,60 @@ def register_plane_pair(
     moving_plane: CalciumPlaneData,
     *,
     transform_type: RegistrationTransform | str = "affine",
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
+    registration_options = _registration_kwargs_dict(registration_kwargs)
     if transform_type not in REGISTRATION_TRANSFORM_TYPES:
         valid_types = ", ".join(repr(value) for value in REGISTRATION_TRANSFORM_TYPES)
         raise ValueError(f"transform_type must be one of {valid_types}")
     if transform_type == "none":
+        if registration_options:
+            option_names = ", ".join(sorted(registration_options))
+            raise TypeError(
+                "transform_type='none' does not accept registration options: "
+                f"{option_names}"
+            )
         if reference_plane.image_shape != moving_plane.image_shape:
             raise ValueError("transform_type='none' requires matching image shapes")
         return moving_plane
     if reference_plane.fov is None or moving_plane.fov is None:
         raise ValueError("Both planes must provide FOV images for registration.")
     if transform_type == "fov-translation":
-        return _fov_translation_registered_plane(reference_plane, moving_plane)
+        return _fov_translation_registered_plane(
+            reference_plane,
+            moving_plane,
+            registration_kwargs=registration_options,
+        )
     if transform_type == "fov-affine":
-        return _fov_affine_registered_plane(reference_plane, moving_plane)
+        return _fov_affine_registered_plane(
+            reference_plane,
+            moving_plane,
+            registration_kwargs=registration_options,
+        )
     if transform_type in NONRIGID_REGISTRATION_TRANSFORM_TYPES:
         return _nonrigid_registered_plane(
             reference_plane,
             moving_plane,
             transform_type=transform_type,
+            registration_kwargs=registration_options,
         )
 
     try:
         reg_img_elastix, itk_reg_all_roi = _load_track2p_registration_backend()
     except ImportError:
         if transform_type == "affine":
-            return _fov_affine_registered_plane(reference_plane, moving_plane)
+            return _fov_affine_registered_plane(
+                reference_plane,
+                moving_plane,
+                registration_kwargs=registration_options,
+            )
         raise
 
+    backend_options = {**registration_options, "transform_type": transform_type}
     registered_fov, reg_params = reg_img_elastix(
         np.asarray(reference_plane.fov),
         np.asarray(moving_plane.fov),
-        SimpleNamespace(transform_type=transform_type),
+        SimpleNamespace(**backend_options),
     )
     moving_support_masks_hw_n = np.moveaxis(
         np.asarray(moving_plane.roi_masks) > 0, 0, -1
@@ -256,6 +290,7 @@ def register_consecutive_session_measurement_planes(
     sessions: Sequence[Track2pSession],
     *,
     transform_type: RegistrationTransform | str = "affine",
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> list[CalciumPlaneData]:
     sessions = list(sessions)
     if len(sessions) < 2:
@@ -265,6 +300,7 @@ def register_consecutive_session_measurement_planes(
             sessions[i].plane_data,
             sessions[i + 1].plane_data,
             transform_type=transform_type,
+            registration_kwargs=registration_kwargs,
         )
         for i in range(len(sessions) - 1)
     ]
@@ -277,6 +313,7 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
     input_format: str = "auto",
     include_behavior: bool = True,
     transform_type: RegistrationTransform | str = "affine",
+    registration_kwargs: Mapping[str, Any] | None = None,
     order: str = "xy",
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
@@ -293,7 +330,9 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
         suite2p_kwargs=suite2p_kwargs,
     )
     registered_measurement_planes = register_consecutive_session_measurement_planes(
-        sessions, transform_type=transform_type
+        sessions,
+        transform_type=transform_type,
+        registration_kwargs=registration_kwargs,
     )
 
     association_kwargs: dict[str, Any] = {"order": order}

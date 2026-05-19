@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    HigherOrderConsistencyConfig,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,
@@ -34,6 +37,7 @@ from bayescatrack.reference import (
     load_aligned_subject_reference,
     load_track2p_reference,
 )
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 ReferenceKind = Literal["auto", "manual-gt", "track2p-output", "aligned-subject-rows"]
 BenchmarkMethod = Literal["track2p-baseline", "global-assignment", "oracle-gt-links"]
@@ -66,6 +70,7 @@ class Track2pBenchmarkConfig:
     cost: AssociationCost = "registered-iou"
     max_gap: int = 2
     transform_type: str = "affine"
+    registration_kwargs: dict[str, Any] | None = None
     start_cost: float = 5.0
     end_cost: float = 5.0
     gap_penalty: float = 1.0
@@ -80,6 +85,11 @@ class Track2pBenchmarkConfig:
     velocity_variance: float = 25.0
     regularization: float = 1.0e-6
     pairwise_cost_kwargs: dict[str, Any] | None = None
+    triplet_weight: float = 0.0
+    triplet_support_top_k: int = 8
+    triplet_support_cost_cap: float = 4.0
+    triplet_max_penalty: float = 2.0
+    triplet_large_cost: float = 1.0e6
     progress: bool = False
 
 
@@ -333,8 +343,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
-        help="Track2p registration transform type",
+        choices=REGISTRATION_TRANSFORM_TYPES,
+        help=(
+            "Track2p/BayesCaTrack registration transform type; growth-aware "
+            "options include fov-affine, bspline, tps, local-affine-grid, and optical-flow"
+        ),
+    )
+    parser.add_argument(
+        "--registration-kwargs-json",
+        default=None,
+        help=(
+            "JSON object passed to the registration backend, e.g. "
+            '\'{"grid_shape":[5,5],"tps_regularization":0.001}\''
+        ),
     )
     parser.add_argument(
         "--start-cost", type=float, default=5.0, help="PyRecEst track start cost"
@@ -410,6 +431,39 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="JSON object merged into pairwise cost kwargs",
     )
     parser.add_argument(
+        "--triplet-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Enable triplet-projected higher-order consistency with this penalty "
+            "weight; 0 disables the adjustment"
+        ),
+    )
+    parser.add_argument(
+        "--triplet-support-top-k",
+        type=int,
+        default=8,
+        help="Number of best third-session support edges considered per shared ROI",
+    )
+    parser.add_argument(
+        "--triplet-support-cost-cap",
+        type=float,
+        default=4.0,
+        help="Maximum pairwise edge cost admitted as third-session triplet support",
+    )
+    parser.add_argument(
+        "--triplet-max-penalty",
+        type=float,
+        default=2.0,
+        help="Maximum unweighted higher-order penalty added to one candidate edge",
+    )
+    parser.add_argument(
+        "--triplet-large-cost",
+        type=float,
+        default=1.0e6,
+        help="Sentinel cost treated as inadmissible by higher-order consistency",
+    )
+    parser.add_argument(
         "--progress",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -482,7 +536,7 @@ def _predict_subject_tracks(
     sessions = _load_subject_sessions(subject_dir, config)
     assignment = solve_configured_global_assignment(sessions, config)
     predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
-    return predicted, _variant_name(config.cost)
+    return predicted, _variant_name(config.cost, _higher_order_consistency_config(config))
 
 
 def oracle_ground_truth_link_tracks(
@@ -540,6 +594,7 @@ def solve_configured_global_assignment(
         cost=config.cost if cost is None else cost,
         calibrated_model=calibrated_model,
         transform_type=config.transform_type,
+        registration_kwargs=config.registration_kwargs,
         start_cost=config.start_cost,
         end_cost=config.end_cost,
         gap_penalty=config.gap_penalty,
@@ -549,21 +604,48 @@ def solve_configured_global_assignment(
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+        higher_order_consistency_config=_higher_order_consistency_config(config),
     )
 
 
-def _variant_name(cost: AssociationCost) -> str:
+def _higher_order_consistency_config(
+    config: Track2pBenchmarkConfig,
+) -> HigherOrderConsistencyConfig | None:
+    """Return validated higher-order consistency settings for the solver."""
+
+    resolved = HigherOrderConsistencyConfig(
+        triplet_weight=float(config.triplet_weight),
+        support_top_k=int(config.triplet_support_top_k),
+        support_cost_cap=float(config.triplet_support_cost_cap),
+        max_penalty=float(config.triplet_max_penalty),
+        large_cost=float(config.triplet_large_cost),
+    )
+    return resolved if resolved.enabled else None
+
+
+def _variant_name(
+    cost: AssociationCost,
+    higher_order_consistency_config: HigherOrderConsistencyConfig | None = None,
+) -> str:
     if cost == "registered-iou":
-        return "Same costs + global assignment"
-    if cost == "registered-soft-iou":
-        return "Soft-IoU costs + global assignment"
-    if cost == "registered-shifted-iou":
-        return "Shifted-IoU costs + global assignment"
-    if cost == "roi-aware-shifted":
-        return "Shifted ROI-aware costs + global assignment"
-    if cost == "calibrated":
-        return "Calibrated costs + global assignment"
-    return "BayesCaTrack costs + global assignment"
+        base = "Same costs + global assignment"
+    elif cost == "registered-soft-iou":
+        base = "Soft-IoU costs + global assignment"
+    elif cost == "registered-shifted-iou":
+        base = "Shifted-IoU costs + global assignment"
+    elif cost == "roi-aware-shifted":
+        base = "Shifted ROI-aware costs + global assignment"
+    elif cost == "calibrated":
+        base = "Calibrated costs + global assignment"
+    else:
+        base = "BayesCaTrack costs + global assignment"
+
+    if (
+        higher_order_consistency_config is not None
+        and higher_order_consistency_config.enabled
+    ):
+        return f"{base} + triplet consistency"
+    return base
 
 
 # pylint: disable=too-many-return-statements,too-many-branches
@@ -956,13 +1038,26 @@ def _looks_like_subject_dir(path: Path) -> bool:
     return bool(find_track2p_session_dirs(path))
 
 
+def _json_object_from_arg(
+    value: str | None, *, option_name: str
+) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{option_name} must decode to a JSON object")
+    return parsed
+
+
 def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
-    pairwise_cost_kwargs = None
-    if args.pairwise_cost_kwargs_json is not None:
-        parsed = json.loads(args.pairwise_cost_kwargs_json)
-        if not isinstance(parsed, dict):
-            raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
-        pairwise_cost_kwargs = parsed
+    pairwise_cost_kwargs = _json_object_from_arg(
+        args.pairwise_cost_kwargs_json,
+        option_name="--pairwise-cost-kwargs-json",
+    )
+    registration_kwargs = _json_object_from_arg(
+        args.registration_kwargs_json,
+        option_name="--registration-kwargs-json",
+    )
     return Track2pBenchmarkConfig(
         data=args.data,
         method=args.method,
@@ -978,6 +1073,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         cost=args.cost,
         max_gap=args.max_gap,
         transform_type=args.transform_type,
+        registration_kwargs=registration_kwargs,
         start_cost=args.start_cost,
         end_cost=args.end_cost,
         gap_penalty=args.gap_penalty,
@@ -992,6 +1088,11 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        triplet_weight=args.triplet_weight,
+        triplet_support_top_k=args.triplet_support_top_k,
+        triplet_support_cost_cap=args.triplet_support_cost_cap,
+        triplet_max_penalty=args.triplet_max_penalty,
+        triplet_large_cost=args.triplet_large_cost,
         progress=args.progress,
     )
 

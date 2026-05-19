@@ -339,6 +339,7 @@ def _reference_training_options(
     return ReferenceTrainingOptions(
         curated_only=config.curated_only,
         transform_type=config.transform_type,
+        registration_kwargs=config.registration_kwargs,
         order=config.order,
         weighted_centroids=config.weighted_centroids,
         velocity_variance=config.velocity_variance,

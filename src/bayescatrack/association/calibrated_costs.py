@@ -135,6 +135,7 @@ class ReferenceTrainingOptions:
 
     curated_only: bool = False
     transform_type: str = "affine"
+    registration_kwargs: Mapping[str, Any] | None = None
     order: str = "xy"
     weighted_centroids: bool = False
     velocity_variance: float = 25.0
@@ -446,6 +447,7 @@ def _build_training_bundle(
         sessions[session_a].plane_data,
         sessions[session_b].plane_data,
         transform_type=options.transform_type,
+        registration_kwargs=options.registration_kwargs,
     )
     registered_measurement_plane, _ = replace_empty_registered_masks(
         registered_measurement_plane
