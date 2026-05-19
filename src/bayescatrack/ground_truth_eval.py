@@ -302,11 +302,20 @@ def _load_long_format(  # pylint: disable=too-many-locals
 
     session_to_index = {name: index for index, name in enumerate(session_names)}
     grouped: dict[str, np.ndarray] = {}
+    seen_track_sessions: set[tuple[str, str]] = set()
     for row in rows:
         track_id = str(row[track_header]).strip()
         session_name = str(row[session_header]).strip()
         if session_name not in session_to_index:
             continue
+        track_session_key = (track_id, session_name)
+        if track_session_key in seen_track_sessions:
+            raise ValueError(
+                "duplicate long-format track/session entry for "
+                f"track {track_id!r} in session {session_name!r}"
+            )
+        seen_track_sessions.add(track_session_key)
+
         roi_index = _parse_roi_value(row[roi_header])
         if track_id not in grouped:
             grouped[track_id] = np.full((len(session_names),), -1, dtype=int)
@@ -477,14 +486,16 @@ def complete_tracks_score(ground_truth: TrackTable, prediction: TrackTable) -> f
     """Return the Track2p 'complete tracks' (CT) score.
 
     This is the F1 score where positives are exact full-track reconstructions.
-    Duplicate predicted tracks therefore still count as false positives.
+    Rows containing missing ROI entries (negative values) are not complete tracks
+    and are excluded from both the reference and prediction CT sets. Duplicate
+    predicted complete tracks therefore still count as false positives.
     """
     prediction = _align_prediction_to_ground_truth(ground_truth, prediction)
-    ground_truth_rows = _row_counter(ground_truth)
-    prediction_rows = _row_counter(prediction)
+    ground_truth_rows = _row_counter(ground_truth, require_complete=True)
+    prediction_rows = _row_counter(prediction, require_complete=True)
     true_positives = _multiset_intersection_size(ground_truth_rows, prediction_rows)
-    false_positives = prediction.n_tracks - true_positives
-    false_negatives = ground_truth.n_tracks - true_positives
+    false_positives = sum(prediction_rows.values()) - true_positives
+    false_negatives = sum(ground_truth_rows.values()) - true_positives
     denominator = 2 * true_positives + false_positives + false_negatives
     if denominator == 0:
         return 0.0
@@ -524,8 +535,8 @@ def evaluate_track_table_prediction(
     """Compute the Track2p benchmark metrics for one prediction."""
     prediction = _align_prediction_to_ground_truth(ground_truth, prediction)
     exact_matches = _multiset_intersection_size(
-        _row_counter(ground_truth),
-        _row_counter(prediction),
+        _row_counter(ground_truth, require_complete=True),
+        _row_counter(prediction, require_complete=True),
     )
     return TrackEvaluation(
         complete_tracks=complete_tracks_score(ground_truth, prediction),

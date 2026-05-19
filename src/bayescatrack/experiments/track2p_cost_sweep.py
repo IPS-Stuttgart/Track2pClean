@@ -17,6 +17,7 @@ from bayescatrack.association.pyrecest_global_assignment import (
     build_registered_pairwise_costs,
     tracks_to_suite2p_index_matrix,
 )
+from bayescatrack.cli_choices import registration_transform_choices
 from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
@@ -28,6 +29,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
+    _with_registration_provenance,
     _variant_name,
     discover_subject_dirs,
 )
@@ -130,10 +132,11 @@ def iter_track2p_cost_sweep(
                 cost_threshold=run.threshold,
             )
             predicted = tracks_to_suite2p_index_matrix(solver_result.tracks, sessions)
-            scores: dict[str, float | int | str] = dict(
+            scores: dict[str, float | int | str] = _with_registration_provenance(
                 _score_prediction_against_reference(
                     predicted, reference, config=benchmark
-                )
+                ),
+                benchmark,
             )
             scores = {
                 **scores,
@@ -336,8 +339,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-gap", type=int, default=2)
     parser.add_argument(
         "--transform-type",
-        default="affine",
-        choices=("affine", "rigid", "fov-affine", "fov-translation", "none"),
+        default="fov-affine",
+        choices=registration_transform_choices(
+            ("affine", "rigid", "fov-affine", "fov-translation", "none")
+        ),
     )
     parser.add_argument("--start-cost", type=float, default=5.0)
     parser.add_argument("--end-cost", type=float, default=5.0)

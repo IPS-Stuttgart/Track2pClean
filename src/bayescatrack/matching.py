@@ -19,7 +19,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -76,14 +76,11 @@ class SessionMatchResult:
     def as_roi_index_mapping(self) -> dict[int, int]:
         """Return matches as ``reference_roi_index -> measurement_roi_index``."""
 
-        return {
-            int(reference_roi): int(measurement_roi)
-            for reference_roi, measurement_roi in zip(
-                self.reference_roi_indices,
-                self.measurement_roi_indices,
-                strict=True,
-            )
-        }
+        return _one_to_one_match_mapping(
+            self.reference_roi_indices,
+            self.measurement_roi_indices,
+            context="SessionMatchResult",
+        )
 
     def as_pair_array(self) -> np.ndarray:
         """Return matches as a ``(n_matches, 2)`` integer array."""
@@ -395,15 +392,11 @@ def _default_start_roi_indices(
 
 
 def _invert_match_mapping(mapping: Mapping[int, int]) -> dict[int, int]:
-    inverted: dict[int, int] = {}
-    for reference_roi, measurement_roi in mapping.items():
-        measurement_roi = int(measurement_roi)
-        if measurement_roi in inverted:
-            raise ValueError(
-                "match mappings must be one-to-one to stitch tracks backward from a later start session"
-            )
-        inverted[measurement_roi] = int(reference_roi)
-    return inverted
+    return _one_to_one_match_mapping(
+        mapping.values(),
+        mapping.keys(),
+        context="inverted match mappings",
+    )
 
 
 def _normalize_match_mapping(
@@ -417,24 +410,61 @@ def _normalize_match_mapping(
     if isinstance(match, SessionMatchResult):
         return match.as_roi_index_mapping()
     if isinstance(match, Mapping):
-        return {
-            int(reference_roi): int(measurement_roi)
-            for reference_roi, measurement_roi in match.items()
-        }
+        return _one_to_one_match_mapping(
+            match.keys(),
+            match.values(),
+            context="mapping-based matches",
+        )
     if isinstance(match, tuple) and len(match) == 2:
         reference_roi_indices = [int(value) for value in match[0]]
         measurement_roi_indices = [int(value) for value in match[1]]
-        if len(reference_roi_indices) != len(measurement_roi_indices):
-            raise ValueError("tuple-based matches must have equal lengths")
-        return dict(zip(reference_roi_indices, measurement_roi_indices, strict=True))
+        return _one_to_one_match_mapping(
+            reference_roi_indices,
+            measurement_roi_indices,
+            context="tuple-based matches",
+        )
 
     match_array = np.asarray(match)
     if match_array.ndim == 2 and match_array.shape[1] == 2:
-        return {
-            int(reference_roi): int(measurement_roi)
-            for reference_roi, measurement_roi in match_array.tolist()
-        }
+        reference_roi_indices = match_array[:, 0].tolist()
+        measurement_roi_indices = match_array[:, 1].tolist()
+        return _one_to_one_match_mapping(
+            reference_roi_indices,
+            measurement_roi_indices,
+            context="array-based matches",
+        )
     raise TypeError("unsupported match representation")
+
+
+def _one_to_one_match_mapping(
+    reference_roi_indices: Iterable[int] | np.ndarray,
+    measurement_roi_indices: Iterable[int] | np.ndarray,
+    *,
+    context: str,
+) -> dict[int, int]:
+    reference_roi_indices = [int(value) for value in reference_roi_indices]
+    measurement_roi_indices = [int(value) for value in measurement_roi_indices]
+    if len(reference_roi_indices) != len(measurement_roi_indices):
+        raise ValueError(f"{context} must have equal lengths")
+
+    mapping: dict[int, int] = {}
+    reverse_mapping: dict[int, int] = {}
+    for reference_roi, measurement_roi in zip(
+        reference_roi_indices,
+        measurement_roi_indices,
+        strict=True,
+    ):
+        if reference_roi in mapping:
+            raise ValueError(
+                f"{context} contains duplicate reference ROI index {reference_roi}"
+            )
+        if measurement_roi in reverse_mapping:
+            raise ValueError(
+                f"{context} contains duplicate measurement ROI index {measurement_roi}"
+            )
+        mapping[reference_roi] = measurement_roi
+        reverse_mapping[measurement_roi] = reference_roi
+    return mapping
 
 
 def _empty_match_result(bundle: Any) -> SessionMatchResult:

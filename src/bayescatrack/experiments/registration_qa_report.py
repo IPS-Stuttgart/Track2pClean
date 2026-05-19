@@ -33,6 +33,7 @@ from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
     pairwise_kwargs_use_shifted_overlap,
 )
+from bayescatrack.cli_choices import registration_transform_choices
 from bayescatrack.core.bridge import (
     CalciumPlaneData,
     Track2pSession,
@@ -510,7 +511,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "gt-affine-oracle", "none"),
+        choices=registration_transform_choices(
+            ("affine", "rigid", "fov-translation", "gt-affine-oracle", "none")
+        ),
     )
     parser.add_argument(
         "--cost",

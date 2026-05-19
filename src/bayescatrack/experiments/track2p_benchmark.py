@@ -18,6 +18,7 @@ from bayescatrack.association.pyrecest_global_assignment import (
     solve_global_assignment_for_sessions,
     tracks_to_suite2p_index_matrix,
 )
+from bayescatrack.cli_choices import registration_transform_choices
 from bayescatrack.core.bridge import (
     Track2pSession,
     find_track2p_session_dirs,
@@ -65,7 +66,7 @@ class Track2pBenchmarkConfig:
     restrict_to_reference_seed_rois: bool = True
     cost: AssociationCost = "registered-iou"
     max_gap: int = 2
-    transform_type: str = "affine"
+    transform_type: str = "fov-affine"
     registration_kwargs: dict[str, Any] | None = None
     start_cost: float = 5.0
     end_cost: float = 5.0
@@ -147,7 +148,9 @@ def run_track2p_benchmark(
     if config.cost == "calibrated":
         raise ValueError("cost='calibrated' requires split='leave-one-subject-out'")
 
-    subject_dirs = discover_subject_dirs(config.data)
+    subject_dirs = discover_subject_dirs(
+        config.data, plane_name=config.plane_name, input_format=config.input_format
+    )
     if not subject_dirs:
         raise ValueError(
             f"No Track2p-style subject directories found under {config.data}"
@@ -175,6 +178,7 @@ def run_track2p_benchmark(
         scores = _score_prediction_against_reference(
             predicted_matrix, reference, config=config
         )
+        scores = _with_registration_provenance(scores, config)
         results.append(
             SubjectBenchmarkResult(
                 subject=subject_dir.name,
@@ -188,16 +192,26 @@ def run_track2p_benchmark(
     return results
 
 
-def discover_subject_dirs(data_path: str | Path) -> list[Path]:
+def discover_subject_dirs(
+    data_path: str | Path,
+    *,
+    plane_name: str = "plane0",
+    input_format: str = "auto",
+) -> list[Path]:
     """Find Track2p subject directories beneath ``data_path``."""
 
     root = Path(data_path)
-    if _looks_like_subject_dir(root):
+    if _looks_like_subject_dir(
+        root, plane_name=plane_name, input_format=input_format
+    ):
         return [root]
     subjects = [
         child
         for child in sorted(root.iterdir())
-        if child.is_dir() and _looks_like_subject_dir(child)
+        if child.is_dir()
+        and _looks_like_subject_dir(
+            child, plane_name=plane_name, input_format=input_format
+        )
     ]
     return subjects
 
@@ -333,9 +347,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--transform-type",
-        default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
-        help="Track2p registration transform type",
+        default="fov-affine",
+        choices=registration_transform_choices(
+            ("affine", "rigid", "fov-affine", "fov-translation", "none")
+        ),
+        help=(
+            "Registration transform type. The default fov-affine uses "
+            "BayesCaTrack's deterministic NumPy FOV-affine backend; use "
+            "affine/rigid only when the Track2p ITK/elastix backend is "
+            "installed and intended."
+        ),
     )
     parser.add_argument(
         "--registration-kwargs-json",
@@ -583,7 +604,9 @@ def _load_reference_for_subject(
             default_ground_truth_path = subject_dir / GROUND_TRUTH_CSV_NAME
             if default_ground_truth_path.exists():
                 return _load_ground_truth_csv_reference(
-                    default_ground_truth_path, subject_dir=subject_dir
+                    default_ground_truth_path,
+                    subject_dir=subject_dir,
+                    config=config,
                 )
             raise ValueError(
                 f"--reference-kind manual-gt was requested, but {default_ground_truth_path} does not exist"
@@ -601,7 +624,9 @@ def _load_reference_for_subject(
         default_ground_truth_path = subject_dir / GROUND_TRUTH_CSV_NAME
         if default_ground_truth_path.exists():
             return _load_ground_truth_csv_reference(
-                default_ground_truth_path, subject_dir=subject_dir
+                default_ground_truth_path,
+                subject_dir=subject_dir,
+                config=config,
             )
         track2p_dir = subject_dir / "track2p"
         if track2p_dir.exists():
@@ -612,7 +637,9 @@ def _load_reference_for_subject(
     if config.reference_kind == "manual-gt":
         if reference_root.is_file():
             return _load_ground_truth_csv_reference(
-                reference_root, subject_dir=subject_dir
+                reference_root,
+                subject_dir=subject_dir,
+                config=config,
             )
         ground_truth_path = _resolve_ground_truth_csv_path(
             subject_dir, data_root=data_root, reference_root=reference_root
@@ -623,7 +650,9 @@ def _load_reference_for_subject(
                 f"for subject {subject_dir.name!r} under {reference_root}"
             )
         return _load_ground_truth_csv_reference(
-            ground_truth_path, subject_dir=subject_dir
+            ground_truth_path,
+            subject_dir=subject_dir,
+            config=config,
         )
 
     if config.reference_kind == "track2p-output":
@@ -645,7 +674,9 @@ def _load_reference_for_subject(
     )
     if ground_truth_path is not None:
         return _load_ground_truth_csv_reference(
-            ground_truth_path, subject_dir=subject_dir
+            ground_truth_path,
+            subject_dir=subject_dir,
+            config=config,
         )
 
     reference_path = _resolve_track2p_reference_path(
@@ -735,14 +766,14 @@ def _resolve_track2p_reference_path(
 
 
 def _load_ground_truth_csv_reference(
-    ground_truth_path: Path, *, subject_dir: Path
+    ground_truth_path: Path, *, subject_dir: Path, config: Track2pBenchmarkConfig
 ) -> Track2pReference:
-    session_names = tuple(
-        session_dir.name for session_dir in find_track2p_session_dirs(subject_dir)
-    )
+    sessions = _load_subject_sessions(subject_dir, config)
+    session_names = tuple(session.session_name for session in sessions)
     if not session_names:
         raise ValueError(
-            f"No Track2p-style sessions were found for ground-truth reference {ground_truth_path}"
+            "No loadable Track2p-style sessions were found for ground-truth "
+            f"reference {ground_truth_path}"
         )
 
     track_table = load_track2p_ground_truth_csv(ground_truth_path)
@@ -805,6 +836,18 @@ def _score_prediction_against_reference(
             ),
         }
     return scores
+
+
+def _with_registration_provenance(
+    scores: Mapping[str, float | int],
+    config: Track2pBenchmarkConfig,
+) -> dict[str, float | int | str]:
+    """Attach benchmark-registration provenance to result rows."""
+
+    annotated: dict[str, float | int | str] = dict(scores)
+    if config.method == "global-assignment":
+        annotated["registration_transform_type"] = config.transform_type
+    return annotated
 
 
 def _with_recomputed_f1_scores(
@@ -955,12 +998,35 @@ def _reference_matrix(reference: Track2pReference, *, curated_only: bool) -> np.
     return matrix[np.asarray(reference.curated_mask, dtype=bool)]
 
 
-def _looks_like_subject_dir(path: Path) -> bool:
+def _looks_like_subject_dir(
+    path: Path, *, plane_name: str = "plane0", input_format: str = "auto"
+) -> bool:
     if not path.exists() or not path.is_dir():
         return False
     if (path / "track2p").exists():
         return True
-    return bool(find_track2p_session_dirs(path))
+    return any(
+        _session_dir_has_loadable_plane_data(
+            session_dir, plane_name=plane_name, input_format=input_format
+        )
+        for session_dir in find_track2p_session_dirs(path)
+    )
+
+
+def _session_dir_has_loadable_plane_data(
+    session_dir: Path, *, plane_name: str, input_format: str
+) -> bool:
+    if input_format not in {"auto", "suite2p", "npy"}:
+        raise ValueError("input_format must be 'auto', 'suite2p', or 'npy'")
+    if input_format in {"auto", "suite2p"} and (
+        session_dir / "suite2p" / plane_name
+    ).is_dir():
+        return True
+    if input_format in {"auto", "npy"} and (
+        session_dir / "data_npy" / plane_name
+    ).is_dir():
+        return True
+    return False
 
 
 def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
@@ -1034,6 +1100,7 @@ def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
         "method",
         "n_sessions",
         "reference_source",
+        "registration_transform_type",
         "pairwise_f1",
         "complete_track_f1",
         "pairwise_precision",

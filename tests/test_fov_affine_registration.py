@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack import CalciumPlaneData
 from bayescatrack.fov_affine_registration import (
     apply_affine_roi_mask_warp,
@@ -82,7 +83,7 @@ def test_fov_affine_registration_recovers_translation_like_fallback():
     )
 
 
-def test_register_plane_pair_affine_falls_back_to_fov_affine(monkeypatch):
+def test_register_plane_pair_affine_requires_track2p_backend(monkeypatch):
     reference_fov = _spot_image((96, 96), ((20, 20), (24, 72), (70, 30), (74, 78)))
     measurement_fov = apply_integer_image_translation(
         reference_fov, [2, -3], output_shape=(96, 96)
@@ -102,8 +103,11 @@ def test_register_plane_pair_affine_falls_back_to_fov_affine(monkeypatch):
     monkeypatch.setattr(
         registration_module, "_load_track2p_registration_backend", _raise_import_error
     )
-    registered = register_plane_pair(
-        reference_plane, measurement_plane, transform_type="affine"
-    )
 
+    with pytest.raises(ImportError, match="Track2p-compatible affine/rigid"):
+        register_plane_pair(reference_plane, measurement_plane, transform_type="affine")
+
+    registered = register_plane_pair(
+        reference_plane, measurement_plane, transform_type="fov-affine"
+    )
     assert registered.ops["registration_backend"] == "fov-affine"

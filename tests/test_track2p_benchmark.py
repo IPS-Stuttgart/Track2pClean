@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
+    discover_subject_dirs,
     format_benchmark_table,
     run_track2p_benchmark,
 )
@@ -191,6 +192,38 @@ def test_benchmark_uses_ground_truth_csv_reference(tmp_path, write_raw_npy_sessi
 
     result = rows[0].to_dict()
     assert result["reference_source"] == "ground_truth_csv"
+    assert result["pairwise_f1"] == pytest.approx(1.0)
+    assert result["complete_track_f1"] == pytest.approx(1.0)
+
+
+def test_ground_truth_csv_reference_uses_loaded_sessions_not_date_like_folders(
+    tmp_path, write_raw_npy_session
+):
+    subject_dir = tmp_path / "jm008"
+    _write_subject(subject_dir, write_raw_npy_session, write_reference=False)
+    _write_ground_truth_csv(
+        subject_dir,
+        ("2024-05-01_a", "2024-05-02_a", "2024-05-03_a"),
+        ((0, 0, 0), (1, 1, 1)),
+    )
+
+    # Date-like folders are common in exported datasets, but they must not
+    # define the benchmark session universe unless they contain loadable plane
+    # data.  Otherwise manual-GT columns can be spuriously misaligned.
+    (subject_dir / "2024-05-04_a").mkdir()
+    non_subject_dir = tmp_path / "notes"
+    (non_subject_dir / "2024-05-01_a").mkdir(parents=True)
+
+    assert discover_subject_dirs(tmp_path) == [subject_dir]
+
+    rows = run_track2p_benchmark(
+        Track2pBenchmarkConfig(data=tmp_path, method="track2p-baseline")
+    )
+
+    assert len(rows) == 1
+    result = rows[0].to_dict()
+    assert result["reference_source"] == "ground_truth_csv"
+    assert result["n_sessions"] == 3
     assert result["pairwise_f1"] == pytest.approx(1.0)
     assert result["complete_track_f1"] == pytest.approx(1.0)
 

@@ -24,6 +24,7 @@ from bayescatrack.association.pyrecest_global_assignment import (
     build_registered_pairwise_costs,
     tracks_to_suite2p_index_matrix,
 )
+from bayescatrack.cli_choices import registration_transform_choices
 from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
@@ -338,7 +339,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=registration_transform_choices(
+            ("affine", "rigid", "fov-translation", "none")
+        ),
     )
     parser.add_argument("--start-costs", default="0.5,1,1.5,2")
     parser.add_argument("--end-costs", default="")

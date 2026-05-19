@@ -692,9 +692,25 @@ def load_suite2p_plane(
     stat = np.load(plane_dir / "stat.npy", allow_pickle=True)
     if stat.ndim != 1:
         raise ValueError("Suite2p stat.npy must be a one-dimensional object array")
+    n_stat_rois = int(stat.shape[0])
 
     iscell_path = plane_dir / "iscell.npy"
-    iscell = np.load(iscell_path, allow_pickle=True) if iscell_path.exists() else None
+    iscell = (
+        _load_suite2p_roi_array(
+            iscell_path,
+            expected_n_rois=n_stat_rois,
+            allow_pickle=True,
+        )
+        if iscell_path.exists()
+        else None
+    )
+    if iscell is not None:
+        if iscell.ndim not in {1, 2}:
+            raise ValueError(
+                "Suite2p iscell.npy must be one- or two-dimensional"
+            )
+        if iscell.ndim == 2 and iscell.shape[1] == 0:
+            raise ValueError("Suite2p iscell.npy must contain at least one column")
 
     ops_path = plane_dir / "ops.npy"
     ops = None
@@ -789,17 +805,29 @@ def load_suite2p_plane(
 
     traces = None
     if load_traces and (plane_dir / "F.npy").exists():
-        traces = np.load(plane_dir / "F.npy")
+        traces = _load_suite2p_roi_array(
+            plane_dir / "F.npy",
+            expected_n_rois=n_stat_rois,
+            expected_ndim=2,
+        )
         traces = traces[selected_indices_array]
 
     spike_traces = None
     if load_spike_traces and (plane_dir / "spks.npy").exists():
-        spike_traces = np.load(plane_dir / "spks.npy")
+        spike_traces = _load_suite2p_roi_array(
+            plane_dir / "spks.npy",
+            expected_n_rois=n_stat_rois,
+            expected_ndim=2,
+        )
         spike_traces = spike_traces[selected_indices_array]
 
     neuropil_traces = None
     if load_neuropil_traces and (plane_dir / "Fneu.npy").exists():
-        neuropil_traces = np.load(plane_dir / "Fneu.npy")
+        neuropil_traces = _load_suite2p_roi_array(
+            plane_dir / "Fneu.npy",
+            expected_n_rois=n_stat_rois,
+            expected_ndim=2,
+        )
         neuropil_traces = neuropil_traces[selected_indices_array]
 
     return CalciumPlaneData(
@@ -1219,6 +1247,34 @@ def summarize_subject(
             for session in sessions
         ],
     }
+
+
+def _load_suite2p_roi_array(
+    path: Path,
+    *,
+    expected_n_rois: int,
+    expected_ndim: int | None = None,
+    allow_pickle: bool = False,
+) -> np.ndarray:
+    """Load a Suite2p ROI-indexed side array and validate its ROI axis."""
+
+    array = np.load(path, allow_pickle=allow_pickle)
+    if expected_ndim is not None and array.ndim != expected_ndim:
+        raise ValueError(
+            f"Suite2p {path.name} must have {expected_ndim} dimensions; "
+            f"got shape {array.shape}"
+        )
+    if array.ndim == 0:
+        raise ValueError(
+            f"Suite2p {path.name} must have a leading ROI dimension; "
+            "got scalar array"
+        )
+    if array.shape[0] != expected_n_rois:
+        raise ValueError(
+            f"Suite2p {path.name} has {array.shape[0]} ROI rows, "
+            f"but stat.npy has {expected_n_rois}"
+        )
+    return array
 
 
 def _stack_or_empty_masks(

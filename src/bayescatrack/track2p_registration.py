@@ -82,11 +82,10 @@ def _load_track2p_registration_backend() -> tuple[Any, Any]:
         raise ImportError(
             "Track2p-compatible affine/rigid registration requires the 'track2p' "
             "package and its ITK/elastix stack. Install that backend for "
-            "transform_type='rigid', or use transform_type='affine' to fall back "
-            "to BayesCaTrack's NumPy FOV-affine registration when Track2p is "
-            "unavailable. Request transform_type='fov-translation' explicitly "
-            "for the integer phase-correlation fallback, transform_type='fov-affine' "
-            "for the NumPy FOV-affine fallback, or a nonrigid transform such as "
+            "transform_type in {'affine', 'rigid'}. Request "
+            "transform_type='fov-translation' explicitly for the integer "
+            "phase-correlation backend, transform_type='fov-affine' for the "
+            "NumPy FOV-affine backend, or a nonrigid transform such as "
             "'bspline', 'tps', 'local-affine-grid', or 'optical-flow' for growth-aware registration."
         ) from exc
     return reg_img_elastix, itk_reg_all_roi
@@ -221,12 +220,7 @@ def register_plane_pair(
             registration_kwargs=registration_kwargs,
         )
 
-    try:
-        reg_img_elastix, itk_reg_all_roi = _load_track2p_registration_backend()
-    except ImportError:
-        if transform_type == "affine":
-            return _fov_affine_registered_plane(reference_plane, moving_plane)
-        raise
+    reg_img_elastix, itk_reg_all_roi = _load_track2p_registration_backend()
 
     registered_fov, reg_params = reg_img_elastix(
         np.asarray(reference_plane.fov),

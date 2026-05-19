@@ -121,6 +121,22 @@ def test_load_track2p_reference_falls_back_to_match_mat(tmp_path: Path):
     npt.assert_array_equal(reference.pairwise_matches(0, 1), np.array([[0, 4]]))
 
 
+def test_track2p_reference_rejects_malformed_roi_entries():
+    with pytest.raises(ValueError, match="ROI index matrix entry"):
+        Track2pReference(
+            session_names=("day0", "day1"),
+            suite2p_indices=np.array([[0, "typo"]], dtype=object),
+        )
+
+
+def test_track2p_reference_rejects_fractional_roi_entries():
+    with pytest.raises(ValueError, match="integer-like"):
+        Track2pReference(
+            session_names=("day0", "day1"),
+            suite2p_indices=np.array([[0, 1.5]], dtype=object),
+        )
+
+
 def test_load_aligned_subject_reference_builds_identity_matrix(monkeypatch):
     fake_sessions = [
         _DummySession("2024-05-01_a", date(2024, 5, 1), 3),
@@ -323,6 +339,13 @@ def test_pairs_from_label_vectors_and_scoring():
     assert scores["precision"] == pytest.approx(2 / 3)
     assert scores["recall"] == pytest.approx(2 / 3)
     assert scores["f1"] == pytest.approx(2 / 3)
+
+
+def test_pairs_from_label_vectors_rejects_malformed_track_labels():
+    with pytest.raises(ValueError, match="track label at ROI 1"):
+        pairs_from_label_vectors(
+            np.array([0, "typo"], dtype=object), np.array([0, 1], dtype=object)
+        )
 
 
 def test_score_label_vectors_against_reference_and_duplicate_detection():

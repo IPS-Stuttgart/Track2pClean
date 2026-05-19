@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import argparse
+
+import pytest
+
 from bayescatrack.experiments import (
     oracle_affine_registration_qa,
     registration_qa_report,
@@ -10,6 +14,39 @@ from bayescatrack.experiments import (
 )
 
 # pylint: disable=protected-access
+
+
+def test_importing_bayescatrack_does_not_patch_argparse_globally():
+    assert not getattr(
+        argparse.ArgumentParser.add_argument,
+        "bayescatrack_registration_transform_patch",
+        False,
+    )
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--transform-type", choices=("affine", "none"))
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--transform-type", "bspline"])
+
+
+def test_track2p_benchmark_cli_defaults_to_explicit_fov_affine_transform():
+    args = track2p_benchmark.build_arg_parser().parse_args(
+        ["--data", "dataset", "--method", "global-assignment"]
+    )
+
+    config = track2p_benchmark._config_from_args(args)
+
+    assert config.transform_type == "fov-affine"
+
+
+def test_track2p_cost_sweep_cli_defaults_to_explicit_fov_affine_transform():
+    args = track2p_cost_sweep.build_arg_parser().parse_args(
+        ["--data", "dataset", "--cost-scales", "1", "--cost-thresholds", "6"]
+    )
+
+    config = track2p_cost_sweep._config_from_args(args)
+
+    assert config.benchmark.transform_type == "fov-affine"
 
 
 def test_track2p_benchmark_cli_accepts_fov_translation_transform():
@@ -27,6 +64,23 @@ def test_track2p_benchmark_cli_accepts_fov_translation_transform():
     config = track2p_benchmark._config_from_args(args)
 
     assert config.transform_type == "fov-translation"
+
+
+def test_track2p_benchmark_cli_accepts_growth_transform_without_global_patch():
+    args = track2p_benchmark.build_arg_parser().parse_args(
+        [
+            "--data",
+            "dataset",
+            "--method",
+            "global-assignment",
+            "--transform-type",
+            "bspline",
+        ]
+    )
+
+    config = track2p_benchmark._config_from_args(args)
+
+    assert config.transform_type == "bspline"
 
 
 def test_track2p_cost_sweep_cli_accepts_fov_translation_transform():

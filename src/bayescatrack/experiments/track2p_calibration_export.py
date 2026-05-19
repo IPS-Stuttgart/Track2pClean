@@ -16,6 +16,7 @@ from bayescatrack.association.calibrated_costs import (
     fit_logistic_association_model,
 )
 from bayescatrack.association.pyrecest_global_assignment import session_edge_pairs
+from bayescatrack.cli_choices import registration_transform_choices
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     discover_subject_dirs,
@@ -123,7 +124,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=registration_transform_choices(
+            ("affine", "rigid", "fov-translation", "none")
+        ),
     )
     parser.add_argument("--curated-only", action="store_true")
     parser.add_argument(

@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack.matching import (
     build_track_rows_from_bundles,
     build_track_rows_from_matches,
@@ -38,6 +39,24 @@ def test_build_track_rows_from_later_seed_session_stitches_both_directions():
         rows,
         np.array([[0, 10, 5], [2, 20, 6], [-1, 30, -1]]),
     )
+
+
+def test_build_track_rows_rejects_duplicate_reference_roi_pairs():
+    with pytest.raises(ValueError, match="duplicate reference ROI index 0"):
+        build_track_rows_from_matches(
+            ("s1", "s2"),
+            [np.array([[0, 10], [0, 20]])],
+            start_roi_indices=np.array([0]),
+        )
+
+
+def test_build_track_rows_rejects_duplicate_measurement_roi_pairs():
+    with pytest.raises(ValueError, match="duplicate measurement ROI index 10"):
+        build_track_rows_from_matches(
+            ("s1", "s2"),
+            [np.array([[0, 10], [1, 10]])],
+            start_roi_indices=np.array([0, 1]),
+        )
 
 
 def test_solve_bundle_linear_assignment_uses_default_cost_gate():

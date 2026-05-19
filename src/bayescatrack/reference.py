@@ -475,25 +475,51 @@ def _as_nullable_int_matrix(array_like: Any) -> np.ndarray:
         array = array.reshape(-1, 1)
     matrix = np.empty(array.shape, dtype=object)
     for index, value in np.ndenumerate(array):
-        matrix[index] = _parse_optional_int(value)
+        matrix[index] = _parse_optional_int(
+            value,
+            context=f"ROI index matrix entry {index}",
+        )
     return matrix
 
 
-def _parse_optional_int(value: Any) -> int | None:
+def _parse_optional_int(value: Any, *, context: str = "ROI index") -> int | None:
     if value is None:
         return None
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{context} must be integer-like or missing, got {value!r}")
     if isinstance(value, bytes):
         value = value.decode("utf-8")
     if isinstance(value, str):
-        if value.strip().lower() in _MISSING_STRINGS:
+        text = value.strip()
+        if text.lower() in _MISSING_STRINGS:
             return None
-        value = value.strip()
-    if isinstance(value, (float, np.floating)) and np.isnan(value):
-        return None
-    try:
+        value = text
+
+    if isinstance(value, (int, np.integer)):
         integer_value = int(value)
-    except (TypeError, ValueError):
-        return None
+    elif isinstance(value, (float, np.floating)):
+        if np.isnan(value):
+            return None
+        if not float(value).is_integer():
+            raise ValueError(
+                f"{context} must be integer-like or missing, got {value!r}"
+            )
+        integer_value = int(value)
+    else:
+        try:
+            number_value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{context} must be integer-like or missing, got {value!r}"
+            ) from exc
+        if np.isnan(number_value):
+            return None
+        if not float(number_value).is_integer():
+            raise ValueError(
+                f"{context} must be integer-like or missing, got {value!r}"
+            )
+        integer_value = int(number_value)
+
     if integer_value < 0:
         return None
     return integer_value
@@ -602,7 +628,9 @@ def _label_vector_to_mapping(labels: Sequence[Any]) -> dict[int, int]:
     label_array = np.asarray(labels, dtype=object).reshape(-1)
     mapping: dict[int, int] = {}
     for roi_idx, label in enumerate(label_array):
-        track_id = _parse_optional_int(label)
+        track_id = _parse_optional_int(
+            label, context=f"track label at ROI {roi_idx}"
+        )
         if track_id is None:
             continue
         if track_id in mapping:
@@ -622,8 +650,10 @@ def _pair_set(pairs: Sequence[Sequence[Any]] | np.ndarray) -> set[tuple[int, int
 
     normalized: set[tuple[int, int]] = set()
     for first, second in pair_array.tolist():
-        first_int = _parse_optional_int(first)
-        second_int = _parse_optional_int(second)
+        first_int = _parse_optional_int(first, context="first ROI in pair")
+        second_int = _parse_optional_int(
+            second, context="second ROI in pair"
+        )
         if first_int is None or second_int is None:
             raise ValueError("Pair arrays must not contain missing values")
         normalized.add((first_int, second_int))
