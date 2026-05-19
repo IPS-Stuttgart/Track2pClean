@@ -67,6 +67,10 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Cross-tab manual GT, Track2p output, and BayesCaTrack edges",
         )
         subparsers.add_parser(
+            "track2p-teacher-distill",
+            help="Run LOSO calibrated assignment with Track2p teacher pseudo-labels",
+        )
+        subparsers.add_parser(
             "track2p-teacher-debug",
             help="Export Bayes/Track2p/manual-GT disagreement diagnostics",
         )
@@ -139,6 +143,12 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_teacher_audit_main(args[1:]))
+    if args[0] == "track2p-teacher-distill":
+        from bayescatrack.experiments.track2p_teacher_distillation import (
+            main as _track2p_teacher_distillation_main,
+        )
+
+        return int(_track2p_teacher_distillation_main(args[1:]))
     if args[0] in {"track2p-teacher-debug", "track2p-teacher-diagnostics"}:
         from bayescatrack.experiments.track2p_teacher_debug import (
             main as _track2p_teacher_debug_main,
