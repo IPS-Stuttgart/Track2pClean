@@ -6,9 +6,12 @@ import numpy as np
 import pytest
 from bayescatrack.experiments.registration_qa_report import (
     RegistrationQAConfig,
+    format_edge_ranking_ledger_summary_table,
     format_registration_backend_audit_table,
     format_registration_qa_table,
+    run_registration_edge_ledger_report,
     run_registration_qa_report,
+    summarize_edge_ranking_ledger,
     summarize_registration_backend_usage,
     summarize_registration_qa_links,
 )
@@ -125,6 +128,48 @@ def test_registration_qa_report_summarizes_manual_gt_links(
     assert np.isnan(backend_audit[0]["median_fov_translation_peak_correlation"])
     assert "registration_backend" in format_registration_backend_audit_table(
         backend_audit
+    )
+
+    ledger = run_registration_edge_ledger_report(
+        RegistrationQAConfig(
+            data=subject_dir,
+            reference_kind="manual-gt",
+            input_format="npy",
+            transform_type="none",
+            max_gap=1,
+            cost="registered-iou",
+        )
+    )
+    assert len(ledger) == 4
+    positive_rows = [row for row in ledger if row["manual_gt_label"]]
+    negative_rows = [row for row in ledger if not row["manual_gt_label"]]
+    assert len(positive_rows) == 2
+    assert len(negative_rows) == 2
+    first_positive = next(
+        row
+        for row in positive_rows
+        if row["source_roi"] == 0 and row["target_roi"] == 0
+    )
+    assert first_positive["manual_gt_target_roi"] == 0
+    assert first_positive["manual_gt_track_index"] == 0
+    assert first_positive["candidate_cost"] == pytest.approx(
+        first_positive["manual_gt_cost"]
+    )
+    assert first_positive["candidate_cost_rank"] == 1
+    assert first_positive["manual_gt_cost_rank"] == 1
+    assert first_positive["candidate_column_cost_rank"] == 1
+    assert first_positive["is_mutual_cost_top1"] is True
+    assert first_positive["row_best_target_roi"] == 0
+    assert first_positive["column_best_source_roi"] == 0
+    assert first_positive["candidate_admissible"] is True
+
+    ledger_summary = summarize_edge_ranking_ledger(ledger)
+    assert len(ledger_summary) == 1
+    assert ledger_summary[0]["candidate_edge_count"] == 4
+    assert ledger_summary[0]["positive_edge_count"] == 2
+    assert ledger_summary[0]["gt_recall_at_1"] == pytest.approx(1.0)
+    assert "threshold_precision" in format_edge_ranking_ledger_summary_table(
+        ledger_summary
     )
 
 

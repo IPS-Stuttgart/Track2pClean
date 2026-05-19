@@ -20,6 +20,10 @@ from bayescatrack.association.activity_similarity import (
     add_activity_similarity_components,
 )
 from bayescatrack.association.registered_masks import replace_empty_registered_masks
+from bayescatrack.core._local_competition import (  # pylint: disable=protected-access
+    LOCAL_COMPETITION_ASSOCIATION_FEATURES as _LOCAL_COMPETITION_ASSOCIATION_FEATURES,
+    add_local_competition_components,
+)
 from bayescatrack.core.bridge import (
     SessionAssociationBundle,
     Track2pSession,
@@ -51,6 +55,9 @@ DEFAULT_ASSOCIATION_FEATURES = (
 )
 SPLIT_ROI_STAT_FEATURES: tuple[str, ...] = ()
 LOCAL_EVIDENCE_ASSOCIATION_FEATURES: tuple[str, ...] = ()
+LOCAL_COMPETITION_ASSOCIATION_FEATURES: tuple[str, ...] = (
+    _LOCAL_COMPETITION_ASSOCIATION_FEATURES
+)
 
 
 @dataclass(frozen=True)
@@ -185,7 +192,8 @@ def pairwise_components_from_bundle(
     components.setdefault("covariance_shape_cost", covariance_shape_cost)
     components.setdefault("covariance_logdet_cost", covariance_logdet_cost)
     components.setdefault("covariance_shape_similarity", covariance_shape_similarity)
-    return with_session_gap_component(components, session_gap=session_gap)
+    components = with_session_gap_component(components, session_gap=session_gap)
+    return add_local_competition_components(components)
 
 
 def with_session_gap_component(
@@ -411,6 +419,10 @@ def _feature_transforms_for(
             transforms[feature_name] = _optional_zero_component_transform(feature_name)
         elif feature_name == "session_gap":
             transforms[feature_name] = _session_gap_transform
+        elif feature_name in LOCAL_COMPETITION_ASSOCIATION_FEATURES:
+            transforms[feature_name] = _optional_zero_component_transform(
+                feature_name
+            )
     return transforms
 
 

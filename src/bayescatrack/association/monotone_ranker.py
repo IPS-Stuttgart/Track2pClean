@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 from bayescatrack.association.calibrated_costs import (
+    CalibratedAssociationModel,
     DEFAULT_ASSOCIATION_FEATURES,
     ReferencePairwiseExamples,
     pairwise_components_from_bundle,
@@ -56,6 +57,10 @@ class MonotoneRankerOptions:
             raise ValueError("binary_loss_weight must be non-negative")
         if self.tolerance < 0.0:
             raise ValueError("tolerance must be non-negative")
+
+
+# Backward-compatible name used by the integrated Track2p LOSO benchmark.
+MonotoneRankerTrainingOptions = MonotoneRankerOptions
 
 
 @dataclass(frozen=True)
@@ -128,6 +133,22 @@ class MonotoneRankingAssociationModel:
             pairwise_components_from_bundle(bundle, session_gap=session_gap)
         )
 
+    def diagnostics(self, *, prefix: str = "monotone") -> dict[str, float | int | str]:
+        """Return compact training diagnostics for benchmark rows."""
+
+        rows: dict[str, float | int | str] = {
+            f"{prefix}_feature_names": ",".join(self.monotone_feature_names),
+            f"{prefix}_preference_pairs": int(self.n_rank_constraints),
+            f"{prefix}_iterations": 0,
+            f"{prefix}_training_loss": float(self.training_rank_loss),
+            f"{prefix}_training_binary_loss": float(self.training_binary_loss),
+            f"{prefix}_training_examples": int(self.n_training_examples),
+            f"{prefix}_positive_examples": int(self.n_positive_examples),
+        }
+        for feature_name, weight in zip(self.monotone_feature_names, self.weights):
+            rows[f"{prefix}_weight_{_metric_safe_name(feature_name)}"] = float(weight)
+        return rows
+
     def _normalized_features(self, features: Any) -> np.ndarray:
         array = np.asarray(features, dtype=float)
         if array.shape[-1] != len(self.feature_names):
@@ -182,6 +203,28 @@ def fit_monotone_ranking_association_model_from_blocks(
         n_training_examples=int(labels.size),
         n_positive_examples=int(np.sum(labels != 0)),
     )
+
+
+def fit_monotone_ranked_association_model_from_blocks(
+    example_blocks: Sequence[ReferencePairwiseExamples],
+    *,
+    feature_names: Sequence[str] | None = None,
+    options: MonotoneRankerTrainingOptions | None = None,
+) -> CalibratedAssociationModel:
+    """Fit a calibrated-association wrapper backed by the monotone ranker."""
+
+    blocks = tuple(example_blocks)
+    if not blocks:
+        raise ValueError("At least one pairwise example block is required")
+    names = tuple(feature_names or blocks[0].feature_names)
+    for block in blocks:
+        if tuple(block.feature_names) != names:
+            raise ValueError("All pairwise example blocks must use the same feature_names")
+    model = fit_monotone_ranking_association_model_from_blocks(
+        blocks,
+        options=options,
+    )
+    return CalibratedAssociationModel(model=model, feature_names=names)
 
 
 def _shared_feature_names(
@@ -440,3 +483,7 @@ def _sigmoid(values: Any) -> np.ndarray:
 def _softplus(values: Any) -> np.ndarray:
     values = np.asarray(values, dtype=float)
     return np.log1p(np.exp(-np.abs(values))) + np.maximum(values, 0.0)
+
+
+def _metric_safe_name(name: str) -> str:
+    return "".join(ch if ch.isalnum() else "_" for ch in name)

@@ -15,7 +15,12 @@ from bayescatrack.association.calibrated_costs import (
     collect_reference_training_examples,
     fit_logistic_association_model,
 )
+from bayescatrack.association.monotone_ranker import (
+    MonotoneRankerTrainingOptions,
+    fit_monotone_ranked_association_model_from_blocks,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
+    AssociationCost,
     session_edge_pairs,
     tracks_to_suite2p_index_matrix,
 )
@@ -117,9 +122,10 @@ def run_track2p_loso_calibration(
     ``model_kwargs['class_weight']``.
     """
 
-    if config.method != "global-assignment" or config.cost != "calibrated":
+    if config.method != "global-assignment" or config.cost not in _LOSO_COSTS:
         raise ValueError(
-            "LOSO calibration requires method='global-assignment' and cost='calibrated'"
+            "LOSO calibration requires method='global-assignment' and "
+            "cost='calibrated' or cost='monotone-ranked'"
         )
     subject_dirs = tuple(discover_subject_dirs(config.data))
     if len(subject_dirs) < 2:
@@ -144,25 +150,15 @@ def run_track2p_loso_calibration(
         training_subjects = tuple(
             subject for index, subject in enumerate(subjects) if index != held_out_index
         )
-        training_features, training_labels = _collect_training_examples(
+        calibrated_model, training_metadata = _fit_loso_fold_model(
             training_subjects,
+            held_out_subject=held_out.subject_name,
             config=config,
             feature_names=feature_names,
             progress=progress,
-            held_out_subject=held_out.subject_name,
-        )
-        weights = _training_sample_weight(
-            training_labels,
             sample_weight=sample_weight,
-            strategy=sample_weight_strategy,
-        )
-        progress.step(f"fitting model for {held_out.subject_name}")
-        calibrated_model = fit_logistic_association_model(
-            training_features,
-            training_labels,
-            feature_names=feature_names,
-            sample_weight=weights,
-            model_kwargs=logistic_model_kwargs,
+            sample_weight_strategy=sample_weight_strategy,
+            logistic_model_kwargs=logistic_model_kwargs,
         )
         progress.step(f"scoring calibration for {held_out.subject_name}")
         calibration_scores = _score_holdout_calibration(
@@ -184,16 +180,9 @@ def run_track2p_loso_calibration(
         base_scores = _score_prediction_against_reference(
             predicted_matrix, held_out.reference, config=config
         )
-        positives = int(np.sum(training_labels))
         scores: dict[str, float | int | str] = {
             **base_scores,
-            "training_examples": int(training_labels.shape[0]),
-            "positive_examples": positives,
-            "negative_examples": int(training_labels.shape[0] - positives),
-            "calibration_sample_weight_strategy": sample_weight_strategy,
-            "calibration_class_weight": _stringify_class_weight(
-                logistic_model_kwargs.get("class_weight")
-            ),
+            **training_metadata,
             **calibration_scores,
         }
         folds.append(
@@ -217,13 +206,128 @@ def run_track2p_loso_calibration(
                     n_sessions=held_out.reference.n_sessions,
                     reference_source=held_out.reference.source,
                 ),
-                training_examples=int(training_labels.shape[0]),
-                positive_examples=positives,
+                training_examples=int(training_metadata["training_examples"]),
+                positive_examples=int(training_metadata["positive_examples"]),
             )
         )
     return LosoCalibrationResult(
         folds=tuple(folds), feature_names=feature_names, max_gap=int(config.max_gap)
     )
+
+
+_LOSO_COSTS = frozenset({"calibrated", "monotone-ranked"})
+
+
+# pylint: disable=too-many-arguments
+def _fit_loso_fold_model(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    held_out_subject: str,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    progress: ProgressReporter,
+    sample_weight: Any | None,
+    sample_weight_strategy: SampleWeightStrategy,
+    logistic_model_kwargs: Mapping[str, Any],
+) -> tuple[Any, dict[str, float | int | str]]:
+    if config.cost == "monotone-ranked":
+        return _fit_loso_monotone_ranker(
+            training_subjects,
+            held_out_subject=held_out_subject,
+            config=config,
+            feature_names=feature_names,
+            progress=progress,
+        )
+    return _fit_loso_logistic_model(
+        training_subjects,
+        held_out_subject=held_out_subject,
+        config=config,
+        feature_names=feature_names,
+        progress=progress,
+        sample_weight=sample_weight,
+        sample_weight_strategy=sample_weight_strategy,
+        logistic_model_kwargs=logistic_model_kwargs,
+    )
+
+
+# pylint: disable=too-many-arguments
+def _fit_loso_logistic_model(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    held_out_subject: str,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    progress: ProgressReporter,
+    sample_weight: Any | None,
+    sample_weight_strategy: SampleWeightStrategy,
+    logistic_model_kwargs: Mapping[str, Any],
+) -> tuple[Any, dict[str, float | int | str]]:
+    training_features, training_labels = _collect_training_examples(
+        training_subjects,
+        config=config,
+        feature_names=feature_names,
+        progress=progress,
+        held_out_subject=held_out_subject,
+    )
+    weights = _training_sample_weight(
+        training_labels,
+        sample_weight=sample_weight,
+        strategy=sample_weight_strategy,
+    )
+    progress.step(f"fitting logistic model for {held_out_subject}")
+    calibrated_model = fit_logistic_association_model(
+        training_features,
+        training_labels,
+        feature_names=feature_names,
+        sample_weight=weights,
+        model_kwargs=logistic_model_kwargs,
+    )
+    positives = int(np.sum(training_labels))
+    return calibrated_model, {
+        "calibration_model": "logistic",
+        "training_examples": int(training_labels.shape[0]),
+        "positive_examples": positives,
+        "negative_examples": int(training_labels.shape[0] - positives),
+        "calibration_sample_weight_strategy": sample_weight_strategy,
+        "calibration_class_weight": _stringify_class_weight(
+            logistic_model_kwargs.get("class_weight")
+        ),
+    }
+
+
+def _fit_loso_monotone_ranker(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    held_out_subject: str,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    progress: ProgressReporter,
+) -> tuple[Any, dict[str, float | int | str]]:
+    pairwise_blocks = _collect_training_example_blocks(
+        training_subjects,
+        config=config,
+        feature_names=feature_names,
+        progress=progress,
+        held_out_subject=held_out_subject,
+    )
+    progress.step(f"fitting monotone ranker for {held_out_subject}")
+    calibrated_model = fit_monotone_ranked_association_model_from_blocks(
+        pairwise_blocks,
+        feature_names=feature_names,
+        options=MonotoneRankerTrainingOptions(),
+    )
+    n_labels, n_positives = _count_pairwise_block_labels(pairwise_blocks)
+    metadata: dict[str, float | int | str] = {
+        "calibration_model": "monotone-ranked",
+        "training_examples": int(n_labels),
+        "positive_examples": int(n_positives),
+        "negative_examples": int(n_labels - n_positives),
+        "calibration_sample_weight_strategy": "not_applicable",
+        "calibration_class_weight": "not_applicable",
+    }
+    if hasattr(calibrated_model.model, "diagnostics"):
+        metadata.update(calibrated_model.model.diagnostics(prefix="monotone"))
+    return calibrated_model, metadata
 
 
 def _validate_sample_weight_strategy(strategy: str) -> SampleWeightStrategy:
@@ -342,6 +446,46 @@ def _collect_training_examples(
     return np.concatenate(feature_blocks, axis=0), np.concatenate(label_blocks, axis=0)
 
 
+def _collect_training_example_blocks(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    progress: ProgressReporter | None = None,
+    held_out_subject: str | None = None,
+) -> tuple[Any, ...]:
+    blocks: list[Any] = []
+    training_options = _reference_training_options(config, feature_names)
+    for subject in training_subjects:
+        if progress is not None:
+            progress.step(
+                f"collecting {subject.subject_name} pairwise blocks for {held_out_subject}"
+            )
+        blocks.extend(
+            collect_reference_pairwise_example_blocks(
+                subject.sessions,
+                subject.reference,
+                session_edges=session_edge_pairs(
+                    len(subject.sessions), max_gap=config.max_gap
+                ),
+                options=training_options,
+            )
+        )
+    if not blocks:
+        raise ValueError("At least one training subject is required")
+    return tuple(blocks)
+
+
+def _count_pairwise_block_labels(blocks: Sequence[Any]) -> tuple[int, int]:
+    n_labels = 0
+    n_positives = 0
+    for block in blocks:
+        labels = np.asarray(block.labels, dtype=int)
+        n_labels += int(labels.size)
+        n_positives += int(np.sum(labels != 0))
+    return n_labels, n_positives
+
+
 def _reference_training_options(
     config: Track2pBenchmarkConfig, feature_names: Sequence[str]
 ) -> ReferenceTrainingOptions:
@@ -355,3 +499,11 @@ def _reference_training_options(
         feature_names=tuple(feature_names),
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
     )
+
+
+def _loso_variant_name(cost: AssociationCost) -> str:
+    if cost == "monotone-ranked":
+        return "Monotone hard-negative ranker + LOSO global assignment"
+    if cost == "calibrated":
+        return "Calibrated costs + LOSO global assignment"
+    raise ValueError(f"Unsupported LOSO cost: {cost!r}")

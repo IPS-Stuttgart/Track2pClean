@@ -1,10 +1,17 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import numpy.testing as npt
-from bayescatrack import CalciumPlaneData
+from bayescatrack import (
+    CalciumPlaneData,
+    Track2pSession,
+    build_session_pair_association_bundle,
+)
 from bayescatrack.association.calibrated_costs import (
+    LOCAL_COMPETITION_ASSOCIATION_FEATURES,
     LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
+    pairwise_components_from_bundle,
     pairwise_feature_tensor,
 )
 from tests._support import run_module
@@ -84,6 +91,76 @@ def test_local_image_and_weighted_mask_evidence_components_rank_diagonal_pairs()
     )
     assert features.shape == (2, 2, len(LOCAL_EVIDENCE_ASSOCIATION_FEATURES))
     assert features[0, 0, 0] < features[0, 1, 0]
+
+
+def test_local_competition_features_are_model_inputs():
+    image_shape = (8, 8)
+    reference_masks: np.ndarray = np.zeros((2, *image_shape), dtype=bool)
+    measurement_masks: np.ndarray = np.zeros((3, *image_shape), dtype=bool)
+    reference_masks[0, 1:3, 1:3] = True
+    reference_masks[1, 5:7, 5:7] = True
+    measurement_masks[0, 1:3, 1:3] = True
+    measurement_masks[1, 1:3, 2:4] = True
+    measurement_masks[2, 5:7, 5:7] = True
+
+    reference = CalciumPlaneData(roi_masks=reference_masks)
+    measurement = CalciumPlaneData(roi_masks=measurement_masks)
+    cost, direct_components = reference.build_pairwise_cost_matrix(
+        measurement,
+        centroid_weight=0.0,
+        iou_weight=0.0,
+        mask_cosine_weight=0.0,
+        area_weight=0.0,
+        roi_feature_weight=0.0,
+        cell_probability_weight=0.0,
+        iou_competition_rank_weight=1.0,
+        iou_competition_gap_weight=1.0,
+        iou_competition_mutual_top1_weight=1.0,
+        local_competition_components=True,
+        return_components=True,
+    )
+
+    assert cost.shape == (2, 3)
+    assert cost[0, 0] < cost[0, 1]
+    assert cost[1, 2] < cost[1, 0]
+    npt.assert_allclose(direct_components["iou_mutual_top1"][0, 0], 1.0)
+    npt.assert_allclose(direct_components["iou_mutual_top1"][0, 1], 0.0)
+    assert direct_components["iou_row_gap_to_best"][0, 1] > 0.0
+
+    bundle = build_session_pair_association_bundle(
+        Track2pSession(
+            session_dir=Path("reference"),
+            session_name="reference",
+            session_date=None,
+            plane_data=reference,
+        ),
+        Track2pSession(
+            session_dir=Path("measurement"),
+            session_name="measurement",
+            session_date=None,
+            plane_data=measurement,
+        ),
+        pairwise_cost_kwargs={
+            "centroid_weight": 0.0,
+            "iou_weight": 0.0,
+            "mask_cosine_weight": 0.0,
+            "area_weight": 0.0,
+            "roi_feature_weight": 0.0,
+            "cell_probability_weight": 0.0,
+        },
+        return_pairwise_components=True,
+    )
+    components = pairwise_components_from_bundle(bundle)
+    features = pairwise_feature_tensor(
+        components,
+        feature_names=LOCAL_COMPETITION_ASSOCIATION_FEATURES,
+    )
+
+    assert features.shape == (2, 3, len(LOCAL_COMPETITION_ASSOCIATION_FEATURES))
+    npt.assert_allclose(components["iou_row_rank_fraction"][0, 0], 0.0)
+    assert components["iou_row_rank_fraction"][0, 1] > 0.0
+    assert components["iou_column_rank_fraction"][0, 1] == 0.0
+    assert components["centroid_competition_rank_cost"][0, 0] == 0.0
 
 
 def test_cli_summary_and_export(tmp_path):

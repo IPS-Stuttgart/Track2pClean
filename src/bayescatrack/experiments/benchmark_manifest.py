@@ -23,10 +23,25 @@ from bayescatrack.experiments.track2p_benchmark import (
     run_track2p_benchmark,
     write_results,
 )
+from bayescatrack.experiments.track2p_teacher_audit import (
+    TRACK2P_TEACHER_MISS_CATEGORY,
+    Track2pTeacherAuditConfig,
+    run_track2p_teacher_audit,
+    teacher_training_rows,
+    write_edge_rows,
+    write_summary_rows,
+)
 
 ManifestObject = Mapping[str, Any]
 TRACK2P_CONFIG_FIELDS = {field.name for field in fields(Track2pBenchmarkConfig)}
-RUN_METADATA_FIELDS = {"name", "output", "format"}
+TEACHER_AUDIT_CONFIG_FIELDS = {
+    field.name for field in fields(Track2pTeacherAuditConfig)
+}
+RUN_BENCHMARKS = {"track2p", "track2p-teacher-audit"}
+TEACHER_AUDIT_OUTPUT_FIELDS = {"edges_output", "focus_output", "teacher_output"}
+RUN_METADATA_FIELDS = (
+    {"name", "output", "format", "benchmark"} | TEACHER_AUDIT_OUTPUT_FIELDS
+)
 COMPARISON_FIELDS = {"name", "inputs", "output", "format", "highlight_best"}
 
 
@@ -35,9 +50,13 @@ class BenchmarkRunSpec:
     """One configured benchmark run from a manifest."""
 
     name: str
-    config: Track2pBenchmarkConfig
+    benchmark: str
+    config: Track2pBenchmarkConfig | Track2pTeacherAuditConfig
     output: Path
     output_format: OutputFormat = "csv"
+    edges_output: Path | None = None
+    focus_output: Path | None = None
+    teacher_output: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -106,7 +125,10 @@ def load_benchmark_manifest(
     defaults = raw_manifest.get("defaults", {})
     if not isinstance(defaults, Mapping):
         raise ValueError("Manifest 'defaults' must be a JSON object")
-    _reject_unknown_keys(defaults, TRACK2P_CONFIG_FIELDS, location="defaults")
+    _reject_unknown_keys(
+        defaults, TRACK2P_CONFIG_FIELDS | TEACHER_AUDIT_CONFIG_FIELDS | {"benchmark"},
+        location="defaults",
+    )
 
     raw_runs = raw_manifest.get("runs")
     if not isinstance(raw_runs, list) or not raw_runs:
@@ -145,9 +167,32 @@ def run_benchmark_manifest(manifest: BenchmarkManifest) -> BenchmarkManifestResu
     run_summaries: list[BenchmarkOutputSummary] = []
     run_outputs: dict[str, Path] = {}
     for run_spec in manifest.runs:
-        results = run_track2p_benchmark(run_spec.config)
-        rows = [result.to_dict() for result in results]
-        write_results(rows, run_spec.output, run_spec.output_format)
+        if run_spec.benchmark == "track2p-teacher-audit":
+            audit = run_track2p_teacher_audit(
+                cast(Track2pTeacherAuditConfig, run_spec.config)
+            )
+            rows = list(audit.summary_rows)
+            write_summary_rows(rows, run_spec.output, run_spec.output_format)
+            if run_spec.edges_output is not None:
+                write_edge_rows(audit.edge_rows, run_spec.edges_output)
+            if run_spec.focus_output is not None:
+                write_edge_rows(
+                    [
+                        row for row in audit.edge_rows
+                        if row["category"] == TRACK2P_TEACHER_MISS_CATEGORY
+                    ],
+                    run_spec.focus_output,
+                )
+            if run_spec.teacher_output is not None:
+                write_edge_rows(
+                    teacher_training_rows(audit.edge_rows), run_spec.teacher_output
+                )
+        else:
+            results = run_track2p_benchmark(
+                cast(Track2pBenchmarkConfig, run_spec.config)
+            )
+            rows = [result.to_dict() for result in results]
+            write_results(rows, run_spec.output, run_spec.output_format)
         run_summaries.append(
             BenchmarkOutputSummary(
                 name=run_spec.name,
@@ -238,10 +283,12 @@ def _parse_run_spec(
     if not isinstance(raw_run, Mapping):
         raise ValueError("Each manifest run must be a JSON object")
     _reject_unknown_keys(
-        raw_run, TRACK2P_CONFIG_FIELDS | RUN_METADATA_FIELDS, location="runs[]"
+        raw_run,
+        TRACK2P_CONFIG_FIELDS | TEACHER_AUDIT_CONFIG_FIELDS | RUN_METADATA_FIELDS,
+        location="runs[]",
     )
-
     run_data = {**defaults, **raw_run}
+    benchmark = _run_benchmark(run_data.get("benchmark", "track2p"))
     name = str(run_data.get("name", _default_run_name(run_data)))
     output_format = _output_format(run_data.get("format", "csv"))
     output = _resolve_output_path(
@@ -249,12 +296,38 @@ def _parse_run_spec(
         default_name=f"{_slugify(name)}.{_benchmark_output_suffix(output_format)}",
         output_base_dir=output_base_dir,
     )
+    if benchmark == "track2p-teacher-audit":
+        config_kwargs = _teacher_audit_config_kwargs(run_data, base_dir=base_dir)
+        teacher_config = Track2pTeacherAuditConfig(**config_kwargs)
+        if progress is not None:
+            teacher_config = replace(teacher_config, progress=progress)
+        return BenchmarkRunSpec(
+            name=name,
+            benchmark=benchmark,
+            config=teacher_config,
+            output=output,
+            output_format=output_format,
+            edges_output=_resolve_optional_output_path(
+                run_data.get("edges_output"), output_base_dir=output_base_dir
+            ),
+            focus_output=_resolve_optional_output_path(
+                run_data.get("focus_output"), output_base_dir=output_base_dir
+            ),
+            teacher_output=_resolve_optional_output_path(
+                run_data.get("teacher_output"), output_base_dir=output_base_dir
+            ),
+        )
+
     config_kwargs = _track2p_config_kwargs(run_data, base_dir=base_dir)
-    config = Track2pBenchmarkConfig(**config_kwargs)
+    track2p_config = Track2pBenchmarkConfig(**config_kwargs)
     if progress is not None:
-        config = replace(config, progress=progress)
+        track2p_config = replace(track2p_config, progress=progress)
     return BenchmarkRunSpec(
-        name=name, config=config, output=output, output_format=output_format
+        name=name,
+        benchmark=benchmark,
+        config=track2p_config,
+        output=output,
+        output_format=output_format,
     )
 
 
@@ -312,6 +385,26 @@ def _track2p_config_kwargs(
     return config_kwargs
 
 
+def _teacher_audit_config_kwargs(
+    run_data: ManifestObject, *, base_dir: Path
+) -> dict[str, Any]:
+    config_kwargs = {
+        key: value
+        for key, value in run_data.items()
+        if key in TEACHER_AUDIT_CONFIG_FIELDS
+    }
+    if "data" not in config_kwargs:
+        raise ValueError(
+            "Manifest run is missing required Track2p teacher-audit config key: data"
+        )
+    for key in ("data", "ground_truth_reference", "track2p_reference"):
+        if key in config_kwargs and config_kwargs[key] is not None:
+            config_kwargs[key] = _resolve_input_path(
+                config_kwargs[key], base_dir=base_dir
+            )
+    return config_kwargs
+
+
 def _comparison_inputs(
     comparison_spec: BenchmarkComparisonSpec,
     *,
@@ -358,6 +451,15 @@ def _resolve_output_path(
     return output_base_dir / path
 
 
+def _resolve_optional_output_path(value: Any, *, output_base_dir: Path) -> Path | None:
+    if value is None:
+        return None
+    path = Path(str(value))
+    if path.is_absolute():
+        return path
+    return output_base_dir / path
+
+
 def _reject_unknown_keys(
     raw_object: ManifestObject, allowed: set[str], *, location: str
 ) -> None:
@@ -387,6 +489,15 @@ def _default_run_name(run_data: ManifestObject) -> str:
     if cost is None:
         return method
     return f"{method}-{cost}"
+
+
+def _run_benchmark(value: Any) -> str:
+    benchmark = str(value)
+    if benchmark not in RUN_BENCHMARKS:
+        raise ValueError(
+            "Manifest run benchmark must be 'track2p' or 'track2p-teacher-audit'"
+        )
+    return benchmark
 
 
 def _output_format(value: Any) -> OutputFormat:

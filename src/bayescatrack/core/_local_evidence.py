@@ -12,6 +12,7 @@ from ._bridge_impl import (
     _mask_support_areas,
     _pairwise_sparse_mask_dot,
 )
+from ._local_competition import add_local_competition_components
 
 _LOCAL_EVIDENCE_INSTALLED_ATTR = "_bayescatrack_local_evidence_installed"
 
@@ -42,6 +43,11 @@ def install_local_evidence_pairwise_features(calcium_plane_cls: type[Any]) -> No
         image_patch_weight: float = 0.0,
         neighbor_constellation_weight: float = 0.0,
         centroid_rank_weight: float = 0.0,
+        iou_competition_rank_weight: float = 0.0,
+        iou_competition_gap_weight: float = 0.0,
+        iou_competition_mutual_top1_weight: float = 0.0,
+        centroid_competition_rank_weight: float = 0.0,
+        local_competition_components: bool = False,
         local_evidence_components: bool = False,
         patch_radius: int = 8,
         neighbor_k: int = 8,
@@ -59,6 +65,10 @@ def install_local_evidence_pairwise_features(calcium_plane_cls: type[Any]) -> No
             "image_patch_weight": image_patch_weight,
             "neighbor_constellation_weight": neighbor_constellation_weight,
             "centroid_rank_weight": centroid_rank_weight,
+            "iou_competition_rank_weight": iou_competition_rank_weight,
+            "iou_competition_gap_weight": iou_competition_gap_weight,
+            "iou_competition_mutual_top1_weight": iou_competition_mutual_top1_weight,
+            "centroid_competition_rank_weight": centroid_competition_rank_weight,
         }.items():
             if weight_value < 0.0:
                 raise ValueError(f"{weight_name} must be non-negative")
@@ -204,6 +214,37 @@ def install_local_evidence_pairwise_features(calcium_plane_cls: type[Any]) -> No
             if centroid_rank_weight > 0.0:
                 total_cost += centroid_rank_weight * centroid_rank_cost
             components["centroid_rank_cost"] = centroid_rank_cost
+
+        if (
+            local_competition_components
+            or iou_competition_rank_weight > 0.0
+            or iou_competition_gap_weight > 0.0
+            or iou_competition_mutual_top1_weight > 0.0
+            or centroid_competition_rank_weight > 0.0
+        ):
+            components = add_local_competition_components(components)
+            if iou_competition_rank_weight > 0.0:
+                total_cost += (
+                    iou_competition_rank_weight
+                    * components["iou_competition_rank_cost"]
+                )
+            if iou_competition_gap_weight > 0.0:
+                iou_gap_cost = 0.5 * (
+                    components["iou_row_gap_to_best"]
+                    + components["iou_column_gap_to_best"]
+                )
+                total_cost += iou_competition_gap_weight * iou_gap_cost
+                components["iou_competition_gap_cost"] = iou_gap_cost
+            if iou_competition_mutual_top1_weight > 0.0:
+                mutual_top1_cost = 1.0 - np.clip(
+                    components["iou_mutual_top1"], 0.0, 1.0
+                )
+                total_cost += iou_competition_mutual_top1_weight * mutual_top1_cost
+                components["iou_mutual_top1_cost"] = mutual_top1_cost
+            if centroid_competition_rank_weight > 0.0:
+                total_cost += centroid_competition_rank_weight * components[
+                    "centroid_competition_rank_cost"
+                ]
 
         gated = np.asarray(
             components.get("gated", np.zeros_like(total_cost, dtype=bool)), dtype=bool

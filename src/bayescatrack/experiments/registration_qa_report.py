@@ -46,7 +46,7 @@ from bayescatrack.experiments.track2p_benchmark import (
 from bayescatrack.track2p_registration import register_plane_pair
 
 RegistrationQACost = Literal["registered-iou", "roi-aware", "calibrated"]
-RegistrationQALevel = Literal["summary", "links", "backend-audit"]
+RegistrationQALevel = Literal["summary", "links", "edge-ledger", "backend-audit"]
 OutputFormat = Literal["table", "json", "csv"]
 
 
@@ -81,8 +81,29 @@ class RegistrationQAConfig:
 def run_registration_qa_report(config: RegistrationQAConfig) -> list[dict[str, Any]]:
     """Return one diagnostics row for each manual-GT link and audited edge."""
 
+    return _run_registration_qa_report(config, emit_candidate_ledger=False)
+
+
+def run_registration_edge_ledger_report(
+    config: RegistrationQAConfig,
+) -> list[dict[str, Any]]:
+    """Return one candidate-edge ledger row for each auditable source/target pair."""
+
+    return _run_registration_qa_report(config, emit_candidate_ledger=True)
+
+
+def _run_registration_qa_report(
+    config: RegistrationQAConfig,
+    *,
+    emit_candidate_ledger: bool,
+) -> list[dict[str, Any]]:
+    """Return link-level diagnostics or the full candidate-edge ranking ledger."""
+
     if config.cost == "calibrated":
-        return _run_calibrated_loso_registration_qa_report(config)
+        return _run_calibrated_loso_registration_qa_report(
+            config,
+            emit_candidate_ledger=emit_candidate_ledger,
+        )
 
     subject_dirs = discover_subject_dirs(config.data)
     if not subject_dirs:
@@ -117,6 +138,7 @@ def run_registration_qa_report(config: RegistrationQAConfig) -> list[dict[str, A
                 sessions,
                 reference_matrix,
                 config,
+                emit_candidate_ledger=emit_candidate_ledger,
             )
         )
     return rows
@@ -124,6 +146,8 @@ def run_registration_qa_report(config: RegistrationQAConfig) -> list[dict[str, A
 
 def _run_calibrated_loso_registration_qa_report(
     config: RegistrationQAConfig,
+    *,
+    emit_candidate_ledger: bool = False,
 ) -> list[dict[str, Any]]:
     """Return held-out edge diagnostics for LOSO calibrated costs."""
 
@@ -192,6 +216,7 @@ def _run_calibrated_loso_registration_qa_report(
             reference_matrix,
             config,
             calibrated_model=calibrated_model,
+            emit_candidate_ledger=emit_candidate_ledger,
         )
         for row in subject_rows:
             row["calibration_training_subjects"] = ",".join(
@@ -315,6 +340,134 @@ def format_registration_qa_table(rows: Sequence[Mapping[str, Any]]) -> str:
         "median_gt_cost_percentile",
         "median_false_cost_median",
         "median_cost_margin",
+    ]
+    body = [
+        "| " + " | ".join(columns) + " |",
+        "| " + " | ".join(["---"] * len(columns)) + " |",
+    ]
+    for row in rows:
+        body.append(
+            "| " + " | ".join(_format_value(row.get(col, "")) for col in columns) + " |"
+        )
+    return "\n".join(body)
+
+
+def summarize_edge_ranking_ledger(
+    rows: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Aggregate full candidate-edge ledger rows by subject/session edge."""
+
+    grouped: dict[tuple[str, str, str, str, int], list[Mapping[str, Any]]] = (
+        defaultdict(list)
+    )
+    for row in rows:
+        key = (
+            str(row.get("cost", "")),
+            str(row["subject"]),
+            str(row["source_session_name"]),
+            str(row["target_session_name"]),
+            int(row["session_gap"]),
+        )
+        grouped[key].append(row)
+
+    summary: list[dict[str, Any]] = []
+    for (cost, subject, source_name, target_name, session_gap), group in sorted(
+        grouped.items()
+    ):
+        positives = [row for row in group if bool(row.get("manual_gt_label", False))]
+        negatives = [
+            row for row in group if not bool(row.get("manual_gt_label", False))
+        ]
+        accepted = [
+            row for row in group if bool(row.get("candidate_admissible", False))
+        ]
+        accepted_positives = [
+            row for row in accepted if bool(row.get("manual_gt_label", False))
+        ]
+        summary.append(
+            {
+                "cost": cost,
+                "subject": subject,
+                "source_session_name": source_name,
+                "target_session_name": target_name,
+                "session_gap": session_gap,
+                "candidate_edge_count": len(group),
+                "source_roi_count": len({int(row["source_roi"]) for row in group}),
+                "target_roi_count": len({int(row["target_roi"]) for row in group}),
+                "positive_edge_count": len(positives),
+                "negative_edge_count": len(negatives),
+                "accepted_edge_count": len(accepted),
+                "accepted_positive_edge_count": len(accepted_positives),
+                "threshold_precision": (
+                    len(accepted_positives) / len(accepted) if accepted else np.nan
+                ),
+                "threshold_recall": (
+                    len(accepted_positives) / len(positives) if positives else np.nan
+                ),
+                "false_accepted_edge_count": _count_bool(
+                    negatives,
+                    "candidate_admissible",
+                ),
+                "registration_backend": _mode(group, "registration_backend"),
+                "registered_plane_source": _mode(group, "registered_plane_source"),
+                "registration_backend_reason": _mode(
+                    group,
+                    "registration_backend_reason",
+                ),
+                "transform_type": _mode(group, "transform_type"),
+                "gt_recall_at_1": _mean_bool(positives, "is_row_cost_top1"),
+                "gt_recall_at_5": _mean_bool(positives, "is_row_cost_top5"),
+                "gt_recall_at_10": _mean_bool(positives, "is_row_cost_top10"),
+                "gt_mutual_top1_rate": _mean_bool(positives, "is_mutual_cost_top1"),
+                "gt_admissible_rate": _mean_bool(positives, "candidate_admissible"),
+                "median_gt_cost_rank": _stat(positives, "candidate_cost_rank"),
+                "p90_gt_cost_rank": _stat(positives, "candidate_cost_rank", 90),
+                "median_gt_column_cost_rank": _stat(
+                    positives,
+                    "candidate_column_cost_rank",
+                ),
+                "median_gt_registered_iou": _stat(positives, "registered_iou"),
+                "median_gt_registered_centroid_distance": _stat(
+                    positives,
+                    "registered_centroid_distance",
+                ),
+                "median_gt_cost": _stat(positives, "candidate_cost"),
+                "median_gt_probability": _stat(positives, "candidate_probability"),
+                "median_gt_row_cost_margin": _stat(positives, "row_cost_margin"),
+                "median_gt_column_cost_margin": _stat(
+                    positives,
+                    "column_cost_margin",
+                ),
+                "median_false_cost": _stat(negatives, "candidate_cost"),
+                "p10_false_cost": _stat(negatives, "candidate_cost", 10),
+            }
+        )
+    return summary
+
+
+def format_edge_ranking_ledger_summary_table(
+    rows: Sequence[Mapping[str, Any]],
+) -> str:
+    """Format candidate-edge ledger summary rows as a compact Markdown table."""
+
+    columns = [
+        "cost",
+        "subject",
+        "source_session_name",
+        "target_session_name",
+        "candidate_edge_count",
+        "positive_edge_count",
+        "accepted_edge_count",
+        "threshold_precision",
+        "threshold_recall",
+        "gt_recall_at_1",
+        "gt_recall_at_5",
+        "gt_recall_at_10",
+        "gt_mutual_top1_rate",
+        "median_gt_registered_iou",
+        "median_gt_cost_rank",
+        "median_gt_row_cost_margin",
+        "false_accepted_edge_count",
     ]
     body = [
         "| " + " | ".join(columns) + " |",
@@ -479,6 +632,32 @@ def write_registration_qa_results(
     output_path.write_text(format_registration_qa_table(rows) + "\n", encoding="utf-8")
 
 
+def write_edge_ranking_ledger_results(
+    rows: Sequence[Mapping[str, Any]],
+    output_path: Path,
+    output_format: OutputFormat,
+) -> None:
+    """Write full candidate-edge ledger rows or their summary."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_format == "json":
+        output_path.write_text(
+            json.dumps(list(rows), indent=2) + "\n", encoding="utf-8"
+        )
+        return
+    if output_format == "csv":
+        with output_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=_csv_fieldnames(rows))
+            writer.writeheader()
+            writer.writerows(rows)
+        return
+    output_path.write_text(
+        format_edge_ranking_ledger_summary_table(summarize_edge_ranking_ledger(rows))
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="bayescatrack benchmark registration-qa",
@@ -529,7 +708,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--regularization", type=float, default=1.0e-6)
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
     parser.add_argument(
-        "--level", default="summary", choices=("summary", "links", "backend-audit")
+        "--level",
+        default="summary",
+        choices=("summary", "links", "edge-ledger", "backend-audit"),
+        help=(
+            "summary/links keep one row per manual-GT link; edge-ledger emits "
+            "one row per source/target candidate edge for CSV/JSON outputs."
+        ),
     )
     parser.add_argument(
         "--progress", action=argparse.BooleanOptionalAction, default=True
@@ -541,16 +726,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    rows: Sequence[Mapping[str, Any]] = run_registration_qa_report(
-        _config_from_args(args)
-    )
-    if args.level == "summary":
-        rows = summarize_registration_qa_links(rows)
-    elif args.level == "backend-audit":
-        rows = summarize_registration_backend_usage(rows)
+    config = _config_from_args(args)
+    if args.level == "edge-ledger":
+        rows: Sequence[Mapping[str, Any]] = run_registration_edge_ledger_report(config)
+    else:
+        rows = run_registration_qa_report(config)
+        if args.level == "summary":
+            rows = summarize_registration_qa_links(rows)
+        elif args.level == "backend-audit":
+            rows = summarize_registration_backend_usage(rows)
 
     if args.output is not None:
-        if args.level == "backend-audit":
+        if args.level == "edge-ledger":
+            write_edge_ranking_ledger_results(rows, args.output, args.format)
+        elif args.level == "backend-audit":
             write_registration_backend_audit_results(rows, args.output, args.format)
         else:
             write_registration_qa_results(rows, args.output, args.format)
@@ -560,6 +749,12 @@ def main(argv: list[str] | None = None) -> int:
         writer = csv.DictWriter(sys.stdout, fieldnames=_csv_fieldnames(rows))
         writer.writeheader()
         writer.writerows(rows)
+    elif args.level == "edge-ledger":
+        print(
+            format_edge_ranking_ledger_summary_table(
+                summarize_edge_ranking_ledger(rows)
+            )
+        )
     else:
         if args.level == "backend-audit":
             print(format_registration_backend_audit_table(rows))
@@ -574,6 +769,7 @@ def _audit_subject(
     reference_matrix: np.ndarray,
     config: RegistrationQAConfig,
     calibrated_model: CalibratedAssociationModel | None = None,
+    emit_candidate_ledger: bool = False,
 ) -> list[dict[str, Any]]:
     if config.cost == "calibrated" and calibrated_model is None:
         raise ValueError("calibrated_model is required when cost='calibrated'")
@@ -643,8 +839,13 @@ def _audit_subject(
             cost_matrix = np.asarray(
                 registered_bundle.pairwise_cost_matrix, dtype=float
             )
+        audit_function = (
+            _audit_candidate_ledger
+            if emit_candidate_ledger
+            else _audit_reference_links
+        )
         rows.extend(
-            _audit_reference_links(
+            audit_function(
                 subject,
                 source_index,
                 target_index,
@@ -829,6 +1030,244 @@ def _audit_reference_links(
     return rows
 
 
+def _audit_candidate_ledger(
+    subject: str,
+    source_index: int,
+    target_index: int,
+    source_session: Track2pSession,
+    target_session: Track2pSession,
+    reference_matrix: np.ndarray,
+    cost_source_lookup: Mapping[int, int],
+    raw_components: Mapping[str, np.ndarray],
+    registered_components: Mapping[str, np.ndarray],
+    cost_matrix: np.ndarray,
+    probability_matrix: np.ndarray | None,
+    empty_registered_rois: np.ndarray,
+    registration_metadata: Mapping[str, Any],
+    config: RegistrationQAConfig,
+) -> list[dict[str, Any]]:
+    """Return one rank-aware ledger row for every candidate target edge."""
+
+    target_lookup = _roi_lookup(target_session)
+    source_roi_indices = _source_roi_indices_for_cost_matrix(cost_source_lookup)
+    target_roi_indices = _roi_indices(target_session)
+    manual_targets, manual_track_indices = _manual_target_and_track_by_source(
+        reference_matrix,
+        source_index,
+        target_index,
+    )
+    rows: list[dict[str, Any]] = []
+    for source_local, source_roi in enumerate(source_roi_indices):
+        source_roi_int = int(source_roi)
+        cost_row = cost_matrix[source_local]
+        probability_row = (
+            None if probability_matrix is None else probability_matrix[source_local]
+        )
+        row_best_local, row_best_cost, row_second_best_cost = _best_and_second_cost(
+            cost_row
+        )
+        manual_target_roi = manual_targets.get(source_roi_int)
+        manual_track_index = manual_track_indices.get(source_roi_int)
+        manual_target_local = (
+            None
+            if manual_target_roi is None
+            else target_lookup.get(int(manual_target_roi))
+        )
+        manual_gt_cost = (
+            np.nan
+            if manual_target_local is None
+            else float(cost_row[manual_target_local])
+        )
+        manual_gt_probability = (
+            np.nan
+            if probability_row is None or manual_target_local is None
+            else float(probability_row[manual_target_local])
+        )
+        manual_gt_cost_rank = _cost_rank(cost_row, manual_gt_cost)
+        manual_gt_probability_rank = _probability_rank(
+            probability_row,
+            manual_gt_probability,
+        )
+        for target_local, target_roi in enumerate(target_roi_indices):
+            target_roi_int = int(target_roi)
+            candidate_cost = float(cost_row[target_local])
+            candidate_probability = (
+                np.nan
+                if probability_row is None
+                else float(probability_row[target_local])
+            )
+            cost_column = cost_matrix[:, target_local]
+            column_best_local, column_best_cost, column_second_best_cost = (
+                _best_and_second_cost(cost_column)
+            )
+            candidate_cost_rank = _cost_rank(cost_row, candidate_cost)
+            candidate_column_cost_rank = _cost_rank(cost_column, candidate_cost)
+            candidate_probability_rank = _probability_rank(
+                probability_row,
+                candidate_probability,
+            )
+            target_empty = bool(empty_registered_rois[target_local])
+            target_gated = bool(
+                _component_value(
+                    registered_components,
+                    "gated",
+                    source_local,
+                    target_local,
+                    False,
+                )
+            )
+            below_threshold = (
+                True
+                if config.cost_threshold is None
+                else bool(candidate_cost <= float(config.cost_threshold))
+            )
+            manual_gt_label = (
+                manual_target_roi is not None
+                and target_roi_int == int(manual_target_roi)
+            )
+            rows.append(
+                {
+                    "cost": config.cost,
+                    "subject": subject,
+                    "source_session_index": source_index,
+                    "target_session_index": target_index,
+                    "source_session_name": source_session.session_name,
+                    "target_session_name": target_session.session_name,
+                    "session_gap": target_index - source_index,
+                    "registration_backend": registration_metadata[
+                        "registration_backend"
+                    ],
+                    "registered_plane_source": registration_metadata[
+                        "registered_plane_source"
+                    ],
+                    "registration_backend_reason": registration_metadata[
+                        "registration_backend_reason"
+                    ],
+                    "fov_translation_shift_y": registration_metadata[
+                        "fov_translation_shift_y"
+                    ],
+                    "fov_translation_shift_x": registration_metadata[
+                        "fov_translation_shift_x"
+                    ],
+                    "fov_translation_peak_correlation": registration_metadata[
+                        "fov_translation_peak_correlation"
+                    ],
+                    "transform_type": config.transform_type,
+                    "source_roi": source_roi_int,
+                    "target_roi": target_roi_int,
+                    "manual_gt_label": manual_gt_label,
+                    "manual_gt_target_roi": (
+                        np.nan if manual_target_roi is None else int(manual_target_roi)
+                    ),
+                    "manual_gt_track_index": (
+                        np.nan
+                        if manual_track_index is None
+                        else int(manual_track_index)
+                    ),
+                    "manual_gt_cost": manual_gt_cost,
+                    "manual_gt_probability": manual_gt_probability,
+                    "manual_gt_cost_rank": manual_gt_cost_rank,
+                    "manual_gt_probability_rank": manual_gt_probability_rank,
+                    "raw_mask_shape_matches": (
+                        source_session.plane_data.image_shape
+                        == target_session.plane_data.image_shape
+                    ),
+                    "raw_iou": _component_value(
+                        raw_components,
+                        "iou",
+                        source_local,
+                        target_local,
+                    ),
+                    "registered_iou": _component_value(
+                        registered_components,
+                        "iou",
+                        source_local,
+                        target_local,
+                    ),
+                    "raw_centroid_distance": _component_value(
+                        raw_components,
+                        "centroid_distance",
+                        source_local,
+                        target_local,
+                    ),
+                    "registered_centroid_distance": _component_value(
+                        registered_components,
+                        "centroid_distance",
+                        source_local,
+                        target_local,
+                    ),
+                    "registered_mask_cosine": _component_value(
+                        registered_components,
+                        "mask_cosine",
+                        source_local,
+                        target_local,
+                    ),
+                    "area_ratio": _component_value(
+                        registered_components,
+                        "area_ratio",
+                        source_local,
+                        target_local,
+                    ),
+                    "candidate_cost": candidate_cost,
+                    "candidate_probability": candidate_probability,
+                    "candidate_cost_rank": candidate_cost_rank,
+                    "candidate_column_cost_rank": candidate_column_cost_rank,
+                    "candidate_probability_rank": candidate_probability_rank,
+                    "candidate_cost_percentile": _finite_percentile_rank(
+                        cost_row,
+                        candidate_cost,
+                    ),
+                    "is_row_cost_top1": candidate_cost_rank == 1,
+                    "is_row_cost_top5": candidate_cost_rank <= 5,
+                    "is_row_cost_top10": candidate_cost_rank <= 10,
+                    "is_column_cost_top1": candidate_column_cost_rank == 1,
+                    "is_mutual_cost_top1": (
+                        candidate_cost_rank == 1
+                        and candidate_column_cost_rank == 1
+                    ),
+                    "row_best_target_roi": _optional_roi(
+                        target_roi_indices,
+                        row_best_local,
+                    ),
+                    "row_best_cost": row_best_cost,
+                    "row_second_best_cost": row_second_best_cost,
+                    "row_cost_margin": _finite_margin(
+                        row_best_cost,
+                        row_second_best_cost,
+                    ),
+                    "candidate_cost_gap_to_row_best": candidate_cost - row_best_cost,
+                    "column_best_source_roi": _optional_roi(
+                        source_roi_indices,
+                        column_best_local,
+                    ),
+                    "column_best_cost": column_best_cost,
+                    "column_second_best_cost": column_second_best_cost,
+                    "column_cost_margin": _finite_margin(
+                        column_best_cost,
+                        column_second_best_cost,
+                    ),
+                    "candidate_cost_gap_to_column_best": (
+                        candidate_cost - column_best_cost
+                    ),
+                    "target_empty_registered_mask": target_empty,
+                    "target_gated": target_gated,
+                    "target_below_cost_threshold": below_threshold,
+                    "candidate_admissible": (
+                        (not target_empty) and (not target_gated) and below_threshold
+                    ),
+                    "empty_registered_rois": int(
+                        np.count_nonzero(empty_registered_rois)
+                    ),
+                    "empty_registered_fraction": (
+                        float(np.mean(empty_registered_rois))
+                        if empty_registered_rois.size
+                        else 0.0
+                    ),
+                }
+            )
+    return rows
+
+
 def _linked_source_rois(
     reference_matrix: np.ndarray,
     source_index: int,
@@ -847,6 +1286,37 @@ def _linked_source_rois(
         seen.add(source_roi_int)
         linked_rois.append(source_roi_int)
     return tuple(linked_rois)
+
+
+def _manual_target_and_track_by_source(
+    reference_matrix: np.ndarray,
+    source_index: int,
+    target_index: int,
+) -> tuple[dict[int, int], dict[int, int]]:
+    targets: dict[int, int] = {}
+    track_indices: dict[int, int] = {}
+    for track_index, track in enumerate(reference_matrix):
+        source_roi = track[source_index]
+        target_roi = track[target_index]
+        if source_roi is None or target_roi is None:
+            continue
+        source_roi_int = int(source_roi)
+        if source_roi_int in targets:
+            continue
+        targets[source_roi_int] = int(target_roi)
+        track_indices[source_roi_int] = track_index
+    return targets, track_indices
+
+
+def _source_roi_indices_for_cost_matrix(
+    cost_source_lookup: Mapping[int, int],
+) -> np.ndarray:
+    source_roi_indices = np.full(len(cost_source_lookup), -1, dtype=int)
+    for source_roi, source_local in cost_source_lookup.items():
+        source_roi_indices[int(source_local)] = int(source_roi)
+    if np.any(source_roi_indices < 0):
+        raise ValueError("Cost source lookup is not a dense local-index mapping")
+    return source_roi_indices
 
 
 def _register_plane_pair_for_registration_qa(
@@ -1380,6 +1850,16 @@ def _mean_bool(rows: Sequence[Mapping[str, Any]], key: str) -> float:
     return float(np.mean([bool(row.get(key, False)) for row in rows]))
 
 
+def _count_bool(rows: Sequence[Mapping[str, Any]], key: str) -> int:
+    return int(sum(bool(row.get(key, False)) for row in rows))
+
+
+def _finite_margin(best_cost: float, second_best_cost: float) -> float:
+    if not np.isfinite(best_cost) or not np.isfinite(second_best_cost):
+        return np.nan
+    return float(second_best_cost - best_cost)
+
+
 def _mode(rows: Sequence[Mapping[str, Any]], key: str) -> str:
     counts: dict[str, int] = defaultdict(int)
     for row in rows:
@@ -1387,6 +1867,62 @@ def _mode(rows: Sequence[Mapping[str, Any]], key: str) -> str:
     if not counts:
         return ""
     return max(counts, key=lambda value: counts[value])
+
+
+def _cost_rank(values: np.ndarray, candidate_cost: float) -> int:
+    if not np.isfinite(candidate_cost):
+        return int(np.count_nonzero(np.isfinite(values)) + 1)
+    return int(1 + np.count_nonzero(np.asarray(values, dtype=float) < candidate_cost))
+
+
+def _probability_rank(
+    values: np.ndarray | None,
+    candidate_probability: float,
+) -> float:
+    if values is None or not np.isfinite(candidate_probability):
+        return np.nan
+    return float(
+        1
+        + np.count_nonzero(
+            np.asarray(values, dtype=float) > candidate_probability
+        )
+    )
+
+
+def _best_and_second_cost(values: np.ndarray) -> tuple[int | None, float, float]:
+    value_array = np.asarray(values, dtype=float)
+    finite_indices = np.flatnonzero(np.isfinite(value_array))
+    if not finite_indices.size:
+        return None, np.nan, np.nan
+    sorted_indices = finite_indices[
+        np.argsort(value_array[finite_indices], kind="stable")
+    ]
+    best_index = int(sorted_indices[0])
+    best_cost = float(value_array[best_index])
+    second_cost = (
+        float(value_array[int(sorted_indices[1])])
+        if sorted_indices.size > 1
+        else np.nan
+    )
+    return best_index, best_cost, second_cost
+
+
+def _finite_percentile_rank(values: np.ndarray, candidate_cost: float) -> float:
+    value_array = np.asarray(values, dtype=float)
+    finite_values = value_array[np.isfinite(value_array)]
+    if not finite_values.size or not np.isfinite(candidate_cost):
+        return np.nan
+    return float(
+        100.0
+        * np.count_nonzero(finite_values < candidate_cost)
+        / max(int(finite_values.size) - 1, 1)
+    )
+
+
+def _optional_roi(roi_indices: np.ndarray, local_index: int | None) -> float | int:
+    if local_index is None:
+        return np.nan
+    return int(np.asarray(roi_indices, dtype=int)[int(local_index)])
 
 
 def _csv_fieldnames(rows: Sequence[Mapping[str, Any]]) -> list[str]:

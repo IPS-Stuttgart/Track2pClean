@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 
+import numpy as np
 import pytest
 from bayescatrack.datasets.track2p import (
     SyntheticTrack2pSubjectConfig,
@@ -22,6 +23,25 @@ def _write_manifest(path, manifest):
 def _read_csv_rows(path):
     with path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
+
+
+def _write_track2p_reference(subject):
+    track2p_dir = subject.subject_dir / "track2p"
+    track2p_dir.mkdir(parents=True, exist_ok=True)
+    np.save(
+        track2p_dir / f"{subject.plane_name}_suite2p_indices.npy",
+        subject.suite2p_indices,
+        allow_pickle=True,
+    )
+    np.save(
+        track2p_dir / "track_ops.npy",
+        {
+            "all_ds_path": [
+                str(subject.subject_dir / name) for name in subject.session_names
+            ]
+        },
+        allow_pickle=True,
+    )
 
 
 def test_benchmark_manifest_runs_suite_and_comparison(tmp_path):
@@ -74,6 +94,54 @@ def test_benchmark_manifest_runs_suite_and_comparison(tmp_path):
     assert "Track2p" in (tmp_path / "results" / "comparison.md").read_text(
         encoding="utf-8"
     )
+
+
+def test_benchmark_manifest_runs_track2p_teacher_audit_wrapper(tmp_path):
+    subject = write_synthetic_track2p_subject(
+        tmp_path / "data",
+        SyntheticTrack2pSubjectConfig(subject_name="jm_teacher_manifest"),
+    )
+    _write_track2p_reference(subject)
+    manifest_path = tmp_path / "teacher-benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data/jm_teacher_manifest",
+                "input_format": "suite2p",
+                "include_behavior": False,
+            },
+            "runs": [
+                {
+                    "name": "teacher-audit",
+                    "benchmark": "track2p-teacher-audit",
+                    "pair_mode": "consecutive",
+                    "format": "csv",
+                    "output": "results/teacher-summary.csv",
+                    "edges_output": "results/teacher-edges.csv",
+                    "focus_output": "results/teacher-focus.csv",
+                    "teacher_output": "results/teacher-labels.csv",
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert [run.name for run in result.runs] == ["teacher-audit"]
+    assert result.runs[0].rows == 1
+    summary_rows = _read_csv_rows(tmp_path / "results" / "teacher-summary.csv")
+    assert float(summary_rows[0]["track2p_vs_gt_f1"]) == pytest.approx(1.0)
+    assert "bayes_miss_rate_on_gt_track2p_agreement" in summary_rows[0]
+    edge_rows = _read_csv_rows(tmp_path / "results" / "teacher-edges.csv")
+    assert edge_rows
+    assert {"in_ground_truth", "in_track2p", "in_bayes", "category"}.issubset(
+        edge_rows[0]
+    )
+    teacher_rows = _read_csv_rows(tmp_path / "results" / "teacher-labels.csv")
+    assert teacher_rows
+    assert teacher_rows[0]["teacher_label_source"] == "track2p_output"
+    assert (tmp_path / "results" / "teacher-focus.csv").exists()
 
 
 def test_benchmark_manifest_rejects_unknown_run_keys(tmp_path):

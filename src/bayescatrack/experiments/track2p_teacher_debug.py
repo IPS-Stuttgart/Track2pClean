@@ -63,6 +63,20 @@ DETAIL_FIELDNAMES = [
     "track2p_label",
     "bayescatrack_label",
     "edge_source",
+    "manual_gt_track_rows",
+    "track2p_track_rows",
+    "bayes_track_rows",
+    "manual_gt_targets_for_source",
+    "track2p_targets_for_source",
+    "bayes_targets_for_source",
+    "manual_gt_sources_for_target",
+    "track2p_sources_for_target",
+    "bayes_sources_for_target",
+    "bayes_selected_same_source",
+    "bayes_selected_same_target",
+    "bayes_selected_alternative_targets",
+    "bayes_selected_alternative_sources",
+    "teacher_miss_reason",
     "bayes_candidate_present",
     "bayes_eligible_after_threshold",
     "bayes_cost",
@@ -92,10 +106,13 @@ SUMMARY_FIELDNAMES = [
     "manual_gt_label",
     "track2p_label",
     "bayescatrack_label",
+    "teacher_miss_reason",
     "candidate_present_rate",
     "eligible_after_threshold_rate",
     "median_bayes_row_rank",
     "median_bayes_adjusted_cost",
+    "same_source_conflict_rate",
+    "same_target_conflict_rate",
 ]
 
 METRIC_FIELDNAMES = [
@@ -143,6 +160,16 @@ class Track2pTeacherDebugReport:
     detail_rows: tuple[CSVRow, ...]
     summary_rows: tuple[CSVRow, ...]
     metric_rows: tuple[CSVRow, ...]
+
+
+@dataclass(frozen=True)
+class _TrackEdgeIndex:
+    """Per-track edge index with row ids and local conflict lookups."""
+
+    edges: frozenset[EdgeKey]
+    rows_by_edge: Mapping[EdgeKey, tuple[int, ...]]
+    targets_by_source: Mapping[tuple[int, int, int], tuple[int, ...]]
+    sources_by_target: Mapping[tuple[int, int, int], tuple[int, ...]]
 
 
 @dataclass(frozen=True)
@@ -622,16 +649,17 @@ def _subject_detail_rows(
     edges = _edge_pairs(
         manual_matrix.shape[1], max_gap=benchmark.max_gap, scope=config.edge_scope
     )
-    manual_edges = _track_matrix_edge_set(manual_matrix, edges=edges)
-    track2p_edges = _track_matrix_edge_set(track2p_matrix, edges=edges)
-    bayes_edges = _track_matrix_edge_set(bayes_matrix, edges=edges)
-    all_edges = sorted(manual_edges | track2p_edges | bayes_edges)
+    manual_index = _track_matrix_edge_index(manual_matrix, edges=edges)
+    track2p_index = _track_matrix_edge_index(track2p_matrix, edges=edges)
+    bayes_index = _track_matrix_edge_index(bayes_matrix, edges=edges)
+    all_edges = sorted(manual_index.edges | track2p_index.edges | bayes_index.edges)
 
     rows: list[CSVRow] = []
     for session_a, session_b, roi_a, roi_b in all_edges:
-        manual = (session_a, session_b, roi_a, roi_b) in manual_edges
-        teacher = (session_a, session_b, roi_a, roi_b) in track2p_edges
-        bayes = (session_a, session_b, roi_a, roi_b) in bayes_edges
+        edge = (session_a, session_b, roi_a, roi_b)
+        manual = edge in manual_index.edges
+        teacher = edge in track2p_index.edges
+        bayes = edge in bayes_index.edges
         row: CSVRow = {
             "subject": subject,
             "session_a": int(session_a),
@@ -650,7 +678,13 @@ def _subject_detail_rows(
             "cost_threshold": _threshold_label(benchmark.cost_threshold),
             "gap_penalty": float(benchmark.gap_penalty),
         }
+        row.update(
+            _edge_membership_context(
+                edge, manual_index, track2p_index, bayes_index
+            )
+        )
         row.update(lookup.lookup(session_a, session_b, roi_a, roi_b))
+        row["teacher_miss_reason"] = _teacher_miss_reason(row)
         rows.append(row)
     return rows
 
@@ -705,13 +739,86 @@ def _track_matrix_edge_set(
     return edge_set
 
 
+def _track_matrix_edge_index(
+    track_matrix: np.ndarray, *, edges: Sequence[tuple[int, int]]
+) -> _TrackEdgeIndex:
+    matrix = normalize_track_matrix(track_matrix)
+    rows_by_edge: dict[EdgeKey, set[int]] = {}
+    targets_by_source: dict[tuple[int, int, int], set[int]] = {}
+    sources_by_target: dict[tuple[int, int, int], set[int]] = {}
+
+    for row_index, row in enumerate(matrix):
+        for session_a, session_b in edges:
+            roi_a = row[session_a]
+            roi_b = row[session_b]
+            if not (_valid_roi(roi_a) and _valid_roi(roi_b)):
+                continue
+            edge = (int(session_a), int(session_b), int(roi_a), int(roi_b))
+            rows_by_edge.setdefault(edge, set()).add(int(row_index))
+            targets_by_source.setdefault(edge[:3], set()).add(edge[3])
+            sources_by_target.setdefault(
+                (edge[0], edge[1], edge[3]), set()
+            ).add(edge[2])
+
+    return _TrackEdgeIndex(
+        edges=frozenset(rows_by_edge),
+        rows_by_edge={
+            key: tuple(sorted(values)) for key, values in rows_by_edge.items()
+        },
+        targets_by_source={
+            key: tuple(sorted(values)) for key, values in targets_by_source.items()
+        },
+        sources_by_target={
+            key: tuple(sorted(values)) for key, values in sources_by_target.items()
+        },
+    )
+
+
+def _edge_membership_context(
+    edge: EdgeKey,
+    manual_index: _TrackEdgeIndex,
+    track2p_index: _TrackEdgeIndex,
+    bayes_index: _TrackEdgeIndex,
+) -> CSVRow:
+    session_a, session_b, roi_a, roi_b = edge
+    source_key = (session_a, session_b, roi_a)
+    target_key = (session_a, session_b, roi_b)
+    bayes_targets = bayes_index.targets_by_source.get(source_key, ())
+    bayes_sources = bayes_index.sources_by_target.get(target_key, ())
+    alternative_targets = tuple(target for target in bayes_targets if target != roi_b)
+    alternative_sources = tuple(source for source in bayes_sources if source != roi_a)
+    return {
+        "manual_gt_track_rows": _join_ints(manual_index.rows_by_edge.get(edge, ())),
+        "track2p_track_rows": _join_ints(track2p_index.rows_by_edge.get(edge, ())),
+        "bayes_track_rows": _join_ints(bayes_index.rows_by_edge.get(edge, ())),
+        "manual_gt_targets_for_source": _join_ints(
+            manual_index.targets_by_source.get(source_key, ())
+        ),
+        "track2p_targets_for_source": _join_ints(
+            track2p_index.targets_by_source.get(source_key, ())
+        ),
+        "bayes_targets_for_source": _join_ints(bayes_targets),
+        "manual_gt_sources_for_target": _join_ints(
+            manual_index.sources_by_target.get(target_key, ())
+        ),
+        "track2p_sources_for_target": _join_ints(
+            track2p_index.sources_by_target.get(target_key, ())
+        ),
+        "bayes_sources_for_target": _join_ints(bayes_sources),
+        "bayes_selected_same_source": bool(bayes_targets),
+        "bayes_selected_same_target": bool(bayes_sources),
+        "bayes_selected_alternative_targets": _join_ints(alternative_targets),
+        "bayes_selected_alternative_sources": _join_ints(alternative_sources),
+    }
+
+
 def _summary_rows(detail_rows: Sequence[CSVRow]) -> tuple[CSVRow, ...]:
     groups: dict[tuple[Any, ...], list[CSVRow]] = defaultdict(list)
     for row in detail_rows:
-        groups[("dataset", "", "", "", "", "", "", row["category"])].append(row)
-        groups[("subject", row["subject"], "", "", "", "", "", row["category"])].append(
-            row
-        )
+        groups[("dataset", "", "", "", "", "", "", row["category"], "")].append(row)
+        groups[
+            ("subject", row["subject"], "", "", "", "", "", row["category"], "")
+        ].append(row)
         groups[
             (
                 "session_edge",
@@ -722,8 +829,24 @@ def _summary_rows(detail_rows: Sequence[CSVRow]) -> tuple[CSVRow, ...]:
                 row["session_b_name"],
                 row["gap"],
                 row["category"],
+                "",
             )
         ].append(row)
+        teacher_miss_reason = row.get("teacher_miss_reason")
+        if teacher_miss_reason:
+            groups[
+                (
+                    "teacher_miss_reason",
+                    row["subject"],
+                    row["session_a"],
+                    row["session_b"],
+                    row["session_a_name"],
+                    row["session_b_name"],
+                    row["gap"],
+                    row["category"],
+                    teacher_miss_reason,
+                )
+            ].append(row)
 
     summary: list[CSVRow] = []
     for key, rows in sorted(
@@ -738,6 +861,7 @@ def _summary_rows(detail_rows: Sequence[CSVRow]) -> tuple[CSVRow, ...]:
             session_b_name,
             gap,
             category,
+            teacher_miss_reason,
         ) = key
         summary.append(
             {
@@ -750,6 +874,7 @@ def _summary_rows(detail_rows: Sequence[CSVRow]) -> tuple[CSVRow, ...]:
                 "gap": gap,
                 "category": category,
                 "count": len(rows),
+                "teacher_miss_reason": teacher_miss_reason,
                 "manual_gt_label": _uniform_or_blank(
                     row["manual_gt_label"] for row in rows
                 ),
@@ -770,6 +895,14 @@ def _summary_rows(detail_rows: Sequence[CSVRow]) -> tuple[CSVRow, ...]:
                 ),
                 "median_bayes_adjusted_cost": _median_numeric(
                     row.get("bayes_adjusted_cost") for row in rows
+                ),
+                "same_source_conflict_rate": _mean_bool(
+                    bool(row.get("bayes_selected_alternative_targets"))
+                    for row in rows
+                ),
+                "same_target_conflict_rate": _mean_bool(
+                    bool(row.get("bayes_selected_alternative_sources"))
+                    for row in rows
                 ),
             }
         )
@@ -824,6 +957,34 @@ def _edge_source_label(manual: bool, track2p: bool, bayes: bool) -> str:
     if bayes:
         sources.append("bayescatrack")
     return "+".join(sources)
+
+
+def _teacher_miss_reason(row: Mapping[str, CSVValue]) -> str:
+    if not (
+        bool(row.get("manual_gt_label"))
+        and bool(row.get("track2p_label"))
+        and not bool(row.get("bayescatrack_label"))
+    ):
+        return ""
+    if not bool(row.get("bayes_candidate_present")):
+        return str(row.get("bayes_missing_reason") or "candidate_absent")
+    if not bool(row.get("bayes_eligible_after_threshold")):
+        return "candidate_over_threshold"
+    if row.get("bayes_selected_alternative_targets"):
+        return "solver_chose_alternative_target_for_source"
+    if row.get("bayes_selected_alternative_sources"):
+        return "solver_chose_alternative_source_for_target"
+    row_rank = row.get("bayes_row_rank")
+    if isinstance(row_rank, (int, np.integer)) and int(row_rank) > 1:
+        return "candidate_ranked_below_bayes_best_target"
+    col_rank = row.get("bayes_col_rank")
+    if isinstance(col_rank, (int, np.integer)) and int(col_rank) > 1:
+        return "candidate_ranked_below_bayes_best_source"
+    return "eligible_not_selected_by_solver"
+
+
+def _join_ints(values: Sequence[int]) -> str:
+    return ";".join(str(int(value)) for value in values)
 
 
 def _valid_roi(value: object) -> bool:

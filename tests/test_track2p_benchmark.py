@@ -105,6 +105,43 @@ def _write_suite2p_session(
     return plane_dir
 
 
+def _write_track2p_clone_suite2p_session(
+    subject_dir: Path,
+    session_name: str,
+    *,
+    roi2_row: int,
+) -> Path:
+    plane_dir = subject_dir / session_name / "suite2p" / "plane0"
+    plane_dir.mkdir(parents=True, exist_ok=True)
+    stat = np.array(
+        [
+            {
+                "ypix": np.array([0, 0]),
+                "xpix": np.array([0, 1]),
+                "lam": np.ones(2),
+                "overlap": np.zeros(2, dtype=bool),
+            },
+            {
+                "ypix": np.array([1, 1]),
+                "xpix": np.array([0, 1]),
+                "lam": np.ones(2),
+                "overlap": np.zeros(2, dtype=bool),
+            },
+            {
+                "ypix": np.array([roi2_row, roi2_row]),
+                "xpix": np.array([3, 4]),
+                "lam": np.ones(2),
+                "overlap": np.zeros(2, dtype=bool),
+            },
+        ],
+        dtype=object,
+    )
+    np.save(plane_dir / "stat.npy", stat, allow_pickle=True)
+    np.save(plane_dir / "iscell.npy", np.array([[1.0, 0.95], [0.0, 0.95], [1.0, 0.60]], dtype=float))
+    np.save(plane_dir / "ops.npy", {"Ly": 5, "Lx": 5, "meanImg": np.zeros((5, 5), dtype=float)}, allow_pickle=True)
+    return plane_dir
+
+
 def _install_fake_multisession_assignment(monkeypatch):
     fake_pyrecest = types.ModuleType("pyrecest")
     fake_utils = types.ModuleType("pyrecest.utils")
@@ -292,6 +329,33 @@ def test_oracle_gt_links_honors_nonzero_seed_session(tmp_path, write_raw_npy_ses
     assert result["complete_tracks"] == 2
 
 
+def test_track2p_clone_runs_internal_iou_assignment_and_probability_only_iscell_filter(tmp_path):
+    subject_dir = tmp_path / "jm008"
+    _write_track2p_clone_suite2p_session(subject_dir, "2024-05-01_a", roi2_row=2)
+    _write_track2p_clone_suite2p_session(subject_dir, "2024-05-02_a", roi2_row=3)
+    _write_track2p_clone_suite2p_session(subject_dir, "2024-05-03_a", roi2_row=4)
+    _write_ground_truth_csv(
+        subject_dir,
+        ("2024-05-01_a", "2024-05-02_a", "2024-05-03_a"),
+        ((0, 0, 0), (1, 1, 1)),
+    )
+
+    rows = run_track2p_benchmark(
+        Track2pBenchmarkConfig(
+            data=subject_dir,
+            method="track2p-clone",
+            input_format="suite2p",
+            transform_type="none",
+            reference_kind="manual-gt",
+        )
+    )
+
+    result = rows[0].to_dict()
+    assert result["variant"] == "Internal Track2p clone"
+    assert result["pairwise_f1"] == pytest.approx(1.0)
+    assert result["complete_track_f1"] == pytest.approx(1.0)
+
+
 def test_benchmark_recomputes_f1_from_counts_when_no_links_match(
     tmp_path, write_raw_npy_session
 ):
@@ -432,3 +496,58 @@ def test_global_assignment_benchmark_uses_skip_edges(
     assert result["pairwise_f1"] == pytest.approx(2 / 3)
     assert result["complete_track_f1"] == pytest.approx(2 / 3)
     assert result["complete_tracks"] == 1
+
+
+def test_track2p_style_propagation_benchmark_restricts_solver_to_reference_seed_rois(
+    tmp_path, monkeypatch
+):
+    subject_dir = tmp_path / "jm008"
+    iscell = np.ones((3, 2), dtype=float)
+    _write_suite2p_session(subject_dir, "2024-05-01_a", iscell=iscell)
+    _write_suite2p_session(subject_dir, "2024-05-02_a", iscell=iscell)
+    _write_ground_truth_csv(
+        subject_dir,
+        ("2024-05-01_a", "2024-05-02_a"),
+        ((0, 0), (2, 2)),
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_track2p_style_solver(sessions, **kwargs):
+        captured["n_sessions"] = len(sessions)
+        captured["seed_session"] = kwargs["seed_session"]
+        captured["seed_detection_indices"] = tuple(kwargs["seed_detection_indices"])
+        return types.SimpleNamespace(
+            result=types.SimpleNamespace(
+                tracks=({0: 0, 1: 0}, {0: 2, 1: 2}),
+                total_cost=0.0,
+            )
+        )
+
+    from bayescatrack.experiments import track2p_benchmark as benchmark
+
+    monkeypatch.setattr(
+        benchmark,
+        "solve_track2p_style_propagation_for_sessions",
+        fake_track2p_style_solver,
+    )
+
+    rows = benchmark.run_track2p_benchmark(
+        benchmark.Track2pBenchmarkConfig(
+            data=subject_dir,
+            method="track2p-style-propagation",
+            input_format="suite2p",
+            include_non_cells=True,
+            reference_kind="manual-gt",
+        )
+    )
+
+    result = rows[0].to_dict()
+    assert result["variant"] == "Same costs + Track2p-style propagation"
+    assert captured == {
+        "n_sessions": 2,
+        "seed_session": 0,
+        "seed_detection_indices": (0, 2),
+    }
+    assert result["pairwise_f1"] == pytest.approx(1.0)
+    assert result["complete_track_f1"] == pytest.approx(1.0)

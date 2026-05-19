@@ -113,6 +113,13 @@ def main() -> int:
             "output": "global_registered_iou.csv",
         },
         {
+            "name": "track2p-style-registered-iou",
+            "method": "track2p-style-propagation",
+            "cost": "registered-iou",
+            "format": "csv",
+            "output": "track2p_style_registered_iou.csv",
+        },
+        {
             "name": "global-roi-aware",
             "method": "global-assignment",
             "cost": "roi-aware",
@@ -123,6 +130,7 @@ def main() -> int:
     comparison_inputs = {
         "Track2p baseline": "track2p-baseline",
         "Global registered IoU": "global-registered-iou",
+        "Track2p-style registered IoU": "track2p-style-registered-iou",
         "Global ROI-aware": "global-roi-aware",
     }
     if run_calibrated_loso:
