@@ -107,6 +107,23 @@ def write_metric_csv(
         writer.writerows(build_metric_rows(rows, reference_approach=reference_approach))
 
 
+def write_subject_metric_csv(
+    rows: Sequence[dict[str, str]],
+    output_path: Path,
+    *,
+    reference_approach: str | None,
+) -> None:
+    """Write per-subject metric values, ranks, and reference gaps to CSV."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=_subject_metric_columns())
+        writer.writeheader()
+        writer.writerows(
+            build_subject_metric_rows(rows, reference_approach=reference_approach)
+        )
+
+
 def format_markdown_table(
     rows: Sequence[dict[str, float | int | str]],
     *,
@@ -263,6 +280,66 @@ def build_metric_rows(
     return metric_rows
 
 
+def build_subject_metric_rows(
+    rows: Sequence[dict[str, str]],
+    *,
+    reference_approach: str | None,
+) -> list[dict[str, float | int | str]]:
+    """Build long-format subject-level metric rows with ranks and reference deltas."""
+
+    if not rows:
+        raise ValueError("At least one subject-level row is required")
+
+    reference_name = _reference_approach_name(rows, reference_approach)
+    result_rows: list[dict[str, float | int | str]] = []
+    for subject in dict.fromkeys(row.get("subject", "") for row in rows):
+        subject_rows = [row for row in rows if row.get("subject", "") == subject]
+        for metric_column, metric_name, count_prefix in _subject_metric_specs():
+            values_by_row = [
+                (row, _as_float(row[metric_column]))
+                for row in subject_rows
+                if row.get(metric_column, "") != ""
+            ]
+            if not values_by_row:
+                continue
+            ranks = _descending_competition_ranks([value for _, value in values_by_row])
+            reference_value = _subject_reference_value(
+                values_by_row,
+                reference_name=reference_name,
+            )
+            for row, value in values_by_row:
+                result_rows.append(
+                    {
+                        "subject": subject,
+                        "metric": metric_name,
+                        "metric_column": metric_column,
+                        "approach": row["approach"],
+                        "value": value,
+                        "rank": ranks[value],
+                        "true_positives": _int_value(
+                            row, f"{count_prefix}_true_positives"
+                        ),
+                        "false_positives": _int_value(
+                            row, f"{count_prefix}_false_positives"
+                        ),
+                        "false_negatives": _int_value(
+                            row, f"{count_prefix}_false_negatives"
+                        ),
+                        "reference_approach": reference_name,
+                        "reference_value": (
+                            reference_value if reference_value is not None else ""
+                        ),
+                        "gap_to_reference": (
+                            value - reference_value
+                            if reference_value is not None
+                            else ""
+                        ),
+                        "is_reference": _format_bool(row["approach"] == reference_name),
+                    }
+                )
+    return result_rows
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the comparison-table CLI parser."""
 
@@ -321,6 +398,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional long-format CSV path for metric ranks and reference gaps",
     )
+    parser.add_argument(
+        "--subject-metric-output",
+        type=Path,
+        default=None,
+        help="Optional long-format CSV path for subject-level reference gaps",
+    )
     return parser
 
 
@@ -330,7 +413,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
     inputs = [_parse_input_spec(spec) for spec in args.input]
-    rows = aggregate_rows(load_labeled_rows(inputs))
+    subject_rows = load_labeled_rows(inputs)
+    rows = aggregate_rows(subject_rows)
     if args.reference_gap_output is not None:
         write_reference_gap_csv(
             rows,
@@ -341,6 +425,12 @@ def main(argv: list[str] | None = None) -> int:
         write_metric_csv(
             rows,
             args.metric_output,
+            reference_approach=args.reference_approach,
+        )
+    if args.subject_metric_output is not None:
+        write_subject_metric_csv(
+            subject_rows,
+            args.subject_metric_output,
             reference_approach=args.reference_approach,
         )
     if args.output is not None:
@@ -476,6 +566,24 @@ def _metric_columns() -> list[str]:
     ]
 
 
+def _subject_metric_columns() -> list[str]:
+    return [
+        "subject",
+        "metric",
+        "metric_column",
+        "approach",
+        "value",
+        "rank",
+        "true_positives",
+        "false_positives",
+        "false_negatives",
+        "reference_approach",
+        "reference_value",
+        "gap_to_reference",
+        "is_reference",
+    ]
+
+
 def _best_metric_columns() -> tuple[str, ...]:
     return (
         "pairwise_f1_macro",
@@ -492,6 +600,13 @@ def _best_metric_headers() -> dict[str, str]:
         "complete_track_f1_macro": "complete-track F1 mean",
         "complete_track_f1_micro": "complete-track F1 micro",
     }
+
+
+def _subject_metric_specs() -> tuple[tuple[str, str, str], ...]:
+    return (
+        ("pairwise_f1", "pairwise F1", "pairwise"),
+        ("complete_track_f1", "complete-track F1", "complete_track"),
+    )
 
 
 def _compute_best_values(
@@ -540,6 +655,31 @@ def _reference_row(
             f"Reference approach {reference_approach!r} not found; available: {available}"
         )
     return matches[0]
+
+
+def _reference_approach_name(
+    rows: Sequence[dict[str, str]],
+    reference_approach: str | None,
+) -> str:
+    if reference_approach is None:
+        return rows[0]["approach"]
+    if not any(row["approach"] == reference_approach for row in rows):
+        available = ", ".join(dict.fromkeys(row["approach"] for row in rows))
+        raise ValueError(
+            f"Reference approach {reference_approach!r} not found; available: {available}"
+        )
+    return reference_approach
+
+
+def _subject_reference_value(
+    values_by_row: Sequence[tuple[dict[str, str], float]],
+    *,
+    reference_name: str,
+) -> float | None:
+    for row, value in values_by_row:
+        if row["approach"] == reference_name:
+            return value
+    return None
 
 
 def _best_competitor_rows(

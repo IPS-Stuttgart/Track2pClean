@@ -8,12 +8,14 @@ from bayescatrack.experiments.benchmark_comparison import (
     aggregate_rows,
     build_metric_rows,
     build_reference_gap_rows,
+    build_subject_metric_rows,
     format_best_summary,
     format_markdown_table,
     format_reference_gap_summary,
     load_labeled_rows,
     write_metric_csv,
     write_reference_gap_csv,
+    write_subject_metric_csv,
 )
 
 
@@ -275,4 +277,89 @@ def test_metric_csv_reports_ranks_and_reference_gaps(tmp_path):
     assert csv_rows[0]["approach"] == "Track2p"
     assert csv_rows[0]["rank"] == "1"
     assert csv_rows[0]["is_best"] == "true"
+    assert csv_rows[0]["is_reference"] == "true"
+
+
+def test_subject_metric_csv_reports_per_subject_reference_gaps(tmp_path):
+    rows = [
+        {
+            "approach": "Track2p",
+            "subject": "jm039",
+            "pairwise_f1": "0.90",
+            "complete_track_f1": "0.80",
+            "pairwise_true_positives": "9",
+            "pairwise_false_positives": "1",
+            "pairwise_false_negatives": "1",
+            "complete_track_true_positives": "8",
+            "complete_track_false_positives": "2",
+            "complete_track_false_negatives": "2",
+        },
+        {
+            "approach": "BayesCaTrack",
+            "subject": "jm039",
+            "pairwise_f1": "0.60",
+            "complete_track_f1": "0.50",
+            "pairwise_true_positives": "6",
+            "pairwise_false_positives": "2",
+            "pairwise_false_negatives": "6",
+            "complete_track_true_positives": "5",
+            "complete_track_false_positives": "3",
+            "complete_track_false_negatives": "7",
+        },
+        {
+            "approach": "Track2p",
+            "subject": "jm046",
+            "pairwise_f1": "0.70",
+            "complete_track_f1": "0.40",
+            "pairwise_true_positives": "7",
+            "pairwise_false_positives": "3",
+            "pairwise_false_negatives": "3",
+            "complete_track_true_positives": "4",
+            "complete_track_false_positives": "6",
+            "complete_track_false_negatives": "6",
+        },
+        {
+            "approach": "BayesCaTrack",
+            "subject": "jm046",
+            "pairwise_f1": "0.75",
+            "complete_track_f1": "0.30",
+            "pairwise_true_positives": "8",
+            "pairwise_false_positives": "2",
+            "pairwise_false_negatives": "3",
+            "complete_track_true_positives": "3",
+            "complete_track_false_positives": "7",
+            "complete_track_false_negatives": "7",
+        },
+    ]
+
+    subject_rows = build_subject_metric_rows(rows, reference_approach="Track2p")
+    output_path = tmp_path / "subject_metrics.csv"
+    write_subject_metric_csv(rows, output_path, reference_approach="Track2p")
+
+    with output_path.open("r", encoding="utf-8", newline="") as handle:
+        csv_rows = list(csv.DictReader(handle))
+
+    jm039_bayes_pairwise = next(
+        row
+        for row in subject_rows
+        if row["subject"] == "jm039"
+        and row["approach"] == "BayesCaTrack"
+        and row["metric_column"] == "pairwise_f1"
+    )
+    jm046_bayes_pairwise = next(
+        row
+        for row in subject_rows
+        if row["subject"] == "jm046"
+        and row["approach"] == "BayesCaTrack"
+        and row["metric_column"] == "pairwise_f1"
+    )
+
+    assert len(subject_rows) == 8
+    assert jm039_bayes_pairwise["rank"] == 2
+    assert jm039_bayes_pairwise["gap_to_reference"] == pytest.approx(-0.30)
+    assert jm046_bayes_pairwise["rank"] == 1
+    assert jm046_bayes_pairwise["gap_to_reference"] == pytest.approx(0.05)
+    assert csv_rows[0]["subject"] == "jm039"
+    assert csv_rows[0]["approach"] == "Track2p"
+    assert csv_rows[0]["true_positives"] == "9"
     assert csv_rows[0]["is_reference"] == "true"
