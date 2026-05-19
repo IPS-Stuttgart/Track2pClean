@@ -20,6 +20,10 @@ from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     discover_subject_dirs,
 )
+from bayescatrack.experiments._cli_choices import (
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.experiments.track2p_loso_calibration import (
     SubjectCalibrationData,
     _collect_training_examples,
@@ -123,7 +127,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_CHOICES,
+        help=REGISTRATION_TRANSFORM_HELP,
     )
     parser.add_argument("--curated-only", action="store_true")
     parser.add_argument(

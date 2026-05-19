@@ -140,6 +140,24 @@ python -m bayescatrack benchmark track2p \
   --max-gap 2
 ```
 
+Add triplet-projected higher-order consistency to penalize pairwise links that
+cannot be embedded into coherent three-session paths:
+
+```bash
+python -m bayescatrack benchmark track2p \
+  --data /path/to/track2p_zenodo \
+  --method global-assignment \
+  --cost roi-aware \
+  --reference /path/to/manual_ground_truth_root \
+  --reference-kind manual-gt \
+  --transform-type fov-translation \
+  --max-gap 2 \
+  --higher-order-triplet-weight 0.25 \
+  --higher-order-support-top-k 8 \
+  --higher-order-support-cost-cap 4.0 \
+  --higher-order-max-penalty 2.0
+```
+
 Run the BayesCaTrack ROI-aware cost ablation:
 
 ```bash
@@ -213,6 +231,19 @@ Run a reproducible benchmark suite from one JSON manifest:
       "cost": "registered-iou",
       "max_gap": 2,
       "output": "results/registered_iou.csv"
+    },
+    {
+      "name": "registered-iou-triplet",
+      "method": "global-assignment",
+      "cost": "registered-iou",
+      "max_gap": 2,
+      "higher_order_consistency_config": {
+        "triplet_weight": 0.25,
+        "support_top_k": 8,
+        "support_cost_cap": 4.0,
+        "max_penalty": 2.0
+      },
+      "output": "results/registered_iou_triplet.csv"
     }
   ],
   "comparisons": [
@@ -220,7 +251,8 @@ Run a reproducible benchmark suite from one JSON manifest:
       "name": "summary",
       "inputs": {
         "Track2p default": "track2p-default",
-        "BayesCaTrack registered IoU": "registered-iou"
+        "BayesCaTrack registered IoU": "registered-iou",
+        "BayesCaTrack triplet consistency": "registered-iou-triplet"
       },
       "output": "results/comparison.md"
     }

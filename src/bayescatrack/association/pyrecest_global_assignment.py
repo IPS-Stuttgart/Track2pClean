@@ -22,7 +22,8 @@ from bayescatrack.association.higher_order_consistency import (
     apply_higher_order_consistency,
 )
 from bayescatrack.association.registered_masks import (
-    replace_empty_registered_masks,
+    drop_empty_registered_masks,
+    expand_registered_pairwise_cost_columns,
 )
 from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
@@ -70,6 +71,16 @@ def registered_iou_cost_kwargs(
         "cell_probability_weight": 0.0,
         "similarity_epsilon": float(similarity_epsilon),
     }
+
+
+def registered_soft_iou_cost_kwargs(
+    *, similarity_epsilon: float = 1.0e-6
+) -> dict[str, float]:
+    """Return a registered-mask ablation using soft mask overlap."""
+    kwargs = registered_iou_cost_kwargs(similarity_epsilon=similarity_epsilon)
+    kwargs["iou_weight"] = 0.0
+    kwargs["mask_cosine_weight"] = 1.0
+    return kwargs
 
 
 def registered_shifted_iou_cost_kwargs(
@@ -209,7 +220,7 @@ def build_registered_pairwise_costs(
                 transform_type=transform_type,
             )
             registered_measurement_plane, empty_registered_rois = (
-                replace_empty_registered_masks(registered_measurement_plane)
+                drop_empty_registered_masks(registered_measurement_plane)
             )
             bundle = build_session_pair_association_bundle(
                 sessions[source_session],
@@ -248,7 +259,7 @@ def build_registered_pairwise_costs(
                     weight=activity_tie_breaker_weight,
                 )
             pairwise_costs[(source_session, target_session)] = (
-                _penalize_empty_registered_roi_columns(
+                expand_registered_pairwise_cost_columns(
                     cost_matrix,
                     empty_registered_rois,
                     large_cost=float(base_cost_kwargs.get("large_cost", 1.0e6)),
@@ -402,6 +413,8 @@ def tracks_to_suite2p_index_matrix(
 def _cost_kwargs_for_method(cost: AssociationCost) -> dict[str, Any]:
     if cost == "registered-iou":
         return registered_iou_cost_kwargs()
+    if cost == "registered-soft-iou":
+        return registered_soft_iou_cost_kwargs()
     if cost == "registered-shifted-iou":
         return registered_shifted_iou_cost_kwargs()
     if cost == "roi-aware-shifted":
@@ -409,18 +422,6 @@ def _cost_kwargs_for_method(cost: AssociationCost) -> dict[str, Any]:
     if cost in {"roi-aware", "calibrated"}:
         return roi_aware_cost_kwargs()
     raise ValueError(f"Unsupported association cost: {cost}")
-
-
-def _penalize_empty_registered_roi_columns(
-    cost_matrix: np.ndarray, empty_registered_rois: np.ndarray, *, large_cost: float
-) -> np.ndarray:
-    cost_matrix = np.asarray(cost_matrix, dtype=float).copy()
-    if empty_registered_rois.shape != (cost_matrix.shape[1],):
-        raise ValueError(
-            "empty_registered_rois must have one entry for each measurement ROI"
-        )
-    cost_matrix[:, empty_registered_rois] = large_cost
-    return cost_matrix
 
 
 def _roi_indices_for_session(session: Track2pSession) -> np.ndarray:

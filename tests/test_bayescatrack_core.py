@@ -44,7 +44,7 @@ def test_local_image_and_weighted_mask_evidence_components_rank_diagonal_pairs()
     reference = CalciumPlaneData(roi_masks=reference_masks, fov=fov)
     measurement = CalciumPlaneData(roi_masks=measurement_masks, fov=fov.copy())
 
-    # Local-evidence kwargs are installed by BayesCaTrack's compatibility patch.
+    # Local-evidence kwargs are installed by BayesCaTrack's core bridge support.
     # pylint: disable=unexpected-keyword-arg
     cost, components = reference.build_pairwise_cost_matrix(
         measurement,

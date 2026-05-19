@@ -38,13 +38,19 @@ from bayescatrack.experiments.track2p_benchmark import (
     solve_configured_global_assignment,
     write_results,
 )
+from bayescatrack.experiments._cli_choices import (
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.experiments.track2p_loso_calibration import (
+    CALIBRATION_FEATURE_SET_CHOICES,
     LosoCalibrationFold,
     LosoCalibrationResult,
     SubjectCalibrationData,
     _load_subject_calibration_data,
     _reference_training_options,
     _score_holdout_calibration,
+    calibration_feature_names,
 )
 
 SampleWeightStrategy = Literal["none", "balanced"]
@@ -173,6 +179,7 @@ def run_track2p_configurable_loso_calibration(
             "positive_examples": positives,
             "negative_examples": int(labels.shape[0] - positives),
             "calibration_model": model_kind,
+            "calibration_feature_count": int(len(feature_names)),
             "calibration_model_kwargs": json.dumps(
                 dict(model_kwargs),
                 sort_keys=True,
@@ -280,7 +287,8 @@ def _fit_model(
         from sklearn.ensemble import HistGradientBoostingClassifier
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
-            "model_kind='hist-gradient-boosting' requires scikit-learn to be installed"
+            "model_kind='hist-gradient-boosting' requires scikit-learn; install "
+            "BayesCaTrack[calibration]"
         ) from exc
     adapter = SklearnPairwiseProbabilityAdapter(
         HistGradientBoostingClassifier(**dict(model_kwargs))
@@ -409,7 +417,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_CHOICES,
+        help=REGISTRATION_TRANSFORM_HELP,
     )
     parser.add_argument("--start-cost", type=float, default=5.0)
     parser.add_argument("--end-cost", type=float, default=5.0)
@@ -428,6 +437,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--calibration-model",
         default="logistic",
         choices=("logistic", "hist-gradient-boosting"),
+    )
+    parser.add_argument(
+        "--calibration-feature-set",
+        default="default",
+        choices=CALIBRATION_FEATURE_SET_CHOICES,
+        help="Named calibrated-association feature preset.",
     )
     parser.add_argument("--calibration-model-kwargs-json", default=None)
     parser.add_argument("--hard-negative-ratio", type=float, default=4.0)
@@ -455,6 +470,7 @@ def main(argv: list[str] | None = None) -> int:
             args.calibration_model_kwargs_json,
             "--calibration-model-kwargs-json",
         ),
+        feature_names=calibration_feature_names(args.calibration_feature_set),
         hard_negative_options=_hard_negative_options(args),
     )
     rows = result.to_rows()

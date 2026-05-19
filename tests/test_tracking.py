@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import numpy.testing as npt
 import pytest
+import bayescatrack.tracking as tracking
 from bayescatrack.tracking import run_registered_subject_tracking
 
 
@@ -124,11 +125,8 @@ def _make_three_roi_masks(shift_x: int = 0) -> np.ndarray:
     return masks
 
 
-def test_run_registered_subject_tracking_builds_full_track_rows(
-    tmp_path: Path, monkeypatch
-):
-    _install_fake_point_set_registration(monkeypatch)
-    subject_dir = tmp_path / "jm271"
+
+def _write_three_session_subject(subject_dir: Path) -> None:
     for session_name, shift_x, offset in (
         ("2024-05-01_a", 0, 0.0),
         ("2024-05-02_a", 1, 10.0),
@@ -141,15 +139,107 @@ def test_run_registered_subject_tracking_builds_full_track_rows(
             offset=offset,
         )
 
+
+def test_run_registered_subject_tracking_uses_global_assignment_by_default(
+    tmp_path: Path, monkeypatch
+):
+    subject_dir = tmp_path / "jm271"
+    _write_three_session_subject(subject_dir)
+
+    fake_global_assignment = types.SimpleNamespace(
+        result=types.SimpleNamespace(tracks=[{0: 0, 1: 0, 2: 0}]),
+        pairwise_costs={
+            (0, 1): np.diag([0.1, 0.2, 0.3]),
+            (1, 2): np.diag([0.4, 0.5, 0.6]),
+            (0, 2): np.diag([0.7, 0.8, 0.9]),
+        },
+        session_sizes=(3, 3, 3),
+        session_edges=((0, 1), (0, 2), (1, 2)),
+    )
+
+    def fake_solve_global_assignment_for_sessions(sessions, **kwargs):
+        assert len(sessions) == 3
+        assert kwargs["max_gap"] == 2
+        assert kwargs["cost"] == "roi-aware"
+        assert kwargs["cost_threshold"] == 6.0
+        return fake_global_assignment
+
+    def fake_tracks_to_suite2p_index_matrix(tracks, sessions):
+        del tracks, sessions
+        return np.asarray(
+            [
+                [0, 0, 0],
+                [1, 1, 1],
+                [2, 2, 2],
+            ],
+            dtype=object,
+        )
+
+    monkeypatch.setattr(
+        tracking,
+        "solve_global_assignment_for_sessions",
+        fake_solve_global_assignment_for_sessions,
+    )
+    monkeypatch.setattr(
+        tracking,
+        "tracks_to_suite2p_index_matrix",
+        fake_tracks_to_suite2p_index_matrix,
+    )
+
     result = run_registered_subject_tracking(
         subject_dir,
         plane_name="plane0",
         input_format="auto",
         include_behavior=False,
+    )
+
+    assert result.tracking_method == "global"
+    assert result.global_assignment is fake_global_assignment
+    assert result.session_names == ("2024-05-01_a", "2024-05-02_a", "2024-05-03_a")
+    npt.assert_array_equal(
+        result.track_rows,
+        np.array(
+            [
+                [0, 0, 0],
+                [1, 1, 1],
+                [2, 2, 2],
+            ],
+            dtype=int,
+        ),
+    )
+    npt.assert_allclose(
+        result.link_costs,
+        np.array([[0.1, 0.4], [0.2, 0.5], [0.3, 0.6]], dtype=float),
+    )
+    assert len(result.registered_bundles.bundles) == 0
+    assert [match.n_matches for match in result.match_results] == [3, 3]
+
+    scores = result.score_summary()
+    assert scores["tracking_method"] == "global"
+    assert scores["n_tracks_started"] == 3
+    assert scores["n_complete_tracks"] == 3
+    assert scores["n_pairwise_matches"] == 6
+    assert scores["global_session_edges"] == ((0, 1), (0, 2), (1, 2))
+
+
+def test_run_registered_subject_tracking_pairwise_ablation_builds_full_track_rows(
+    tmp_path: Path, monkeypatch
+):
+    _install_fake_point_set_registration(monkeypatch)
+    subject_dir = tmp_path / "jm271"
+    _write_three_session_subject(subject_dir)
+
+    result = run_registered_subject_tracking(
+        subject_dir,
+        plane_name="plane0",
+        input_format="auto",
+        include_behavior=False,
+        tracking_method="pairwise",
         registration_model="affine",
         pairwise_cost_kwargs={"max_centroid_distance": 5.0, "roi_feature_weight": 0.0},
     )
 
+    assert result.tracking_method == "pairwise"
     assert result.session_names == ("2024-05-01_a", "2024-05-02_a", "2024-05-03_a")
     npt.assert_array_equal(
         result.track_rows,
@@ -201,6 +291,7 @@ def test_run_registered_subject_tracking_handles_single_session(tmp_path: Path):
     )
 
     npt.assert_array_equal(result.track_rows, np.array([[0], [1], [2]], dtype=int))
+    assert result.tracking_method == "global"
     assert result.link_costs.shape == (3, 0)
     assert result.match_results == ()
     scores = result.score_summary()

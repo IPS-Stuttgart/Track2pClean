@@ -29,6 +29,23 @@ def test_track2p_benchmark_cli_accepts_fov_translation_transform():
     assert config.transform_type == "fov-translation"
 
 
+def test_track2p_benchmark_cli_accepts_growth_transform_without_argparse_patch():
+    args = track2p_benchmark.build_arg_parser().parse_args(
+        [
+            "--data",
+            "dataset",
+            "--method",
+            "global-assignment",
+            "--transform-type",
+            "bspline",
+        ]
+    )
+
+    config = track2p_benchmark._config_from_args(args)
+
+    assert config.transform_type == "bspline"
+
+
 def test_track2p_cost_sweep_cli_accepts_fov_translation_transform():
     args = track2p_cost_sweep.build_arg_parser().parse_args(
         [

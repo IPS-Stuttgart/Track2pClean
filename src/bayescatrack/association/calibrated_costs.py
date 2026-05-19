@@ -17,6 +17,7 @@ from bayescatrack.association._pyrecest_feature_compat import (
     pairwise_feature_tensor as pyrecest_pairwise_feature_tensor,
 )
 from bayescatrack.association.activity_similarity import (
+    ACTIVITY_TIEBREAKER_FEATURES,
     add_activity_similarity_components,
 )
 from bayescatrack.association.registered_masks import replace_empty_registered_masks
@@ -33,11 +34,36 @@ from bayescatrack.core.bridge import (
 from bayescatrack.reference import Track2pReference
 from bayescatrack.track2p_registration import register_plane_pair
 
+ACTIVITY_ASSOCIATION_FEATURES = tuple(ACTIVITY_TIEBREAKER_FEATURES)
+
 _ACTIVITY_FEATURES = {
     "activity_correlation",
     "activity_similarity",
     "activity_similarity_cost",
     "activity_similarity_available",
+    "activity_tiebreaker_available",
+    "activity_tiebreaker_cost",
+    "activity_tiebreaker_missing",
+    "event_rate_absdiff",
+    "event_rate_available",
+    "fluorescence_correlation",
+    "fluorescence_similarity",
+    "fluorescence_similarity_available",
+    "fluorescence_similarity_cost",
+    "neuropil_correlation",
+    "neuropil_ratio_absdiff",
+    "neuropil_ratio_available",
+    "neuropil_similarity",
+    "neuropil_similarity_available",
+    "neuropil_similarity_cost",
+    "spike_correlation",
+    "spike_similarity",
+    "spike_similarity_available",
+    "spike_similarity_cost",
+    "trace_skew_absdiff",
+    "trace_skew_available",
+    "trace_std_absdiff",
+    "trace_std_available",
 }
 
 DEFAULT_ASSOCIATION_FEATURES = (
@@ -55,7 +81,23 @@ DEFAULT_ASSOCIATION_FEATURES = (
     "session_gap",
 )
 SPLIT_ROI_STAT_FEATURES: tuple[str, ...] = ()
-LOCAL_EVIDENCE_ASSOCIATION_FEATURES: tuple[str, ...] = ()
+LOCAL_EVIDENCE_ASSOCIATION_FEATURES: tuple[str, ...] = (
+    "one_minus_weighted_dice",
+    "one_minus_overlap_min_fraction",
+    "weighted_dice_cost",
+    "overlap_fraction_cost",
+    "containment_asymmetry_cost",
+    "distance_transform_cost",
+    "image_patch_cost",
+    "image_patch_valid",
+    "neighbor_constellation_cost",
+    "centroid_rank_cost",
+)
+_LOCAL_EVIDENCE_DIRECT_COMPONENT_FEATURES = frozenset(
+    feature_name
+    for feature_name in LOCAL_EVIDENCE_ASSOCIATION_FEATURES
+    if not feature_name.startswith("one_minus_")
+)
 
 
 @dataclass(frozen=True)
@@ -414,6 +456,16 @@ def _feature_transforms_for(
             )
         elif feature_name in _ACTIVITY_FEATURES:
             transforms[feature_name] = _optional_zero_component_transform(feature_name)
+        elif feature_name == "one_minus_weighted_dice":
+            transforms[feature_name] = _optional_one_minus_component_transform(
+                "weighted_dice_similarity"
+            )
+        elif feature_name == "one_minus_overlap_min_fraction":
+            transforms[feature_name] = _optional_one_minus_component_transform(
+                "overlap_min_fraction"
+            )
+        elif feature_name in _LOCAL_EVIDENCE_DIRECT_COMPONENT_FEATURES:
+            transforms[feature_name] = _optional_zero_component_transform(feature_name)
         elif feature_name == "session_gap":
             transforms[feature_name] = _session_gap_transform
     return transforms
@@ -426,6 +478,21 @@ def _optional_zero_component_transform(
         if feature_name not in pairwise_components:
             return _zero_like_pairwise_component(pairwise_components)
         return _finite_component(pairwise_components, feature_name)
+
+    return transform
+
+
+def _optional_one_minus_component_transform(
+    component_name: str,
+) -> FeatureTransform:
+    def transform(pairwise_components: Mapping[str, Any]) -> np.ndarray:
+        if component_name not in pairwise_components:
+            return _zero_like_pairwise_component(pairwise_components)
+        return 1.0 - np.clip(
+            _finite_component(pairwise_components, component_name),
+            0.0,
+            1.0,
+        )
 
     return transform
 

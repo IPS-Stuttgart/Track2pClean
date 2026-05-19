@@ -28,7 +28,12 @@ from bayescatrack.association.pyrecest_global_assignment import (
     roi_aware_shifted_cost_kwargs,
     session_edge_pairs,
 )
-from bayescatrack.association.registered_masks import replace_empty_registered_masks
+from bayescatrack.association.registered_masks import (
+    drop_empty_registered_masks,
+    expand_registered_pairwise_components,
+    expand_registered_pairwise_cost_columns,
+    expand_registered_roi_columns,
+)
 from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
     pairwise_kwargs_use_shifted_overlap,
@@ -37,6 +42,11 @@ from bayescatrack.core.bridge import (
     CalciumPlaneData,
     Track2pSession,
     build_session_pair_association_bundle,
+)
+from bayescatrack.experiments._cli_choices import (
+    REGISTRATION_QA_COST_CHOICES,
+    REGISTRATION_QA_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
 )
 from bayescatrack.experiments.track2p_benchmark import (
     ReferenceKind,
@@ -510,12 +520,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "gt-affine-oracle", "none"),
+        choices=REGISTRATION_QA_TRANSFORM_CHOICES,
+        help=f"{REGISTRATION_TRANSFORM_HELP} Also supports gt-affine-oracle for manual-GT registration QA.",
     )
     parser.add_argument(
         "--cost",
         default="registered-iou",
-        choices=("registered-iou", "roi-aware", "roi-aware-shifted", "calibrated"),
+        choices=REGISTRATION_QA_COST_CHOICES,
     )
     parser.add_argument("--cost-threshold", type=float, default=6.0)
     parser.add_argument("--no-cost-threshold", action="store_true")
@@ -614,7 +625,7 @@ def _audit_subject(
             config.transform_type,
             registered_plane,
         )
-        registered_plane, empty_registered_rois = replace_empty_registered_masks(
+        registered_plane, empty_registered_rois = drop_empty_registered_masks(
             registered_plane
         )
         raw_components = _raw_pairwise_components(
@@ -650,6 +661,22 @@ def _audit_subject(
             cost_matrix = np.asarray(
                 registered_bundle.pairwise_cost_matrix, dtype=float
             )
+        large_cost = float(_cost_kwargs(config).get("large_cost", 1.0e6))
+        cost_matrix = expand_registered_pairwise_cost_columns(
+            cost_matrix,
+            empty_registered_rois,
+            large_cost=large_cost,
+        )
+        if probability_matrix is not None:
+            probability_matrix = expand_registered_roi_columns(
+                probability_matrix,
+                empty_registered_rois,
+                fill_value=0.0,
+            )
+        registered_components = expand_registered_pairwise_components(
+            registered_bundle.pairwise_components,
+            empty_registered_rois,
+        )
         rows.extend(
             _audit_reference_links(
                 subject,
@@ -660,7 +687,7 @@ def _audit_subject(
                 reference_matrix,
                 cost_source_lookup,
                 raw_components,
-                registered_bundle.pairwise_components,
+                registered_components,
                 np.asarray(cost_matrix, dtype=float),
                 (
                     None

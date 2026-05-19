@@ -9,6 +9,7 @@ from typing import Any, Literal, cast
 
 import numpy as np
 from bayescatrack.association.calibrated_costs import (
+    ACTIVITY_ASSOCIATION_FEATURES,
     DEFAULT_ASSOCIATION_FEATURES,
     LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
     ReferenceTrainingOptions,
@@ -43,7 +44,24 @@ from bayescatrack.experiments.track2p_benchmark import (
 from bayescatrack.reference import Track2pReference
 
 SampleWeightStrategy = Literal["none", "balanced"]
-CalibrationFeatureSet = Literal["default", "local-evidence", "default+local-evidence"]
+CalibrationFeatureSet = Literal[
+    "default",
+    "local-evidence",
+    "default+local-evidence",
+    "activity",
+    "default+activity",
+    "activity+local-evidence",
+    "default+activity+local-evidence",
+]
+CALIBRATION_FEATURE_SET_CHOICES: tuple[CalibrationFeatureSet, ...] = (
+    "default",
+    "local-evidence",
+    "default+local-evidence",
+    "activity",
+    "default+activity",
+    "activity+local-evidence",
+    "default+activity+local-evidence",
+)
 _LOCAL_EVIDENCE_COMPONENT_KWARGS = frozenset(
     {
         "local_evidence_components",
@@ -68,14 +86,36 @@ def calibration_feature_names(
     if feature_set == "local-evidence":
         return tuple(LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
     if feature_set == "default+local-evidence":
-        return tuple(
-            dict.fromkeys(
-                (*DEFAULT_ASSOCIATION_FEATURES, *LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
-            )
+        return _deduplicated_feature_names(
+            DEFAULT_ASSOCIATION_FEATURES,
+            LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
+        )
+    if feature_set == "activity":
+        return tuple(ACTIVITY_ASSOCIATION_FEATURES)
+    if feature_set == "default+activity":
+        return _deduplicated_feature_names(
+            DEFAULT_ASSOCIATION_FEATURES,
+            ACTIVITY_ASSOCIATION_FEATURES,
+        )
+    if feature_set == "activity+local-evidence":
+        return _deduplicated_feature_names(
+            ACTIVITY_ASSOCIATION_FEATURES,
+            LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
+        )
+    if feature_set == "default+activity+local-evidence":
+        return _deduplicated_feature_names(
+            DEFAULT_ASSOCIATION_FEATURES,
+            ACTIVITY_ASSOCIATION_FEATURES,
+            LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
         )
     raise ValueError(
-        "calibration feature set must be 'default', 'local-evidence', or 'default+local-evidence'"
+        "calibration feature set must be one of: "
+        + ", ".join(CALIBRATION_FEATURE_SET_CHOICES)
     )
+
+
+def _deduplicated_feature_names(*feature_groups: Sequence[str]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(feature for group in feature_groups for feature in group))
 
 
 def pairwise_cost_kwargs_for_calibration_features(

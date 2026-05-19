@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 from bayescatrack import CalciumPlaneData
 from bayescatrack.fov_affine_registration import (
+    apply_affine_image_warp,
     apply_affine_roi_mask_warp,
     estimate_fov_affine_transform,
     register_measurement_plane_by_fov_affine,
@@ -34,6 +35,18 @@ def test_apply_affine_roi_mask_warp_applies_translation():
     np.testing.assert_array_equal(registered, expected)
 
 
+def test_apply_affine_image_warp_applies_translation():
+    image = np.zeros((8, 8), dtype=float)
+    image[3, 4] = 2.5
+    affine_xy = np.asarray([[1.0, 0.0, -2.0], [0.0, 1.0, 1.0]], dtype=float)
+
+    registered = apply_affine_image_warp(image, affine_xy, output_shape=(8, 8))
+
+    expected = np.zeros_like(image)
+    expected[4, 2] = 2.5
+    np.testing.assert_array_equal(registered, expected)
+
+
 def test_fov_affine_estimate_contains_residual_metadata():
     reference = _spot_image((96, 96), ((20, 20), (20, 75), (72, 24), (75, 78)))
     measurement = apply_integer_image_translation(
@@ -50,7 +63,7 @@ def test_fov_affine_estimate_contains_residual_metadata():
 
 def test_fov_affine_registration_recovers_translation_like_fallback():
     reference_fov = _spot_image((96, 96), ((20, 22), (28, 72), (68, 28), (72, 75)))
-    measurement_fov = apply_integer_image_translation(
+    measurement_fov = 2.0 * apply_integer_image_translation(
         reference_fov, [-3, 4], output_shape=(96, 96)
     )
     reference_mask = reference_fov[None, :, :] > 0.0
@@ -79,6 +92,9 @@ def test_fov_affine_registration_recovers_translation_like_fallback():
     assert (
         np.count_nonzero(registered_mask & reference_mask[0])
         >= np.count_nonzero(reference_mask[0]) // 2
+    )
+    np.testing.assert_array_equal(
+        registration.registered_measurement_plane.fov, 2.0 * reference_fov
     )
 
 

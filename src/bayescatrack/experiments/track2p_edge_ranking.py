@@ -38,6 +38,11 @@ from bayescatrack.experiments.track2p_benchmark import (
     _validate_reference_roi_indices,
     discover_subject_dirs,
 )
+from bayescatrack.experiments._cli_choices import (
+    ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.soft_overlap_costs import registered_soft_iou_cost_kwargs
 
 DEFAULT_EDGE_RANKING_FEATURES = (
@@ -284,19 +289,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cost",
         default="registered-iou",
-        choices=(
-            "registered-iou",
-            "registered-soft-iou",
-            "registered-shifted-iou",
-            "roi-aware",
-            "roi-aware-shifted",
-        ),
+        choices=ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
         help="Raw pairwise cost whose pairwise_cost_matrix should be ranked",
     )
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_CHOICES,
+        help=REGISTRATION_TRANSFORM_HELP,
     )
     parser.add_argument("--curated-only", action="store_true")
     parser.add_argument(

@@ -343,20 +343,12 @@ class CalciumPlaneData:
         else:
             roi_feature_cost = zero_cost
 
-        if (
-            (cell_probability_weight > 0.0 or return_components)
-            and self.cell_probabilities is not None
-            and other.cell_probabilities is not None
-        ):
-            probabilities_self = np.clip(
-                self.cell_probabilities, similarity_epsilon, 1.0
-            )
-            probabilities_other = np.clip(
-                other.cell_probabilities, similarity_epsilon, 1.0
-            )
-            cell_probability_cost = -0.5 * (
-                np.log(probabilities_self[:, None])
-                + np.log(probabilities_other[None, :])
+        if cell_probability_weight > 0.0 or return_components:
+            cell_probability_cost = _pairwise_cell_probability_cost(
+                self.cell_probabilities,
+                other.cell_probabilities,
+                cost_shape=cost_shape,
+                similarity_epsilon=similarity_epsilon,
             )
             if cell_probability_weight > 0.0:
                 total_cost += cell_probability_weight * cell_probability_cost
@@ -709,7 +701,7 @@ def load_suite2p_plane(
 
     selected_indices: list[int] = []
     roi_masks: list[np.ndarray] = []
-    cell_probabilities: list[float] = []
+    cell_probabilities: list[float] | None = [] if iscell is not None else None
     feature_names = (
         "radius",
         "aspect_ratio",
@@ -766,7 +758,8 @@ def load_suite2p_plane(
 
         selected_indices.append(roi_index)
         roi_masks.append(mask)
-        cell_probabilities.append(probability)
+        if cell_probabilities is not None:
+            cell_probabilities.append(probability)
         for feature_name in feature_names:
             collected_features[feature_name].append(
                 float(roi_stat.get(feature_name, np.nan))
@@ -778,8 +771,8 @@ def load_suite2p_plane(
     selected_indices_array = np.asarray(selected_indices, dtype=int)
     probability_array = (
         np.asarray(cell_probabilities, dtype=float)
-        if roi_masks
-        else np.zeros((0,), dtype=float)
+        if cell_probabilities is not None
+        else None
     )
     feature_arrays = {
         key: np.asarray(value, dtype=float)
@@ -1265,6 +1258,42 @@ def _ensure_finite_cost_matrix(
         sanitized[invalid] = large_cost
     sanitized[sanitized < 0.0] = 0.0
     return sanitized
+
+
+def _pairwise_cell_probability_cost(
+    reference_probabilities: np.ndarray | None,
+    measurement_probabilities: np.ndarray | None,
+    *,
+    cost_shape: tuple[int, int],
+    similarity_epsilon: float,
+) -> np.ndarray:
+    cost = np.zeros(cost_shape, dtype=float)
+    if reference_probabilities is None or measurement_probabilities is None:
+        return cost
+
+    reference_probabilities = np.asarray(reference_probabilities, dtype=float)
+    measurement_probabilities = np.asarray(measurement_probabilities, dtype=float)
+    if reference_probabilities.shape != (cost_shape[0],):
+        raise ValueError("reference cell probabilities must match reference ROIs")
+    if measurement_probabilities.shape != (cost_shape[1],):
+        raise ValueError("measurement cell probabilities must match measurement ROIs")
+
+    finite_reference = np.isfinite(reference_probabilities)
+    finite_measurement = np.isfinite(measurement_probabilities)
+    if not np.any(finite_reference) or not np.any(finite_measurement):
+        return cost
+
+    probabilities_reference = np.clip(
+        reference_probabilities[finite_reference], similarity_epsilon, 1.0
+    )
+    probabilities_measurement = np.clip(
+        measurement_probabilities[finite_measurement], similarity_epsilon, 1.0
+    )
+    cost[np.ix_(finite_reference, finite_measurement)] = -0.5 * (
+        np.log(probabilities_reference[:, None])
+        + np.log(probabilities_measurement[None, :])
+    )
+    return cost
 
 
 def _estimate_default_centroid_scale(

@@ -55,6 +55,12 @@ def register_measurement_plane_by_fov_affine(
         estimate.matrix_xy,
         output_shape=reference_plane.image_shape,
     )
+    registered_fov = apply_affine_image_warp(
+        measurement_plane.fov,
+        estimate.matrix_xy,
+        output_shape=reference_plane.image_shape,
+        fill_value=0.0,
+    )
     ops = {} if measurement_plane.ops is None else dict(measurement_plane.ops)
     ops.update(
         {
@@ -70,7 +76,7 @@ def register_measurement_plane_by_fov_affine(
     )
     registered_plane = measurement_plane.with_replaced_masks(
         masks,
-        fov=reference_plane.fov,
+        fov=registered_fov,
         source=f"{measurement_plane.source}_fov_affine_registered",
         ops=ops,
     )
@@ -173,6 +179,48 @@ def apply_affine_roi_mask_warp(
         else:
             values = np.asarray(mask[yy[valid], xx[valid]], dtype=output.dtype)
             np.maximum.at(output[roi_index], (y[valid], x[valid]), values)
+    return output
+
+
+def apply_affine_image_warp(
+    image: np.ndarray,
+    matrix_xy: np.ndarray,
+    *,
+    output_shape: tuple[int, int],
+    fill_value: float | bool = 0.0,
+) -> np.ndarray:
+    """Warp one 2-D image with a source-to-output affine transform."""
+
+    image = np.asarray(image)
+    matrix_xy = np.asarray(matrix_xy, dtype=float)
+    if image.ndim != 2:
+        raise ValueError("image must have shape (height, width)")
+    if matrix_xy.shape != (2, 3):
+        raise ValueError("matrix_xy must have shape (2, 3)")
+
+    output_shape = (int(output_shape[0]), int(output_shape[1]))
+    output = np.full(output_shape, fill_value, dtype=image.dtype)
+    inverse_matrix_xy = invert_affine_xy(matrix_xy)
+    yy, xx = np.indices(output_shape, dtype=float)
+    source_x = (
+        inverse_matrix_xy[0, 0] * xx
+        + inverse_matrix_xy[0, 1] * yy
+        + inverse_matrix_xy[0, 2]
+    )
+    source_y = (
+        inverse_matrix_xy[1, 0] * xx
+        + inverse_matrix_xy[1, 1] * yy
+        + inverse_matrix_xy[1, 2]
+    )
+    source_x = np.rint(source_x).astype(int)
+    source_y = np.rint(source_y).astype(int)
+    valid = (
+        (source_x >= 0)
+        & (source_x < image.shape[1])
+        & (source_y >= 0)
+        & (source_y < image.shape[0])
+    )
+    output[valid] = image[source_y[valid], source_x[valid]]
     return output
 
 

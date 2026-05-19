@@ -6,10 +6,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from bayescatrack.experiments import track2p_benchmark as benchmark_module
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
+    build_arg_parser,
     format_benchmark_table,
     run_track2p_benchmark,
+    solve_configured_global_assignment,
 )
 
 
@@ -391,3 +394,69 @@ def test_global_assignment_benchmark_uses_skip_edges(
     assert result["pairwise_f1"] == pytest.approx(2 / 3)
     assert result["complete_track_f1"] == pytest.approx(2 / 3)
     assert result["complete_tracks"] == 1
+
+
+def test_benchmark_cli_parses_higher_order_consistency_config():
+    parser = build_arg_parser()
+    args = parser.parse_args(
+        [
+            "--data",
+            "/tmp/track2p",
+            "--method",
+            "global-assignment",
+            "--higher-order-consistency-json",
+            '{"support_top_k": 4, "support_cost_cap": 3.5}',
+            "--higher-order-triplet-weight",
+            "0.25",
+            "--higher-order-max-penalty",
+            "1.75",
+            "--higher-order-large-cost",
+            "1234.0",
+            "--no-progress",
+        ]
+    )
+
+    config = benchmark_module._config_from_args(args)
+
+    assert config.higher_order_consistency_config == {
+        "support_top_k": 4,
+        "support_cost_cap": 3.5,
+        "triplet_weight": 0.25,
+        "max_penalty": 1.75,
+        "large_cost": 1234.0,
+    }
+
+
+def test_configured_global_assignment_forwards_higher_order_consistency_config(
+    monkeypatch,
+):
+    seen = {}
+
+    def fake_solve_global_assignment_for_sessions(sessions, **kwargs):
+        seen["sessions"] = sessions
+        seen.update(kwargs)
+        return "assignment"
+
+    monkeypatch.setattr(
+        benchmark_module,
+        "solve_global_assignment_for_sessions",
+        fake_solve_global_assignment_for_sessions,
+    )
+    higher_order_config = {
+        "triplet_weight": 0.25,
+        "support_top_k": 8,
+        "support_cost_cap": 4.0,
+        "max_penalty": 2.0,
+    }
+    config = Track2pBenchmarkConfig(
+        data=Path("."),
+        method="global-assignment",
+        higher_order_consistency_config=higher_order_config,
+    )
+    sessions = [object()]
+
+    result = solve_configured_global_assignment(sessions, config)
+
+    assert result == "assignment"
+    assert seen["sessions"] == sessions
+    assert seen["higher_order_consistency_config"] == higher_order_config

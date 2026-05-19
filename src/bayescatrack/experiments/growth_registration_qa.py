@@ -18,7 +18,10 @@ from bayescatrack.association.pyrecest_global_assignment import (
     roi_aware_cost_kwargs,
     session_edge_pairs,
 )
-from bayescatrack.association.registered_masks import replace_empty_registered_masks
+from bayescatrack.association.registered_masks import (
+    drop_empty_registered_masks,
+    expand_registered_pairwise_cost_columns,
+)
 from bayescatrack.core.bridge import (
     Track2pSession,
     build_session_pair_association_bundle,
@@ -366,14 +369,15 @@ def _edge_link_rows(
         source_session.plane_data.roi_masks[source_locals],
         registered_plane.roi_masks[target_locals],
     )
-    cost_plane, empty_registered_rois = replace_empty_registered_masks(registered_plane)
+    cost_plane, empty_registered_rois = drop_empty_registered_masks(registered_plane)
     cost_matrix = _pairwise_cost_matrix(
         source_session, target_session, cost_plane, config
     )
-    if empty_registered_rois.size:
-        cost_matrix[:, empty_registered_rois] = float(
-            _cost_kwargs(config).get("large_cost", 1.0e6)
-        )
+    cost_matrix = expand_registered_pairwise_cost_columns(
+        cost_matrix,
+        empty_registered_rois,
+        large_cost=float(_cost_kwargs(config).get("large_cost", 1.0e6)),
+    )
 
     affine_values = _affine_summary(fit, source_session.plane_data.image_shape)
     rows: list[dict[str, Any]] = []

@@ -63,7 +63,12 @@ def register_measurement_plane_by_nonrigid_fov(
 ) -> NonrigidRegistration:
     """Register measurement ROIs into the reference FOV with an inverse dense warp."""
 
-    del unused_options
+    if unused_options:
+        unknown_options = ", ".join(repr(name) for name in sorted(unused_options))
+        raise TypeError(
+            "register_measurement_plane_by_nonrigid_fov() got unsupported "
+            f"keyword argument(s): {unknown_options}"
+        )
     method = _canonical_nonrigid_transform(transform_type)
     if reference_plane.fov is None or measurement_plane.fov is None:
         raise ValueError(

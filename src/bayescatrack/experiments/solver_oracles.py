@@ -14,7 +14,10 @@ from bayescatrack.association.pyrecest_global_assignment import (
     roi_aware_cost_kwargs,
     session_edge_pairs,
 )
-from bayescatrack.association.registered_masks import replace_empty_registered_masks
+from bayescatrack.association.registered_masks import (
+    drop_empty_registered_masks,
+    expand_registered_pairwise_cost_columns,
+)
 from bayescatrack.core.bridge import (
     Track2pSession,
     build_session_pair_association_bundle,
@@ -158,7 +161,7 @@ def oracle_registration_costs(
             require_full_rank=require_full_rank,
             ridge=ridge,
         )
-        registered, empty = replace_empty_registered_masks(registered)
+        registered, empty = drop_empty_registered_masks(registered)
         bundle = build_session_pair_association_bundle(
             sessions[source],
             sessions[target],
@@ -171,8 +174,11 @@ def oracle_registration_costs(
             return_pairwise_components=False,
         )
         matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float).copy()
-        matrix[:, empty] = float(kwargs.get("large_cost", large_cost))
-        costs[(source, target)] = matrix
+        costs[(source, target)] = expand_registered_pairwise_cost_columns(
+            matrix,
+            empty,
+            large_cost=float(kwargs.get("large_cost", large_cost)),
+        )
     return costs
 
 

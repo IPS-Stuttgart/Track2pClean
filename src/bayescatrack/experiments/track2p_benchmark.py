@@ -23,6 +23,11 @@ from bayescatrack.core.bridge import (
     find_track2p_session_dirs,
     load_track2p_subject,
 )
+from bayescatrack.experiments._cli_choices import (
+    ASSOCIATION_COST_CHOICES,
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.evaluation.track2p_metrics import (
     normalize_track_matrix,
     score_track_matrices,
@@ -45,6 +50,13 @@ ALIGNED_REFERENCE_SOURCE = "aligned_subject_rows"
 TRACK2P_REFERENCE_SOURCES = frozenset(
     {"track2p_output_suite2p_indices", "track2p_output_match_mat"}
 )
+HIGHER_ORDER_ARG_KEYS = (
+    ("higher_order_triplet_weight", "triplet_weight"),
+    ("higher_order_support_top_k", "support_top_k"),
+    ("higher_order_support_cost_cap", "support_cost_cap"),
+    ("higher_order_max_penalty", "max_penalty"),
+    ("higher_order_large_cost", "large_cost"),
+)
 
 
 # pylint: disable=too-many-instance-attributes
@@ -64,6 +76,7 @@ class Track2pBenchmarkConfig:
     seed_session: int = 0
     restrict_to_reference_seed_rois: bool = True
     cost: AssociationCost = "registered-iou"
+    calibration_feature_set: str = "default"
     max_gap: int = 2
     transform_type: str = "affine"
     start_cost: float = 5.0
@@ -80,6 +93,7 @@ class Track2pBenchmarkConfig:
     velocity_variance: float = 25.0
     regularization: float = 1.0e-6
     pairwise_cost_kwargs: dict[str, Any] | None = None
+    higher_order_consistency_config: dict[str, Any] | None = None
     progress: bool = False
 
 
@@ -314,15 +328,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cost",
         default="registered-iou",
-        choices=(
-            "registered-iou",
-            "registered-soft-iou",
-            "registered-shifted-iou",
-            "roi-aware",
-            "roi-aware-shifted",
-            "calibrated",
-        ),
+        choices=ASSOCIATION_COST_CHOICES,
         help="Pairwise cost used by global assignment",
+    )
+    parser.add_argument(
+        "--calibration-feature-set",
+        default="default",
+        choices=(
+            "default",
+            "local-evidence",
+            "default+local-evidence",
+            "activity",
+            "default+activity",
+            "activity+local-evidence",
+            "default+activity+local-evidence",
+        ),
+        help=(
+            "Named feature preset for cost='calibrated' LOSO runs. "
+            "Use default+activity to let the calibrated model learn from "
+            "fluorescence, spike, event-rate, and neuropil-ratio cues."
+        ),
     )
     parser.add_argument(
         "--max-gap",
@@ -333,8 +358,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
-        help="Track2p registration transform type",
+        choices=REGISTRATION_TRANSFORM_CHOICES,
+        help=REGISTRATION_TRANSFORM_HELP,
     )
     parser.add_argument(
         "--start-cost", type=float, default=5.0, help="PyRecEst track start cost"
@@ -408,6 +433,44 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--pairwise-cost-kwargs-json",
         default=None,
         help="JSON object merged into pairwise cost kwargs",
+    )
+    parser.add_argument(
+        "--higher-order-consistency-json",
+        default=None,
+        help=(
+            "JSON object passed to HigherOrderConsistencyConfig. Individual "
+            "--higher-order-* options override keys from this object."
+        ),
+    )
+    parser.add_argument(
+        "--higher-order-triplet-weight",
+        type=float,
+        default=None,
+        help="Weight for triplet-projected higher-order consistency penalties",
+    )
+    parser.add_argument(
+        "--higher-order-support-top-k",
+        type=int,
+        default=None,
+        help="Number of low-cost third-session support edges retained per ROI",
+    )
+    parser.add_argument(
+        "--higher-order-support-cost-cap",
+        type=float,
+        default=None,
+        help="Maximum support-edge cost considered as triplet evidence",
+    )
+    parser.add_argument(
+        "--higher-order-max-penalty",
+        type=float,
+        default=None,
+        help="Maximum unweighted penalty added to an unsupported edge",
+    )
+    parser.add_argument(
+        "--higher-order-large-cost",
+        type=float,
+        default=None,
+        help="Large-cost sentinel used to preserve already-gated edges",
     )
     parser.add_argument(
         "--progress",
@@ -549,6 +612,7 @@ def solve_configured_global_assignment(
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+        higher_order_consistency_config=config.higher_order_consistency_config,
     )
 
 
@@ -556,7 +620,7 @@ def _variant_name(cost: AssociationCost) -> str:
     if cost == "registered-iou":
         return "Same costs + global assignment"
     if cost == "registered-soft-iou":
-        return "Soft-IoU costs + global assignment"
+        return "Soft registered-overlap costs + global assignment"
     if cost == "registered-shifted-iou":
         return "Shifted-IoU costs + global assignment"
     if cost == "roi-aware-shifted":
@@ -937,6 +1001,26 @@ def _loaded_suite2p_index_set(session: Track2pSession) -> set[int]:
     return {int(value) for value in np.asarray(roi_indices, dtype=int).reshape(-1)}
 
 
+def _higher_order_consistency_config_from_args(
+    args: argparse.Namespace,
+) -> dict[str, Any] | None:
+    config: dict[str, Any] = {}
+    if args.higher_order_consistency_json is not None:
+        parsed = json.loads(args.higher_order_consistency_json)
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                "--higher-order-consistency-json must decode to a JSON object"
+            )
+        config.update(parsed)
+
+    for arg_name, config_key in HIGHER_ORDER_ARG_KEYS:
+        value = getattr(args, arg_name)
+        if value is not None:
+            config[config_key] = value
+
+    return config or None
+
+
 def _reference_matrix(reference: Track2pReference, *, curated_only: bool) -> np.ndarray:
     matrix = normalize_track_matrix(reference.suite2p_indices)
     if not curated_only:
@@ -976,6 +1060,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
         cost=args.cost,
+        calibration_feature_set=args.calibration_feature_set,
         max_gap=args.max_gap,
         transform_type=args.transform_type,
         start_cost=args.start_cost,
@@ -992,6 +1077,9 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=_higher_order_consistency_config_from_args(
+            args
+        ),
         progress=args.progress,
     )
 
