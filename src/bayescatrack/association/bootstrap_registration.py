@@ -265,11 +265,13 @@ def fit_residual_transform_from_roi_pairs(
     bootstrap_config = config or BootstrapRegistrationConfig()
     if len(pairs) < bootstrap_config.min_matches:
         return None
+    if order not in {"xy", "yx"}:
+        raise ValueError("order must be 'xy' or 'yx'")
     reference_xy, measurement_xy = _centroid_correspondences(
         reference_plane,
         registered_measurement_plane,
         pairs,
-        order=order,
+        order="xy",
         weighted=weighted_centroids,
     )
     if reference_xy.shape[0] < bootstrap_config.min_matches:
