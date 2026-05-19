@@ -8,13 +8,16 @@ from bayescatrack.experiments.benchmark_comparison import (
     aggregate_rows,
     build_metric_rows,
     build_reference_gap_rows,
+    build_subject_gap_summary_rows,
     build_subject_metric_rows,
     format_best_summary,
     format_markdown_table,
     format_reference_gap_summary,
+    format_subject_gap_summary,
     load_labeled_rows,
     write_metric_csv,
     write_reference_gap_csv,
+    write_subject_gap_summary,
     write_subject_metric_csv,
 )
 
@@ -363,3 +366,80 @@ def test_subject_metric_csv_reports_per_subject_reference_gaps(tmp_path):
     assert csv_rows[0]["approach"] == "Track2p"
     assert csv_rows[0]["true_positives"] == "9"
     assert csv_rows[0]["is_reference"] == "true"
+
+
+def test_subject_gap_summary_reports_worst_non_reference_rows(tmp_path):
+    rows = [
+        {
+            "approach": "Track2p",
+            "subject": "jm039",
+            "pairwise_f1": "0.90",
+            "complete_track_f1": "0.80",
+            "pairwise_true_positives": "9",
+            "pairwise_false_positives": "1",
+            "pairwise_false_negatives": "1",
+            "complete_track_true_positives": "8",
+            "complete_track_false_positives": "2",
+            "complete_track_false_negatives": "2",
+        },
+        {
+            "approach": "BayesCaTrack",
+            "subject": "jm039",
+            "pairwise_f1": "0.60",
+            "complete_track_f1": "0.50",
+            "pairwise_true_positives": "6",
+            "pairwise_false_positives": "2",
+            "pairwise_false_negatives": "6",
+            "complete_track_true_positives": "5",
+            "complete_track_false_positives": "3",
+            "complete_track_false_negatives": "7",
+        },
+        {
+            "approach": "Track2p",
+            "subject": "jm046",
+            "pairwise_f1": "0.70",
+            "complete_track_f1": "0.40",
+            "pairwise_true_positives": "7",
+            "pairwise_false_positives": "3",
+            "pairwise_false_negatives": "3",
+            "complete_track_true_positives": "4",
+            "complete_track_false_positives": "6",
+            "complete_track_false_negatives": "6",
+        },
+        {
+            "approach": "BayesCaTrack",
+            "subject": "jm046",
+            "pairwise_f1": "0.75",
+            "complete_track_f1": "0.30",
+            "pairwise_true_positives": "8",
+            "pairwise_false_positives": "2",
+            "pairwise_false_negatives": "3",
+            "complete_track_true_positives": "3",
+            "complete_track_false_positives": "7",
+            "complete_track_false_negatives": "7",
+        },
+    ]
+
+    gap_rows = build_subject_gap_summary_rows(
+        rows, reference_approach="Track2p", limit=2
+    )
+    summary = format_subject_gap_summary(rows, reference_approach="Track2p", limit=2)
+    output_path = tmp_path / "subject_gaps.md"
+    write_subject_gap_summary(
+        rows,
+        output_path,
+        reference_approach="Track2p",
+        limit=2,
+    )
+
+    assert [row["subject"] for row in gap_rows] == ["jm039", "jm039"]
+    assert [row["metric_column"] for row in gap_rows] == [
+        "complete_track_f1",
+        "pairwise_f1",
+    ]
+    assert "### Worst Subject Gaps to Track2p" in summary
+    assert (
+        "| jm039 | complete-track F1 | BayesCaTrack | 0.500 | 0.800 | -0.300 | 2 |"
+        in summary
+    )
+    assert output_path.read_text(encoding="utf-8").endswith("\n")

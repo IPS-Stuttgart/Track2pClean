@@ -124,6 +124,25 @@ def write_subject_metric_csv(
         )
 
 
+def write_subject_gap_summary(
+    rows: Sequence[dict[str, str]],
+    output_path: Path,
+    *,
+    reference_approach: str | None,
+    limit: int,
+) -> None:
+    """Write a Markdown summary of the largest subject-level reference gaps."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        format_subject_gap_summary(
+            rows, reference_approach=reference_approach, limit=limit
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def format_markdown_table(
     rows: Sequence[dict[str, float | int | str]],
     *,
@@ -207,6 +226,42 @@ def format_reference_gap_summary(
             f"{row['best_non_reference_approach']} | "
             f"{_format_value(_as_float(row['best_non_reference_value']))} | "
             f"{_format_delta(_as_float(row['gap_to_reference']))} |"
+        )
+    return "\n".join(body)
+
+
+def format_subject_gap_summary(
+    rows: Sequence[dict[str, str]],
+    *,
+    reference_approach: str | None,
+    limit: int = 12,
+) -> str:
+    """Format a Markdown table of the largest subject-level reference gaps."""
+
+    reference_name = _reference_approach_name(rows, reference_approach)
+    gap_rows = build_subject_gap_summary_rows(
+        rows, reference_approach=reference_approach, limit=limit
+    )
+    body = [
+        f"### Worst Subject Gaps to {reference_name}",
+        "",
+        "| subject | metric | approach | value | reference | gap | rank |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: |",
+    ]
+    if not gap_rows:
+        body.append("| n/a | n/a | n/a | n/a | n/a | n/a | n/a |")
+        return "\n".join(body)
+
+    for row in gap_rows:
+        body.append(
+            "| "
+            f"{row['subject']} | "
+            f"{row['metric']} | "
+            f"{row['approach']} | "
+            f"{_format_value(_as_float(row['value']))} | "
+            f"{_format_value(_as_float(row['reference_value']))} | "
+            f"{_format_delta(_as_float(row['gap_to_reference']))} | "
+            f"{row['rank']} |"
         )
     return "\n".join(body)
 
@@ -340,6 +395,37 @@ def build_subject_metric_rows(
     return result_rows
 
 
+def build_subject_gap_summary_rows(
+    rows: Sequence[dict[str, str]],
+    *,
+    reference_approach: str | None,
+    limit: int = 12,
+) -> list[dict[str, float | int | str]]:
+    """Build subject-level non-reference rows sorted by worst reference gap."""
+
+    if limit < 1:
+        raise ValueError("Subject gap summary limit must be at least 1")
+
+    subject_metric_rows = build_subject_metric_rows(
+        rows, reference_approach=reference_approach
+    )
+    gap_rows = [
+        row
+        for row in subject_metric_rows
+        if row["is_reference"] != "true" and row["gap_to_reference"] != ""
+    ]
+    return sorted(
+        gap_rows,
+        key=lambda row: (
+            _as_float(row["gap_to_reference"]),
+            str(row["subject"]),
+            str(row["metric"]),
+            int(row["rank"]),
+            str(row["approach"]),
+        ),
+    )[:limit]
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the comparison-table CLI parser."""
 
@@ -404,6 +490,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional long-format CSV path for subject-level reference gaps",
     )
+    parser.add_argument(
+        "--subject-gap-summary-output",
+        type=Path,
+        default=None,
+        help="Optional Markdown path for the worst subject-level reference gaps",
+    )
+    parser.add_argument(
+        "--subject-gap-summary-limit",
+        type=int,
+        default=12,
+        help="Maximum number of rows to include in the subject gap summary",
+    )
     return parser
 
 
@@ -432,6 +530,13 @@ def main(argv: list[str] | None = None) -> int:
             subject_rows,
             args.subject_metric_output,
             reference_approach=args.reference_approach,
+        )
+    if args.subject_gap_summary_output is not None:
+        write_subject_gap_summary(
+            subject_rows,
+            args.subject_gap_summary_output,
+            reference_approach=args.reference_approach,
+            limit=args.subject_gap_summary_limit,
         )
     if args.output is not None:
         write_comparison(
