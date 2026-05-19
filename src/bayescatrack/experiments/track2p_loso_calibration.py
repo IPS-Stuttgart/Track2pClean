@@ -36,6 +36,8 @@ from bayescatrack.experiments.track2p_benchmark import (
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
+    _higher_order_consistency_config,
+    _variant_name,
     discover_subject_dirs,
     solve_configured_global_assignment,
 )
@@ -202,7 +204,14 @@ def run_track2p_loso_calibration(
                 ),
                 benchmark=SubjectBenchmarkResult(
                     subject=held_out.subject_name,
-                    variant="Calibrated costs + LOSO global assignment",
+                    variant=_variant_name(
+                        config.cost,
+                        higher_order_consistency_config=(
+                            _higher_order_consistency_config(config)
+                        ),
+                    ).replace(
+                        " + global assignment", " + LOSO global assignment"
+                    ),
                     method=config.method,
                     scores=scores,
                     n_sessions=held_out.reference.n_sessions,

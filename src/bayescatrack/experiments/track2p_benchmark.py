@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    HigherOrderConsistencyConfig,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,
@@ -80,6 +83,11 @@ class Track2pBenchmarkConfig:
     velocity_variance: float = 25.0
     regularization: float = 1.0e-6
     pairwise_cost_kwargs: dict[str, Any] | None = None
+    higher_order_triplet_weight: float = 0.0
+    higher_order_support_top_k: int = 8
+    higher_order_support_cost_cap: float = 4.0
+    higher_order_max_penalty: float = 2.0
+    higher_order_large_cost: float = 1.0e6
     progress: bool = False
 
 
@@ -245,6 +253,63 @@ def write_results(
     output_path.write_text(format_benchmark_table(rows) + "\n", encoding="utf-8")
 
 
+def add_higher_order_consistency_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add paper-facing higher-order triplet-consistency CLI knobs."""
+
+    parser.add_argument(
+        "--higher-order-triplet-weight",
+        "--triplet-weight",
+        dest="higher_order_triplet_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for triplet-support penalties added to pairwise costs before "
+            "global assignment. The default 0 disables higher-order consistency."
+        ),
+    )
+    parser.add_argument(
+        "--higher-order-support-top-k",
+        "--triplet-support-top-k",
+        dest="higher_order_support_top_k",
+        type=int,
+        default=8,
+        help=(
+            "Maximum number of admissible supporting ROIs kept per shared "
+            "third-session ROI when approximating triplet support."
+        ),
+    )
+    parser.add_argument(
+        "--higher-order-support-cost-cap",
+        "--triplet-support-cost-cap",
+        dest="higher_order_support_cost_cap",
+        type=float,
+        default=4.0,
+        help=(
+            "Maximum pairwise cost considered as third-session support; unsupported "
+            "edges receive a penalty."
+        ),
+    )
+    parser.add_argument(
+        "--higher-order-max-penalty",
+        "--triplet-max-penalty",
+        dest="higher_order_max_penalty",
+        type=float,
+        default=2.0,
+        help="Maximum unweighted triplet-consistency penalty added to one edge.",
+    )
+    parser.add_argument(
+        "--higher-order-large-cost",
+        "--triplet-large-cost",
+        dest="higher_order_large_cost",
+        type=float,
+        default=1.0e6,
+        help=(
+            "Cost value treated as an inadmissible/gated edge by the "
+            "triplet-consistency penalty."
+        ),
+    )
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="bayescatrack benchmark track2p",
@@ -402,6 +467,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="JSON object merged into pairwise cost kwargs",
     )
+    add_higher_order_consistency_arguments(parser)
     parser.add_argument(
         "--progress",
         action=argparse.BooleanOptionalAction,
@@ -475,7 +541,10 @@ def _predict_subject_tracks(
     sessions = _load_subject_sessions(subject_dir, config)
     assignment = solve_configured_global_assignment(sessions, config)
     predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
-    return predicted, _variant_name(config.cost)
+    return predicted, _variant_name(
+        config.cost,
+        higher_order_consistency_config=_higher_order_consistency_config(config),
+    )
 
 
 def oracle_ground_truth_link_tracks(
@@ -542,15 +611,42 @@ def solve_configured_global_assignment(
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+        higher_order_consistency_config=_higher_order_consistency_config(config),
     )
 
 
-def _variant_name(cost: AssociationCost) -> str:
+def _higher_order_consistency_config(
+    config: Track2pBenchmarkConfig,
+) -> HigherOrderConsistencyConfig | None:
+    """Return the enabled triplet-consistency config for a benchmark run."""
+
+    higher_order_config = HigherOrderConsistencyConfig(
+        triplet_weight=config.higher_order_triplet_weight,
+        support_top_k=config.higher_order_support_top_k,
+        support_cost_cap=config.higher_order_support_cost_cap,
+        max_penalty=config.higher_order_max_penalty,
+        large_cost=config.higher_order_large_cost,
+    )
+    return higher_order_config if higher_order_config.enabled else None
+
+
+def _variant_name(
+    cost: AssociationCost,
+    *,
+    higher_order_consistency_config: HigherOrderConsistencyConfig | None = None,
+) -> str:
     if cost == "registered-iou":
-        return "Same costs + global assignment"
-    if cost == "calibrated":
-        return "Calibrated costs + global assignment"
-    return "BayesCaTrack costs + global assignment"
+        variant = "Same costs + global assignment"
+    elif cost == "calibrated":
+        variant = "Calibrated costs + global assignment"
+    else:
+        variant = "BayesCaTrack costs + global assignment"
+    if (
+        higher_order_consistency_config is not None
+        and higher_order_consistency_config.enabled
+    ):
+        variant += " + triplet consistency"
+    return variant
 
 
 # pylint: disable=too-many-return-statements,too-many-branches
@@ -979,6 +1075,11 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_triplet_weight=args.higher_order_triplet_weight,
+        higher_order_support_top_k=args.higher_order_support_top_k,
+        higher_order_support_cost_cap=args.higher_order_support_cost_cap,
+        higher_order_max_penalty=args.higher_order_max_penalty,
+        higher_order_large_cost=args.higher_order_large_cost,
         progress=args.progress,
     )
 

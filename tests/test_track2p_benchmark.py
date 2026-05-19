@@ -8,6 +8,10 @@ import numpy as np
 import pytest
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
+    _config_from_args,
+    _higher_order_consistency_config,
+    _variant_name,
+    build_arg_parser,
     format_benchmark_table,
     run_track2p_benchmark,
 )
@@ -125,6 +129,43 @@ def _install_fake_multisession_assignment(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "pyrecest.utils.multisession_assignment", fake_assignment
     )
+
+
+def test_benchmark_cli_parses_higher_order_triplet_consistency_args():
+    parser = build_arg_parser()
+
+    args = parser.parse_args(
+        [
+            "--data",
+            "/tmp/track2p-data",
+            "--method",
+            "global-assignment",
+            "--triplet-weight",
+            "0.75",
+            "--triplet-support-top-k",
+            "3",
+            "--triplet-support-cost-cap",
+            "1.5",
+            "--triplet-max-penalty",
+            "0.9",
+            "--triplet-large-cost",
+            "9999",
+        ]
+    )
+
+    config = _config_from_args(args)
+    higher_order_config = _higher_order_consistency_config(config)
+
+    assert higher_order_config is not None
+    assert higher_order_config.triplet_weight == pytest.approx(0.75)
+    assert higher_order_config.support_top_k == 3
+    assert higher_order_config.support_cost_cap == pytest.approx(1.5)
+    assert higher_order_config.max_penalty == pytest.approx(0.9)
+    assert higher_order_config.large_cost == pytest.approx(9999.0)
+    assert _variant_name(
+        config.cost,
+        higher_order_consistency_config=higher_order_config,
+    ).endswith("+ triplet consistency")
 
 
 def test_track2p_baseline_benchmark_scores_track2p_output_only_as_smoke_test(

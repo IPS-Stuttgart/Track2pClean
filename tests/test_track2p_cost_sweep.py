@@ -11,7 +11,9 @@ from bayescatrack.experiments.track2p_benchmark import (
 )
 from bayescatrack.experiments.track2p_cost_sweep import (
     CostSweepConfig,
+    _config_from_args,
     _parse_cost_scales,
+    build_arg_parser,
     _parse_nonnegative_values,
     _parse_positive_values,
     _parse_thresholds,
@@ -189,6 +191,85 @@ def test_track2p_cost_sweep_varies_start_end_and_gap(
     result_dicts = [row.to_dict() for row in rows]
     assert [row["sweep_count"] for row in result_dicts] == [4, 4, 4, 4]
     assert [row["start_cost"] for row in result_dicts] == [0.5, 0.5, 2.0, 2.0]
+
+
+def test_track2p_cost_sweep_applies_higher_order_triplet_consistency(
+    tmp_path, monkeypatch, write_raw_npy_session
+):
+    subject_dir = tmp_path / "jm001"
+    _write_subject(subject_dir, write_raw_npy_session)
+
+    solver_calls = []
+
+    class SolverResult:
+        tracks = [{0: 0, 1: 0, 2: 0}, {0: 1, 1: 1, 2: 1}]
+        matched_edges = []
+        total_cost = 0.0
+
+    def fake_solver(pairwise_costs, **kwargs):
+        solver_calls.append((pairwise_costs, kwargs))
+        return SolverResult()
+
+    monkeypatch.setattr(
+        sweep_module,
+        "build_registered_pairwise_costs",
+        lambda sessions, **kwargs: {
+            (0, 1): np.array([[0.1, 3.0], [3.0, 0.1]], dtype=float),
+            (1, 2): np.array([[0.1, 3.0], [3.0, 0.1]], dtype=float),
+            (0, 2): np.array([[0.2, 0.25], [0.3, 0.2]], dtype=float),
+        },
+    )
+    monkeypatch.setattr(
+        sweep_module,
+        "_load_pyrecest_multisession_solver",
+        lambda: fake_solver,
+    )
+
+    rows = run_track2p_cost_sweep(
+        CostSweepConfig(
+            benchmark=Track2pBenchmarkConfig(
+                data=subject_dir,
+                method="global-assignment",
+                cost="registered-iou",
+                allow_track2p_as_reference_for_smoke_test=True,
+                higher_order_triplet_weight=1.0,
+                higher_order_support_top_k=2,
+                higher_order_support_cost_cap=0.5,
+                higher_order_max_penalty=2.0,
+                progress=False,
+            ),
+            cost_scales=(1.0,),
+            cost_thresholds=(None,),
+        )
+    )
+
+    assert len(solver_calls) == 1
+    adjusted_costs = solver_calls[0][0]
+    np.testing.assert_allclose(adjusted_costs[(0, 2)][0, 0], 0.2)
+    np.testing.assert_allclose(adjusted_costs[(0, 2)][1, 1], 0.2)
+    np.testing.assert_allclose(adjusted_costs[(0, 2)][0, 1], 2.25)
+    np.testing.assert_allclose(adjusted_costs[(0, 2)][1, 0], 2.3)
+    assert rows[0].variant.endswith("+ triplet consistency")
+
+
+def test_cost_sweep_parser_passes_higher_order_triplet_config():
+    parser = build_arg_parser()
+    args = parser.parse_args(
+        [
+            "--data",
+            "/tmp/track2p-data",
+            "--cost-scales",
+            "1",
+            "--cost-thresholds",
+            "none",
+            "--higher-order-triplet-weight",
+            "0.5",
+        ]
+    )
+
+    config = _config_from_args(args)
+
+    assert config.benchmark.higher_order_triplet_weight == pytest.approx(0.5)
 
 
 def test_cost_sweep_parser_accepts_none_thresholds():

@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    apply_higher_order_consistency,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     _load_pyrecest_multisession_solver,
     build_registered_pairwise_costs,
@@ -21,6 +24,7 @@ from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
     ProgressReporter,
+    add_higher_order_consistency_arguments,
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
     _load_reference_for_subject,
@@ -28,6 +32,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
+    _higher_order_consistency_config,
     _variant_name,
     discover_subject_dirs,
 )
@@ -115,6 +120,13 @@ def iter_track2p_cost_sweep(
 
         base_costs = _build_sweep_pairwise_costs(sessions, benchmark)
         session_sizes = tuple(int(session.plane_data.n_rois) for session in sessions)
+        higher_order_config = _higher_order_consistency_config(benchmark)
+        if higher_order_config is not None:
+            base_costs = apply_higher_order_consistency(
+                base_costs,
+                session_sizes=session_sizes,
+                config=higher_order_config,
+            )
 
         for run in runs:
             progress.step(
@@ -148,7 +160,10 @@ def iter_track2p_cost_sweep(
             }
             yield SubjectBenchmarkResult(
                 subject=subject_dir.name,
-                variant=_variant_name(benchmark.cost),
+                variant=_variant_name(
+                    benchmark.cost,
+                    higher_order_consistency_config=higher_order_config,
+                ),
                 method=benchmark.method,
                 scores=scores,
                 n_sessions=reference.n_sessions,
@@ -385,6 +400,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--velocity-variance", type=float, default=25.0)
     parser.add_argument("--regularization", type=float, default=1.0e-6)
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
+    add_higher_order_consistency_arguments(parser)
     parser.add_argument(
         "--progress", action=argparse.BooleanOptionalAction, default=True
     )
@@ -455,6 +471,11 @@ def _config_from_args(args: argparse.Namespace) -> CostSweepConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_triplet_weight=args.higher_order_triplet_weight,
+        higher_order_support_top_k=args.higher_order_support_top_k,
+        higher_order_support_cost_cap=args.higher_order_support_cost_cap,
+        higher_order_max_penalty=args.higher_order_max_penalty,
+        higher_order_large_cost=args.higher_order_large_cost,
         progress=args.progress,
     )
     return CostSweepConfig(
