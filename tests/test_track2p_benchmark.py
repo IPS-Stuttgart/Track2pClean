@@ -8,6 +8,9 @@ import numpy as np
 import pytest
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
+    _config_from_args,
+    apply_benchmark_preset,
+    build_arg_parser,
     format_benchmark_table,
     run_track2p_benchmark,
 )
@@ -125,6 +128,46 @@ def _install_fake_multisession_assignment(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "pyrecest.utils.multisession_assignment", fake_assignment
     )
+
+
+def test_roi_aware_tuned_benchmark_preset_exposes_stronger_default_row(tmp_path):
+    args = build_arg_parser().parse_args(
+        [
+            "--data",
+            str(tmp_path),
+            "--method",
+            "global-assignment",
+            "--benchmark-preset",
+            "roi-aware-tuned",
+        ]
+    )
+
+    config = apply_benchmark_preset(
+        Track2pBenchmarkConfig(
+            data=args.data,
+            method=args.method,
+            benchmark_preset=args.benchmark_preset,
+        )
+    )
+
+    assert config.cost == "roi-aware"
+    assert config.max_gap == 2
+    assert config.transform_type == "affine"
+    assert config.start_cost == pytest.approx(1.0)
+    assert config.end_cost == pytest.approx(1.0)
+    assert config.gap_penalty == pytest.approx(0.6)
+    assert config.cost_threshold == pytest.approx(2.0)
+
+
+def test_benchmark_preset_rejects_non_global_assignment_method(tmp_path):
+    with pytest.raises(ValueError, match="method='global-assignment'"):
+        apply_benchmark_preset(
+            Track2pBenchmarkConfig(
+                data=tmp_path,
+                method="track2p-baseline",
+                benchmark_preset="roi-aware-tuned",
+            )
+        )
 
 
 def test_track2p_baseline_benchmark_scores_track2p_output_only_as_smoke_test(
@@ -304,6 +347,60 @@ def test_benchmark_recomputes_f1_from_counts_when_no_links_match(
     assert result["complete_track_f1"] == pytest.approx(0.0)
 
 
+def test_benchmark_reports_complete_track_damage_diagnostics(
+    tmp_path, write_raw_npy_session
+):
+    subject_dir = tmp_path / "jm008"
+    _write_subject(subject_dir, write_raw_npy_session)
+    _write_ground_truth_csv(
+        subject_dir,
+        ("2024-05-01_a", "2024-05-02_a", "2024-05-03_a"),
+        ((0, 0, 0),),
+    )
+
+    track2p_dir = subject_dir / "track2p"
+    np.save(
+        track2p_dir / "track_ops.npy",
+        {
+            "all_ds_path": np.array(
+                [
+                    str(subject_dir / "2024-05-01_a"),
+                    str(subject_dir / "2024-05-02_a"),
+                    str(subject_dir / "2024-05-03_a"),
+                ],
+                dtype=object,
+            ),
+            "vector_curation_plane_0": np.array([1.0]),
+        },
+        allow_pickle=True,
+    )
+    np.save(
+        track2p_dir / "plane0_suite2p_indices.npy",
+        np.array([[0, 0, -1]], dtype=object),
+        allow_pickle=True,
+    )
+
+    rows = run_track2p_benchmark(
+        Track2pBenchmarkConfig(data=subject_dir, method="track2p-baseline")
+    )
+
+    result = rows[0].to_dict()
+    assert result["complete_track_f1"] == pytest.approx(0.0)
+    assert result["adjacent_link_true_positives"] == 1
+    assert result["adjacent_link_false_positives"] == 0
+    assert result["adjacent_link_false_negatives"] == 1
+    assert result["adjacent_link_precision"] == pytest.approx(1.0)
+    assert result["adjacent_link_recall"] == pytest.approx(0.5)
+    assert result["reference_track_mean_best_session_recall"] == pytest.approx(
+        2 / 3
+    )
+    assert result["reference_track_mean_missing_sessions"] == pytest.approx(1.0)
+    assert result["reference_single_session_near_misses"] == 1
+    assert result["reference_near_miss_fraction"] == pytest.approx(1.0)
+    assert result["reference_track_mean_fragment_count"] == pytest.approx(1.0)
+    assert "adjacent_link_recall" in format_benchmark_table([result])
+
+
 def test_ground_truth_csv_validation_catches_filtered_stat_rows(tmp_path):
     subject_dir = tmp_path / "jm003"
     iscell = np.array([[1.0, 0.95], [0.0, 0.1], [1.0, 0.9]], dtype=float)
@@ -333,6 +430,32 @@ def test_ground_truth_csv_validation_catches_filtered_stat_rows(tmp_path):
     assert result["pairwise_recall"] == pytest.approx(1.0)
     assert result["pairwise_precision"] == pytest.approx(1.0)
     assert result["dropped_prediction_tracks"] == 1
+
+
+def test_ground_truth_csv_validation_identifies_public_subset_index_space(tmp_path):
+    subject_dir = tmp_path / "jm008"
+    iscell = np.ones((3, 2), dtype=float)
+    _write_suite2p_session(subject_dir, "2024-05-01_a", iscell=iscell)
+    _write_suite2p_session(subject_dir, "2024-05-02_a", iscell=iscell)
+    _write_ground_truth_csv(
+        subject_dir,
+        ("2024-05-01_a", "2024-05-02_a"),
+        ((0, 0), (4, 4)),
+    )
+
+    config = Track2pBenchmarkConfig(
+        data=subject_dir,
+        method="track2p-baseline",
+        input_format="suite2p",
+        include_non_cells=True,
+    )
+    with pytest.raises(ValueError) as exc_info:
+        run_track2p_benchmark(config)
+
+    message = str(exc_info.value)
+    assert "larger Suite2p/stat.npy row space" in message
+    assert "full pre-Track2p Suite2p outputs" in message
+    assert "audit-manual-gt-rois" in message
 
 
 def test_ground_truth_scoring_filters_predictions_to_reference_seed_rois(tmp_path):
@@ -391,3 +514,68 @@ def test_global_assignment_benchmark_uses_skip_edges(
     assert result["pairwise_f1"] == pytest.approx(2 / 3)
     assert result["complete_track_f1"] == pytest.approx(2 / 3)
     assert result["complete_tracks"] == 1
+
+
+def test_track2p_benchmark_cli_parses_higher_order_json(tmp_path):
+    args = build_arg_parser().parse_args(
+        [
+            "--data",
+            str(tmp_path),
+            "--method",
+            "global-assignment",
+            "--higher-order-json",
+            '{"triplet_weight":0.25,"support_top_k":4,"support_cost_cap":3.5}',
+        ]
+    )
+
+    config = _config_from_args(args)
+
+    assert config.higher_order_consistency_config == {
+        "triplet_weight": 0.25,
+        "support_top_k": 4,
+        "support_cost_cap": 3.5,
+    }
+
+
+def test_global_assignment_benchmark_threads_higher_order_consistency_config(
+    tmp_path, monkeypatch, write_raw_npy_session
+):
+    subject_dir = tmp_path / "jm008"
+    _write_subject(subject_dir, write_raw_npy_session)
+    _install_fake_multisession_assignment(monkeypatch)
+
+    from bayescatrack.association import pyrecest_global_assignment as global_assignment
+
+    monkeypatch.setattr(
+        global_assignment,
+        "register_plane_pair",
+        lambda _reference, moving, **_kwargs: moving,
+    )
+    captured = {}
+
+    def capture_higher_order_config(pairwise_costs, *, session_sizes, config):
+        captured["session_sizes"] = tuple(session_sizes)
+        captured["config"] = dict(config)
+        return dict(pairwise_costs)
+
+    monkeypatch.setattr(
+        global_assignment,
+        "apply_higher_order_consistency",
+        capture_higher_order_config,
+    )
+
+    run_track2p_benchmark(
+        Track2pBenchmarkConfig(
+            data=subject_dir,
+            method="global-assignment",
+            cost="registered-iou",
+            max_gap=2,
+            allow_track2p_as_reference_for_smoke_test=True,
+            higher_order_consistency_config={"triplet_weight": 0.5, "support_top_k": 3},
+        )
+    )
+
+    assert captured == {
+        "session_sizes": (2, 2, 2),
+        "config": {"triplet_weight": 0.5, "support_top_k": 3},
+    }

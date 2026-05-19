@@ -33,6 +33,11 @@ from bayescatrack.core.bridge import (
     Track2pSession,
     build_session_pair_association_bundle,
 )
+from bayescatrack.soft_overlap_costs import (
+    install_soft_overlap_costs,
+    pairwise_kwargs_use_soft_overlap,
+    registered_soft_iou_cost_kwargs,
+)
 from bayescatrack.track2p_registration import register_plane_pair
 
 AssociationCost = Literal[
@@ -166,6 +171,7 @@ def build_registered_pairwise_costs(
     cost: AssociationCost = "registered-iou",
     calibrated_model: CalibratedAssociationModel | None = None,
     transform_type: str = "affine",
+    registration_kwargs: Mapping[str, Any] | None = None,
     order: str = "xy",
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
@@ -204,6 +210,10 @@ def build_registered_pairwise_costs(
     base_cost_kwargs = _cost_kwargs_for_method(cost)
     if pairwise_cost_kwargs is not None:
         base_cost_kwargs.update(dict(pairwise_cost_kwargs))
+    registration_options = dict(registration_kwargs or {})
+
+    if pairwise_kwargs_use_soft_overlap(base_cost_kwargs):
+        install_soft_overlap_costs()
 
     previous_pairwise_cost_method = None
     if pairwise_kwargs_use_shifted_overlap(base_cost_kwargs):
@@ -217,6 +227,7 @@ def build_registered_pairwise_costs(
                 sessions[source_session].plane_data,
                 sessions[target_session].plane_data,
                 transform_type=transform_type,
+                registration_kwargs=registration_options,
             )
             registered_measurement_plane, empty_registered_rois = (
                 replace_empty_registered_masks(registered_measurement_plane)
@@ -285,6 +296,7 @@ def solve_global_assignment_for_sessions(
     cost: AssociationCost = "registered-iou",
     calibrated_model: CalibratedAssociationModel | None = None,
     transform_type: str = "affine",
+    registration_kwargs: Mapping[str, Any] | None = None,
     start_cost: float = 5.0,
     end_cost: float = 5.0,
     gap_penalty: float = 1.0,
@@ -315,6 +327,7 @@ def solve_global_assignment_for_sessions(
         cost=cost,
         calibrated_model=calibrated_model,
         transform_type=transform_type,
+        registration_kwargs=registration_kwargs,
         order=order,
         weighted_centroids=weighted_centroids,
         velocity_variance=velocity_variance,
@@ -425,6 +438,8 @@ def tracks_to_suite2p_index_matrix(
 def _cost_kwargs_for_method(cost: AssociationCost) -> dict[str, Any]:
     if cost == "registered-iou":
         return registered_iou_cost_kwargs()
+    if cost == "registered-soft-iou":
+        return dict(registered_soft_iou_cost_kwargs())
     if cost == "registered-shifted-iou":
         return registered_shifted_iou_cost_kwargs()
     if cost == "roi-aware-shifted":

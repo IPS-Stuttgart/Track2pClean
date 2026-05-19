@@ -82,9 +82,28 @@ If a subject directory contains `ground_truth.csv`, the benchmark can use it as
 the reference automatically. You can also point `--reference` at a
 `ground_truth.csv` file or at a separate ground-truth root and declare
 `--reference-kind manual-gt`. Ground-truth ROI indices are validated against the
-loaded Suite2p ROI indices, so references that use raw `stat.npy` row indices
-will fail clearly if Suite2p cell filtering removed any referenced ROI; use
-`--include-non-cells` when benchmarking against all `stat.npy` rows.
+loaded Suite2p ROI indices. References that use raw `stat.npy` row indices fail
+clearly if Suite2p cell filtering removed any referenced ROI; use
+`--include-non-cells` when benchmarking against all `stat.npy` rows. If the
+maximum manual-GT ROI index is outside the loaded ROI index range, the dataset is
+most likely a reduced or reindexed public subset rather than the full pre-Track2p
+Suite2p output. In that case, obtain the full Suite2p folders or an explicit
+ROI-ID remapping before interpreting BayesCaTrack-vs-Track2p numbers.
+
+Audit the manual-GT/Suite2p ROI index space before paper-facing runs:
+
+```bash
+python -m bayescatrack benchmark audit-manual-gt-rois \
+  --data /path/to/track2p_zenodo \
+  --reference /path/to/manual_ground_truth_root \
+  --reference-kind manual-gt \
+  --include-non-cells \
+  --fail-on-incompatible
+```
+
+For a compact compatibility-only preflight check, use
+`python -m bayescatrack benchmark validate-track2p-inputs` with the same
+`--data`, `--reference`, and `--reference-kind manual-gt` arguments.
 
 The benchmark refuses Track2p outputs and already row-aligned Suite2p rows as
 references by default because those are not independent evidence for a

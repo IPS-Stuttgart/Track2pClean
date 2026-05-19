@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -21,6 +21,10 @@ from bayescatrack.association.pyrecest_global_assignment import (
 )
 from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.evaluation.calibration_diagnostics import calibration_summary
+from bayescatrack.evaluation.solver_rejection_ledger import (
+    build_solver_rejection_ledger,
+    write_solver_rejection_ledger_rows,
+)
 from bayescatrack.experiments.calibration_hard_negatives import (
     CandidateHardNegativeOptions,
     balanced_binary_sample_weights,
@@ -37,6 +41,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
     discover_subject_dirs,
+    higher_order_consistency_enabled,
     solve_configured_global_assignment,
 )
 from bayescatrack.reference import Track2pReference
@@ -137,6 +142,7 @@ def run_track2p_loso_calibration(
     sample_weight_strategy = _validate_sample_weight_strategy(sample_weight_strategy)
     logistic_model_kwargs = _loso_logistic_model_kwargs(model_kwargs)
     folds: list[LosoCalibrationFold] = []
+    solver_ledger_rows: list[dict[str, float | int | str]] = []
 
     for held_out_index, held_out in enumerate(subjects):
         training_subjects = tuple(
@@ -182,18 +188,38 @@ def run_track2p_loso_calibration(
         base_scores = _score_prediction_against_reference(
             predicted_matrix, held_out.reference, config=config
         )
+        solver_ledger_summary: dict[str, float | int] = {}
+        if config.solver_ledger:
+            ledger = build_solver_rejection_ledger(
+                assignment,
+                held_out.sessions,
+                held_out.reference,
+                subject=held_out.subject_name,
+                curated_only=config.curated_only,
+                cost_threshold=config.cost_threshold,
+                gap_penalty=config.gap_penalty,
+                rank_k=config.solver_ledger_rank_k,
+                large_cost=config.solver_ledger_large_cost,
+            )
+            solver_ledger_summary = ledger.summary
+            solver_ledger_rows.extend(ledger.rows)
         positives = int(np.sum(training_labels))
         scores: dict[str, float | int | str] = {
             **base_scores,
+            **solver_ledger_summary,
             "training_examples": int(training_labels.shape[0]),
             "positive_examples": positives,
             "negative_examples": int(training_labels.shape[0] - positives),
+            "calibration_model": "logistic",
             "calibration_sample_weight_strategy": sample_weight_strategy,
             "calibration_class_weight": _stringify_class_weight(
                 logistic_model_kwargs.get("class_weight")
             ),
             **calibration_scores,
         }
+        variant = "Calibrated costs + LOSO global assignment"
+        if higher_order_consistency_enabled(config.higher_order_consistency_config):
+            variant += " + triplet consistency"
         folds.append(
             LosoCalibrationFold(
                 held_out_subject=held_out.subject_name,
@@ -202,7 +228,7 @@ def run_track2p_loso_calibration(
                 ),
                 benchmark=SubjectBenchmarkResult(
                     subject=held_out.subject_name,
-                    variant="Calibrated costs + LOSO global assignment",
+                    variant=variant,
                     method=config.method,
                     scores=scores,
                     n_sessions=held_out.reference.n_sessions,
@@ -212,6 +238,8 @@ def run_track2p_loso_calibration(
                 positive_examples=positives,
             )
         )
+    if config.solver_ledger_output is not None:
+        write_solver_rejection_ledger_rows(solver_ledger_rows, config.solver_ledger_output)
     return LosoCalibrationResult(
         folds=tuple(folds), feature_names=feature_names, max_gap=int(config.max_gap)
     )
@@ -339,6 +367,7 @@ def _reference_training_options(
     return ReferenceTrainingOptions(
         curated_only=config.curated_only,
         transform_type=config.transform_type,
+        registration_kwargs=config.registration_kwargs,
         order=config.order,
         weighted_centroids=config.weighted_centroids,
         velocity_variance=config.velocity_variance,
@@ -347,4 +376,29 @@ def _reference_training_options(
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
         activity_trace_source=config.activity_trace_source,
         activity_event_threshold=config.activity_event_threshold,
+    )
+
+
+def pairwise_cost_kwargs_for_calibration_features(
+    pairwise_cost_kwargs: Mapping[str, Any] | None,
+    feature_names: Sequence[str],
+) -> dict[str, Any] | None:
+    """Return pairwise-cost kwargs suitable for the requested calibration features."""
+
+    kwargs = dict(pairwise_cost_kwargs or {})
+    return kwargs or None
+
+
+def _config_with_pairwise_kwargs_for_features(
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+) -> Track2pBenchmarkConfig:
+    """Return a config whose pairwise kwargs are compatible with feature extraction."""
+
+    return replace(
+        config,
+        pairwise_cost_kwargs=pairwise_cost_kwargs_for_calibration_features(
+            config.pairwise_cost_kwargs,
+            feature_names,
+        ),
     )

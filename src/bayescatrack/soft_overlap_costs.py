@@ -8,11 +8,32 @@ reference ROI, but exact-pixel IoU remains zero.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
 from bayescatrack.core import _bridge_impl
 from bayescatrack.core.bridge import CalciumPlaneData
+
+SOFT_OVERLAP_KWARG_NAMES = frozenset(
+    (
+        "soft_iou_weight",
+        "soft_iou_radius",
+        "distance_transform_overlap_weight",
+        "distance_transform_overlap_radius",
+        "distance_transform_overlap_scale",
+    )
+)
+
+
+def pairwise_kwargs_use_soft_overlap(
+    pairwise_cost_kwargs: Mapping[str, Any] | None,
+) -> bool:
+    """Return whether pairwise cost kwargs require soft-overlap support."""
+
+    if not pairwise_cost_kwargs:
+        return False
+    return any(key in pairwise_cost_kwargs for key in SOFT_OVERLAP_KWARG_NAMES)
 
 
 def registered_soft_iou_cost_kwargs(
@@ -380,4 +401,8 @@ def _dilate_binary_mask_stack(masks: np.ndarray, radius: int) -> np.ndarray:
     return dilated
 
 
-__all__ = ["install_soft_overlap_costs", "registered_soft_iou_cost_kwargs"]
+__all__ = [
+    "install_soft_overlap_costs",
+    "pairwise_kwargs_use_soft_overlap",
+    "registered_soft_iou_cost_kwargs",
+]

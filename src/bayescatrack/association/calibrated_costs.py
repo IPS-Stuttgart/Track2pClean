@@ -42,6 +42,29 @@ _ACTIVITY_FEATURES = {
     *ACTIVITY_TIEBREAKER_FEATURES,
 }
 
+SPLIT_ROI_STAT_FEATURES = (
+    "roi_stat_radius_cost",
+    "roi_stat_aspect_ratio_cost",
+    "roi_stat_compact_cost",
+    "roi_stat_footprint_cost",
+    "roi_stat_skew_cost",
+    "roi_stat_std_cost",
+    "roi_stat_npix_cost",
+    "roi_stat_npix_norm_cost",
+)
+
+LOCAL_EVIDENCE_ASSOCIATION_FEATURES = (
+    "local_patch_cost",
+    "local_patch_available",
+)
+
+_OPTIONAL_ZERO_FEATURES = (
+    set(_ACTIVITY_FEATURES)
+    | set(SPLIT_ROI_STAT_FEATURES)
+    | set(LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
+    | {"local_patch_correlation"}
+)
+
 DEFAULT_ASSOCIATION_FEATURES = (
     "centroid_distance",
     "mahalanobis_centroid_distance",
@@ -51,6 +74,8 @@ DEFAULT_ASSOCIATION_FEATURES = (
     "covariance_shape_cost",
     "covariance_logdet_cost",
     "roi_feature_cost",
+    *SPLIT_ROI_STAT_FEATURES,
+    *LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
     "cell_probability_cost",
     "activity_similarity_cost",
     "activity_similarity_available",
@@ -61,8 +86,6 @@ ACTIVITY_TIEBREAKER_ASSOCIATION_FEATURES = tuple(
         (*DEFAULT_ASSOCIATION_FEATURES, *ACTIVITY_TIEBREAKER_FEATURES)
     )
 )
-SPLIT_ROI_STAT_FEATURES: tuple[str, ...] = ()
-LOCAL_EVIDENCE_ASSOCIATION_FEATURES: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -142,6 +165,7 @@ class ReferenceTrainingOptions:
 
     curated_only: bool = False
     transform_type: str = "affine"
+    registration_kwargs: Mapping[str, Any] | None = None
     order: str = "xy"
     weighted_centroids: bool = False
     velocity_variance: float = 25.0
@@ -421,7 +445,7 @@ def _feature_transforms_for(
             transforms[feature_name] = lambda components: 1.0 - _finite_component(
                 components, "activity_similarity"
             )
-        elif feature_name in _ACTIVITY_FEATURES:
+        elif feature_name in _OPTIONAL_ZERO_FEATURES:
             transforms[feature_name] = _optional_zero_component_transform(feature_name)
         elif feature_name == "session_gap":
             transforms[feature_name] = _session_gap_transform
@@ -455,6 +479,7 @@ def _build_training_bundle(
         sessions[session_a].plane_data,
         sessions[session_b].plane_data,
         transform_type=options.transform_type,
+        registration_kwargs=options.registration_kwargs,
     )
     registered_measurement_plane, _ = replace_empty_registered_masks(
         registered_measurement_plane

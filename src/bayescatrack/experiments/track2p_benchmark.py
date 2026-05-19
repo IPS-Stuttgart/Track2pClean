@@ -7,11 +7,14 @@ import csv
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    HigherOrderConsistencyConfig,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,
@@ -22,6 +25,10 @@ from bayescatrack.core.bridge import (
     Track2pSession,
     find_track2p_session_dirs,
     load_track2p_subject,
+)
+from bayescatrack.evaluation.solver_rejection_ledger import (
+    build_solver_rejection_ledger,
+    write_solver_rejection_ledger_rows,
 )
 from bayescatrack.evaluation.track2p_metrics import (
     normalize_track_matrix,
@@ -34,10 +41,12 @@ from bayescatrack.reference import (
     load_aligned_subject_reference,
     load_track2p_reference,
 )
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 ReferenceKind = Literal["auto", "manual-gt", "track2p-output", "aligned-subject-rows"]
 BenchmarkMethod = Literal["track2p-baseline", "global-assignment", "oracle-gt-links"]
 BenchmarkSplit = Literal["subject", "leave-one-subject-out"]
+CalibrationModel = Literal["logistic", "monotone-ranker"]
 OutputFormat = Literal["table", "json", "csv"]
 GROUND_TRUTH_CSV_NAME = "ground_truth.csv"
 GROUND_TRUTH_REFERENCE_SOURCE = "ground_truth_csv"
@@ -45,6 +54,34 @@ ALIGNED_REFERENCE_SOURCE = "aligned_subject_rows"
 TRACK2P_REFERENCE_SOURCES = frozenset(
     {"track2p_output_suite2p_indices", "track2p_output_match_mat"}
 )
+GLOBAL_ASSIGNMENT_PRESETS: dict[BenchmarkPreset, dict[str, Any]] = {
+    "none": {},
+    # Keep the registered-IoU ablation, but use the solver priors that have
+    # repeatedly been more appropriate for sparse longitudinal Track2p rows
+    # than the conservative smoke-test defaults.
+    "registered-iou-tuned": {
+        "cost": "registered-iou",
+        "max_gap": 2,
+        "transform_type": "affine",
+        "start_cost": 1.0,
+        "end_cost": 1.0,
+        "gap_penalty": 0.6,
+        "cost_threshold": 2.0,
+    },
+    # Stronger BayesCaTrack row: use the ROI-aware cost family instead of the
+    # IoU-only ablation, while retaining the same tuned global-assignment
+    # priors. This makes the paper-facing comparison less dependent on a weak
+    # default row without removing the ablation from the CLI.
+    "roi-aware-tuned": {
+        "cost": "roi-aware",
+        "max_gap": 2,
+        "transform_type": "affine",
+        "start_cost": 1.0,
+        "end_cost": 1.0,
+        "gap_penalty": 0.6,
+        "cost_threshold": 2.0,
+    },
+}
 
 
 # pylint: disable=too-many-instance-attributes
@@ -55,6 +92,7 @@ class Track2pBenchmarkConfig:
     data: Path
     method: BenchmarkMethod
     split: BenchmarkSplit = "subject"
+    benchmark_preset: BenchmarkPreset = "none"
     plane_name: str = "plane0"
     input_format: str = "auto"
     reference: Path | None = None
@@ -66,6 +104,7 @@ class Track2pBenchmarkConfig:
     cost: AssociationCost = "registered-iou"
     max_gap: int = 2
     transform_type: str = "affine"
+    registration_kwargs: dict[str, Any] | None = None
     start_cost: float = 5.0
     end_cost: float = 5.0
     gap_penalty: float = 1.0
@@ -80,6 +119,9 @@ class Track2pBenchmarkConfig:
     velocity_variance: float = 25.0
     regularization: float = 1.0e-6
     pairwise_cost_kwargs: dict[str, Any] | None = None
+    higher_order_consistency_config: (
+        HigherOrderConsistencyConfig | dict[str, Any] | None
+    ) = None
     activity_tie_breaker_weight: float = 0.0
     activity_tie_breaker_component: str = "activity_tiebreaker_cost"
     activity_tie_breaker_neutral_cost: float = 0.5
@@ -90,6 +132,12 @@ class Track2pBenchmarkConfig:
     activity_event_threshold: float = 0.0
     load_neuropil_traces: bool = False
     progress: bool = False
+    calibration_model: CalibrationModel = "logistic"
+    monotone_ranker_kwargs: dict[str, Any] | None = None
+    solver_ledger: bool = False
+    solver_ledger_rank_k: int = 1
+    solver_ledger_large_cost: float = 1.0e5
+    solver_ledger_output: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -137,21 +185,57 @@ class ProgressReporter:
         )
 
 
+def apply_benchmark_preset(config: Track2pBenchmarkConfig) -> Track2pBenchmarkConfig:
+    """Return ``config`` with a named global-assignment benchmark preset applied."""
+
+    preset = config.benchmark_preset
+    try:
+        overrides = GLOBAL_ASSIGNMENT_PRESETS[preset]
+    except KeyError as exc:
+        raise ValueError(f"Unknown benchmark preset: {preset!r}") from exc
+
+    if not overrides:
+        return config
+    if config.method != "global-assignment":
+        raise ValueError(
+            "--benchmark-preset is only valid with method='global-assignment'"
+        )
+    return replace(config, **overrides)
+
+
 def run_track2p_benchmark(
     config: Track2pBenchmarkConfig,
 ) -> list[SubjectBenchmarkResult]:
     """Run a Track2p benchmark over one subject directory or a dataset root."""
+
+    config = apply_benchmark_preset(config)
 
     if config.split == "leave-one-subject-out":
         if config.method != "global-assignment" or config.cost != "calibrated":
             raise ValueError(
                 "LOSO calibration requires method='global-assignment' and cost='calibrated'"
             )
-        from bayescatrack.experiments.track2p_loso_calibration import (
-            run_track2p_loso_calibration,
-        )
+        if config.calibration_model == "logistic":
+            from bayescatrack.experiments.track2p_loso_calibration import (
+                run_track2p_loso_calibration,
+            )
 
-        return run_track2p_loso_calibration(config).to_benchmark_results()
+            return run_track2p_loso_calibration(config).to_benchmark_results()
+        if config.calibration_model == "monotone-ranker":
+            from bayescatrack.experiments.track2p_monotone_loso_calibration import (
+                run_track2p_monotone_loso_calibration,
+            )
+
+            return run_track2p_monotone_loso_calibration(
+                config,
+                monotone_options=_monotone_ranker_options_from_config(config),
+            ).to_benchmark_results()
+        raise ValueError(f"Unsupported calibration_model: {config.calibration_model!r}")
+    if config.calibration_model != "logistic":
+        raise ValueError(
+            "calibration_model='monotone-ranker' requires "
+            "split='leave-one-subject-out' and cost='calibrated'"
+        )
     if config.cost == "calibrated":
         raise ValueError("cost='calibrated' requires split='leave-one-subject-out'")
 
@@ -162,6 +246,7 @@ def run_track2p_benchmark(
         )
 
     results: list[SubjectBenchmarkResult] = []
+    solver_ledger_rows: list[dict[str, float | int | str]] = []
     progress = ProgressReporter(
         len(subject_dirs), enabled=config.progress, label="benchmark"
     )
@@ -177,12 +262,19 @@ def run_track2p_benchmark(
             _validate_reference_roi_indices(
                 reference, _load_subject_sessions(subject_dir, config)
             )
-        predicted_matrix, variant = _predict_subject_tracks(
+        (
+            predicted_matrix,
+            variant,
+            solver_ledger_summary,
+            subject_ledger_rows,
+        ) = _predict_subject_tracks(
             subject_dir, config, reference=reference
         )
+        solver_ledger_rows.extend(subject_ledger_rows)
         scores = _score_prediction_against_reference(
             predicted_matrix, reference, config=config
         )
+        scores = {**scores, **solver_ledger_summary}
         results.append(
             SubjectBenchmarkResult(
                 subject=subject_dir.name,
@@ -193,7 +285,26 @@ def run_track2p_benchmark(
                 reference_source=reference.source,
             )
         )
+    if config.solver_ledger_output is not None:
+        write_solver_rejection_ledger_rows(solver_ledger_rows, config.solver_ledger_output)
     return results
+
+
+def _monotone_ranker_options_from_config(
+    config: Track2pBenchmarkConfig,
+) -> Any:
+    """Build monotone ranker options from the main benchmark config."""
+
+    from bayescatrack.association.monotone_ranker import MonotoneRankerOptions
+
+    raw_kwargs = config.monotone_ranker_kwargs
+    if raw_kwargs is None:
+        kwargs: dict[str, Any] = {}
+    elif isinstance(raw_kwargs, Mapping):
+        kwargs = dict(raw_kwargs)
+    else:
+        raise ValueError("monotone_ranker_kwargs must be a JSON object/mapping")
+    return MonotoneRankerOptions(**kwargs)
 
 
 def discover_subject_dirs(data_path: str | Path) -> list[Path]:
@@ -217,6 +328,10 @@ def format_benchmark_table(rows: Sequence[dict[str, float | int | str]]) -> str:
         "variant",
         "pairwise_f1",
         "complete_track_f1",
+        "adjacent_link_recall",
+        "reference_track_mean_best_session_recall",
+        "reference_single_session_near_misses",
+        "reference_track_mean_fragment_count",
         "pairwise_precision",
         "pairwise_recall",
         "complete_tracks",
@@ -272,10 +387,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Benchmark variant to run",
     )
     parser.add_argument(
+        "--benchmark-preset",
+        default="none",
+        choices=tuple(GLOBAL_ASSIGNMENT_PRESETS),
+        help="Optional global-assignment preset for paper-facing rows",
+    )
+    parser.add_argument(
         "--split",
         default="subject",
         choices=("subject", "leave-one-subject-out"),
         help="Evaluation split policy",
+    )
+    parser.add_argument(
+        "--calibration-model",
+        default="logistic",
+        choices=("logistic", "monotone-ranker"),
+        help="Model used for cost='calibrated' leave-one-subject-out runs",
     )
     parser.add_argument(
         "--plane", dest="plane_name", default="plane0", help="Plane name such as plane0"
@@ -342,8 +469,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_TYPES,
         help="Track2p registration transform type",
+    )
+    parser.add_argument(
+        "--registration-kwargs-json",
+        default=None,
+        help="JSON object forwarded to the selected registration backend",
     )
     parser.add_argument(
         "--start-cost", type=float, default=5.0, help="PyRecEst track start cost"
@@ -419,6 +551,43 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="JSON object merged into pairwise cost kwargs",
     )
     parser.add_argument(
+        "--higher-order-json",
+        default=None,
+        help=(
+            "JSON object configuring triplet-projected higher-order consistency penalties, "
+            'for example {"triplet_weight":0.25,"support_top_k":8,"support_cost_cap":4.0}'
+        ),
+    )
+    parser.add_argument(
+        "--monotone-ranker-kwargs-json",
+        default=None,
+        help="JSON object passed to MonotoneRankerOptions for monotone calibrated LOSO runs",
+    )
+    add_higher_order_consistency_arguments(parser)
+    parser.add_argument(
+        "--solver-ledger",
+        action="store_true",
+        help="Add cause-specific manual-GT edge rejection diagnostics to benchmark rows",
+    )
+    parser.add_argument(
+        "--solver-ledger-rank-k",
+        type=int,
+        default=1,
+        help="Rank cutoff used for top-k rejection causes in the solver ledger",
+    )
+    parser.add_argument(
+        "--solver-ledger-large-cost",
+        type=float,
+        default=1.0e5,
+        help="Cost floor treated as an empty-ROI/large-cost failure in the ledger",
+    )
+    parser.add_argument(
+        "--solver-ledger-output",
+        type=Path,
+        default=None,
+        help="Optional detailed per-GT-edge solver rejection CSV output path",
+    )
+    parser.add_argument(
         "--activity-tie-breaker-weight",
         type=float,
         default=0.0,
@@ -487,6 +656,60 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def add_higher_order_consistency_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add shared CLI knobs for triplet-projected consistency penalties."""
+
+    group = parser.add_argument_group("higher-order consistency")
+    group.add_argument(
+        "--higher-order-triplet-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for triplet-projected higher-order penalties. "
+            "The default 0 disables the adjustment."
+        ),
+    )
+    group.add_argument(
+        "--higher-order-support-top-k",
+        type=int,
+        default=8,
+        help="Number of third-session support candidates retained per shared ROI",
+    )
+    group.add_argument(
+        "--higher-order-support-cost-cap",
+        type=float,
+        default=4.0,
+        help="Maximum pairwise edge cost considered valid third-session support",
+    )
+    group.add_argument(
+        "--higher-order-max-penalty",
+        type=float,
+        default=2.0,
+        help="Maximum unweighted penalty added to an unsupported candidate edge",
+    )
+    group.add_argument(
+        "--higher-order-large-cost",
+        type=float,
+        default=1.0e6,
+        help="Sentinel cost above which candidate edges are treated as inadmissible",
+    )
+
+
+def higher_order_consistency_config_from_args(
+    args: argparse.Namespace,
+) -> HigherOrderConsistencyConfig | None:
+    """Return a validated higher-order config from parsed CLI arguments."""
+
+    config = HigherOrderConsistencyConfig(
+        triplet_weight=float(args.higher_order_triplet_weight),
+        support_top_k=int(args.higher_order_support_top_k),
+        support_cost_cap=float(args.higher_order_support_cost_cap),
+        max_penalty=float(args.higher_order_max_penalty),
+        large_cost=float(args.higher_order_large_cost),
+    )
+    return config if config.enabled else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
@@ -506,7 +729,7 @@ def _predict_subject_tracks(
     config: Track2pBenchmarkConfig,
     *,
     reference: Track2pReference | None = None,
-) -> tuple[np.ndarray, str]:
+) -> tuple[np.ndarray, str, dict[str, float | int], list[dict[str, float | int | str]]]:
     if config.method == "track2p-baseline":
         track2p_dir = subject_dir / "track2p"
         if track2p_dir.exists():
@@ -522,7 +745,9 @@ def _predict_subject_tracks(
                 weighted_masks=config.weighted_masks,
                 exclude_overlapping_pixels=config.exclude_overlapping_pixels,
             )
-        return normalize_track_matrix(baseline.suite2p_indices), "Track2p default"
+        return (
+            normalize_track_matrix(baseline.suite2p_indices), "Track2p default", {}, []
+        )
 
     if config.method == "oracle-gt-links":
         if reference is None:
@@ -534,6 +759,8 @@ def _predict_subject_tracks(
                 seed_session=config.seed_session,
             ),
             "Oracle GT consecutive links",
+            {},
+            [],
         )
 
     if config.method != "global-assignment":
@@ -542,11 +769,29 @@ def _predict_subject_tracks(
     sessions = _load_subject_sessions(subject_dir, config)
     assignment = solve_configured_global_assignment(sessions, config)
     predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
+    solver_ledger_summary: dict[str, float | int] = {}
+    solver_ledger_rows: list[dict[str, float | int | str]] = []
+    if config.solver_ledger:
+        if reference is None:
+            raise ValueError("solver ledger diagnostics require a loaded reference")
+        ledger = build_solver_rejection_ledger(
+            assignment,
+            sessions,
+            reference,
+            subject=subject_dir.name,
+            curated_only=config.curated_only,
+            cost_threshold=config.cost_threshold,
+            gap_penalty=config.gap_penalty,
+            rank_k=config.solver_ledger_rank_k,
+            large_cost=config.solver_ledger_large_cost,
+        )
+        solver_ledger_summary = ledger.summary
+        solver_ledger_rows = list(ledger.rows)
     return (
         predicted,
-        _variant_name(
-            config.cost, activity_tie_breaker_weight=config.activity_tie_breaker_weight
-        ),
+        configured_variant_name(config),
+        solver_ledger_summary,
+        solver_ledger_rows,
     )
 
 
@@ -605,6 +850,7 @@ def solve_configured_global_assignment(
         cost=config.cost if cost is None else cost,
         calibrated_model=calibrated_model,
         transform_type=config.transform_type,
+        registration_kwargs=config.registration_kwargs,
         start_cost=config.start_cost,
         end_cost=config.end_cost,
         gap_penalty=config.gap_penalty,
@@ -622,6 +868,7 @@ def solve_configured_global_assignment(
         activity_tie_breaker_max_column_margin=config.activity_tie_breaker_max_column_margin,
         activity_trace_source=config.activity_trace_source,
         activity_event_threshold=config.activity_event_threshold,
+        higher_order_consistency_config=config.higher_order_consistency_config,
     )
 
 
@@ -643,6 +890,55 @@ def _variant_name(
     if activity_tie_breaker_weight > 0.0:
         variant += f" + activity tie-breaker (w={activity_tie_breaker_weight:g})"
     return variant
+
+
+def configured_variant_name(config: Track2pBenchmarkConfig) -> str:
+    """Return the paper-facing variant label for a full benchmark config."""
+
+    variant = _variant_name(
+        config.cost, activity_tie_breaker_weight=config.activity_tie_breaker_weight
+    )
+    if higher_order_consistency_enabled(config.higher_order_consistency_config):
+        variant += " + triplet consistency"
+    return variant
+
+
+def higher_order_consistency_enabled(
+    config: HigherOrderConsistencyConfig | Mapping[str, Any] | None,
+) -> bool:
+    """Return whether a higher-order consistency config changes pairwise costs."""
+
+    resolved = _coerce_higher_order_consistency_config(config)
+    return bool(resolved is not None and resolved.enabled)
+
+
+def higher_order_consistency_score_fields(
+    config: Track2pBenchmarkConfig,
+) -> dict[str, float | int]:
+    """Return reproducibility fields for enabled higher-order consistency."""
+
+    resolved = _coerce_higher_order_consistency_config(
+        config.higher_order_consistency_config
+    )
+    if resolved is None or not resolved.enabled:
+        return {}
+    return {
+        "higher_order_triplet_weight": float(resolved.triplet_weight),
+        "higher_order_support_top_k": int(resolved.support_top_k),
+        "higher_order_support_cost_cap": float(resolved.support_cost_cap),
+        "higher_order_max_penalty": float(resolved.max_penalty),
+        "higher_order_large_cost": float(resolved.large_cost),
+    }
+
+
+def _coerce_higher_order_consistency_config(
+    config: HigherOrderConsistencyConfig | Mapping[str, Any] | None,
+) -> HigherOrderConsistencyConfig | None:
+    if config is None:
+        return None
+    if isinstance(config, HigherOrderConsistencyConfig):
+        return config
+    return HigherOrderConsistencyConfig(**dict(config))
 
 
 # pylint: disable=too-many-return-statements,too-many-branches
@@ -863,8 +1159,12 @@ def _score_prediction_against_reference(
             seed_session=config.seed_session,
         )
 
-    scores = _with_recomputed_f1_scores(
-        score_track_matrices(predicted, reference_matrix)
+    scores = _with_track_damage_diagnostics(
+        _with_recomputed_f1_scores(
+            score_track_matrices(predicted, reference_matrix)
+        ),
+        predicted=predicted,
+        reference_matrix=reference_matrix,
     )
     if config.restrict_to_reference_seed_rois:
         scores = {
@@ -876,6 +1176,9 @@ def _score_prediction_against_reference(
                 predicted_before_filter - predicted.shape[0]
             ),
         }
+    higher_order_fields = higher_order_consistency_score_fields(config)
+    if higher_order_fields:
+        scores = {**scores, **higher_order_fields}
     return scores
 
 
@@ -898,6 +1201,173 @@ def _f1_from_counts(
     if denominator == 0:
         return 1.0
     return float(2 * true_positives / denominator)
+
+
+def _with_track_damage_diagnostics(
+    scores: Mapping[str, float | int],
+    *,
+    predicted: np.ndarray,
+    reference_matrix: np.ndarray,
+) -> dict[str, float | int]:
+    """Add diagnostics that expose complete-track metric sensitivity.
+
+    Complete-track F1 is intentionally strict: one missing session in an
+    otherwise correct longitudinal identity turns the whole row into a false
+    negative.  These auxiliary metrics keep that strict headline number while
+    revealing whether failures are isolated near misses, fragmentation, or
+    broadly missing adjacent links.
+    """
+
+    return {
+        **dict(scores),
+        **_track_damage_diagnostics(predicted, reference_matrix),
+    }
+
+
+def _track_damage_diagnostics(
+    predicted_matrix: np.ndarray,
+    reference_matrix: np.ndarray,
+) -> dict[str, float | int]:
+    predicted = normalize_track_matrix(predicted_matrix)
+    reference = normalize_track_matrix(reference_matrix)
+
+    reference_tracks = 0
+    fully_covered_reference_tracks = 0
+    reference_tracks_with_any_match = 0
+    single_session_near_misses = 0
+    best_session_recalls: list[float] = []
+    missing_session_counts: list[int] = []
+    fragment_counts: list[int] = []
+
+    for reference_row in reference:
+        valid_positions = _valid_track_positions(reference_row)
+        n_valid_sessions = len(valid_positions)
+        if n_valid_sessions == 0:
+            continue
+
+        reference_tracks += 1
+        overlaps = [
+            _track_overlap_count(predicted_row, valid_positions)
+            for predicted_row in predicted
+        ]
+        best_overlap = max(overlaps, default=0)
+        missing_sessions = n_valid_sessions - best_overlap
+        fragment_count = sum(1 for overlap in overlaps if overlap > 0)
+
+        best_session_recalls.append(best_overlap / n_valid_sessions)
+        missing_session_counts.append(missing_sessions)
+        fragment_counts.append(fragment_count)
+
+        if best_overlap == n_valid_sessions:
+            fully_covered_reference_tracks += 1
+        if best_overlap > 0:
+            reference_tracks_with_any_match += 1
+        if missing_sessions == 1:
+            single_session_near_misses += 1
+
+    adjacent_reference_links = _adjacent_link_set(reference)
+    adjacent_predicted_links = _adjacent_link_set(predicted)
+    adjacent_true_positives = len(adjacent_predicted_links & adjacent_reference_links)
+    adjacent_false_positives = len(adjacent_predicted_links - adjacent_reference_links)
+    adjacent_false_negatives = len(adjacent_reference_links - adjacent_predicted_links)
+
+    return {
+        "adjacent_link_true_positives": int(adjacent_true_positives),
+        "adjacent_link_false_positives": int(adjacent_false_positives),
+        "adjacent_link_false_negatives": int(adjacent_false_negatives),
+        "adjacent_link_precision": _precision_from_counts(
+            adjacent_true_positives, adjacent_false_positives
+        ),
+        "adjacent_link_recall": _recall_from_counts(
+            adjacent_true_positives, adjacent_false_negatives
+        ),
+        "adjacent_link_f1": _f1_from_counts(
+            adjacent_true_positives,
+            adjacent_false_positives,
+            adjacent_false_negatives,
+        ),
+        "reference_tracks": int(reference_tracks),
+        "reference_tracks_fully_covered": int(fully_covered_reference_tracks),
+        "reference_tracks_with_any_match": int(reference_tracks_with_any_match),
+        "reference_single_session_near_misses": int(single_session_near_misses),
+        "reference_near_miss_fraction": _safe_fraction(
+            single_session_near_misses, reference_tracks
+        ),
+        "reference_track_mean_best_session_recall": _safe_mean(
+            best_session_recalls
+        ),
+        "reference_track_mean_missing_sessions": _safe_mean(
+            missing_session_counts
+        ),
+        "reference_track_mean_fragment_count": _safe_mean(fragment_counts),
+        "reference_track_max_fragment_count": int(
+            max(fragment_counts, default=0)
+        ),
+    }
+
+
+def _valid_track_positions(row: np.ndarray) -> dict[int, int]:
+    return {
+        session_index: int(cast(Any, roi_index))
+        for session_index, roi_index in enumerate(row)
+        if _is_valid_roi_index(roi_index)
+    }
+
+
+def _track_overlap_count(
+    predicted_row: np.ndarray, reference_positions: Mapping[int, int]
+) -> int:
+    matches = 0
+    for session_index, reference_roi_index in reference_positions.items():
+        predicted_roi_index = predicted_row[session_index]
+        if not _is_valid_roi_index(predicted_roi_index):
+            continue
+        if int(cast(Any, predicted_roi_index)) == reference_roi_index:
+            matches += 1
+    return matches
+
+
+def _adjacent_link_set(matrix: np.ndarray) -> set[tuple[int, int, int]]:
+    links: set[tuple[int, int, int]] = set()
+    for row in matrix:
+        for session_index in range(row.shape[0] - 1):
+            left = row[session_index]
+            right = row[session_index + 1]
+            if _is_valid_roi_index(left) and _is_valid_roi_index(right):
+                links.add(
+                    (
+                        session_index,
+                        int(cast(Any, left)),
+                        int(cast(Any, right)),
+                    )
+                )
+    return links
+
+
+def _precision_from_counts(true_positives: int, false_positives: int) -> float:
+    denominator = true_positives + false_positives
+    if denominator == 0:
+        return 1.0
+    return float(true_positives / denominator)
+
+
+def _recall_from_counts(true_positives: int, false_negatives: int) -> float:
+    denominator = true_positives + false_negatives
+    if denominator == 0:
+        return 1.0
+    return float(true_positives / denominator)
+
+
+def _safe_fraction(numerator: int, denominator: int) -> float:
+    if denominator == 0:
+        return 0.0
+    return float(numerator / denominator)
+
+
+def _safe_mean(values: Sequence[float | int]) -> float:
+    if not values:
+        return 0.0
+    return float(np.mean(values))
 
 
 def _filter_tracks_by_seed_rois(
@@ -996,18 +1466,13 @@ def _validate_reference_roi_indices(
         }
         missing_indices = sorted(referenced_indices - available_indices)
         if missing_indices:
-            preview = ", ".join(str(value) for value in missing_indices[:10])
-            suffix = (
-                ""
-                if len(missing_indices) <= 10
-                else f", ... ({len(missing_indices)} total)"
-            )
             raise ValueError(
-                "Reference ROI indices are absent from loaded session "
-                f"{session.session_name!r}: {preview}{suffix}. "
-                "This usually means the reference uses Suite2p stat.npy row indices, "
-                "but the benchmark loaded a filtered ROI set. Re-run with --include-non-cells "
-                "or adjust --cell-probability-threshold if this is intentional."
+                _format_reference_roi_index_error(
+                    session=session,
+                    referenced_indices=referenced_indices,
+                    available_indices=available_indices,
+                    missing_indices=missing_indices,
+                )
             )
 
 
@@ -1016,6 +1481,69 @@ def _loaded_suite2p_index_set(session: Track2pSession) -> set[int]:
     if roi_indices is None:
         return set(range(session.plane_data.n_rois))
     return {int(value) for value in np.asarray(roi_indices, dtype=int).reshape(-1)}
+
+
+def _format_reference_roi_index_error(
+    *,
+    session: Track2pSession,
+    referenced_indices: set[int],
+    available_indices: set[int],
+    missing_indices: Sequence[int],
+) -> str:
+    preview = ", ".join(str(value) for value in missing_indices[:10])
+    suffix = "" if len(missing_indices) <= 10 else f", ... ({len(missing_indices)} total)"
+    return (
+        "Reference ROI indices are absent from loaded session "
+        f"{session.session_name!r}: {preview}{suffix}. "
+        f"Loaded ROI index range: {_format_int_range(available_indices)} "
+        f"({len(available_indices)} ROIs); reference ROI index range: "
+        f"{_format_int_range(referenced_indices)} ({len(referenced_indices)} ROIs). "
+        f"{_reference_roi_mismatch_hint(referenced_indices, available_indices, missing_indices)} "
+        "Run `bayescatrack benchmark audit-manual-gt-rois --reference-kind manual-gt "
+        "--include-non-cells` to distinguish filtered ROIs from a reduced/reindexed "
+        "public dataset before interpreting benchmark scores."
+    )
+
+
+def _format_int_range(values: set[int]) -> str:
+    if not values:
+        return "empty"
+    return f"[{min(values)}, {max(values)}]"
+
+
+def _reference_roi_mismatch_hint(
+    referenced_indices: set[int],
+    available_indices: set[int],
+    missing_indices: Sequence[int],
+) -> str:
+    if not available_indices:
+        return (
+            "No Suite2p ROI indices were loaded for this session; check the input format, "
+            "plane name, and Suite2p files."
+        )
+    if not referenced_indices:
+        return "The manual-GT column does not contain any non-negative ROI IDs."
+
+    available_max = max(available_indices)
+    referenced_max = max(referenced_indices)
+    if referenced_max > available_max:
+        return (
+            "The manual-GT reference appears to use a larger Suite2p/stat.npy row space "
+            "than the loaded data. This is the public-subset/reindexing failure mode: "
+            "--include-non-cells cannot recover ROI IDs that are outside the loaded range. "
+            "Obtain the full pre-Track2p Suite2p outputs or an explicit ROI-ID remapping."
+        )
+
+    missing = tuple(int(value) for value in missing_indices)
+    if missing and all(value - 1 in available_indices for value in missing):
+        return "The missing IDs are all present after subtracting one; check for one-based ROI numbering."
+    if missing and all(value + 1 in available_indices for value in missing):
+        return "The missing IDs are all present after adding one; check for an off-by-one ROI remapping."
+    return (
+        "The reference probably uses raw Suite2p stat.npy row indices while the benchmark "
+        "loaded a filtered ROI set. Re-run with --include-non-cells or lower "
+        "--cell-probability-threshold if this filtering was unintentional."
+    )
 
 
 def _reference_matrix(reference: Track2pReference, *, curated_only: bool) -> np.ndarray:
@@ -1037,13 +1565,30 @@ def _looks_like_subject_dir(path: Path) -> bool:
     return bool(find_track2p_session_dirs(path))
 
 
+def _json_object_from_arg(raw: str | None, option_name: str) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{option_name} must decode to a JSON object")
+    return parsed
+
+
 def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
-    pairwise_cost_kwargs = None
-    if args.pairwise_cost_kwargs_json is not None:
-        parsed = json.loads(args.pairwise_cost_kwargs_json)
-        if not isinstance(parsed, dict):
-            raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
-        pairwise_cost_kwargs = parsed
+    pairwise_cost_kwargs = _json_object_from_arg(
+        args.pairwise_cost_kwargs_json, "--pairwise-cost-kwargs-json"
+    )
+    registration_kwargs = _json_object_from_arg(
+        args.registration_kwargs_json, "--registration-kwargs-json"
+    )
+    higher_order_consistency_config = _json_object_from_arg(
+        args.higher_order_json, "--higher-order-json"
+    )
+    if higher_order_consistency_config is None:
+        higher_order_consistency_config = higher_order_consistency_config_from_args(args)
+    monotone_ranker_kwargs = _json_object_from_arg(
+        args.monotone_ranker_kwargs_json, "--monotone-ranker-kwargs-json"
+    )
     activity_tie_breaker_availability_component = _optional_component_name_from_arg(
         args.activity_tie_breaker_availability_component
     )
@@ -1051,6 +1596,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         data=args.data,
         method=args.method,
         split=args.split,
+        benchmark_preset=args.benchmark_preset,
         plane_name=args.plane_name,
         input_format=args.input_format,
         reference=args.reference,
@@ -1060,8 +1606,10 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
         cost=args.cost,
+        calibration_model=args.calibration_model,
         max_gap=args.max_gap,
         transform_type=args.transform_type,
+        registration_kwargs=registration_kwargs,
         start_cost=args.start_cost,
         end_cost=args.end_cost,
         gap_penalty=args.gap_penalty,
@@ -1076,6 +1624,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=higher_order_consistency_config,
         activity_tie_breaker_weight=args.activity_tie_breaker_weight,
         activity_tie_breaker_component=args.activity_tie_breaker_component,
         activity_tie_breaker_neutral_cost=args.activity_tie_breaker_neutral_cost,
@@ -1086,6 +1635,11 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         activity_event_threshold=args.activity_event_threshold,
         load_neuropil_traces=args.load_neuropil_traces,
         progress=args.progress,
+        monotone_ranker_kwargs=monotone_ranker_kwargs,
+        solver_ledger=bool(args.solver_ledger or args.solver_ledger_output is not None),
+        solver_ledger_rank_k=args.solver_ledger_rank_k,
+        solver_ledger_large_cost=args.solver_ledger_large_cost,
+        solver_ledger_output=args.solver_ledger_output,
     )
 
 
@@ -1121,6 +1675,21 @@ def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
         "reference_source",
         "pairwise_f1",
         "complete_track_f1",
+        "adjacent_link_f1",
+        "adjacent_link_precision",
+        "adjacent_link_recall",
+        "adjacent_link_true_positives",
+        "adjacent_link_false_positives",
+        "adjacent_link_false_negatives",
+        "reference_tracks",
+        "reference_tracks_fully_covered",
+        "reference_tracks_with_any_match",
+        "reference_single_session_near_misses",
+        "reference_near_miss_fraction",
+        "reference_track_mean_best_session_recall",
+        "reference_track_mean_missing_sessions",
+        "reference_track_mean_fragment_count",
+        "reference_track_max_fragment_count",
         "pairwise_precision",
         "pairwise_recall",
         "complete_tracks",
@@ -1132,6 +1701,28 @@ def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
         "training_examples",
         "positive_examples",
         "negative_examples",
+        "higher_order_triplet_weight",
+        "higher_order_support_top_k",
+        "higher_order_support_cost_cap",
+        "higher_order_max_penalty",
+        "higher_order_large_cost",
+        "calibration_model",
+        "monotone_rank_constraints",
+        "monotone_training_rank_loss",
+        "monotone_training_binary_loss",
+        "solver_ledger_gt_edges",
+        "solver_ledger_selected_edges",
+        "solver_ledger_rejected_edges",
+        "solver_ledger_selected_rate",
+        "solver_ledger_rejected_rate",
+        "solver_ledger_true_edge_gated_by_cost_threshold",
+        "solver_ledger_true_edge_not_row_top_k",
+        "solver_ledger_true_edge_not_column_top_k",
+        "solver_ledger_wrong_edge_selected",
+        "solver_ledger_mutual_top1_rejected_by_solver_prior",
+        "solver_ledger_true_edge_large_cost_or_empty_registered_roi",
+        "solver_ledger_reference_roi_missing_from_loaded_session",
+        "solver_ledger_measurement_roi_missing_from_loaded_session",
     ]
     remaining = sorted({key for row in rows for key in row} - set(preferred))
     return [key for key in preferred if any(key in row for row in rows)] + remaining

@@ -45,6 +45,17 @@ import numpy as np
 
 _SESSION_NAME_PATTERN = re.compile(r"^(?P<session_date>\d{4}-\d{2}-\d{2})(?:_.+)?$")
 
+_SPLIT_ROI_STAT_FEATURES = (
+    "radius",
+    "aspect_ratio",
+    "compact",
+    "footprint",
+    "skew",
+    "std",
+    "npix",
+    "npix_norm",
+)
+
 
 @dataclass(frozen=True)
 # pylint: disable=too-many-instance-attributes
@@ -213,6 +224,7 @@ class CalciumPlaneData:
         area_weight: float = 0.5,
         roi_feature_weight: float = 0.25,
         feature_names: Sequence[str] | None = None,
+        local_patch_radius: int = 10,
         cell_probability_weight: float = 0.0,
         large_cost: float = 1.0e6,
         similarity_epsilon: float = 1.0e-6,
@@ -249,6 +261,9 @@ class CalciumPlaneData:
             Finite penalty assigned to pairs excluded by the hard gate.
         similarity_epsilon
             Small positive constant preventing ``log(0)``.
+        local_patch_radius
+            Half-width, in pixels, of FOV patches used for diagnostic/calibrated
+            local image-evidence features. Set to zero to disable them.
         return_components
             If ``True``, also return a dictionary of intermediate matrices for
             diagnostics and ablations.
@@ -258,6 +273,8 @@ class CalciumPlaneData:
             raise ValueError("similarity_epsilon must be strictly positive")
         if large_cost <= 0.0:
             raise ValueError("large_cost must be strictly positive")
+        if local_patch_radius < 0:
+            raise ValueError("local_patch_radius must be non-negative")
         for weight_name, weight_value in {
             "centroid_weight": centroid_weight,
             "iou_weight": iou_weight,
@@ -376,6 +393,16 @@ class CalciumPlaneData:
         if not return_components:
             return total_cost
 
+        roi_stat_feature_components = _pairwise_roi_stat_feature_components(
+            self,
+            other,
+            feature_names=feature_names,
+        )
+        local_patch_components = _pairwise_local_patch_evidence_components(
+            self,
+            other,
+            patch_radius=local_patch_radius,
+        )
         components = {
             "pairwise_cost_matrix": total_cost,
             "centroid_distance": centroid_distances,
@@ -389,6 +416,8 @@ class CalciumPlaneData:
             "cell_probability_cost": cell_probability_cost,
             "gated": gated.astype(bool),
         }
+        components.update(roi_stat_feature_components)
+        components.update(local_patch_components)
         return total_cost, components
 
     def centroids(self, order: str = "xy", weighted: bool = False) -> np.ndarray:
@@ -669,6 +698,174 @@ class SessionAssociationBundle:
             "covMatsMeas": self.measurement_covariances,
             "pairwise_cost_matrix": self.pairwise_cost_matrix,
         }
+
+
+def _pairwise_roi_stat_feature_components(
+    reference_plane: CalciumPlaneData,
+    measurement_plane: CalciumPlaneData,
+    *,
+    feature_names: Sequence[str] | None = None,
+    epsilon: float = 1.0e-6,
+) -> dict[str, np.ndarray]:
+    """Return one normalized pairwise cost matrix per Suite2p ROI-stat feature."""
+
+    if epsilon <= 0.0:
+        raise ValueError("epsilon must be strictly positive")
+
+    cost_shape = (reference_plane.n_rois, measurement_plane.n_rois)
+    zero_cost = np.zeros(cost_shape, dtype=float)
+    requested_features = set(feature_names) if feature_names is not None else None
+    components: dict[str, np.ndarray] = {}
+    for feature_name in _SPLIT_ROI_STAT_FEATURES:
+        component_name = f"roi_stat_{feature_name}_cost"
+        if (
+            requested_features is not None
+            and feature_name not in requested_features
+            and component_name not in requested_features
+        ):
+            components[component_name] = zero_cost.copy()
+            continue
+
+        values_a = _one_dimensional_roi_feature(reference_plane, feature_name)
+        values_b = _one_dimensional_roi_feature(measurement_plane, feature_name)
+        if values_a is None or values_b is None:
+            components[component_name] = zero_cost.copy()
+            continue
+
+        finite_a = np.isfinite(values_a)
+        finite_b = np.isfinite(values_b)
+        if not np.any(finite_a) or not np.any(finite_b):
+            components[component_name] = zero_cost.copy()
+            continue
+
+        pooled = np.concatenate((values_a[finite_a], values_b[finite_b]))
+        scale = _robust_feature_scale(pooled, epsilon=epsilon)
+        filled_a = np.where(finite_a, values_a, float(np.nanmedian(pooled)))
+        filled_b = np.where(finite_b, values_b, float(np.nanmedian(pooled)))
+        pairwise_cost = np.abs(filled_a[:, None] - filled_b[None, :]) / scale
+        pairwise_cost = np.where(
+            finite_a[:, None] & finite_b[None, :], pairwise_cost, 0.0
+        )
+        components[component_name] = np.nan_to_num(
+            pairwise_cost, nan=0.0, posinf=1.0e6, neginf=0.0
+        )
+    return components
+
+
+def _one_dimensional_roi_feature(
+    plane: CalciumPlaneData, feature_name: str
+) -> np.ndarray | None:
+    values = plane.roi_features.get(feature_name)
+    if values is None:
+        return None
+    array_values = np.asarray(values, dtype=float)
+    if array_values.ndim != 1 or array_values.shape != (plane.n_rois,):
+        return None
+    return array_values
+
+
+def _robust_feature_scale(values: np.ndarray, *, epsilon: float) -> float:
+    finite_values = np.asarray(values, dtype=float)
+    finite_values = finite_values[np.isfinite(finite_values)]
+    if finite_values.size == 0:
+        return 1.0
+    median = float(np.median(finite_values))
+    mad = float(np.median(np.abs(finite_values - median)))
+    if mad > epsilon:
+        return max(1.4826 * mad, epsilon)
+    spread = float(np.std(finite_values))
+    if spread > epsilon:
+        return max(spread, epsilon)
+    return max(abs(median), 1.0, epsilon)
+
+
+def _pairwise_local_patch_evidence_components(
+    reference_plane: CalciumPlaneData,
+    measurement_plane: CalciumPlaneData,
+    *,
+    patch_radius: int,
+) -> dict[str, np.ndarray]:
+    """Return local registered-FOV patch evidence for every ROI pair."""
+
+    cost_shape = (reference_plane.n_rois, measurement_plane.n_rois)
+    zero_cost = np.zeros(cost_shape, dtype=float)
+    if patch_radius <= 0 or reference_plane.fov is None or measurement_plane.fov is None:
+        return {
+            "local_patch_correlation": zero_cost.copy(),
+            "local_patch_cost": zero_cost.copy(),
+            "local_patch_available": zero_cost.copy(),
+        }
+
+    reference_fov = _finite_fov_image(reference_plane.fov)
+    measurement_fov = _finite_fov_image(measurement_plane.fov)
+    if reference_fov.shape != measurement_fov.shape:
+        return {
+            "local_patch_correlation": zero_cost.copy(),
+            "local_patch_cost": zero_cost.copy(),
+            "local_patch_available": zero_cost.copy(),
+        }
+
+    reference_centers_yx = reference_plane.centroids(order="yx", weighted=True).T
+    measurement_centers_yx = measurement_plane.centroids(order="yx", weighted=True).T
+    reference_vectors, valid_reference = _normalized_patch_vectors(
+        reference_fov, reference_centers_yx, patch_radius=patch_radius
+    )
+    measurement_vectors, valid_measurement = _normalized_patch_vectors(
+        measurement_fov, measurement_centers_yx, patch_radius=patch_radius
+    )
+    correlations = reference_vectors @ measurement_vectors.T
+    valid_pairs = valid_reference[:, None] & valid_measurement[None, :]
+    correlations = np.where(valid_pairs, correlations, 0.0)
+    correlations = np.clip(np.nan_to_num(correlations, nan=0.0), -1.0, 1.0)
+    return {
+        "local_patch_correlation": correlations,
+        "local_patch_cost": np.where(valid_pairs, 1.0 - correlations, 0.0),
+        "local_patch_available": valid_pairs.astype(float),
+    }
+
+
+def _finite_fov_image(fov: np.ndarray) -> np.ndarray:
+    image = np.asarray(fov, dtype=float)
+    finite = np.isfinite(image)
+    if not np.any(finite):
+        return np.zeros_like(image, dtype=float)
+    fill_value = float(np.median(image[finite]))
+    return np.where(finite, image, fill_value)
+
+
+def _normalized_patch_vectors(
+    image: np.ndarray, centers_yx: np.ndarray, *, patch_radius: int
+) -> tuple[np.ndarray, np.ndarray]:
+    image = np.asarray(image, dtype=float)
+    patch_radius = int(patch_radius)
+    patch_width = 2 * patch_radius + 1
+    if centers_yx.size == 0:
+        return np.zeros((0, patch_width * patch_width), dtype=float), np.zeros(
+            (0,), dtype=bool
+        )
+    padded = np.pad(image, patch_radius, mode="edge")
+    rounded_centers = np.rint(centers_yx).astype(int)
+    rounded_centers[:, 0] = np.clip(rounded_centers[:, 0], 0, image.shape[0] - 1)
+    rounded_centers[:, 1] = np.clip(rounded_centers[:, 1], 0, image.shape[1] - 1)
+    vectors = np.empty((centers_yx.shape[0], patch_width * patch_width), dtype=float)
+    for roi_index, (center_y, center_x) in enumerate(rounded_centers):
+        padded_y = int(center_y) + patch_radius
+        padded_x = int(center_x) + patch_radius
+        patch = padded[
+            padded_y - patch_radius : padded_y + patch_radius + 1,
+            padded_x - patch_radius : padded_x + patch_radius + 1,
+        ]
+        vectors[roi_index] = patch.reshape(-1)
+    vectors -= np.mean(vectors, axis=1, keepdims=True)
+    norms = np.linalg.norm(vectors, axis=1)
+    valid = norms > 1.0e-12
+    vectors = np.divide(
+        vectors,
+        norms[:, None],
+        out=np.zeros_like(vectors),
+        where=valid[:, None],
+    )
+    return vectors, valid
 
 
 # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements

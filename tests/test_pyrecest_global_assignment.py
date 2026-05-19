@@ -38,6 +38,40 @@ def test_registered_pairwise_costs_penalize_empty_registered_masks(
     npt.assert_array_equal(pairwise_costs[(0, 1)], np.array([[1.0e6]]))
 
 
+def test_registered_pairwise_costs_forward_registration_kwargs(
+    make_track2p_session,
+    monkeypatch,
+):
+    reference_masks = np.zeros((1, 6, 6), dtype=bool)
+    reference_masks[0, 1:3, 1:3] = True
+    measurement_masks = np.zeros_like(reference_masks)
+    measurement_masks[0, 2:4, 2:4] = True
+    reference = make_track2p_session("2024-05-01_a", reference_masks)
+    measurement = make_track2p_session("2024-05-02_a", measurement_masks)
+    seen_kwargs = {}
+
+    def _fake_register_plane_pair(_reference, moving, **kwargs):
+        seen_kwargs.update(kwargs)
+        return moving
+
+    monkeypatch.setattr(
+        global_assignment, "register_plane_pair", _fake_register_plane_pair
+    )
+
+    global_assignment.build_registered_pairwise_costs(
+        [reference, measurement],
+        max_gap=1,
+        cost="registered-iou",
+        transform_type="bspline",
+        registration_kwargs={"grid_shape": [3, 3]},
+    )
+
+    assert seen_kwargs == {
+        "transform_type": "bspline",
+        "registration_kwargs": {"grid_shape": [3, 3]},
+    }
+
+
 def test_registered_shifted_iou_cost_kwargs_replace_exact_iou_term():
     kwargs = global_assignment.registered_shifted_iou_cost_kwargs(shifted_iou_radius=3)
 

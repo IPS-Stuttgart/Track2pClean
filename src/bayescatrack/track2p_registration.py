@@ -14,6 +14,10 @@ from bayescatrack import (
     build_consecutive_session_association_bundles,
     load_track2p_subject,
 )
+from bayescatrack.association_guided_registration import (
+    ASSOCIATION_GUIDED_NONRIGID_REGISTRATION_TRANSFORM_TYPES,
+    register_measurement_plane_by_association_guided_nonrigid,
+)
 from bayescatrack.nonrigid_registration import (
     NONRIGID_REGISTRATION_TRANSFORM_TYPES,
     register_measurement_plane_by_nonrigid_fov,
@@ -31,6 +35,13 @@ RegistrationTransform = Literal[
     "landmark-tps",
     "local-affine-grid",
     "optical-flow",
+    "association-guided-bspline",
+    "association-guided-b-spline",
+    "association-guided-thin-plate-spline",
+    "association-guided-tps",
+    "association-guided-landmark-tps",
+    "association-guided-local-affine-grid",
+    "association-guided-optical-flow",
     "none",
 ]
 REGISTRATION_TRANSFORM_TYPES: tuple[str, ...] = (
@@ -39,6 +50,7 @@ REGISTRATION_TRANSFORM_TYPES: tuple[str, ...] = (
     "fov-translation",
     "fov-affine",
     *NONRIGID_REGISTRATION_TRANSFORM_TYPES,
+    *ASSOCIATION_GUIDED_NONRIGID_REGISTRATION_TRANSFORM_TYPES,
     "none",
 )
 
@@ -70,12 +82,11 @@ def _load_track2p_registration_backend() -> tuple[Any, Any]:
         raise ImportError(
             "Track2p-compatible affine/rigid registration requires the 'track2p' "
             "package and its ITK/elastix stack. Install that backend for "
-            "transform_type='rigid', or use transform_type='affine' to fall back "
-            "to BayesCaTrack's NumPy FOV-affine registration when Track2p is "
-            "unavailable. Request transform_type='fov-translation' explicitly "
-            "for the integer phase-correlation fallback, transform_type='fov-affine' "
-            "for the NumPy FOV-affine fallback, or a nonrigid transform such as "
-            "'bspline', 'tps', 'local-affine-grid', or 'optical-flow' for growth-aware registration."
+            "transform_type='affine' or transform_type='rigid'. Request "
+            "transform_type='fov-translation' explicitly for the integer "
+            "phase-correlation fallback, transform_type='fov-affine' for the "
+            "NumPy FOV-affine fallback, or a nonrigid transform such as 'bspline', "
+            "'tps', 'local-affine-grid', or 'optical-flow' for growth-aware registration."
         ) from exc
     return reg_img_elastix, itk_reg_all_roi
 
@@ -99,6 +110,7 @@ def _fov_translation_registered_plane(
     *,
     transform_type: str = "fov-translation",
     reason: str = "explicit transform_type='fov-translation'",
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
     from bayescatrack.fov_registration import (
         register_measurement_plane_by_fov_translation,
@@ -107,6 +119,7 @@ def _fov_translation_registered_plane(
     registered_plane = register_measurement_plane_by_fov_translation(
         reference_plane,
         moving_plane,
+        **dict(registration_kwargs or {}),
     ).registered_measurement_plane
     return _with_registration_backend_metadata(
         registered_plane,
@@ -122,6 +135,7 @@ def _fov_affine_registered_plane(
     *,
     transform_type: str = "fov-affine",
     reason: str = "explicit transform_type='fov-affine'",
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
     from bayescatrack.fov_affine_registration import (
         register_measurement_plane_by_fov_affine,
@@ -130,6 +144,7 @@ def _fov_affine_registered_plane(
     registered_plane = register_measurement_plane_by_fov_affine(
         reference_plane,
         moving_plane,
+        **dict(registration_kwargs or {}),
     ).registered_measurement_plane
     registration_reason = str(
         (registered_plane.ops or {}).get("registration_backend_reason") or reason
@@ -147,12 +162,43 @@ def _nonrigid_registered_plane(
     moving_plane: CalciumPlaneData,
     *,
     transform_type: str,
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
     return register_measurement_plane_by_nonrigid_fov(
         reference_plane,
         moving_plane,
         transform_type=transform_type,
+        **dict(registration_kwargs or {}),
     ).registered_measurement_plane
+
+
+def _association_guided_nonrigid_registered_plane(
+    reference_plane: CalciumPlaneData,
+    moving_plane: CalciumPlaneData,
+    *,
+    transform_type: str,
+    registration_kwargs: Mapping[str, Any] | None = None,
+) -> CalciumPlaneData:
+    return register_measurement_plane_by_association_guided_nonrigid(
+        reference_plane,
+        moving_plane,
+        transform_type=transform_type,
+        **dict(registration_kwargs or {}),
+    ).registered_measurement_plane
+
+
+def _registration_kwargs_dict(
+    registration_kwargs: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Return validated registration-backend kwargs as a mutable dict."""
+
+    kwargs = dict(registration_kwargs or {})
+    if "transform_type" in kwargs:
+        raise ValueError(
+            "registration_kwargs must not contain 'transform_type'; pass the "
+            "registration transform through the transform_type argument instead"
+        )
+    return kwargs
 
 
 def register_plane_pair(
@@ -160,38 +206,64 @@ def register_plane_pair(
     moving_plane: CalciumPlaneData,
     *,
     transform_type: RegistrationTransform | str = "affine",
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
+    registration_kwargs = _registration_kwargs_dict(registration_kwargs)
     if transform_type not in REGISTRATION_TRANSFORM_TYPES:
         valid_types = ", ".join(repr(value) for value in REGISTRATION_TRANSFORM_TYPES)
         raise ValueError(f"transform_type must be one of {valid_types}")
     if transform_type == "none":
+        if registration_kwargs:
+            unexpected = ", ".join(sorted(registration_kwargs))
+            raise TypeError(
+                "registration_kwargs are not supported for transform_type='none': "
+                f"{unexpected}"
+            )
         if reference_plane.image_shape != moving_plane.image_shape:
             raise ValueError("transform_type='none' requires matching image shapes")
         return moving_plane
     if reference_plane.fov is None or moving_plane.fov is None:
         raise ValueError("Both planes must provide FOV images for registration.")
     if transform_type == "fov-translation":
-        return _fov_translation_registered_plane(reference_plane, moving_plane)
+        return _fov_translation_registered_plane(
+            reference_plane,
+            moving_plane,
+            registration_kwargs=registration_kwargs,
+        )
     if transform_type == "fov-affine":
-        return _fov_affine_registered_plane(reference_plane, moving_plane)
+        return _fov_affine_registered_plane(
+            reference_plane,
+            moving_plane,
+            registration_kwargs=registration_kwargs,
+        )
     if transform_type in NONRIGID_REGISTRATION_TRANSFORM_TYPES:
         return _nonrigid_registered_plane(
             reference_plane,
             moving_plane,
             transform_type=transform_type,
+            registration_kwargs=registration_kwargs,
+        )
+    if transform_type in ASSOCIATION_GUIDED_NONRIGID_REGISTRATION_TRANSFORM_TYPES:
+        return _association_guided_nonrigid_registered_plane(
+            reference_plane,
+            moving_plane,
+            transform_type=transform_type,
+            registration_kwargs=registration_kwargs,
         )
 
     try:
         reg_img_elastix, itk_reg_all_roi = _load_track2p_registration_backend()
-    except ImportError:
-        if transform_type == "affine":
-            return _fov_affine_registered_plane(reference_plane, moving_plane)
-        raise
+    except ImportError as exc:
+        raise ImportError(
+            f"transform_type={transform_type!r} requires Track2p/elastix. "
+            "Use transform_type='fov-affine' to opt in to BayesCaTrack's "
+            "NumPy fallback explicitly."
+        ) from exc
 
     registered_fov, reg_params = reg_img_elastix(
         np.asarray(reference_plane.fov),
         np.asarray(moving_plane.fov),
-        SimpleNamespace(transform_type=transform_type),
+        SimpleNamespace(transform_type=transform_type, **registration_kwargs),
     )
     moving_support_masks_hw_n = np.moveaxis(
         np.asarray(moving_plane.roi_masks) > 0, 0, -1
@@ -211,6 +283,16 @@ def register_plane_pair(
             transform_type=transform_type,
             reason="track2p.register.elastix import succeeded",
         ),
+    )
+
+
+def _raise_unsupported_registration_kwargs(
+    transform_type: str, registration_kwargs: Mapping[str, Any]
+) -> None:
+    keys = ", ".join(sorted(str(key) for key in registration_kwargs))
+    raise ValueError(
+        f"registration kwargs are only supported for transform_type='fov-affine' "
+        f"and nonrigid transforms, not {transform_type!r}; received: {keys}"
     )
 
 
@@ -256,6 +338,7 @@ def register_consecutive_session_measurement_planes(
     sessions: Sequence[Track2pSession],
     *,
     transform_type: RegistrationTransform | str = "affine",
+    registration_kwargs: Mapping[str, Any] | None = None,
 ) -> list[CalciumPlaneData]:
     sessions = list(sessions)
     if len(sessions) < 2:
@@ -265,6 +348,7 @@ def register_consecutive_session_measurement_planes(
             sessions[i].plane_data,
             sessions[i + 1].plane_data,
             transform_type=transform_type,
+            registration_kwargs=registration_kwargs,
         )
         for i in range(len(sessions) - 1)
     ]
@@ -277,6 +361,7 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
     input_format: str = "auto",
     include_behavior: bool = True,
     transform_type: RegistrationTransform | str = "affine",
+    registration_kwargs: Mapping[str, Any] | None = None,
     order: str = "xy",
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
@@ -293,7 +378,8 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
         suite2p_kwargs=suite2p_kwargs,
     )
     registered_measurement_planes = register_consecutive_session_measurement_planes(
-        sessions, transform_type=transform_type
+        sessions, transform_type=transform_type,
+        registration_kwargs=registration_kwargs,
     )
 
     association_kwargs: dict[str, Any] = {"order": order}

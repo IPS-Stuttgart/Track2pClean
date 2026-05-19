@@ -29,6 +29,46 @@ def test_track2p_benchmark_cli_accepts_fov_translation_transform():
     assert config.transform_type == "fov-translation"
 
 
+def test_track2p_benchmark_cli_accepts_fov_affine_transform():
+    args = track2p_benchmark.build_arg_parser().parse_args(
+        [
+            "--data",
+            "dataset",
+            "--method",
+            "global-assignment",
+            "--transform-type",
+            "fov-affine",
+        ]
+    )
+
+    config = track2p_benchmark._config_from_args(args)
+
+    assert config.transform_type == "fov-affine"
+
+
+def test_track2p_benchmark_cli_accepts_nonrigid_registration_kwargs():
+    args = track2p_benchmark.build_arg_parser().parse_args(
+        [
+            "--data",
+            "dataset",
+            "--method",
+            "global-assignment",
+            "--transform-type",
+            "bspline",
+            "--registration-kwargs-json",
+            '{"grid_shape":[4,4],"bspline_regularization":0.05}',
+        ]
+    )
+
+    config = track2p_benchmark._config_from_args(args)
+
+    assert config.transform_type == "bspline"
+    assert config.registration_kwargs == {
+        "grid_shape": [4, 4],
+        "bspline_regularization": 0.05,
+    }
+
+
 def test_track2p_cost_sweep_cli_accepts_fov_translation_transform():
     args = track2p_cost_sweep.build_arg_parser().parse_args(
         [

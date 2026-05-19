@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 from bayescatrack import CalciumPlaneData
 from bayescatrack.fov_affine_registration import (
+    apply_affine_image_warp,
     apply_affine_roi_mask_warp,
     estimate_fov_affine_transform,
     register_measurement_plane_by_fov_affine,
@@ -31,6 +32,18 @@ def test_apply_affine_roi_mask_warp_applies_translation():
 
     expected = np.zeros_like(masks)
     expected[0, 4, 2] = True
+    np.testing.assert_array_equal(registered, expected)
+
+
+def test_apply_affine_image_warp_applies_translation():
+    image = np.zeros((8, 8), dtype=float)
+    image[3, 4] = 1.0
+    affine_xy = np.asarray([[1.0, 0.0, -2.0], [0.0, 1.0, 1.0]], dtype=float)
+
+    registered = apply_affine_image_warp(image, affine_xy, output_shape=(8, 8))
+
+    expected = np.zeros_like(image)
+    expected[4, 2] = 1.0
     np.testing.assert_array_equal(registered, expected)
 
 
@@ -82,7 +95,43 @@ def test_fov_affine_registration_recovers_translation_like_fallback():
     )
 
 
-def test_register_plane_pair_affine_falls_back_to_fov_affine(monkeypatch):
+def test_fov_affine_registration_stores_warped_measurement_fov():
+    reference_fov = _spot_image(
+        (96, 96),
+        ((20, 22), (28, 72), (68, 28), (72, 75)),
+    )
+    measurement_fov = reference_fov + 2.0
+    reference_mask = reference_fov[None, :, :] > 0.0
+    measurement_mask = reference_mask.copy()
+    reference_plane = CalciumPlaneData(
+        reference_mask,
+        fov=reference_fov,
+        source="reference",
+    )
+    measurement_plane = CalciumPlaneData(
+        measurement_mask,
+        fov=measurement_fov,
+        source="measurement",
+    )
+
+    registration = register_measurement_plane_by_fov_affine(
+        reference_plane,
+        measurement_plane,
+    )
+
+    np.testing.assert_array_equal(
+        registration.registered_measurement_plane.fov,
+        measurement_fov,
+    )
+    assert not np.array_equal(
+        registration.registered_measurement_plane.fov,
+        reference_fov,
+    )
+    ops = registration.registered_measurement_plane.ops
+    assert ops["fov_affine_registered_fov_source"] == "measurement_affine_warp"
+
+
+def test_register_plane_pair_fov_affine_uses_explicit_numpy_backend(monkeypatch):
     reference_fov = _spot_image((96, 96), ((20, 20), (24, 72), (70, 30), (74, 78)))
     measurement_fov = apply_integer_image_translation(
         reference_fov, [2, -3], output_shape=(96, 96)
@@ -103,7 +152,7 @@ def test_register_plane_pair_affine_falls_back_to_fov_affine(monkeypatch):
         registration_module, "_load_track2p_registration_backend", _raise_import_error
     )
     registered = register_plane_pair(
-        reference_plane, measurement_plane, transform_type="affine"
+        reference_plane, measurement_plane, transform_type="fov-affine"
     )
 
     assert registered.ops["registration_backend"] == "fov-affine"

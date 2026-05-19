@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    apply_higher_order_consistency,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     _load_pyrecest_multisession_solver,
     build_registered_pairwise_costs,
@@ -28,8 +31,10 @@ from bayescatrack.experiments.track2p_benchmark import (
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
-    _variant_name,
+    add_higher_order_consistency_arguments,
+    configured_variant_name,
     discover_subject_dirs,
+    higher_order_consistency_config_from_args,
 )
 from bayescatrack.experiments.track2p_fov_affine_benchmark import (
     _soft_iou_pairwise_cost_matrix,
@@ -148,7 +153,7 @@ def iter_track2p_cost_sweep(
             }
             yield SubjectBenchmarkResult(
                 subject=subject_dir.name,
-                variant=_variant_name(benchmark.cost),
+                variant=configured_variant_name(benchmark),
                 method=benchmark.method,
                 scores=scores,
                 n_sessions=reference.n_sessions,
@@ -177,7 +182,7 @@ def _build_sweep_pairwise_costs(
     if benchmark.cost == "registered-iou":
         CalciumPlaneData.build_pairwise_cost_matrix = _patched_pairwise_cost  # type: ignore[method-assign]
     try:
-        return build_registered_pairwise_costs(
+        pairwise_costs = build_registered_pairwise_costs(
             sessions,
             max_gap=benchmark.max_gap,
             cost=benchmark.cost,
@@ -188,6 +193,15 @@ def _build_sweep_pairwise_costs(
             regularization=benchmark.regularization,
             pairwise_cost_kwargs=benchmark.pairwise_cost_kwargs,
         )
+        if benchmark.higher_order_consistency_config is not None:
+            pairwise_costs = apply_higher_order_consistency(
+                pairwise_costs,
+                session_sizes=tuple(
+                    int(session.plane_data.n_rois) for session in sessions
+                ),
+                config=benchmark.higher_order_consistency_config,
+            )
+        return pairwise_costs
     finally:
         if benchmark.cost == "registered-iou":
             CalciumPlaneData.build_pairwise_cost_matrix = original_pairwise_cost  # type: ignore[method-assign]
@@ -393,6 +407,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--velocity-variance", type=float, default=25.0)
     parser.add_argument("--regularization", type=float, default=1.0e-6)
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
+    add_higher_order_consistency_arguments(parser)
     parser.add_argument(
         "--progress", action=argparse.BooleanOptionalAction, default=True
     )
@@ -463,6 +478,7 @@ def _config_from_args(args: argparse.Namespace) -> CostSweepConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=higher_order_consistency_config_from_args(args),
         progress=args.progress,
     )
     return CostSweepConfig(

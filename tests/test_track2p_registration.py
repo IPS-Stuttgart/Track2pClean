@@ -66,9 +66,11 @@ def test_register_plane_pair_uses_explicit_fov_translation(
     )
 
 
+@pytest.mark.parametrize("transform_type", ("affine", "rigid"))
 def test_register_plane_pair_affine_rigid_do_not_fall_back_to_fov_translation(
     make_track2p_session,
     monkeypatch,
+    transform_type,
 ):
     import bayescatrack.track2p_registration as registration
 
@@ -85,9 +87,9 @@ def test_register_plane_pair_affine_rigid_do_not_fall_back_to_fov_translation(
         registration, "_load_track2p_registration_backend", _missing_backend
     )
 
-    with pytest.raises(ImportError, match="missing test backend"):
+    with pytest.raises(ImportError, match="requires Track2p/elastix"):
         register_plane_pair(
             reference.plane_data,
             moving.plane_data,
-            transform_type="rigid",
+            transform_type=transform_type,
         )

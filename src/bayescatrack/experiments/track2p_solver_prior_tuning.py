@@ -54,7 +54,7 @@ from bayescatrack.experiments.track2p_loso_calibration import (
 
 CalibrationModelKind = Literal["logistic", "monotone"]
 SampleWeightStrategy = Literal["none", "balanced"]
-SolverPriorObjective = Literal["pairwise_f1", "complete_track_f1"]
+SolverPriorObjective = Literal["pairwise_f1", "complete_track_f1", "mean_f1"]
 
 DEFAULT_SOLVER_PRIOR_START_COSTS = (1.0, 2.0, 5.0)
 DEFAULT_SOLVER_PRIOR_END_COSTS = (1.0, 2.0, 5.0)
@@ -115,6 +115,16 @@ class CachedSolverTuningSubject:
     session_edges: tuple[tuple[int, int], ...]
 
 
+@dataclass(frozen=True)
+class _FittedSolverPriorCalibration:
+    """Fold-local calibrated pairwise model plus training metadata."""
+
+    model: Any
+    training_examples: int
+    positive_examples: int
+    score_fields: Mapping[str, float | int | str]
+
+
 # pylint: disable=too-many-arguments,too-many-locals
 def run_track2p_loso_solver_prior_tuning(
     config: Track2pBenchmarkConfig,
@@ -145,10 +155,9 @@ def run_track2p_loso_solver_prior_tuning(
         )
 
     feature_names = tuple(feature_names)
+    calibration_model = _validate_calibration_model_kind(calibration_model)
     sample_weight_strategy = _validate_sample_weight_strategy(sample_weight_strategy)
     logistic_model_kwargs = _loso_logistic_model_kwargs(model_kwargs)
-    if calibration_model not in {"logistic", "monotone"}:
-        raise ValueError("calibration_model must be either 'logistic' or 'monotone'")
     monotone_options = monotone_options or MonotoneRankerOptions()
     solver_prior_options = solver_prior_options or SolverPriorTuningOptions()
     progress = ProgressReporter(
@@ -170,7 +179,7 @@ def run_track2p_loso_solver_prior_tuning(
             for index, subject in enumerate(subject_data)
             if index != held_out_index
         )
-        calibrated_model, training_scores = _fit_calibrated_cost_model(
+        fit_result = _fit_solver_prior_calibration_model(
             training_subjects,
             config=config,
             feature_names=feature_names,
@@ -187,14 +196,14 @@ def run_track2p_loso_solver_prior_tuning(
             training_subjects,
             config=config,
             cost="calibrated",
-            calibrated_model=calibrated_model,
+            calibrated_model=fit_result.model,
             options=solver_prior_options,
         )
         progress.step(f"solving {held_out.subject_name}")
         assignment = _solve_loso_assignment_with_priors(
             held_out,
             config=config,
-            calibrated_model=calibrated_model,
+            calibrated_model=fit_result.model,
             parameters=tuning_result.parameters,
         )
         predicted_matrix = tracks_to_suite2p_index_matrix(
@@ -204,19 +213,22 @@ def run_track2p_loso_solver_prior_tuning(
             predicted_matrix, held_out.reference, config=config
         )
         calibration_scores = _score_holdout_calibration(
-            calibrated_model,
+            fit_result.model,
             held_out,
             config=config,
             feature_names=feature_names,
         )
         scores: dict[str, float | int | str] = {
             **base_scores,
-            **training_scores,
+            "training_examples": int(fit_result.training_examples),
+            "positive_examples": int(fit_result.positive_examples),
+            "negative_examples": int(fit_result.training_examples - fit_result.positive_examples),
+            **fit_result.score_fields,
             **tuning_result.to_score_dict(),
             **calibration_scores,
         }
-        training_examples = int(training_scores["training_examples"])
-        positive_examples = int(training_scores["positive_examples"])
+        training_examples = int(fit_result.training_examples)
+        positive_examples = int(fit_result.positive_examples)
         folds.append(
             LosoCalibrationFold(
                 held_out_subject=held_out.subject_name,
@@ -238,6 +250,162 @@ def run_track2p_loso_solver_prior_tuning(
     return LosoCalibrationResult(
         folds=tuple(folds), feature_names=feature_names, max_gap=int(config.max_gap)
     )
+
+
+def _fit_solver_prior_calibration_model(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    calibration_model: CalibrationModelKind,
+    sample_weight: Any | None,
+    sample_weight_strategy: SampleWeightStrategy,
+    logistic_model_kwargs: Mapping[str, Any],
+    monotone_options: MonotoneRankerOptions | None,
+    progress: ProgressReporter,
+    held_out_subject: str,
+) -> _FittedSolverPriorCalibration:
+    """Fit one fold-local calibrated model for solver-prior tuning."""
+
+    if calibration_model == "logistic":
+        return _fit_logistic_solver_prior_calibration_model(
+            training_subjects,
+            config=config,
+            feature_names=feature_names,
+            sample_weight=sample_weight,
+            sample_weight_strategy=sample_weight_strategy,
+            logistic_model_kwargs=logistic_model_kwargs,
+            progress=progress,
+            held_out_subject=held_out_subject,
+        )
+    if calibration_model == "monotone":
+        return _fit_monotone_solver_prior_calibration_model(
+            training_subjects,
+            config=config,
+            feature_names=feature_names,
+            sample_weight=sample_weight,
+            sample_weight_strategy=sample_weight_strategy,
+            monotone_options=monotone_options,
+            progress=progress,
+            held_out_subject=held_out_subject,
+        )
+    raise ValueError(f"Unsupported calibration model: {calibration_model!r}")
+
+
+def _fit_logistic_solver_prior_calibration_model(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    sample_weight: Any | None,
+    sample_weight_strategy: SampleWeightStrategy,
+    logistic_model_kwargs: Mapping[str, Any],
+    progress: ProgressReporter,
+    held_out_subject: str,
+) -> _FittedSolverPriorCalibration:
+    training_features, training_labels = _collect_training_examples(
+        training_subjects,
+        config=config,
+        feature_names=feature_names,
+        progress=progress,
+        held_out_subject=held_out_subject,
+    )
+    weights = _training_sample_weight(
+        training_labels,
+        sample_weight=sample_weight,
+        strategy=sample_weight_strategy,
+    )
+    progress.step(f"fitting logistic model for {held_out_subject}")
+    model = fit_logistic_association_model(
+        training_features,
+        training_labels,
+        feature_names=feature_names,
+        sample_weight=weights,
+        model_kwargs=logistic_model_kwargs,
+    )
+    positives = int(np.sum(training_labels))
+    return _FittedSolverPriorCalibration(
+        model=model,
+        training_examples=int(training_labels.shape[0]),
+        positive_examples=positives,
+        score_fields={
+            "calibration_model": "logistic",
+            "calibration_sample_weight_strategy": sample_weight_strategy,
+            "calibration_class_weight": _stringify_class_weight(
+                logistic_model_kwargs.get("class_weight")
+            ),
+        },
+    )
+
+
+def _fit_monotone_solver_prior_calibration_model(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    sample_weight: Any | None,
+    sample_weight_strategy: SampleWeightStrategy,
+    monotone_options: MonotoneRankerOptions | None,
+    progress: ProgressReporter,
+    held_out_subject: str,
+) -> _FittedSolverPriorCalibration:
+    if sample_weight is not None or sample_weight_strategy != "none":
+        raise ValueError("Monotone solver-prior tuning does not support sample weights")
+    blocks = _collect_training_blocks(
+        training_subjects,
+        config=config,
+        feature_names=feature_names,
+        progress=progress,
+        held_out_subject=held_out_subject,
+    )
+    progress.step(f"fitting monotone model for {held_out_subject}")
+    model = fit_monotone_ranking_association_model_from_blocks(
+        blocks,
+        options=monotone_options or MonotoneRankerOptions(),
+    )
+    return _FittedSolverPriorCalibration(
+        model=model,
+        training_examples=int(model.n_training_examples),
+        positive_examples=int(model.n_positive_examples),
+        score_fields={
+            "calibration_model": "monotone-ranker",
+            "calibration_sample_weight_strategy": "none",
+            "calibration_class_weight": "None",
+            "monotone_feature_names": ",".join(model.monotone_feature_names),
+            "monotone_rank_constraints": int(model.n_rank_constraints),
+            "monotone_training_rank_loss": float(model.training_rank_loss),
+            "monotone_training_binary_loss": float(model.training_binary_loss),
+        },
+    )
+
+
+def _collect_training_blocks(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    progress: ProgressReporter,
+    held_out_subject: str,
+) -> tuple[Any, ...]:
+    blocks: list[Any] = []
+    options = _reference_training_options(config, feature_names)
+    for subject in training_subjects:
+        progress.step(
+            f"collecting {subject.subject_name} training blocks for {held_out_subject}"
+        )
+        blocks.extend(
+            collect_reference_pairwise_example_blocks(
+                subject.sessions,
+                subject.reference,
+                session_edges=session_edge_pairs(
+                    len(subject.sessions), max_gap=config.max_gap
+                ),
+                options=options,
+            )
+        )
+    if not blocks:
+        raise ValueError("At least one training block is required")
+    return tuple(blocks)
 
 
 def tune_solver_priors_for_training_subjects(
@@ -537,6 +705,12 @@ def _variant_name_for_calibrated_solver_priors(
     return "Calibrated costs + LOSO tuned-prior global assignment"
 
 
+def _validate_calibration_model_kind(kind: str) -> CalibrationModelKind:
+    if kind not in {"logistic", "monotone"}:
+        raise ValueError("calibration_model must be either 'logistic' or 'monotone'")
+    return kind  # type: ignore[return-value]
+
+
 def _mean_numeric_scores(
     rows: Sequence[Mapping[str, float | int | str]],
 ) -> dict[str, float]:
@@ -547,9 +721,14 @@ def _mean_numeric_scores(
                 numeric_value = float(value)
                 if np.isfinite(numeric_value):
                     values_by_key.setdefault(key, []).append(numeric_value)
-    return {
+    result = {
         key: float(np.mean(values)) for key, values in values_by_key.items() if values
     }
+    if "pairwise_f1" in result and "complete_track_f1" in result:
+        result["mean_f1"] = 0.5 * (
+            float(result["pairwise_f1"]) + float(result["complete_track_f1"])
+        )
+    return result
 
 
 def _solver_prior_parameter_grid(
@@ -745,7 +924,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--objective",
         default="pairwise_f1",
-        choices=("pairwise_f1", "complete_track_f1"),
+        choices=("pairwise_f1", "complete_track_f1", "mean_f1"),
     )
     parser.add_argument("--start-costs", default=None)
     parser.add_argument("--end-costs", default=None)

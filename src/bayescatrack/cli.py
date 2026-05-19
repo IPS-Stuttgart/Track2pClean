@@ -91,8 +91,18 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Alias for track2p-teacher-debug",
         )
         subparsers.add_parser(
+            "track2p-teacher-distill-loso",
+            help="Train LOSO calibrated costs from Track2p teacher labels and evaluate on manual GT",
+        )
+        subparsers.add_parser(
             "edge-ranking",
             help="Rank manual-GT Track2p edges within pairwise cost/feature matrices",
+        )
+        subparsers.add_parser(
+            "track2p-learned-edge-ranking",
+            help=(
+                "Rank manual-GT Track2p edges under LOSO calibrated/monotone learned scores"
+            ),
         )
         subparsers.add_parser(
             "solver-oracles",
@@ -198,12 +208,24 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_teacher_debug_main(args[1:]))
+    if args[0] == "track2p-teacher-distill-loso":
+        from bayescatrack.experiments.track2p_teacher_distillation import (
+            main as _track2p_teacher_distillation_main,
+        )
+
+        return int(_track2p_teacher_distillation_main(args[1:]))
     if args[0] == "edge-ranking":
         from bayescatrack.experiments.track2p_edge_ranking import (
             main as _track2p_edge_ranking_main,
         )
 
         return int(_track2p_edge_ranking_main(args[1:]))
+    if args[0] == "track2p-learned-edge-ranking":
+        from bayescatrack.experiments.track2p_learned_edge_ranking import (
+            main as _track2p_learned_edge_ranking_main,
+        )
+
+        return int(_track2p_learned_edge_ranking_main(args[1:]))
     if args[0] == "solver-oracles":
         from bayescatrack.experiments.track2p_solver_oracles import (
             main as _track2p_solver_oracles_main,

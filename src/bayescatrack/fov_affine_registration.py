@@ -55,6 +55,11 @@ def register_measurement_plane_by_fov_affine(
         estimate.matrix_xy,
         output_shape=reference_plane.image_shape,
     )
+    registered_fov = apply_affine_image_warp(
+        measurement_plane.fov,
+        estimate.matrix_xy,
+        output_shape=reference_plane.image_shape,
+    )
     ops = {} if measurement_plane.ops is None else dict(measurement_plane.ops)
     ops.update(
         {
@@ -66,11 +71,12 @@ def register_measurement_plane_by_fov_affine(
             "fov_affine_tile_count": int(estimate.tile_reference_xy.shape[0]),
             "fov_affine_fit_rmse": float(estimate.fit_rmse),
             "fov_affine_fallback_translation": bool(estimate.fallback_translation),
+            "fov_affine_registered_fov_source": "measurement_affine_warp",
         }
     )
     registered_plane = measurement_plane.with_replaced_masks(
         masks,
-        fov=reference_plane.fov,
+        fov=registered_fov,
         source=f"{measurement_plane.source}_fov_affine_registered",
         ops=ops,
     )
@@ -173,6 +179,82 @@ def apply_affine_roi_mask_warp(
         else:
             values = np.asarray(mask[yy[valid], xx[valid]], dtype=output.dtype)
             np.maximum.at(output[roi_index], (y[valid], x[valid]), values)
+    return output
+
+
+def apply_affine_image_warp(
+    image: np.ndarray,
+    matrix_xy: np.ndarray,
+    *,
+    output_shape: tuple[int, int],
+    fill_value: float = 0.0,
+) -> np.ndarray:
+    """Warp a 2-D image from source coordinates into destination coordinates.
+
+    ``matrix_xy`` is the same forward affine map used for ROI masks: it maps
+    source/measurement ``(x, y)`` coordinates into destination/reference
+    coordinates.  Image resampling uses inverse mapping with bilinear
+    interpolation to avoid holes in the registered FOV image.
+    """
+
+    image = np.asarray(image)
+    matrix_xy = np.asarray(matrix_xy, dtype=float)
+    if image.ndim != 2:
+        raise ValueError("image must have shape (height, width)")
+    if matrix_xy.shape != (2, 3):
+        raise ValueError("matrix_xy must have shape (2, 3)")
+    output_shape = (int(output_shape[0]), int(output_shape[1]))
+    if output_shape == image.shape and np.allclose(
+        matrix_xy, np.asarray([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]), atol=1.0e-10
+    ):
+        return np.array(image, copy=True)
+    grid_y, grid_x = np.indices(output_shape, dtype=float)
+    destination_xy = np.column_stack((grid_x.ravel(), grid_y.ravel()))
+    inverse_matrix_xy = invert_affine_xy(matrix_xy)
+    source_xy = (
+        destination_xy @ inverse_matrix_xy[:, :2].T
+        + inverse_matrix_xy[:, 2][None, :]
+    )
+    sampled = _sample_bilinear(
+        image,
+        source_xy[:, 0],
+        source_xy[:, 1],
+        fill_value=fill_value,
+    )
+    return sampled.reshape(output_shape)
+
+
+def _sample_bilinear(
+    image: np.ndarray,
+    source_x: np.ndarray,
+    source_y: np.ndarray,
+    *,
+    fill_value: float,
+) -> np.ndarray:
+    image_float = np.asarray(image, dtype=float)
+    output = np.full(source_x.shape, float(fill_value), dtype=float)
+    tolerance = 1.0e-9
+    valid = (
+        np.isfinite(source_x)
+        & np.isfinite(source_y)
+        & (source_x >= -tolerance)
+        & (source_x <= image_float.shape[1] - 1 + tolerance)
+        & (source_y >= -tolerance)
+        & (source_y <= image_float.shape[0] - 1 + tolerance)
+    )
+    if not np.any(valid):
+        return output
+    clipped_x = np.clip(source_x[valid], 0.0, image_float.shape[1] - 1)
+    clipped_y = np.clip(source_y[valid], 0.0, image_float.shape[0] - 1)
+    x0 = np.floor(clipped_x).astype(int)
+    y0 = np.floor(clipped_y).astype(int)
+    x1 = np.minimum(x0 + 1, image_float.shape[1] - 1)
+    y1 = np.minimum(y0 + 1, image_float.shape[0] - 1)
+    dx = clipped_x - x0
+    dy = clipped_y - y0
+    top = (1.0 - dx) * image_float[y0, x0] + dx * image_float[y0, x1]
+    bottom = (1.0 - dx) * image_float[y1, x0] + dx * image_float[y1, x1]
+    output[valid] = (1.0 - dy) * top + dy * bottom
     return output
 
 

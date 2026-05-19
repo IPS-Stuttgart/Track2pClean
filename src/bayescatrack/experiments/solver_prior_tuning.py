@@ -18,6 +18,9 @@ from pathlib import Path
 from typing import Any, Literal, Protocol, cast
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    apply_higher_order_consistency,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     _load_pyrecest_multisession_solver,
@@ -36,11 +39,14 @@ from bayescatrack.experiments.track2p_benchmark import (
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
     _variant_name,
+    _json_object_from_arg,
+    add_higher_order_consistency_arguments,
     discover_subject_dirs,
     format_benchmark_table,
-    solve_configured_global_assignment,
+    higher_order_consistency_config_from_args,
 )
 from bayescatrack.reference import Track2pReference
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 SolverPriorObjective = Literal["pairwise_f1", "complete_track_f1", "mean_f1"]
 
@@ -77,6 +83,7 @@ class SolverPriorCandidate:
     end_cost: float
     gap_penalty: float
     cost_threshold: float | None
+    cost_scale: float = 1.0
 
     def config_for(self, config: Track2pBenchmarkConfig) -> Track2pBenchmarkConfig:
         """Return a benchmark config with this candidate applied."""
@@ -93,6 +100,7 @@ class SolverPriorCandidate:
 
     def score_fields(self) -> dict[str, float | str]:
         return {
+            "learned_cost_scale": float(self.cost_scale),
             "learned_start_cost": float(self.start_cost),
             "learned_end_cost": float(self.end_cost),
             "learned_gap_penalty": float(self.gap_penalty),
@@ -104,6 +112,7 @@ class SolverPriorCandidate:
 class SolverPriorSearchConfig:
     """Finite solver-prior search space."""
 
+    cost_scales: tuple[float, ...] = (1.0,)
     start_costs: tuple[float, ...] = (0.5, 1.0, 1.5, 2.0)
     end_costs: tuple[float, ...] = ()
     gap_penalties: tuple[float, ...] = (0.0, 0.3, 0.6, 0.9, 1.2)
@@ -111,12 +120,14 @@ class SolverPriorSearchConfig:
     objective: SolverPriorObjective = "complete_track_f1"
 
     def candidates(self) -> tuple[SolverPriorCandidate, ...]:
+        scales = _positive_values(self.cost_scales, name="cost_scales")
         starts = _positive_values(self.start_costs, name="start_costs")
         ends = _positive_values(self.end_costs or self.start_costs, name="end_costs")
         gaps = _nonnegative_values(self.gap_penalties, name="gap_penalties")
         thresholds = _thresholds(self.cost_thresholds)
         return tuple(
-            SolverPriorCandidate(start, end, gap, threshold)
+            SolverPriorCandidate(start, end, gap, threshold, scale)
+            for scale in scales
             for start in starts
             for end in ends
             for gap in gaps
@@ -276,11 +287,19 @@ def run_track2p_loso_solver_priors(
             cost=config.cost,
         )
         solve_config = tuning.config_with_best_priors(config)
-        assignment = solve_configured_global_assignment(
-            held_out.sessions, solve_config, cost=config.cost
+        prepared_held_out = _prepare_subject(
+            held_out,
+            config=config,
+            cost=config.cost,
+            calibrated_model=None,
+        )
+        assignment = _solve_prepared_subject(
+            tuning.best_candidate,
+            prepared_held_out,
+            solver=_load_pyrecest_multisession_solver(),
         )
         predicted = tracks_to_suite2p_index_matrix(
-            assignment.result.tracks, held_out.sessions
+            assignment.tracks, held_out.sessions
         )
         scores: dict[str, float | int | str] = {
             **_score_prediction_against_reference(
@@ -296,7 +315,7 @@ def run_track2p_loso_solver_priors(
                 ),
                 benchmark=SubjectBenchmarkResult(
                     subject=held_out.subject_name,
-                    variant=f"{_variant_name(config.cost)} + LOSO learned solver priors",
+                    variant=f"{configured_variant_name(config)} + LOSO learned solver priors",
                     method=config.method,
                     scores=scores,
                     n_sessions=held_out.reference.n_sessions,
@@ -332,14 +351,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "registered-shifted-iou",
             "roi-aware",
             "roi-aware-shifted",
+            "calibrated",
         ),
     )
     parser.add_argument("--max-gap", type=int, default=2)
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_TYPES,
     )
+    parser.add_argument(
+        "--registration-kwargs-json",
+        default=None,
+        help="JSON object forwarded to the selected registration backend",
+    )
+    parser.add_argument("--cost-scales", default="1")
     parser.add_argument("--start-costs", default="0.5,1,1.5,2")
     parser.add_argument("--end-costs", default="")
     parser.add_argument("--gap-penalties", default="0,0.3,0.6,0.9,1.2")
@@ -349,6 +375,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="complete_track_f1",
         choices=("pairwise_f1", "complete_track_f1", "mean_f1"),
     )
+    parser.add_argument(
+        "--calibration-model",
+        default="logistic",
+        choices=("logistic", "monotone"),
+        help="Calibrated pairwise model to fit inside each LOSO fold when --cost=calibrated.",
+    )
+    parser.add_argument(
+        "--calibration-feature-set",
+        default="default",
+        choices=("default", "local-evidence", "default+local-evidence"),
+        help="Calibrated feature preset used when --cost=calibrated.",
+    )
+    parser.add_argument(
+        "--sample-weight-strategy", default="none", choices=("none", "balanced")
+    )
+    parser.add_argument("--calibration-model-kwargs-json", default=None)
+    parser.add_argument("--monotone-ranker-kwargs-json", default=None)
     parser.add_argument(
         "--input-format", default="auto", choices=("auto", "suite2p", "npy")
     )
@@ -365,6 +408,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--weighted-centroids", action="store_true")
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
+    add_higher_order_consistency_arguments(parser)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     parser.add_argument("--output", type=Path, default=None)
     return parser
@@ -372,13 +416,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    pairwise_cost_kwargs = (
-        json.loads(args.pairwise_cost_kwargs_json)
-        if args.pairwise_cost_kwargs_json
-        else None
+    pairwise_cost_kwargs = _json_object_from_arg(
+        args.pairwise_cost_kwargs_json, "--pairwise-cost-kwargs-json"
     )
-    if pairwise_cost_kwargs is not None and not isinstance(pairwise_cost_kwargs, dict):
-        raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
+    registration_kwargs = _json_object_from_arg(
+        args.registration_kwargs_json, "--registration-kwargs-json"
+    )
     config = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -389,6 +432,7 @@ def main(argv: list[str] | None = None) -> int:
         cost=cast(AssociationCost, args.cost),
         max_gap=args.max_gap,
         transform_type=args.transform_type,
+        registration_kwargs=registration_kwargs,
         input_format=args.input_format,
         include_behavior=args.include_behavior,
         include_non_cells=args.include_non_cells,
@@ -397,8 +441,10 @@ def main(argv: list[str] | None = None) -> int:
         exclude_overlapping_pixels=args.exclude_overlapping_pixels,
         weighted_centroids=args.weighted_centroids,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=higher_order_consistency_config_from_args(args),
     )
     search = SolverPriorSearchConfig(
+        cost_scales=parse_positive_list(args.cost_scales, name="--cost-scales"),
         start_costs=parse_positive_list(args.start_costs, name="--start-costs"),
         end_costs=(
             parse_positive_list(args.end_costs, name="--end-costs")
@@ -411,9 +457,56 @@ def main(argv: list[str] | None = None) -> int:
         cost_thresholds=parse_threshold_list(args.cost_thresholds),
         objective=cast(SolverPriorObjective, args.objective),
     )
-    rows = run_track2p_loso_solver_priors(config, search=search).to_rows()
+    if args.cost == "calibrated":
+        rows = _run_calibrated_loso_solver_priors(args, config, search).to_rows()
+    else:
+        rows = run_track2p_loso_solver_priors(config, search=search).to_rows()
     _write_rows(rows, args.output, args.format)
     return 0
+
+
+def _run_calibrated_loso_solver_priors(
+    args: argparse.Namespace,
+    config: Track2pBenchmarkConfig,
+    search: SolverPriorSearchConfig,
+) -> Any:
+    """Delegate calibrated solver-prior tuning to the fold-safe calibrated path."""
+
+    from bayescatrack.association.monotone_ranker import MonotoneRankerOptions
+    from bayescatrack.experiments.track2p_loso_calibration import (
+        calibration_feature_names,
+    )
+    from bayescatrack.experiments.track2p_solver_prior_tuning import (
+        SolverPriorTuningOptions as CalibratedSolverPriorTuningOptions,
+    )
+    from bayescatrack.experiments.track2p_solver_prior_tuning import (
+        run_track2p_loso_solver_prior_tuning,
+    )
+
+    monotone_kwargs = _json_object(
+        args.monotone_ranker_kwargs_json,
+        "--monotone-ranker-kwargs-json",
+    )
+    return run_track2p_loso_solver_prior_tuning(
+        config,
+        feature_names=calibration_feature_names(args.calibration_feature_set),
+        sample_weight_strategy=args.sample_weight_strategy,
+        model_kwargs=_json_object(
+            args.calibration_model_kwargs_json,
+            "--calibration-model-kwargs-json",
+        ),
+        calibration_model=args.calibration_model,
+        monotone_options=MonotoneRankerOptions(**monotone_kwargs)
+        if monotone_kwargs is not None
+        else None,
+        solver_prior_options=CalibratedSolverPriorTuningOptions(
+            objective=cast(Any, search.objective),
+            start_costs=search.start_costs,
+            end_costs=search.end_costs or search.start_costs,
+            gap_penalties=search.gap_penalties,
+            cost_thresholds=search.cost_thresholds,
+        ),
+    )
 
 
 def _prepare_subject(
@@ -429,20 +522,28 @@ def _prepare_subject(
         cost=cost,
         calibrated_model=calibrated_model,
         transform_type=config.transform_type,
+        registration_kwargs=config.registration_kwargs,
         order=config.order,
         weighted_centroids=config.weighted_centroids,
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
     )
+    session_sizes = tuple(
+        int(session.plane_data.n_rois) for session in subject.sessions
+    )
+    if config.higher_order_consistency_config is not None:
+        pairwise_costs = apply_higher_order_consistency(
+            pairwise_costs,
+            session_sizes=session_sizes,
+            config=config.higher_order_consistency_config,
+        )
     return _PreparedSubject(
         subject_name=subject.subject_name,
         sessions=tuple(subject.sessions),
         reference=subject.reference,
         pairwise_costs=pairwise_costs,
-        session_sizes=tuple(
-            int(session.plane_data.n_rois) for session in subject.sessions
-        ),
+        session_sizes=session_sizes,
     )
 
 
@@ -456,14 +557,7 @@ def _score_candidate(
     fold_config = candidate.config_for(config)
     subject_scores = []
     for subject in subjects:
-        result = solver(
-            subject.pairwise_costs,
-            session_sizes=subject.session_sizes,
-            start_cost=candidate.start_cost,
-            end_cost=candidate.end_cost,
-            gap_penalty=candidate.gap_penalty,
-            cost_threshold=candidate.cost_threshold,
-        )
+        result = _solve_prepared_subject(candidate, subject, solver=solver)
         predicted = tracks_to_suite2p_index_matrix(result.tracks, subject.sessions)
         subject_scores.append(
             _score_prediction_against_reference(
@@ -471,6 +565,35 @@ def _score_candidate(
             )
         )
     return _aggregate_scores(subject_scores)
+
+
+def _solve_prepared_subject(
+    candidate: SolverPriorCandidate,
+    subject: _PreparedSubject,
+    *,
+    solver: Any,
+) -> Any:
+    pairwise_costs = _scale_pairwise_costs(subject.pairwise_costs, candidate.cost_scale)
+    return solver(
+        pairwise_costs,
+        session_sizes=subject.session_sizes,
+        start_cost=candidate.start_cost,
+        end_cost=candidate.end_cost,
+        gap_penalty=candidate.gap_penalty,
+        cost_threshold=candidate.cost_threshold,
+    )
+
+
+def _scale_pairwise_costs(
+    pairwise_costs: Mapping[tuple[int, int], np.ndarray], scale: float
+) -> dict[tuple[int, int], np.ndarray]:
+    scale = float(scale)
+    if not np.isfinite(scale) or scale <= 0.0:
+        raise ValueError("cost_scale values must be positive finite numbers")
+    return {
+        edge: np.asarray(costs, dtype=float) * scale
+        for edge, costs in pairwise_costs.items()
+    }
 
 
 def _aggregate_scores(
@@ -569,6 +692,15 @@ def _parse_float(token: str, *, name: str) -> float:
     return value
 
 
+def _json_object(value: str | None, option_name: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{option_name} must decode to a JSON object")
+    return parsed
+
+
 def _positive_values(values: Sequence[float], *, name: str) -> tuple[float, ...]:
     result = tuple(float(value) for value in values)
     if not result or any(value <= 0.0 or not np.isfinite(value) for value in result):
@@ -629,6 +761,7 @@ def _fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
         "training_subjects",
         "pairwise_f1",
         "complete_track_f1",
+        "learned_cost_scale",
         "learned_start_cost",
         "learned_end_cost",
         "learned_gap_penalty",

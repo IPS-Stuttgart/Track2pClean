@@ -32,6 +32,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     ProgressReporter,
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
+    _json_object_from_arg,
     _score_prediction_against_reference,
     discover_subject_dirs,
     solve_configured_global_assignment,
@@ -44,6 +45,7 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     _load_subject_calibration_data,
     _reference_training_options,
 )
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 
 # pylint: disable=too-many-arguments,too-many-locals
@@ -238,7 +240,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_TYPES,
+    )
+    parser.add_argument(
+        "--registration-kwargs-json",
+        default=None,
+        help="JSON object forwarded to the selected registration backend",
     )
     parser.add_argument("--start-cost", type=float, default=5.0)
     parser.add_argument("--end-cost", type=float, default=5.0)
@@ -289,12 +296,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
-    pairwise_cost_kwargs = None
-    if args.pairwise_cost_kwargs_json is not None:
-        parsed = json.loads(args.pairwise_cost_kwargs_json)
-        if not isinstance(parsed, dict):
-            raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
-        pairwise_cost_kwargs = parsed
+    pairwise_cost_kwargs = _json_object_from_arg(
+        args.pairwise_cost_kwargs_json, "--pairwise-cost-kwargs-json"
+    )
+    registration_kwargs = _json_object_from_arg(
+        args.registration_kwargs_json, "--registration-kwargs-json"
+    )
     return Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -310,6 +317,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         cost="calibrated",
         max_gap=args.max_gap,
         transform_type=args.transform_type,
+        registration_kwargs=registration_kwargs,
         start_cost=args.start_cost,
         end_cost=args.end_cost,
         gap_penalty=args.gap_penalty,

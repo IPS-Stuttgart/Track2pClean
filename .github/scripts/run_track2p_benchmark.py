@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,126 @@ def _should_run_loso(policy: str, *, n_subjects: int) -> bool:
     raise ValueError(f"Unsupported calibrated LOSO policy: {policy!r}")
 
 
+def _shifted_pairwise_kwargs(
+    base_pairwise_cost_kwargs: Mapping[str, Any],
+    *,
+    radius: int,
+    shift_penalty_weight: float,
+    include_mask_cosine_flag: bool = False,
+) -> dict[str, Any]:
+    """Return pairwise kwargs for one shifted-overlap benchmark variant."""
+
+    radius = int(radius)
+    if radius < 0:
+        raise ValueError("shifted-IoU benchmark radius must be non-negative")
+    shift_penalty_weight = float(shift_penalty_weight)
+    if shift_penalty_weight < 0.0:
+        raise ValueError("shifted-IoU shift penalty weight must be non-negative")
+
+    use_shifted_overlap = radius > 0
+    kwargs = dict(base_pairwise_cost_kwargs)
+    kwargs.update(
+        {
+            "shifted_iou_radius": radius,
+            "use_shifted_iou_for_iou_cost": use_shifted_overlap,
+            "shifted_iou_shift_penalty_weight": shift_penalty_weight,
+        }
+    )
+    if include_mask_cosine_flag:
+        kwargs["use_shifted_mask_cosine_for_mask_cosine_cost"] = use_shifted_overlap
+    return kwargs
+
+
+def _shifted_iou_benchmark_runs(
+    base_pairwise_cost_kwargs: Mapping[str, Any],
+) -> list[tuple[dict[str, Any], str]]:
+    """Return official shifted-IoU sweep runs and their comparison labels."""
+
+    shifted_specs = (
+        (
+            "global-registered-shifted-iou-r0",
+            "Global registered shifted IoU r=0",
+            "registered-shifted-iou",
+            "global_registered_shifted_iou_r0.csv",
+            0,
+            0.0,
+            False,
+        ),
+        (
+            "global-registered-shifted-iou-r1",
+            "Global registered shifted IoU r=1",
+            "registered-shifted-iou",
+            "global_registered_shifted_iou_r1.csv",
+            1,
+            0.0,
+            False,
+        ),
+        (
+            "global-registered-shifted-iou-r2",
+            "Global registered shifted IoU r=2",
+            "registered-shifted-iou",
+            "global_registered_shifted_iou_r2.csv",
+            2,
+            0.0,
+            False,
+        ),
+        (
+            "global-registered-shifted-iou-r4",
+            "Global registered shifted IoU r=4",
+            "registered-shifted-iou",
+            "global_registered_shifted_iou_r4.csv",
+            4,
+            0.0,
+            False,
+        ),
+        (
+            "global-registered-shifted-iou-r2-p025",
+            "Global registered shifted IoU r=2 p=0.25",
+            "registered-shifted-iou",
+            "global_registered_shifted_iou_r2_p025.csv",
+            2,
+            0.25,
+            False,
+        ),
+        (
+            "global-roi-aware-shifted-r2-p025",
+            "Global ROI-aware shifted r=2 p=0.25",
+            "roi-aware-shifted",
+            "global_roi_aware_shifted_r2_p025.csv",
+            2,
+            0.25,
+            True,
+        ),
+    )
+    return [
+        (
+            {
+                "name": name,
+                "method": "global-assignment",
+                "cost": cost,
+                "format": "csv",
+                "output": output,
+                "pairwise_cost_kwargs": _shifted_pairwise_kwargs(
+                    base_pairwise_cost_kwargs,
+                    radius=radius,
+                    shift_penalty_weight=shift_penalty_weight,
+                    include_mask_cosine_flag=include_mask_cosine_flag,
+                ),
+            },
+            label,
+        )
+        for (
+            name,
+            label,
+            cost,
+            output,
+            radius,
+            shift_penalty_weight,
+            include_mask_cosine_flag,
+        ) in shifted_specs
+    ]
+
+
 def _summary_table(rows: list[dict[str, int | str]]) -> str:
     body = ["| kind | name | rows | output |", "| --- | --- | ---: | --- |"]
     for row in rows:
@@ -77,6 +198,8 @@ def main() -> int:
         os.environ.get("TRACK2P_RUN_CALIBRATED_LOSO", "auto"),
         n_subjects=len(subject_dirs),
     )
+    run_shifted_iou_sweep = _bool_env("TRACK2P_RUN_SHIFTED_IOU_SWEEP", default=True)
+    base_pairwise_cost_kwargs = _json_object_env("TRACK2P_PAIRWISE_COST_KWARGS_JSON")
 
     defaults: dict[str, Any] = {
         "data": str(data_path),
@@ -95,7 +218,7 @@ def main() -> int:
         "restrict_to_reference_seed_rois": _bool_env(
             "TRACK2P_RESTRICT_TO_REFERENCE_SEED_ROIS", default=True
         ),
-        "pairwise_cost_kwargs": _json_object_env("TRACK2P_PAIRWISE_COST_KWARGS_JSON"),
+        "pairwise_cost_kwargs": base_pairwise_cost_kwargs,
     }
 
     runs: list[dict[str, Any]] = [
@@ -125,6 +248,13 @@ def main() -> int:
         "Global registered IoU": "global-registered-iou",
         "Global ROI-aware": "global-roi-aware",
     }
+    shifted_iou_runs: list[tuple[dict[str, Any], str]] = []
+    if run_shifted_iou_sweep:
+        shifted_iou_runs = _shifted_iou_benchmark_runs(base_pairwise_cost_kwargs)
+        for run, label in shifted_iou_runs:
+            runs.append(run)
+            comparison_inputs[label] = str(run["name"])
+
     if run_calibrated_loso:
         runs.append(
             {
@@ -137,6 +267,28 @@ def main() -> int:
             }
         )
         comparison_inputs["Global calibrated LOSO"] = "global-calibrated-loso"
+        if run_shifted_iou_sweep:
+            calibrated_shifted_run = {
+                "name": "global-calibrated-loso-shifted-r2-p025",
+                "method": "global-assignment",
+                "cost": "calibrated",
+                "split": "leave-one-subject-out",
+                "format": "csv",
+                "output": "global_calibrated_loso_shifted_r2_p025.csv",
+                "pairwise_cost_kwargs": _shifted_pairwise_kwargs(
+                    base_pairwise_cost_kwargs,
+                    radius=2,
+                    shift_penalty_weight=0.25,
+                    include_mask_cosine_flag=True,
+                ),
+            }
+            runs.append(calibrated_shifted_run)
+            shifted_iou_runs.append(
+                (calibrated_shifted_run, "Global calibrated LOSO shifted r=2 p=0.25")
+            )
+            comparison_inputs["Global calibrated LOSO shifted r=2 p=0.25"] = str(
+                calibrated_shifted_run["name"]
+            )
 
     manifest_data = {
         "defaults": defaults,
@@ -161,6 +313,10 @@ def main() -> int:
         "subjects": [path.name for path in subject_dirs],
         "n_subjects": len(subject_dirs),
         "run_calibrated_loso": run_calibrated_loso,
+        "run_shifted_iou_sweep": run_shifted_iou_sweep,
+        "shifted_iou_runs": [
+            str(run["name"]) for run, _label in shifted_iou_runs
+        ],
         "pyrecest_repository": PYRECEST_REPOSITORY,
         "pyrecest_commit": PYRECEST_COMMIT,
     }
