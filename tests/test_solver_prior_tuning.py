@@ -5,8 +5,10 @@ from typing import Any
 
 import numpy as np
 import pytest
+from bayescatrack import cli
 from bayescatrack.experiments import solver_prior_tuning as tuning
 from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
+from bayescatrack.experiments import track2p_solver_prior_tuning as calibrated_tuning
 from bayescatrack.experiments.track2p_solver_prior_tuning import (
     DEFAULT_SOLVER_PRIOR_COST_THRESHOLDS,
     DEFAULT_SOLVER_PRIOR_END_COSTS,
@@ -182,6 +184,45 @@ def test_tune_solver_priors_selects_best_training_candidate(monkeypatch):
     assert result.score_fields()["learned_cost_threshold"] == "none"
 
 
+def test_tune_solver_priors_passes_calibrated_model(monkeypatch):
+    config = Track2pBenchmarkConfig(
+        data="missing",
+        method="global-assignment",
+        cost="calibrated",
+        progress=False,
+    )
+    subject = _Subject("train", (_Session(),), object())
+    calibrated_model = object()
+    seen = {}
+
+    def fake_build(_sessions, **kwargs):
+        seen.update(kwargs)
+        return {(0, 1): np.asarray([[0.0]], dtype=float)}
+
+    monkeypatch.setattr(tuning, "build_registered_pairwise_costs", fake_build)
+    monkeypatch.setattr(
+        tuning,
+        "_load_pyrecest_multisession_solver",
+        lambda: lambda *_args, **_kwargs: type("Result", (), {"tracks": [{}]})(),
+    )
+    monkeypatch.setattr(
+        tuning, "tracks_to_suite2p_index_matrix", lambda _tracks, _sessions: np.empty((0, 1))
+    )
+    monkeypatch.setattr(
+        tuning, "_score_prediction_against_reference", lambda *_args, **_kwargs: {}
+    )
+
+    tuning.tune_solver_priors(
+        (subject,),
+        config=config,
+        cost="calibrated",
+        calibrated_model=calibrated_model,
+    )
+
+    assert seen["cost"] == "calibrated"
+    assert seen["calibrated_model"] is calibrated_model
+
+
 @pytest.mark.parametrize("raw", ["0", "-1", "nan", "1,"])
 def test_positive_list_parser_rejects_invalid_values(raw):
     with pytest.raises(ValueError):
@@ -190,3 +231,30 @@ def test_positive_list_parser_rejects_invalid_values(raw):
 
 def test_threshold_parser_accepts_none():
     assert tuning.parse_threshold_list("none,2") == (None, 2.0)
+
+
+def test_solver_prior_cli_dispatch_detects_calibrated_cost():
+    assert cli._solver_prior_uses_calibrated_cost(["--cost", "calibrated"])
+    assert cli._solver_prior_uses_calibrated_cost(["--cost=calibrated"])
+    assert not cli._solver_prior_uses_calibrated_cost(["--cost", "registered-iou"])
+    assert not cli._solver_prior_uses_calibrated_cost([])
+
+
+def test_calibrated_solver_prior_parser_accepts_monotone_ranker():
+    args = calibrated_tuning.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p",
+            "--cost",
+            "calibrated",
+            "--calibration-model",
+            "monotone",
+            "--start-costs",
+            "1,2",
+            "--cost-thresholds",
+            "2,none",
+        ]
+    )
+
+    assert args.calibration_model == "monotone"
+    assert calibrated_tuning._parse_optional_threshold_tuple(args.cost_thresholds) == (2.0, None)

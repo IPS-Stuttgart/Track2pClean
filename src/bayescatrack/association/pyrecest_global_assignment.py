@@ -174,6 +174,10 @@ def build_registered_pairwise_costs(
     return_pairwise_components: bool = False,
     activity_tie_breaker_weight: float = 0.0,
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
+    activity_tie_breaker_neutral_cost: float = 0.5,
+    activity_tie_breaker_availability_component: str | None = "activity_tiebreaker_available",
+    activity_tie_breaker_max_row_margin: float | None = None,
+    activity_tie_breaker_max_column_margin: float | None = None,
     activity_trace_source: str = "auto",
     activity_event_threshold: float = 0.0,
 ) -> dict[SessionEdge, np.ndarray]:
@@ -184,6 +188,12 @@ def build_registered_pairwise_costs(
         raise ValueError("calibrated_model is required when cost='calibrated'")
     if activity_tie_breaker_weight < 0.0:
         raise ValueError("activity_tie_breaker_weight must be non-negative")
+    for margin_name, margin_value in {
+        "activity_tie_breaker_max_row_margin": activity_tie_breaker_max_row_margin,
+        "activity_tie_breaker_max_column_margin": activity_tie_breaker_max_column_margin,
+    }.items():
+        if margin_value is not None and float(margin_value) < 0.0:
+            raise ValueError(f"{margin_name} must be non-negative")
 
     needs_activity_components = (
         return_pairwise_components
@@ -246,6 +256,11 @@ def build_registered_pairwise_costs(
                     bundle.pairwise_components,
                     component_name=activity_tie_breaker_component,
                     weight=activity_tie_breaker_weight,
+                    availability_component=activity_tie_breaker_availability_component,
+                    neutral_cost=activity_tie_breaker_neutral_cost,
+                    base_cost_matrix=cost_matrix,
+                    max_row_margin=activity_tie_breaker_max_row_margin,
+                    max_column_margin=activity_tie_breaker_max_column_margin,
                 )
             pairwise_costs[(source_session, target_session)] = (
                 _penalize_empty_registered_roi_columns(
@@ -281,6 +296,10 @@ def solve_global_assignment_for_sessions(
     pairwise_cost_kwargs: Mapping[str, Any] | None = None,
     activity_tie_breaker_weight: float = 0.0,
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
+    activity_tie_breaker_neutral_cost: float = 0.5,
+    activity_tie_breaker_availability_component: str | None = "activity_tiebreaker_available",
+    activity_tie_breaker_max_row_margin: float | None = None,
+    activity_tie_breaker_max_column_margin: float | None = None,
     activity_trace_source: str = "auto",
     activity_event_threshold: float = 0.0,
     higher_order_consistency_config: (
@@ -303,6 +322,10 @@ def solve_global_assignment_for_sessions(
         pairwise_cost_kwargs=pairwise_cost_kwargs,
         activity_tie_breaker_weight=activity_tie_breaker_weight,
         activity_tie_breaker_component=activity_tie_breaker_component,
+        activity_tie_breaker_neutral_cost=activity_tie_breaker_neutral_cost,
+        activity_tie_breaker_availability_component=activity_tie_breaker_availability_component,
+        activity_tie_breaker_max_row_margin=activity_tie_breaker_max_row_margin,
+        activity_tie_breaker_max_column_margin=activity_tie_breaker_max_column_margin,
         activity_trace_source=activity_trace_source,
         activity_event_threshold=activity_event_threshold,
     )

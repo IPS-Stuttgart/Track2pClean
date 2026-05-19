@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
+import sys
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -16,7 +18,9 @@ from bayescatrack.experiments.registration_qa_report import (  # pylint: disable
     OutputFormat,
     RegistrationQAConfig,
     _benchmark_config,
+    _config_from_args as _registration_qa_config_from_args,
     _registration_metadata,
+    build_arg_parser as _registration_qa_arg_parser,
 )
 from bayescatrack.experiments.track2p_benchmark import (  # pylint: disable=protected-access
     _load_reference_for_subject,
@@ -258,6 +262,54 @@ def format_nonrigid_registration_backend_audit_table(
     return "\n".join(body)
 
 
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the CLI parser for nonrigid backend-audit summaries."""
+
+    parser = _registration_qa_arg_parser()
+    parser.prog = "bayescatrack benchmark nonrigid-backend-audit"
+    parser.description = (
+        "Report nonrigid registration backend diagnostics aggregated over "
+        "manual-GT-linked Track2p session edges."
+    )
+    parser.epilog = (
+        "The command reuses the registration-qa options, but always writes the "
+        "nonrigid backend-audit summary rather than link-level QA rows."
+    )
+    _hide_registration_qa_level_argument(parser)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the nonrigid registration backend audit from the command line."""
+
+    args = build_arg_parser().parse_args(argv)
+    rows = run_registration_backend_audit_report(_registration_qa_config_from_args(args))
+    if args.output is not None:
+        write_nonrigid_registration_backend_audit_results(
+            rows,
+            args.output,
+            args.format,
+        )
+    elif args.format == "json":
+        print(json.dumps(list(rows), indent=2))
+    elif args.format == "csv":
+        writer = csv.DictWriter(sys.stdout, fieldnames=_csv_fieldnames(rows))
+        writer.writeheader()
+        writer.writerows(rows)
+    else:
+        print(format_nonrigid_registration_backend_audit_table(rows))
+    return 0
+
+
+def _hide_registration_qa_level_argument(parser: argparse.ArgumentParser) -> None:
+    """Hide the inherited registration-qa --level flag for this fixed-level CLI."""
+
+    for action in parser._actions:  # pylint: disable=protected-access
+        if "--level" in action.option_strings:
+            action.default = "backend-audit"
+            action.help = argparse.SUPPRESS
+
+
 def _nonrigid_registration_metadata(
     registered_plane: CalciumPlaneData,
 ) -> dict[str, Any]:
@@ -370,3 +422,7 @@ def _format_value(value: Any) -> str:
             return "nan"
         return f"{value:.4g}"
     return str(value)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

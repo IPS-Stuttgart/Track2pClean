@@ -17,6 +17,7 @@ from bayescatrack.association._pyrecest_feature_compat import (
     pairwise_feature_tensor as pyrecest_pairwise_feature_tensor,
 )
 from bayescatrack.association.activity_similarity import (
+    ACTIVITY_TIEBREAKER_FEATURES,
     add_activity_similarity_components,
 )
 from bayescatrack.association.registered_masks import replace_empty_registered_masks
@@ -38,6 +39,7 @@ _ACTIVITY_FEATURES = {
     "activity_similarity",
     "activity_similarity_cost",
     "activity_similarity_available",
+    *ACTIVITY_TIEBREAKER_FEATURES,
 }
 
 DEFAULT_ASSOCIATION_FEATURES = (
@@ -53,6 +55,11 @@ DEFAULT_ASSOCIATION_FEATURES = (
     "activity_similarity_cost",
     "activity_similarity_available",
     "session_gap",
+)
+ACTIVITY_TIEBREAKER_ASSOCIATION_FEATURES = tuple(
+    dict.fromkeys(
+        (*DEFAULT_ASSOCIATION_FEATURES, *ACTIVITY_TIEBREAKER_FEATURES)
+    )
 )
 SPLIT_ROI_STAT_FEATURES: tuple[str, ...] = ()
 LOCAL_EVIDENCE_ASSOCIATION_FEATURES: tuple[str, ...] = ()
@@ -141,6 +148,8 @@ class ReferenceTrainingOptions:
     regularization: float = 1.0e-6
     feature_names: tuple[str, ...] = DEFAULT_ASSOCIATION_FEATURES
     pairwise_cost_kwargs: Mapping[str, Any] | None = None
+    activity_trace_source: str = "auto"
+    activity_event_threshold: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -474,6 +483,8 @@ def _build_training_bundle(
         bundle.pairwise_components,
         sessions[session_a].plane_data,
         registered_measurement_plane,
+        trace_source=options.activity_trace_source,
+        event_threshold=options.activity_event_threshold,
     )
     return bundle
 

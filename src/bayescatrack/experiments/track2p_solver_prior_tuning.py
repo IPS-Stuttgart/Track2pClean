@@ -2,14 +2,25 @@
 
 from __future__ import annotations
 
+import argparse
+import csv
+import json
+import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from typing import Any, Literal
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any, Literal, cast
 
 import numpy as np
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
+    collect_reference_pairwise_example_blocks,
+    collect_reference_training_examples,
     fit_logistic_association_model,
+)
+from bayescatrack.association.monotone_ranker import (
+    MonotoneRankerOptions,
+    fit_monotone_ranking_association_model_from_blocks,
 )
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
@@ -18,10 +29,13 @@ from bayescatrack.association.pyrecest_global_assignment import (
     solve_global_assignment_from_pairwise_costs,
     tracks_to_suite2p_index_matrix,
 )
+from bayescatrack.evaluation.calibration_diagnostics import calibration_summary
 from bayescatrack.experiments.track2p_benchmark import (
+    OutputFormat,
     ProgressReporter,
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
+    format_benchmark_table,
     _score_prediction_against_reference,
     discover_subject_dirs,
 )
@@ -32,12 +46,13 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     _collect_training_examples,
     _load_subject_calibration_data,
     _loso_logistic_model_kwargs,
-    _score_holdout_calibration,
+    _reference_training_options,
     _stringify_class_weight,
     _training_sample_weight,
     _validate_sample_weight_strategy,
 )
 
+CalibrationModelKind = Literal["logistic", "monotone"]
 SampleWeightStrategy = Literal["none", "balanced"]
 SolverPriorObjective = Literal["pairwise_f1", "complete_track_f1"]
 
@@ -108,6 +123,8 @@ def run_track2p_loso_solver_prior_tuning(
     sample_weight: Any | None = None,
     sample_weight_strategy: SampleWeightStrategy = "none",
     model_kwargs: Mapping[str, Any] | None = None,
+    calibration_model: CalibrationModelKind = "logistic",
+    monotone_options: MonotoneRankerOptions | None = None,
     solver_prior_options: SolverPriorTuningOptions | None = None,
 ) -> LosoCalibrationResult:
     """Run calibrated LOSO while tuning solver priors on training subjects.
@@ -130,6 +147,9 @@ def run_track2p_loso_solver_prior_tuning(
     feature_names = tuple(feature_names)
     sample_weight_strategy = _validate_sample_weight_strategy(sample_weight_strategy)
     logistic_model_kwargs = _loso_logistic_model_kwargs(model_kwargs)
+    if calibration_model not in {"logistic", "monotone"}:
+        raise ValueError("calibration_model must be either 'logistic' or 'monotone'")
+    monotone_options = monotone_options or MonotoneRankerOptions()
     solver_prior_options = solver_prior_options or SolverPriorTuningOptions()
     progress = ProgressReporter(
         len(subject_dirs) + len(subject_dirs) * (len(subject_dirs) + 3),
@@ -150,25 +170,17 @@ def run_track2p_loso_solver_prior_tuning(
             for index, subject in enumerate(subject_data)
             if index != held_out_index
         )
-        training_features, training_labels = _collect_training_examples(
+        calibrated_model, training_scores = _fit_calibrated_cost_model(
             training_subjects,
             config=config,
             feature_names=feature_names,
+            calibration_model=calibration_model,
+            sample_weight=sample_weight,
+            sample_weight_strategy=sample_weight_strategy,
+            logistic_model_kwargs=logistic_model_kwargs,
+            monotone_options=monotone_options,
             progress=progress,
             held_out_subject=held_out.subject_name,
-        )
-        weights = _training_sample_weight(
-            training_labels,
-            sample_weight=sample_weight,
-            strategy=sample_weight_strategy,
-        )
-        progress.step(f"fitting model for {held_out.subject_name}")
-        calibrated_model = fit_logistic_association_model(
-            training_features,
-            training_labels,
-            feature_names=feature_names,
-            sample_weight=weights,
-            model_kwargs=logistic_model_kwargs,
         )
         progress.step(f"tuning solver priors for {held_out.subject_name}")
         tuning_result = tune_solver_priors_for_training_subjects(
@@ -197,19 +209,14 @@ def run_track2p_loso_solver_prior_tuning(
             config=config,
             feature_names=feature_names,
         )
-        positives = int(np.sum(training_labels))
         scores: dict[str, float | int | str] = {
             **base_scores,
-            "training_examples": int(training_labels.shape[0]),
-            "positive_examples": positives,
-            "negative_examples": int(training_labels.shape[0] - positives),
-            "calibration_sample_weight_strategy": sample_weight_strategy,
-            "calibration_class_weight": _stringify_class_weight(
-                logistic_model_kwargs.get("class_weight")
-            ),
+            **training_scores,
             **tuning_result.to_score_dict(),
             **calibration_scores,
         }
+        training_examples = int(training_scores["training_examples"])
+        positive_examples = int(training_scores["positive_examples"])
         folds.append(
             LosoCalibrationFold(
                 held_out_subject=held_out.subject_name,
@@ -218,14 +225,14 @@ def run_track2p_loso_solver_prior_tuning(
                 ),
                 benchmark=SubjectBenchmarkResult(
                     subject=held_out.subject_name,
-                    variant="Calibrated costs + LOSO tuned-prior global assignment",
+                    variant=_variant_name_for_calibrated_solver_priors(calibration_model),
                     method=config.method,
                     scores=scores,
                     n_sessions=held_out.reference.n_sessions,
                     reference_source=held_out.reference.source,
                 ),
-                training_examples=int(training_labels.shape[0]),
-                positive_examples=positives,
+                training_examples=training_examples,
+                positive_examples=positive_examples,
             )
         )
     return LosoCalibrationResult(
@@ -366,6 +373,170 @@ def _solve_loso_assignment_with_priors(
     )
 
 
+# pylint: disable=too-many-arguments
+def _fit_calibrated_cost_model(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    calibration_model: CalibrationModelKind,
+    sample_weight: Any | None,
+    sample_weight_strategy: SampleWeightStrategy,
+    logistic_model_kwargs: Mapping[str, Any],
+    monotone_options: MonotoneRankerOptions,
+    progress: ProgressReporter | None,
+    held_out_subject: str,
+) -> tuple[Any, dict[str, float | int | str]]:
+    if calibration_model == "logistic":
+        training_features, training_labels = _collect_training_examples(
+            training_subjects,
+            config=config,
+            feature_names=feature_names,
+            progress=progress,
+            held_out_subject=held_out_subject,
+        )
+        weights = _training_sample_weight(
+            training_labels,
+            sample_weight=sample_weight,
+            strategy=sample_weight_strategy,
+        )
+        if progress is not None:
+            progress.step(f"fitting logistic model for {held_out_subject}")
+        calibrated_model = fit_logistic_association_model(
+            training_features,
+            training_labels,
+            feature_names=feature_names,
+            sample_weight=weights,
+            model_kwargs=logistic_model_kwargs,
+        )
+        positives = int(np.sum(training_labels))
+        return calibrated_model, {
+            "training_examples": int(training_labels.shape[0]),
+            "positive_examples": positives,
+            "negative_examples": int(training_labels.shape[0] - positives),
+            "calibration_model": "logistic",
+            "calibration_feature_names": ",".join(feature_names),
+            "calibration_sample_weight_strategy": sample_weight_strategy,
+            "calibration_class_weight": _stringify_class_weight(
+                logistic_model_kwargs.get("class_weight")
+            ),
+        }
+
+    if calibration_model == "monotone":
+        if sample_weight is not None or sample_weight_strategy != "none":
+            raise ValueError(
+                "sample weights are only supported for calibration_model='logistic'"
+            )
+        blocks = _collect_training_blocks(
+            training_subjects,
+            config=config,
+            feature_names=feature_names,
+            progress=progress,
+            held_out_subject=held_out_subject,
+        )
+        if progress is not None:
+            progress.step(f"fitting monotone ranker for {held_out_subject}")
+        calibrated_model = fit_monotone_ranking_association_model_from_blocks(
+            blocks,
+            options=monotone_options,
+        )
+        positives = int(calibrated_model.n_positive_examples)
+        training_examples = int(calibrated_model.n_training_examples)
+        return calibrated_model, {
+            "training_examples": training_examples,
+            "positive_examples": positives,
+            "negative_examples": int(training_examples - positives),
+            "calibration_model": "monotone-ranker",
+            "calibration_feature_names": ",".join(feature_names),
+            "monotone_feature_names": ",".join(
+                calibrated_model.monotone_feature_names
+            ),
+            "monotone_rank_constraints": int(calibrated_model.n_rank_constraints),
+            "monotone_training_rank_loss": float(
+                calibrated_model.training_rank_loss
+            ),
+            "monotone_training_binary_loss": float(
+                calibrated_model.training_binary_loss
+            ),
+            **_monotone_option_scores(monotone_options),
+        }
+
+    raise ValueError("calibration_model must be either 'logistic' or 'monotone'")
+
+
+def _collect_training_blocks(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    progress: ProgressReporter | None,
+    held_out_subject: str,
+) -> tuple[Any, ...]:
+    blocks: list[Any] = []
+    training_options = _reference_training_options(config, feature_names)
+    for subject in training_subjects:
+        if progress is not None:
+            progress.step(
+                f"collecting {subject.subject_name} ranking blocks for {held_out_subject}"
+            )
+        blocks.extend(
+            collect_reference_pairwise_example_blocks(
+                subject.sessions,
+                subject.reference,
+                session_edges=session_edge_pairs(
+                    len(subject.sessions), max_gap=config.max_gap
+                ),
+                options=training_options,
+            )
+        )
+    if not blocks:
+        raise ValueError("At least one training block is required")
+    return tuple(blocks)
+
+
+def _score_holdout_calibration(
+    calibrated_model: Any,
+    held_out: SubjectCalibrationData,
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+) -> dict[str, float | int]:
+    features, labels = collect_reference_training_examples(
+        held_out.sessions,
+        held_out.reference,
+        session_edges=session_edge_pairs(len(held_out.sessions), max_gap=config.max_gap),
+        options=_reference_training_options(config, feature_names),
+    )
+    probabilities = np.asarray(
+        _predict_match_probability(calibrated_model, features), dtype=float
+    ).reshape(-1)
+    return calibration_summary(probabilities, np.asarray(labels).reshape(-1))
+
+
+def _predict_match_probability(calibrated_model: Any, features: np.ndarray) -> np.ndarray:
+    if hasattr(calibrated_model, "predict_match_probability"):
+        return np.asarray(calibrated_model.predict_match_probability(features))
+    return np.asarray(calibrated_model.model.predict_match_probability(features))
+
+
+def _monotone_option_scores(
+    options: MonotoneRankerOptions,
+) -> dict[str, float | int | str]:
+    values = asdict(options)
+    return {
+        f"monotone_option_{key}": ",".join(value) if isinstance(value, tuple) else value
+        for key, value in values.items()
+    }
+
+
+def _variant_name_for_calibrated_solver_priors(
+    calibration_model: CalibrationModelKind,
+) -> str:
+    if calibration_model == "monotone":
+        return "Monotone ranker costs + LOSO tuned-prior global assignment"
+    return "Calibrated costs + LOSO tuned-prior global assignment"
+
+
 def _mean_numeric_scores(
     rows: Sequence[Mapping[str, float | int | str]],
 ) -> dict[str, float]:
@@ -484,3 +655,267 @@ def _dedupe_threshold_values(
 
 def _threshold_label(threshold: float | None) -> float | str:
     return "none" if threshold is None else float(threshold)
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the calibrated/monotone solver-prior tuning parser."""
+
+    parser = argparse.ArgumentParser(
+        prog="bayescatrack benchmark track2p-solver-prior-loso --cost calibrated",
+        description=(
+            "Run Track2p LOSO calibrated or monotone global assignment while "
+            "tuning solver priors inside each training fold."
+        ),
+    )
+    parser.add_argument("--data", required=True, type=Path)
+    parser.add_argument("--plane", dest="plane_name", default="plane0")
+    parser.add_argument(
+        "--input-format", default="auto", choices=("auto", "suite2p", "npy")
+    )
+    parser.add_argument("--reference", type=Path, default=None)
+    parser.add_argument(
+        "--reference-kind",
+        default="manual-gt",
+        choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
+    )
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
+    parser.add_argument("--curated-only", action="store_true")
+    parser.add_argument("--seed-session", type=int, default=0)
+    parser.add_argument(
+        "--restrict-to-reference-seed-rois",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument("--cost", default="calibrated", choices=("calibrated",))
+    parser.add_argument("--max-gap", type=int, default=2)
+    parser.add_argument(
+        "--transform-type",
+        default="affine",
+        choices=(
+            "affine",
+            "rigid",
+            "fov-translation",
+            "fov-affine",
+            "bspline",
+            "tps",
+            "thin-plate-spline",
+            "local-affine-grid",
+            "optical-flow",
+            "none",
+        ),
+    )
+    parser.add_argument("--start-cost", type=float, default=5.0)
+    parser.add_argument("--end-cost", type=float, default=5.0)
+    parser.add_argument("--gap-penalty", type=float, default=1.0)
+    parser.add_argument("--cost-threshold", type=float, default=6.0)
+    parser.add_argument("--no-cost-threshold", action="store_true")
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument("--include-non-cells", action="store_true")
+    parser.add_argument("--cell-probability-threshold", type=float, default=0.5)
+    parser.add_argument("--weighted-masks", action="store_true")
+    parser.add_argument(
+        "--exclude-overlapping-pixels",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument("--order", default="xy", choices=("xy", "yx"))
+    parser.add_argument("--weighted-centroids", action="store_true")
+    parser.add_argument("--velocity-variance", type=float, default=25.0)
+    parser.add_argument("--regularization", type=float, default=1.0e-6)
+    parser.add_argument("--pairwise-cost-kwargs-json", default=None)
+    parser.add_argument(
+        "--calibration-model",
+        default="logistic",
+        choices=("logistic", "monotone"),
+        help="Learned edge-cost model to fit inside each LOSO training fold.",
+    )
+    parser.add_argument("--feature-names", default=",".join(DEFAULT_ASSOCIATION_FEATURES))
+    parser.add_argument(
+        "--sample-weight-strategy",
+        default="none",
+        choices=("none", "balanced"),
+        help="Logistic calibration sample weighting; monotone ranker requires none.",
+    )
+    parser.add_argument("--model-kwargs-json", default=None)
+    parser.add_argument("--monotone-ranker-kwargs-json", default=None)
+    parser.add_argument(
+        "--objective",
+        default="pairwise_f1",
+        choices=("pairwise_f1", "complete_track_f1"),
+    )
+    parser.add_argument("--start-costs", default=None)
+    parser.add_argument("--end-costs", default=None)
+    parser.add_argument("--gap-penalties", default=None)
+    parser.add_argument("--cost-thresholds", default=None)
+    parser.add_argument(
+        "--progress", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    config = _config_from_args(args)
+    options = SolverPriorTuningOptions(
+        objective=cast(SolverPriorObjective, args.objective),
+        start_costs=_parse_optional_float_tuple(args.start_costs, name="--start-costs"),
+        end_costs=_parse_optional_float_tuple(args.end_costs, name="--end-costs"),
+        gap_penalties=_parse_optional_float_tuple(args.gap_penalties, name="--gap-penalties"),
+        cost_thresholds=_parse_optional_threshold_tuple(args.cost_thresholds),
+    )
+    rows = run_track2p_loso_solver_prior_tuning(
+        config,
+        feature_names=_parse_feature_names(args.feature_names),
+        sample_weight_strategy=cast(SampleWeightStrategy, args.sample_weight_strategy),
+        model_kwargs=_parse_json_object(args.model_kwargs_json, name="--model-kwargs-json"),
+        calibration_model=cast(CalibrationModelKind, args.calibration_model),
+        monotone_options=_monotone_options_from_json(args.monotone_ranker_kwargs_json),
+        solver_prior_options=options,
+    ).to_rows()
+    if args.output is not None:
+        from bayescatrack.experiments.track2p_benchmark import write_results
+
+        write_results(rows, args.output, cast(OutputFormat, args.format))
+    else:
+        _write_stdout(rows, cast(OutputFormat, args.format))
+    return 0
+
+
+def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
+    return Track2pBenchmarkConfig(
+        data=args.data,
+        method="global-assignment",
+        split="leave-one-subject-out",
+        plane_name=args.plane_name,
+        input_format=args.input_format,
+        reference=args.reference,
+        reference_kind=args.reference_kind,
+        allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
+        curated_only=args.curated_only,
+        seed_session=args.seed_session,
+        restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        cost="calibrated",
+        max_gap=args.max_gap,
+        transform_type=args.transform_type,
+        start_cost=args.start_cost,
+        end_cost=args.end_cost,
+        gap_penalty=args.gap_penalty,
+        cost_threshold=None if args.no_cost_threshold else args.cost_threshold,
+        include_behavior=args.include_behavior,
+        include_non_cells=args.include_non_cells,
+        cell_probability_threshold=args.cell_probability_threshold,
+        weighted_masks=args.weighted_masks,
+        exclude_overlapping_pixels=args.exclude_overlapping_pixels,
+        order=args.order,
+        weighted_centroids=args.weighted_centroids,
+        velocity_variance=args.velocity_variance,
+        regularization=args.regularization,
+        pairwise_cost_kwargs=_parse_json_object(
+            args.pairwise_cost_kwargs_json, name="--pairwise-cost-kwargs-json"
+        ),
+        progress=args.progress,
+    )
+
+
+def _parse_feature_names(raw: str) -> tuple[str, ...]:
+    names = tuple(token.strip() for token in raw.split(","))
+    if not names or any(not name for name in names):
+        raise ValueError("--feature-names must be a comma-separated list without empty entries")
+    return names
+
+
+def _parse_json_object(raw: str | None, *, name: str) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{name} must decode to a JSON object")
+    return parsed
+
+
+def _monotone_options_from_json(raw: str | None) -> MonotoneRankerOptions:
+    parsed = _parse_json_object(raw, name="--monotone-ranker-kwargs-json")
+    if parsed is None:
+        return MonotoneRankerOptions()
+    return MonotoneRankerOptions(**parsed)
+
+
+def _parse_optional_float_tuple(raw: str | None, *, name: str) -> tuple[float, ...] | None:
+    if raw is None:
+        return None
+    return tuple(_parse_float_token(token, name=name) for token in _split_csv(raw, name=name))
+
+
+def _parse_optional_threshold_tuple(raw: str | None) -> tuple[float | None, ...] | None:
+    if raw is None:
+        return None
+    values: list[float | None] = []
+    for token in _split_csv(raw, name="--cost-thresholds"):
+        values.append(
+            None
+            if token.lower() in {"none", "null", "off", "disabled"}
+            else _parse_float_token(token, name="--cost-thresholds")
+        )
+    return tuple(values)
+
+
+def _split_csv(raw: str, *, name: str) -> tuple[str, ...]:
+    tokens = tuple(token.strip() for token in raw.split(","))
+    if not tokens or any(not token for token in tokens):
+        raise ValueError(f"{name} must be a comma-separated list without empty entries")
+    return tokens
+
+
+def _parse_float_token(token: str, *, name: str) -> float:
+    try:
+        return float(token)
+    except ValueError as exc:
+        raise ValueError(f"{name} contains a non-numeric value: {token!r}") from exc
+
+
+def _write_stdout(
+    rows: Sequence[dict[str, float | int | str]], output_format: OutputFormat
+) -> None:
+    if output_format == "json":
+        print(json.dumps(list(rows), indent=2))
+        return
+    if output_format == "csv":
+        writer = csv.DictWriter(sys.stdout, fieldnames=_csv_fieldnames(rows))
+        writer.writeheader()
+        writer.writerows(rows)
+        return
+    print(format_benchmark_table(rows))
+
+
+def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
+    preferred = [
+        "subject",
+        "variant",
+        "method",
+        "n_sessions",
+        "reference_source",
+        "pairwise_f1",
+        "complete_track_f1",
+        "training_examples",
+        "positive_examples",
+        "negative_examples",
+        "calibration_model",
+        "solver_prior_objective",
+        "tuned_start_cost",
+        "tuned_end_cost",
+        "tuned_gap_penalty",
+        "tuned_cost_threshold",
+    ]
+    remaining = sorted({key for row in rows for key in row} - set(preferred))
+    return [key for key in preferred if any(key in row for row in rows)] + remaining
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

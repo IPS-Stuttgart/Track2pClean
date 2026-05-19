@@ -18,6 +18,10 @@ from bayescatrack.experiments.track2p_benchmark import (
     run_track2p_benchmark,
     write_results,
 )
+from bayescatrack.experiments.track2p_fov_affine_benchmark import (
+    _enable_fov_affine_choice,
+    _register_plane_pair_with_fov_affine,
+)
 
 
 def _add_shifted_iou_options(parser: Any) -> None:
@@ -83,6 +87,7 @@ def _write_stdout(rows: list[dict[str, Any]], output_format: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
     parser.prog = "bayescatrack benchmark track2p-shifted-iou"
+    _enable_fov_affine_choice(parser)
     _add_shifted_iou_options(parser)
     args = parser.parse_args(argv)
     if args.shifted_iou_radius < 0:
@@ -118,14 +123,22 @@ def main(argv: list[str] | None = None) -> int:
         )
     config = replace(config, pairwise_cost_kwargs=pairwise_cost_kwargs)
 
+    import bayescatrack.association.pyrecest_global_assignment as assignment
+
+    original_register = assignment.register_plane_pair
     original_pairwise_cost = install_shifted_overlap_cost_patch()
+    assignment.register_plane_pair = _register_plane_pair_with_fov_affine
     try:
         results = run_track2p_benchmark(config)
     finally:
+        assignment.register_plane_pair = original_register
         CalciumPlaneData.build_pairwise_cost_matrix = original_pairwise_cost  # type: ignore[method-assign]
 
     rows = [result.to_dict() for result in results]
     for row in rows:
+        row["registration_wrapper"] = (
+            "fov-affine" if config.transform_type == "fov-affine" else ""
+        )
         row["shifted_iou_radius"] = int(args.shifted_iou_radius)
         row["shifted_iou_additive_weight"] = float(args.shifted_iou_additive_weight)
         row["shifted_mask_cosine_weight"] = float(args.shifted_mask_cosine_weight)

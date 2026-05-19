@@ -345,4 +345,6 @@ def _reference_training_options(
         regularization=config.regularization,
         feature_names=tuple(feature_names),
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+        activity_trace_source=config.activity_trace_source,
+        activity_event_threshold=config.activity_event_threshold,
     )

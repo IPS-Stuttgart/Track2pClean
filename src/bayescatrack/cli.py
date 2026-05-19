@@ -55,12 +55,28 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Sweep Track2p global-assignment cost scales and thresholds",
         )
         subparsers.add_parser(
+            "track2p-shifted-iou",
+            help="Run one Track2p shifted-IoU global-assignment benchmark",
+        )
+        subparsers.add_parser(
+            "track2p-shifted-iou-ablation",
+            help="Run a multi-radius shifted-IoU benchmark and edge-ranking ablation",
+        )
+        subparsers.add_parser(
             "track2p-solver-prior-loso",
             help="Tune Track2p global-assignment solver priors inside LOSO folds",
         )
         subparsers.add_parser(
+            "track2p-solver-oracles",
+            help="Run solver-oracle global-assignment diagnostics and paper artifacts",
+        )
+        subparsers.add_parser(
             "track2p-monotone-loso",
             help="Run LOSO calibrated global assignment with monotone ranking costs",
+        )
+        subparsers.add_parser(
+            "track2p-teacher-distill",
+            help="Train a monotone ranker from Track2p teacher edges in LOSO folds",
         )
         subparsers.add_parser(
             "track2p-teacher-audit",
@@ -79,6 +95,10 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Rank manual-GT Track2p edges within pairwise cost/feature matrices",
         )
         subparsers.add_parser(
+            "solver-oracles",
+            help="Run GT edge-cost, rank-k, and oracle-registration solver diagnostics",
+        )
+        subparsers.add_parser(
             "registration-qa",
             help="Report registration quality on manual-GT Track2p links",
         )
@@ -89,6 +109,10 @@ def _handle_benchmark(args: list[str]) -> int:
         subparsers.add_parser(
             "growth-registration-qa",
             help="Report spatially resolved growth/deformation registration QA",
+        )
+        subparsers.add_parser(
+            "nonrigid-backend-audit",
+            help="Report nonrigid registration backend diagnostics",
         )
         subparsers.add_parser(
             "validate-track2p-inputs",
@@ -106,7 +130,7 @@ def _handle_benchmark(args: list[str]) -> int:
             "compare", help="Aggregate benchmark CSVs into a comparison table"
         )
         subparsers.add_parser("suite", help="Run a JSON benchmark manifest")
-        parser.parse_args(args)
+        parser.print_help()
         return 0
 
     if args[0] == "track2p":
@@ -121,18 +145,47 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_cost_sweep_main(args[1:]))
-    if args[0] == "track2p-solver-prior-loso":
-        from bayescatrack.experiments.solver_prior_tuning import (
-            main as _track2p_solver_prior_loso_main,
+    if args[0] == "track2p-shifted-iou":
+        from bayescatrack.experiments.track2p_shifted_iou_benchmark import (
+            main as _track2p_shifted_iou_main,
         )
 
+        return int(_track2p_shifted_iou_main(args[1:]))
+    if args[0] == "track2p-shifted-iou-ablation":
+        from bayescatrack.experiments.track2p_shifted_iou_ablation import (
+            main as _track2p_shifted_iou_ablation_main,
+        )
+
+        return int(_track2p_shifted_iou_ablation_main(args[1:]))
+    if args[0] == "track2p-solver-prior-loso":
+        if _solver_prior_uses_calibrated_cost(args[1:]):
+            from bayescatrack.experiments.track2p_solver_prior_tuning import (
+                main as _track2p_solver_prior_loso_main,
+            )
+        else:
+            from bayescatrack.experiments.solver_prior_tuning import (
+                main as _track2p_solver_prior_loso_main,
+            )
+
         return int(_track2p_solver_prior_loso_main(args[1:]))
+    if args[0] == "track2p-solver-oracles":
+        from bayescatrack.experiments.track2p_solver_oracle_benchmark import (
+            main as _track2p_solver_oracles_main,
+        )
+
+        return int(_track2p_solver_oracles_main(args[1:]))
     if args[0] == "track2p-monotone-loso":
         from bayescatrack.experiments.track2p_monotone_loso_calibration import (
             main as _track2p_monotone_loso_main,
         )
 
         return int(_track2p_monotone_loso_main(args[1:]))
+    if args[0] == "track2p-teacher-distill":
+        from bayescatrack.experiments.track2p_teacher_distillation import (
+            main as _track2p_teacher_distillation_main,
+        )
+
+        return int(_track2p_teacher_distillation_main(args[1:]))
     if args[0] == "track2p-teacher-audit":
         from bayescatrack.experiments.track2p_teacher_audit import (
             main as _track2p_teacher_audit_main,
@@ -151,6 +204,12 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_edge_ranking_main(args[1:]))
+    if args[0] == "solver-oracles":
+        from bayescatrack.experiments.track2p_solver_oracles import (
+            main as _track2p_solver_oracles_main,
+        )
+
+        return int(_track2p_solver_oracles_main(args[1:]))
     if args[0] == "registration-qa":
         from bayescatrack.experiments.registration_qa_report import (
             main as _registration_qa_main,
@@ -169,6 +228,12 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_growth_registration_qa_main(args[1:]))
+    if args[0] == "nonrigid-backend-audit":
+        from bayescatrack.experiments.nonrigid_backend_audit import (
+            main as _nonrigid_backend_audit_main,
+        )
+
+        return int(_nonrigid_backend_audit_main(args[1:]))
     if args[0] == "validate-track2p-inputs":
         from bayescatrack.experiments.track2p_input_validator import (
             main as _track2p_input_validator_main,
@@ -197,6 +262,23 @@ def _handle_benchmark(args: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="bayescatrack benchmark")
     parser.error(f"unknown benchmark {args[0]!r}")
     return 2
+
+
+def _solver_prior_uses_calibrated_cost(args: list[str]) -> bool:
+    """Return whether the solver-prior command requested learned costs.
+
+    The public ``track2p-solver-prior-loso`` subcommand supports both the older
+    fixed-cost prior tuner and the newer calibrated/monotone learned-cost tuner.
+    Dispatching here keeps existing fixed-cost workflow invocations unchanged
+    while exposing ``--cost calibrated`` through the same CLI entry point.
+    """
+
+    for index, arg in enumerate(args):
+        if arg == "--cost" and index + 1 < len(args):
+            return args[index + 1] == "calibrated"
+        if arg.startswith("--cost="):
+            return arg.split("=", 1)[1] == "calibrated"
+    return False
 
 
 if __name__ == "__main__":  # pragma: no cover

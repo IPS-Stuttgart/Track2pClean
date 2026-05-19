@@ -119,6 +119,29 @@ jobs:
           TRACK2P_RESTRICT_TO_REFERENCE_SEED_ROIS: "true"
         run: python .github/scripts/run_track2p_oracle_benchmark.py
 
+      - name: Run solver-oracle diagnostics
+        env:
+          TRACK2P_DATA_PATH: ${{ steps.prep.outputs.data_root }}
+          TRACK2P_REFERENCE_PATH: ${{ steps.prep.outputs.reference_root }}
+          TRACK2P_REFERENCE_KIND: ${{ steps.prep.outputs.reference_kind }}
+          TRACK2P_PLANE: plane0
+          TRACK2P_INPUT_FORMAT: suite2p
+        run: |
+          python -m bayescatrack.cli benchmark track2p-solver-oracles \
+            --data "$TRACK2P_DATA_PATH" \
+            --reference "$TRACK2P_REFERENCE_PATH" \
+            --reference-kind "$TRACK2P_REFERENCE_KIND" \
+            --plane "$TRACK2P_PLANE" \
+            --input-format "$TRACK2P_INPUT_FORMAT" \
+            --include-non-cells \
+            --no-include-behavior \
+            --output-dir benchmark-results/solver-oracles \
+            --format table
+
+      - name: Add solver-oracle summary to job summary
+        if: always() && hashFiles('benchmark-results/solver-oracles/solver_oracles.md') != ''
+        run: cat benchmark-results/solver-oracles/solver_oracles.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload oracle benchmark results
         if: always() && hashFiles('benchmark-results/**') != ''
         uses: actions/upload-artifact@v7

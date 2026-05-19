@@ -80,6 +80,15 @@ class Track2pBenchmarkConfig:
     velocity_variance: float = 25.0
     regularization: float = 1.0e-6
     pairwise_cost_kwargs: dict[str, Any] | None = None
+    activity_tie_breaker_weight: float = 0.0
+    activity_tie_breaker_component: str = "activity_tiebreaker_cost"
+    activity_tie_breaker_neutral_cost: float = 0.5
+    activity_tie_breaker_availability_component: str | None = "activity_tiebreaker_available"
+    activity_tie_breaker_max_row_margin: float | None = None
+    activity_tie_breaker_max_column_margin: float | None = None
+    activity_trace_source: str = "auto"
+    activity_event_threshold: float = 0.0
+    load_neuropil_traces: bool = False
     progress: bool = False
 
 
@@ -410,6 +419,57 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="JSON object merged into pairwise cost kwargs",
     )
     parser.add_argument(
+        "--activity-tie-breaker-weight",
+        type=float,
+        default=0.0,
+        help="Weak additive activity tie-breaker weight; 0 disables the adjustment",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-component",
+        default="activity_tiebreaker_cost",
+        help="Pairwise activity component used for the weak additive tie-breaker",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-neutral-cost",
+        type=float,
+        default=0.5,
+        help="Activity component value treated as neutral before centering the tie-breaker",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-availability-component",
+        default="activity_tiebreaker_available",
+        help="Availability component gating activity adjustments; use 'none' to disable gating",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-max-row-margin",
+        type=float,
+        default=None,
+        help="Only apply activity to candidates within this cost margin of the row best edge",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-max-column-margin",
+        type=float,
+        default=None,
+        help="Only apply activity to candidates within this cost margin of the column best edge",
+    )
+    parser.add_argument(
+        "--activity-trace-source",
+        default="auto",
+        choices=("auto", "traces", "spike_traces", "neuropil_traces"),
+        help="Trace source for legacy activity_similarity_cost and additive activity tie-breakers",
+    )
+    parser.add_argument(
+        "--activity-event-threshold",
+        type=float,
+        default=0.0,
+        help="Spike/event threshold used for event-rate activity features",
+    )
+    parser.add_argument(
+        "--load-neuropil-traces",
+        action="store_true",
+        help="Load Suite2p Fneu.npy so neuropil-ratio activity features are available",
+    )
+    parser.add_argument(
         "--progress",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -482,7 +542,12 @@ def _predict_subject_tracks(
     sessions = _load_subject_sessions(subject_dir, config)
     assignment = solve_configured_global_assignment(sessions, config)
     predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
-    return predicted, _variant_name(config.cost)
+    return (
+        predicted,
+        _variant_name(
+            config.cost, activity_tie_breaker_weight=config.activity_tie_breaker_weight
+        ),
+    )
 
 
 def oracle_ground_truth_link_tracks(
@@ -549,21 +614,35 @@ def solve_configured_global_assignment(
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+        activity_tie_breaker_weight=config.activity_tie_breaker_weight,
+        activity_tie_breaker_component=config.activity_tie_breaker_component,
+        activity_tie_breaker_neutral_cost=config.activity_tie_breaker_neutral_cost,
+        activity_tie_breaker_availability_component=config.activity_tie_breaker_availability_component,
+        activity_tie_breaker_max_row_margin=config.activity_tie_breaker_max_row_margin,
+        activity_tie_breaker_max_column_margin=config.activity_tie_breaker_max_column_margin,
+        activity_trace_source=config.activity_trace_source,
+        activity_event_threshold=config.activity_event_threshold,
     )
 
 
-def _variant_name(cost: AssociationCost) -> str:
+def _variant_name(
+    cost: AssociationCost, *, activity_tie_breaker_weight: float = 0.0
+) -> str:
     if cost == "registered-iou":
-        return "Same costs + global assignment"
-    if cost == "registered-soft-iou":
-        return "Soft-IoU costs + global assignment"
-    if cost == "registered-shifted-iou":
-        return "Shifted-IoU costs + global assignment"
-    if cost == "roi-aware-shifted":
-        return "Shifted ROI-aware costs + global assignment"
-    if cost == "calibrated":
-        return "Calibrated costs + global assignment"
-    return "BayesCaTrack costs + global assignment"
+        variant = "Same costs + global assignment"
+    elif cost == "registered-soft-iou":
+        variant = "Soft-IoU costs + global assignment"
+    elif cost == "registered-shifted-iou":
+        variant = "Shifted-IoU costs + global assignment"
+    elif cost == "roi-aware-shifted":
+        variant = "Shifted ROI-aware costs + global assignment"
+    elif cost == "calibrated":
+        variant = "Calibrated costs + global assignment"
+    else:
+        variant = "BayesCaTrack costs + global assignment"
+    if activity_tie_breaker_weight > 0.0:
+        variant += f" + activity tie-breaker (w={activity_tie_breaker_weight:g})"
+    return variant
 
 
 # pylint: disable=too-many-return-statements,too-many-branches
@@ -873,6 +952,7 @@ def _load_aligned_reference_for_config(
         cell_probability_threshold=config.cell_probability_threshold,
         weighted_masks=config.weighted_masks,
         exclude_overlapping_pixels=config.exclude_overlapping_pixels,
+        load_neuropil_traces=config.load_neuropil_traces,
     )
 
 
@@ -888,6 +968,7 @@ def _load_subject_sessions(
         cell_probability_threshold=config.cell_probability_threshold,
         weighted_masks=config.weighted_masks,
         exclude_overlapping_pixels=config.exclude_overlapping_pixels,
+        load_neuropil_traces=config.load_neuropil_traces,
     )
 
 
@@ -963,6 +1044,9 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         if not isinstance(parsed, dict):
             raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
         pairwise_cost_kwargs = parsed
+    activity_tie_breaker_availability_component = _optional_component_name_from_arg(
+        args.activity_tie_breaker_availability_component
+    )
     return Track2pBenchmarkConfig(
         data=args.data,
         method=args.method,
@@ -992,8 +1076,26 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        activity_tie_breaker_weight=args.activity_tie_breaker_weight,
+        activity_tie_breaker_component=args.activity_tie_breaker_component,
+        activity_tie_breaker_neutral_cost=args.activity_tie_breaker_neutral_cost,
+        activity_tie_breaker_availability_component=activity_tie_breaker_availability_component,
+        activity_tie_breaker_max_row_margin=args.activity_tie_breaker_max_row_margin,
+        activity_tie_breaker_max_column_margin=args.activity_tie_breaker_max_column_margin,
+        activity_trace_source=args.activity_trace_source,
+        activity_event_threshold=args.activity_event_threshold,
+        load_neuropil_traces=args.load_neuropil_traces,
         progress=args.progress,
     )
+
+
+def _optional_component_name_from_arg(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if stripped.lower() in {"", "none", "null"}:
+        return None
+    return stripped
 
 
 def _write_stdout(

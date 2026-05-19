@@ -7,11 +7,18 @@ import csv
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+import numpy as np
 
 from bayescatrack.association.calibrated_costs import (
     ReferenceTrainingOptions,
     collect_reference_pairwise_example_blocks,
+    fit_logistic_association_model,
+)
+from bayescatrack.association.monotone_ranking_costs import (
+    MonotoneRankerOptions,
+    fit_monotone_ranked_association_model,
 )
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
@@ -28,6 +35,10 @@ from bayescatrack.evaluation.edge_ranking import (
     rank_labeled_edges,
     score_matrices_from_feature_tensor,
     summarize_edge_ranking_rows,
+)
+from bayescatrack.experiments.calibration_hard_negatives import (
+    CandidateHardNegativeOptions,
+    collect_candidate_limited_training_examples,
 )
 from bayescatrack.experiments.track2p_benchmark import (
     ProgressReporter,
@@ -63,6 +74,8 @@ DEFAULT_SIMILARITY_FEATURES = (
     "activity_similarity",
 )
 
+LearnedScoreModel = Literal["none", "logistic", "monotone"]
+
 EDGE_FIELDNAMES = [
     "subject",
     "session_a",
@@ -70,6 +83,8 @@ EDGE_FIELDNAMES = [
     "session_a_name",
     "session_b_name",
     "session_gap",
+    "learned_score_model",
+    "training_subjects",
     "reference_roi_index",
     "measurement_roi_index",
     "score_name",
@@ -143,6 +158,9 @@ def run_track2p_edge_ranking(
     feature_names: Sequence[str] = DEFAULT_EDGE_RANKING_FEATURES,
     similarity_features: Sequence[str] = DEFAULT_SIMILARITY_FEATURES,
     hit_ks: Sequence[int] = DEFAULT_HIT_KS,
+    learned_score_model: LearnedScoreModel = "none",
+    calibrated_model_kwargs: Mapping[str, Any] | None = None,
+    monotone_ranker_options: MonotoneRankerOptions | None = None,
 ) -> tuple[int, int]:
     """Export per-edge and per-session-pair edge-ranking diagnostics.
 
@@ -150,11 +168,9 @@ def run_track2p_edge_ranking(
     CSV groups those rows by subject, session pair, gap, and score name.
     """
 
-    if config.cost == "calibrated":
-        raise ValueError(
-            "Edge-ranking diagnostics do not fit/load calibrated models yet; use cost='registered-iou' or cost='roi-aware'."
-        )
-
+    learned_score_model = _effective_learned_score_model(
+        learned_score_model, config.cost
+    )
     subject_dirs = tuple(discover_subject_dirs(config.data))
     if not subject_dirs:
         raise ValueError(
@@ -164,6 +180,9 @@ def run_track2p_edge_ranking(
     feature_names = tuple(dict.fromkeys(str(feature) for feature in feature_names))
     if not feature_names:
         raise ValueError("At least one feature/score name is required")
+
+    if learned_score_model != "none" and len(subject_dirs) < 2:
+        raise ValueError("Learned-score edge ranking requires at least two subjects")
 
     score_directions: dict[str, ScoreDirection] = {
         str(feature): "similarity" for feature in similarity_features
@@ -183,6 +202,25 @@ def run_track2p_edge_ranking(
         )
         sessions = _load_subject_sessions(subject_dir, config)
         _validate_reference_roi_indices(reference, sessions)
+        learned_model = None
+        training_subject_names: tuple[str, ...] = ()
+        if learned_score_model != "none":
+            training_subject_names = tuple(
+                candidate.name for candidate in subject_dirs if candidate != subject_dir
+            )
+            training_blocks = _collect_learned_score_training_blocks(
+                subject_dirs,
+                subject_dir,
+                config=config,
+                feature_names=feature_names,
+            )
+            learned_model = _fit_learned_score_model(
+                training_blocks,
+                learned_score_model=learned_score_model,
+                feature_names=feature_names,
+                calibrated_model_kwargs=calibrated_model_kwargs,
+                monotone_ranker_options=monotone_ranker_options,
+            )
         options = _reference_training_options(config, feature_names)
         edges = session_edge_pairs(len(sessions), max_gap=config.max_gap)
         blocks = collect_reference_pairwise_example_blocks(
@@ -197,9 +235,20 @@ def run_track2p_edge_ranking(
                 "session_b_name": sessions[block.session_b].session_name,
                 "session_gap": int(block.gap),
             }
+            if learned_score_model != "none":
+                metadata["learned_score_model"] = learned_score_model
+                metadata["training_subjects"] = ",".join(training_subject_names)
             score_matrices = score_matrices_from_feature_tensor(
                 block.features, block.feature_names
             )
+            if learned_model is not None:
+                score_matrices.update(
+                    _learned_score_matrices(
+                        learned_model,
+                        block.features,
+                        learned_score_model=learned_score_model,
+                    )
+                )
             output_rows.extend(
                 rank_labeled_edges(
                     block.labels,
@@ -219,7 +268,7 @@ def run_track2p_edge_ranking(
                     ),
                     reference_roi_indices=block.reference_roi_indices,
                     measurement_roi_indices=block.measurement_roi_indices,
-                    score_names=block.feature_names,
+                    score_names=tuple(score_matrices.keys()),
                     score_directions=score_directions,
                     metadata=metadata,
                 )
@@ -235,6 +284,142 @@ def run_track2p_edge_ranking(
     _write_csv(output_rows, output_path, preferred_fieldnames=EDGE_FIELDNAMES)
     _write_csv(summary_rows, summary_path, preferred_fieldnames=SUMMARY_FIELDNAMES)
     return len(output_rows), len(summary_rows)
+
+
+def _collect_learned_score_training_blocks(
+    subject_dirs: Sequence[Path],
+    held_out_subject_dir: Path,
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+) -> tuple[Any, ...]:
+    """Collect manual-GT pairwise blocks from all non-held-out subjects."""
+
+    blocks: list[Any] = []
+    options = _reference_training_options(config, feature_names)
+    for training_subject_dir in subject_dirs:
+        if training_subject_dir == held_out_subject_dir:
+            continue
+        reference = _load_reference_for_subject(
+            training_subject_dir, data_root=config.data, config=config
+        )
+        _validate_reference_for_benchmark(
+            reference, subject_dir=training_subject_dir, config=config
+        )
+        sessions = _load_subject_sessions(training_subject_dir, config)
+        _validate_reference_roi_indices(reference, sessions)
+        blocks.extend(
+            collect_reference_pairwise_example_blocks(
+                sessions,
+                reference,
+                session_edges=session_edge_pairs(
+                    len(sessions), max_gap=config.max_gap
+                ),
+                options=options,
+            )
+        )
+    if not blocks:
+        raise ValueError("No learned-score training blocks were collected")
+    return tuple(blocks)
+
+
+def _fit_learned_score_model(
+    training_blocks: Sequence[Any],
+    *,
+    learned_score_model: LearnedScoreModel,
+    feature_names: Sequence[str],
+    calibrated_model_kwargs: Mapping[str, Any] | None,
+    monotone_ranker_options: MonotoneRankerOptions | None,
+) -> Any:
+    """Fit the LOSO model whose learned scores will be ranked on held-out data."""
+
+    if learned_score_model == "logistic":
+        features, labels = collect_candidate_limited_training_examples(
+            training_blocks, options=CandidateHardNegativeOptions()
+        )
+        model_kwargs = {"class_weight": None}
+        model_kwargs.update(dict(calibrated_model_kwargs or {}))
+        return fit_logistic_association_model(
+            features,
+            labels,
+            feature_names=tuple(feature_names),
+            model_kwargs=model_kwargs,
+        )
+    if learned_score_model == "monotone":
+        return fit_monotone_ranked_association_model(
+            training_blocks,
+            feature_names=tuple(feature_names),
+            options=monotone_ranker_options or MonotoneRankerOptions(),
+        )
+    raise ValueError(f"Unsupported learned-score model: {learned_score_model!r}")
+
+
+def _learned_score_matrices(
+    calibrated_model: Any,
+    features: Any,
+    *,
+    learned_score_model: LearnedScoreModel,
+) -> dict[str, Any]:
+    """Return learned cost/probability score planes for one feature tensor."""
+
+    prefix = "calibrated" if learned_score_model == "logistic" else "monotone"
+    probabilities = _predict_probability_matrix(calibrated_model, features)
+    matrices: dict[str, Any] = {
+        f"{prefix}_match_probability": probabilities,
+        f"{prefix}_cost": -np.log(np.clip(probabilities, 1.0e-12, 1.0)),
+    }
+    raw_score = _optional_raw_score_matrix(calibrated_model, features)
+    if raw_score is not None:
+        matrices[f"{prefix}_raw_score"] = raw_score
+    return matrices
+
+
+def _predict_probability_matrix(calibrated_model: Any, features: Any) -> np.ndarray:
+    if hasattr(calibrated_model, "predict_match_probability"):
+        return _matrix_from_feature_predictor(
+            calibrated_model.predict_match_probability, features
+        )
+    model = getattr(calibrated_model, "model", calibrated_model)
+    if hasattr(model, "predict_match_probability"):
+        return _matrix_from_feature_predictor(model.predict_match_probability, features)
+    if hasattr(model, "predict_proba"):
+        return _matrix_from_feature_predictor(
+            lambda values: np.asarray(model.predict_proba(values), dtype=float)[
+                ..., -1
+            ],
+            features,
+        )
+    if hasattr(model, "pairwise_cost_matrix"):
+        costs = _matrix_from_feature_predictor(model.pairwise_cost_matrix, features)
+        return np.exp(-np.clip(costs, 0.0, 1.0e12))
+    raise TypeError("Learned model does not expose probability or cost prediction")
+
+
+def _optional_raw_score_matrix(
+    calibrated_model: Any, features: Any
+) -> np.ndarray | None:
+    model = getattr(calibrated_model, "model", calibrated_model)
+    for method_name in ("predict_score", "raw_cost_score"):
+        if hasattr(model, method_name):
+            return _matrix_from_feature_predictor(getattr(model, method_name), features)
+    return None
+
+
+def _matrix_from_feature_predictor(predictor: Any, features: Any) -> np.ndarray:
+    feature_array = np.asarray(features, dtype=float)
+    expected_shape = feature_array.shape[:-1]
+    try:
+        values = np.asarray(predictor(feature_array), dtype=float)
+    except (TypeError, ValueError):
+        values = np.empty((), dtype=float)
+    if values.shape == expected_shape:
+        return values
+    flat_values = np.asarray(
+        predictor(feature_array.reshape(-1, feature_array.shape[-1])), dtype=float
+    )
+    if flat_values.ndim >= 1 and flat_values.shape[-1] == 1:
+        flat_values = flat_values[..., 0]
+    return flat_values.reshape(expected_shape)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -290,8 +475,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "registered-shifted-iou",
             "roi-aware",
             "roi-aware-shifted",
+            "calibrated",
+            "monotone",
         ),
-        help="Raw pairwise cost whose pairwise_cost_matrix should be ranked",
+        help=(
+            "Raw pairwise cost to rank; calibrated/monotone enable "
+            "LOSO learned scores"
+        ),
+    )
+    parser.add_argument(
+        "--learned-score-model",
+        default="none",
+        choices=("none", "logistic", "monotone"),
     )
     parser.add_argument(
         "--transform-type",
@@ -318,6 +513,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--pairwise-cost-kwargs-json",
         default=None,
         help="JSON object merged into pairwise cost kwargs before ranking pairwise_cost_matrix",
+    )
+    parser.add_argument(
+        "--calibrated-model-kwargs-json",
+        default=None,
+        help="JSON object passed to the logistic model for learned-score ranking",
+    )
+    parser.add_argument(
+        "--monotone-ranker-kwargs-json",
+        default=None,
+        help="JSON object used to construct MonotoneRankerOptions",
     )
     parser.add_argument(
         "--feature",
@@ -350,17 +555,27 @@ def main(argv: list[str] | None = None) -> int:
         if args.features is not None
         else DEFAULT_EDGE_RANKING_FEATURES
     )
+    learned_score_model = _effective_learned_score_model(
+        args.learned_score_model, args.cost
+    )
     similarity_features = (
         tuple(args.similarity_features)
         if args.similarity_features is not None
         else DEFAULT_SIMILARITY_FEATURES
     )
+    calibrated_model_kwargs = _json_object_or_none(
+        args.calibrated_model_kwargs_json, "--calibrated-model-kwargs-json"
+    )
+    monotone_ranker_options = _monotone_ranker_options_from_args(args)
     edge_rows, summary_rows = run_track2p_edge_ranking(
         config,
         args.output,
         summary_output_path=args.summary_output,
         feature_names=feature_names,
         similarity_features=similarity_features,
+        learned_score_model=learned_score_model,
+        calibrated_model_kwargs=calibrated_model_kwargs,
+        monotone_ranker_options=monotone_ranker_options,
     )
     summary_path = (
         args.summary_output
@@ -385,7 +600,7 @@ def _reference_training_options(
         regularization=config.regularization,
         feature_names=tuple(feature_names),
         pairwise_cost_kwargs=_pairwise_cost_kwargs_for_config(
-            config.cost, config.pairwise_cost_kwargs
+            _edge_ranking_base_cost(config.cost), config.pairwise_cost_kwargs
         ),
     )
 
@@ -394,6 +609,7 @@ def _pairwise_cost_kwargs_for_config(
     cost: AssociationCost,
     overrides: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
+    cost = _edge_ranking_base_cost(cost)
     kwargs: dict[str, Any]
     if cost == "registered-iou":
         kwargs = registered_iou_cost_kwargs()
@@ -410,6 +626,44 @@ def _pairwise_cost_kwargs_for_config(
     if overrides is not None:
         kwargs.update(dict(overrides))
     return kwargs
+
+
+def _effective_learned_score_model(requested: str, cost: str) -> LearnedScoreModel:
+    if requested == "logistic":
+        return "logistic"
+    if requested == "monotone":
+        return "monotone"
+    if requested != "none":
+        raise ValueError("learned_score_model must be one of: none, logistic, monotone")
+    if cost == "calibrated":
+        return "logistic"
+    if cost == "monotone":
+        return "monotone"
+    return "none"
+
+
+def _edge_ranking_base_cost(cost: str) -> str:
+    if cost in {"calibrated", "monotone"}:
+        return "registered-iou"
+    return cost
+
+
+def _json_object_or_none(value: str | None, option_name: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{option_name} must decode to a JSON object")
+    return parsed
+
+
+def _monotone_ranker_options_from_args(
+    args: argparse.Namespace,
+) -> MonotoneRankerOptions | None:
+    parsed = _json_object_or_none(
+        args.monotone_ranker_kwargs_json, "--monotone-ranker-kwargs-json"
+    )
+    return None if parsed is None else MonotoneRankerOptions(**parsed)
 
 
 def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
@@ -429,7 +683,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         reference_kind=args.reference_kind,
         allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
         curated_only=args.curated_only,
-        cost=args.cost,
+        cost=_edge_ranking_base_cost(args.cost),
         max_gap=args.max_gap,
         transform_type=args.transform_type,
         include_behavior=args.include_behavior,
