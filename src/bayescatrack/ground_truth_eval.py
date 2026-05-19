@@ -478,6 +478,8 @@ def complete_tracks_score(ground_truth: TrackTable, prediction: TrackTable) -> f
 
     This is the F1 score where positives are exact full-track reconstructions.
     Duplicate predicted tracks therefore still count as false positives.
+    Rows with missing ROI indices are incomplete-track fragments and are not
+    complete-track positives.
     """
     prediction = _align_prediction_to_ground_truth(ground_truth, prediction)
     ground_truth_rows = _row_counter(ground_truth, require_complete=True)

@@ -13,6 +13,8 @@ from bayescatrack.experiments.track2p_cost_sweep import (
     CostSweepConfig,
     _parse_cost_scales,
     _parse_nonnegative_values,
+    _parse_nonnegative_int_values,
+    _parse_optional_positive_values,
     _parse_positive_values,
     _parse_thresholds,
     format_sweep_table,
@@ -191,11 +193,123 @@ def test_track2p_cost_sweep_varies_start_end_and_gap(
     assert [row["start_cost"] for row in result_dicts] == [0.5, 0.5, 2.0, 2.0]
 
 
+def test_track2p_cost_sweep_varies_shifted_overlap_pairwise_knobs(
+    tmp_path, monkeypatch, write_raw_npy_session
+):
+    subject_dir = tmp_path / "jm001"
+    _write_subject(subject_dir, write_raw_npy_session)
+
+    build_calls = []
+    solver_calls = []
+
+    def fake_build_registered_pairwise_costs(sessions, **kwargs):
+        build_calls.append((len(sessions), kwargs))
+        radius = kwargs["pairwise_cost_kwargs"]["shifted_iou_radius"]
+        return {(0, 1): np.asarray([[float(radius)]], dtype=float)}
+
+    class SolverResult:
+        tracks = [{0: 0, 1: 0, 2: 0}]
+        matched_edges = []
+        total_cost = 0.0
+
+    def fake_solver(pairwise_costs, **kwargs):
+        solver_calls.append((pairwise_costs, kwargs))
+        return SolverResult()
+
+    monkeypatch.setattr(
+        sweep_module,
+        "build_registered_pairwise_costs",
+        fake_build_registered_pairwise_costs,
+    )
+    monkeypatch.setattr(
+        sweep_module,
+        "_load_pyrecest_multisession_solver",
+        lambda: fake_solver,
+    )
+
+    rows = run_track2p_cost_sweep(
+        CostSweepConfig(
+            benchmark=Track2pBenchmarkConfig(
+                data=subject_dir,
+                method="global-assignment",
+                cost="registered-shifted-iou",
+                allow_track2p_as_reference_for_smoke_test=True,
+                progress=False,
+            ),
+            cost_scales=(0.5, 2.0),
+            cost_thresholds=(6.0,),
+            shifted_iou_radii=(1, 3),
+            shifted_iou_shift_penalty_weights=(0.25,),
+            shifted_iou_shift_penalty_scales=(None, 4.0),
+        )
+    )
+
+    assert len(build_calls) == 4
+    assert len(solver_calls) == 8
+    assert [call[1]["pairwise_cost_kwargs"] for call in build_calls] == [
+        {
+            "shifted_iou_radius": 1,
+            "shifted_iou_shift_penalty_weight": 0.25,
+        },
+        {
+            "shifted_iou_radius": 1,
+            "shifted_iou_shift_penalty_weight": 0.25,
+            "shifted_iou_shift_penalty_scale": 4.0,
+        },
+        {
+            "shifted_iou_radius": 3,
+            "shifted_iou_shift_penalty_weight": 0.25,
+        },
+        {
+            "shifted_iou_radius": 3,
+            "shifted_iou_shift_penalty_weight": 0.25,
+            "shifted_iou_shift_penalty_scale": 4.0,
+        },
+    ]
+    np.testing.assert_allclose(solver_calls[0][0][(0, 1)], [[0.5]])
+    np.testing.assert_allclose(solver_calls[1][0][(0, 1)], [[2.0]])
+
+    result_dicts = [row.to_dict() for row in rows]
+    assert [row["shifted_iou_radius"] for row in result_dicts[:4]] == [1, 1, 1, 1]
+    assert [row["shifted_iou_radius"] for row in result_dicts[4:]] == [3, 3, 3, 3]
+    assert [row["shifted_iou_shift_penalty_scale"] for row in result_dicts[:4]] == [
+        "default",
+        "default",
+        4.0,
+        4.0,
+    ]
+
+
+def test_track2p_cost_sweep_rejects_shifted_knobs_for_non_shifted_cost():
+    with pytest.raises(ValueError, match="Shifted-overlap sweep axes"):
+        run_track2p_cost_sweep(
+            CostSweepConfig(
+                benchmark=Track2pBenchmarkConfig(
+                    data="missing",
+                    method="global-assignment",
+                    cost="registered-iou",
+                    progress=False,
+                ),
+                cost_scales=(1.0,),
+                cost_thresholds=(None,),
+                shifted_iou_radii=(2,),
+            )
+        )
+
+
 def test_cost_sweep_parser_accepts_none_thresholds():
     assert _parse_cost_scales("0.25,1,4") == (0.25, 1.0, 4.0)
     assert _parse_thresholds("none,2,6") == (None, 2.0, 6.0)
     assert _parse_positive_values("0.5,2", name="--start-costs") == (0.5, 2.0)
     assert _parse_nonnegative_values("0,1", name="--gap-penalties") == (0.0, 1.0)
+    assert _parse_nonnegative_int_values("0,2", name="--shifted-iou-radii") == (
+        0,
+        2,
+    )
+    assert _parse_optional_positive_values("default,4", name="--shift-scale") == (
+        None,
+        4.0,
+    )
 
 
 def test_write_sweep_results_incrementally_writes_csv_rows(tmp_path):

@@ -55,7 +55,17 @@ DEFAULT_ASSOCIATION_FEATURES = (
     "session_gap",
 )
 SPLIT_ROI_STAT_FEATURES: tuple[str, ...] = ()
-LOCAL_EVIDENCE_ASSOCIATION_FEATURES: tuple[str, ...] = ()
+LOCAL_EVIDENCE_ASSOCIATION_FEATURES: tuple[str, ...] = (
+    "weighted_dice_cost",
+    "overlap_fraction_cost",
+    "containment_asymmetry_cost",
+    "distance_transform_cost",
+    "image_patch_cost",
+    "image_patch_valid",
+    "neighbor_constellation_cost",
+    "centroid_rank_cost",
+)
+_LOCAL_EVIDENCE_FEATURES = frozenset(LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
 
 
 @dataclass(frozen=True)
@@ -412,7 +422,10 @@ def _feature_transforms_for(
             transforms[feature_name] = lambda components: 1.0 - _finite_component(
                 components, "activity_similarity"
             )
-        elif feature_name in _ACTIVITY_FEATURES:
+        elif (
+            feature_name in _ACTIVITY_FEATURES
+            or feature_name in _LOCAL_EVIDENCE_FEATURES
+        ):
             transforms[feature_name] = _optional_zero_component_transform(feature_name)
         elif feature_name == "session_gap":
             transforms[feature_name] = _session_gap_transform

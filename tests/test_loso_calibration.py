@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import sys
 import types
 
 import numpy as np
 import pytest
+from bayescatrack.association.calibrated_costs import (
+    DEFAULT_ASSOCIATION_FEATURES,
+    LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
+)
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
+    _config_from_args,
+    build_arg_parser,
     run_track2p_benchmark,
 )
 
@@ -119,7 +126,12 @@ def _install_registration_passthrough(monkeypatch):
     monkeypatch.setattr(global_assignment, "register_plane_pair", passthrough)
 
 
-def _loso_config(tmp_path, *, allow_smoke_reference=False):
+def _loso_config(
+    tmp_path,
+    *,
+    allow_smoke_reference=False,
+    calibration_model="logistic",
+):
     return Track2pBenchmarkConfig(
         data=tmp_path,
         method="global-assignment",
@@ -127,6 +139,7 @@ def _loso_config(tmp_path, *, allow_smoke_reference=False):
         cost="calibrated",
         max_gap=2,
         include_behavior=False,
+        calibration_model=calibration_model,
         allow_track2p_as_reference_for_smoke_test=allow_smoke_reference,
     )
 
@@ -155,6 +168,7 @@ def _run_direct_loso_calibration(
     *,
     allow_smoke_reference=False,
     sample_weight_strategy="none",
+    calibration_model="logistic",
 ):
     _prepare_loso_fixture(tmp_path, monkeypatch, subject_writer)
     from bayescatrack.experiments.track2p_loso_calibration import (
@@ -162,9 +176,35 @@ def _run_direct_loso_calibration(
     )
 
     return run_track2p_loso_calibration(
-        _loso_config(tmp_path, allow_smoke_reference=allow_smoke_reference),
+        _loso_config(
+            tmp_path,
+            allow_smoke_reference=allow_smoke_reference,
+            calibration_model=calibration_model,
+        ),
         sample_weight_strategy=sample_weight_strategy,
     ).to_benchmark_results()
+
+
+def test_track2p_benchmark_cli_accepts_local_evidence_feature_set(tmp_path):
+    parser = build_arg_parser()
+    args = parser.parse_args(
+        [
+            "--data",
+            str(tmp_path),
+            "--method",
+            "global-assignment",
+            "--cost",
+            "calibrated",
+            "--split",
+            "leave-one-subject-out",
+            "--calibration-feature-set",
+            "default+local-evidence",
+        ]
+    )
+
+    config = _config_from_args(args)
+
+    assert config.calibration_feature_set == "default+local-evidence"
 
 
 def test_loso_calibration_trains_on_other_subjects(
@@ -192,6 +232,7 @@ def test_loso_calibration_trains_on_other_subjects(
         assert row["calibration_brier_score"] == pytest.approx(0.25)
         assert row["calibration_ece"] == pytest.approx(0.0)
         assert row["calibration_mce"] == pytest.approx(0.0)
+        assert row["calibration_model"] == "logistic"
 
 
 def test_loso_calibration_avoids_double_balancing_by_default(
@@ -217,6 +258,42 @@ def test_loso_calibration_avoids_double_balancing_by_default(
         assert row["calibration_class_weight"] == "None"
 
 
+def test_loso_calibration_local_evidence_feature_set_materializes_features(
+    tmp_path, monkeypatch, write_raw_npy_session
+):
+    _prepare_loso_fixture(
+        tmp_path,
+        monkeypatch,
+        lambda subject_dir: _write_subject(subject_dir, write_raw_npy_session),
+    )
+    config = replace(
+        _loso_config(tmp_path, allow_smoke_reference=True),
+        calibration_feature_set="default+local-evidence",
+    )
+
+    results = run_track2p_benchmark(config)
+
+    expected_features = tuple(
+        dict.fromkeys(
+            (*DEFAULT_ASSOCIATION_FEATURES, *LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
+        )
+    )
+    assert LOCAL_EVIDENCE_ASSOCIATION_FEATURES
+    assert len(expected_features) > len(DEFAULT_ASSOCIATION_FEATURES)
+
+    fake_models = sys.modules["pyrecest.utils.association_models"]
+    assert len(fake_models.fit_models) == 2
+    for model in fake_models.fit_models:
+        assert model.fit_args is not None
+        features, _labels, _sample_weight = model.fit_args
+        assert features.shape[-1] == len(expected_features)
+
+    for result in results:
+        row = result.to_dict()
+        assert row["calibration_feature_set"] == "default+local-evidence"
+        assert row["calibration_feature_count"] == len(expected_features)
+
+
 def test_loso_calibration_balanced_strategy_uses_one_explicit_weighting(
     tmp_path, monkeypatch, write_raw_npy_session
 ):
@@ -236,6 +313,28 @@ def test_loso_calibration_balanced_strategy_uses_one_explicit_weighting(
         _features, labels, sample_weight = model.fit_args
         assert sample_weight is not None
         assert np.asarray(sample_weight).shape == labels.shape
+
+
+def test_loso_calibration_can_use_monotone_ranker(
+    tmp_path, monkeypatch, write_raw_npy_session
+):
+    results = _run_direct_loso_calibration(
+        tmp_path,
+        monkeypatch,
+        lambda subject_dir: _write_subject(subject_dir, write_raw_npy_session),
+        allow_smoke_reference=True,
+        calibration_model="monotone-ranker",
+    )
+
+    fake_models = sys.modules["pyrecest.utils.association_models"]
+    assert fake_models.fit_models == []
+    for result in results:
+        row = result.to_dict()
+        assert row["variant"] == (
+            "Monotone-ranker calibrated costs + LOSO global assignment"
+        )
+        assert row["calibration_model"] == "monotone-ranker"
+        assert row["pairwise_f1"] == pytest.approx(1.0)
 
 
 def test_loso_calibration_uses_aligned_rows_when_track2p_reference_is_absent(

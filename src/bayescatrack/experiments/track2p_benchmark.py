@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    HigherOrderConsistencyConfig,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,
@@ -39,11 +42,30 @@ ReferenceKind = Literal["auto", "manual-gt", "track2p-output", "aligned-subject-
 BenchmarkMethod = Literal["track2p-baseline", "global-assignment", "oracle-gt-links"]
 BenchmarkSplit = Literal["subject", "leave-one-subject-out"]
 OutputFormat = Literal["table", "json", "csv"]
+CalibrationModel = Literal["monotone-ranker", "logistic"]
+CalibrationFeatureSet = Literal["default", "local-evidence", "default+local-evidence"]
+SolverPriorObjective = Literal["pairwise_f1", "complete_track_f1", "mean_f1"]
 GROUND_TRUTH_CSV_NAME = "ground_truth.csv"
 GROUND_TRUTH_REFERENCE_SOURCE = "ground_truth_csv"
 ALIGNED_REFERENCE_SOURCE = "aligned_subject_rows"
 TRACK2P_REFERENCE_SOURCES = frozenset(
     {"track2p_output_suite2p_indices", "track2p_output_match_mat"}
+)
+
+_ACTIVITY_TIE_BREAKER_COMPONENTS = (
+    "activity_tiebreaker_cost",
+    "fluorescence_similarity_cost",
+    "spike_similarity_cost",
+    "trace_std_absdiff",
+    "trace_skew_absdiff",
+    "event_rate_absdiff",
+    "neuropil_ratio_absdiff",
+)
+_ACTIVITY_TRACE_SOURCES = (
+    "auto",
+    "traces",
+    "spike_traces",
+    "neuropil_traces",
 )
 
 
@@ -65,6 +87,7 @@ class Track2pBenchmarkConfig:
     restrict_to_reference_seed_rois: bool = True
     cost: AssociationCost = "registered-iou"
     max_gap: int = 2
+    calibration_model: CalibrationModel = "monotone-ranker"
     transform_type: str = "affine"
     allow_fov_affine_fallback: bool = False
     start_cost: float = 5.0
@@ -80,8 +103,20 @@ class Track2pBenchmarkConfig:
     weighted_centroids: bool = False
     velocity_variance: float = 25.0
     regularization: float = 1.0e-6
+    calibration_feature_set: CalibrationFeatureSet = "default"
     pairwise_cost_kwargs: dict[str, Any] | None = None
+    higher_order_consistency_config: dict[str, Any] | None = None
+    activity_tie_breaker_weight: float = 0.0
+    activity_tie_breaker_component: str = "activity_tiebreaker_cost"
+    activity_trace_source: str = "auto"
+    activity_event_threshold: float = 0.0
     progress: bool = False
+    tune_solver_priors: bool = False
+    solver_prior_objective: SolverPriorObjective = "complete_track_f1"
+    solver_prior_start_costs: tuple[float, ...] | None = None
+    solver_prior_end_costs: tuple[float, ...] | None = None
+    solver_prior_gap_penalties: tuple[float, ...] | None = None
+    solver_prior_cost_thresholds: tuple[float | None, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -142,15 +177,9 @@ def run_track2p_benchmark(
     """Run a Track2p benchmark over one subject directory or a dataset root."""
 
     if config.split == "leave-one-subject-out":
-        if config.method != "global-assignment" or config.cost != "calibrated":
-            raise ValueError(
-                "LOSO calibration requires method='global-assignment' and cost='calibrated'"
-            )
-        from bayescatrack.experiments.track2p_loso_calibration import (
-            run_track2p_loso_calibration,
-        )
-
-        return run_track2p_loso_calibration(config).to_benchmark_results()
+        return _run_loso_benchmark(config)
+    if config.tune_solver_priors:
+        raise ValueError("--tune-solver-priors requires split='leave-one-subject-out'")
     if config.cost == "calibrated":
         raise ValueError("cost='calibrated' requires split='leave-one-subject-out'")
 
@@ -182,6 +211,7 @@ def run_track2p_benchmark(
         scores = _score_prediction_against_reference(
             predicted_matrix, reference, config=config
         )
+        scores = {**scores, **_activity_tie_breaker_metadata(config)}
         results.append(
             SubjectBenchmarkResult(
                 subject=subject_dir.name,
@@ -336,6 +366,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Pairwise cost used by global assignment",
     )
     parser.add_argument(
+        "--calibration-model",
+        default="monotone-ranker",
+        choices=("monotone-ranker", "logistic"),
+        help=(
+            "LOSO calibrated-cost model; monotone-ranker trains on "
+            "positive-vs-hard-negative ranking constraints"
+        ),
+    )
+    parser.add_argument(
         "--max-gap",
         type=int,
         default=2,
@@ -377,6 +416,73 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--no-cost-threshold",
         action="store_true",
         help="Disable the solver edge-cost threshold",
+    )
+    parser.add_argument(
+        "--tune-solver-priors",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "For leave-one-subject-out global assignment, select start/end/gap/threshold "
+            "solver priors on the training subjects inside each fold."
+        ),
+    )
+    parser.add_argument(
+        "--solver-prior-objective",
+        default="complete_track_f1",
+        choices=("pairwise_f1", "complete_track_f1", "mean_f1"),
+        help="Training-fold score optimized when --tune-solver-priors is enabled",
+    )
+    parser.add_argument(
+        "--solver-prior-start-costs",
+        default=None,
+        help="Comma-separated candidate start costs for --tune-solver-priors",
+    )
+    parser.add_argument(
+        "--solver-prior-end-costs",
+        default=None,
+        help="Comma-separated candidate end costs for --tune-solver-priors",
+    )
+    parser.add_argument(
+        "--solver-prior-gap-penalties",
+        default=None,
+        help="Comma-separated candidate skip-gap penalties for --tune-solver-priors",
+    )
+    parser.add_argument(
+        "--solver-prior-cost-thresholds",
+        default=None,
+        help=(
+            "Comma-separated candidate cost thresholds; use 'none' to include no threshold"
+        ),
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weak additive activity cost weight for global assignment. Keep this "
+            "small so spatial ROI evidence remains dominant."
+        ),
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-component",
+        default="activity_tiebreaker_cost",
+        choices=_ACTIVITY_TIE_BREAKER_COMPONENTS,
+        help="Pairwise activity component to add as a weak cost plane.",
+    )
+    parser.add_argument(
+        "--activity-trace-source",
+        default="auto",
+        choices=_ACTIVITY_TRACE_SOURCES,
+        help="Trace source used by the activity component extractor.",
+    )
+    parser.add_argument(
+        "--activity-event-threshold",
+        type=float,
+        default=0.0,
+        help=(
+            "Spike/event threshold used for event-rate activity features. This "
+            "only matters for activity components based on event rates."
+        ),
     )
     parser.add_argument(
         "--include-behavior",
@@ -427,10 +533,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Position covariance regularization",
     )
     parser.add_argument(
+        "--calibration-feature-set",
+        default="default",
+        choices=("default", "local-evidence", "default+local-evidence"),
+        help=(
+            "Feature preset for LOSO calibrated costs; local-evidence presets "
+            "automatically collect the matching pairwise components"
+        ),
+    )
+    parser.add_argument(
         "--pairwise-cost-kwargs-json",
         default=None,
         help="JSON object merged into pairwise cost kwargs",
     )
+    _add_higher_order_consistency_arguments(parser)
     parser.add_argument(
         "--progress",
         action=argparse.BooleanOptionalAction,
@@ -509,7 +625,7 @@ def _predict_subject_tracks(
     sessions = _load_subject_sessions(subject_dir, config)
     assignment = solve_configured_global_assignment(sessions, config)
     predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
-    return predicted, _variant_name(config.cost), _assignment_registration_summary(assignment)
+    return predicted, _configured_variant_name(config), _assignment_registration_summary(assignment)
 
 
 def oracle_ground_truth_link_tracks(
@@ -577,21 +693,72 @@ def solve_configured_global_assignment(
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+        higher_order_consistency_config=config.higher_order_consistency_config,
+        activity_tie_breaker_weight=config.activity_tie_breaker_weight,
+        activity_tie_breaker_component=config.activity_tie_breaker_component,
+        activity_trace_source=config.activity_trace_source,
+        activity_event_threshold=config.activity_event_threshold,
     )
 
 
-def _variant_name(cost: AssociationCost) -> str:
+def _configured_variant_name(config: Track2pBenchmarkConfig) -> str:
+    return (
+        _variant_name(
+            config.cost,
+            higher_order_consistency_config=config.higher_order_consistency_config,
+        )
+        + _activity_variant_suffix(config)
+    )
+
+
+def _activity_variant_suffix(config: Track2pBenchmarkConfig) -> str:
+    if config.activity_tie_breaker_weight <= 0.0:
+        return ""
+    component_suffix = (
+        ""
+        if config.activity_tie_breaker_component == "activity_tiebreaker_cost"
+        else f" ({config.activity_tie_breaker_component})"
+    )
+    return (
+        f" + activity tie-breaker {config.activity_tie_breaker_weight:g}"
+        f"{component_suffix}"
+    )
+
+
+def _activity_tie_breaker_metadata(
+    config: Track2pBenchmarkConfig,
+) -> dict[str, float | str]:
+    if config.activity_tie_breaker_weight <= 0.0:
+        return {}
+    return {
+        "activity_tie_breaker_weight": float(config.activity_tie_breaker_weight),
+        "activity_tie_breaker_component": config.activity_tie_breaker_component,
+        "activity_trace_source": config.activity_trace_source,
+        "activity_event_threshold": float(config.activity_event_threshold),
+    }
+
+
+def _variant_name(
+    cost: AssociationCost,
+    *,
+    higher_order_consistency_config: Mapping[str, Any] | None = None,
+    assignment_label: str = "global assignment",
+) -> str:
     if cost == "registered-iou":
-        return "Same costs + global assignment"
-    if cost == "registered-soft-iou":
-        return "Soft-IoU costs + global assignment"
-    if cost == "registered-shifted-iou":
-        return "Shifted-IoU costs + global assignment"
-    if cost == "roi-aware-shifted":
-        return "Shifted ROI-aware costs + global assignment"
-    if cost == "calibrated":
-        return "Calibrated costs + global assignment"
-    return "BayesCaTrack costs + global assignment"
+        label = f"Same costs + {assignment_label}"
+    elif cost == "registered-soft-iou":
+        label = f"Soft-IoU costs + {assignment_label}"
+    elif cost == "registered-shifted-iou":
+        label = f"Shifted-IoU costs + {assignment_label}"
+    elif cost == "roi-aware-shifted":
+        label = f"Shifted ROI-aware costs + {assignment_label}"
+    elif cost == "calibrated":
+        label = f"Calibrated costs + {assignment_label}"
+    else:
+        label = f"BayesCaTrack costs + {assignment_label}"
+    if higher_order_consistency_config is not None:
+        label = f"{label} + higher-order consistency"
+    return label
 
 
 def _assignment_registration_summary(assignment: GlobalAssignmentRun) -> dict[str, str]:
@@ -1007,6 +1174,49 @@ def _looks_like_subject_dir(path: Path) -> bool:
     return bool(find_track2p_session_dirs(path))
 
 
+def _run_loso_benchmark(config: Track2pBenchmarkConfig) -> list[SubjectBenchmarkResult]:
+    if config.method != "global-assignment":
+        raise ValueError("LOSO benchmarking requires method='global-assignment'")
+    if config.tune_solver_priors:
+        if config.cost == "calibrated":
+            if config.solver_prior_objective == "mean_f1":
+                raise ValueError(
+                    "--solver-prior-objective mean_f1 is currently supported for non-calibrated solver-prior tuning only"
+                )
+            from bayescatrack.experiments.track2p_solver_prior_tuning import (
+                SolverPriorTuningOptions,
+                run_track2p_loso_solver_prior_tuning,
+            )
+
+            options = SolverPriorTuningOptions(
+                objective=cast(Any, config.solver_prior_objective),
+                start_costs=config.solver_prior_start_costs,
+                end_costs=config.solver_prior_end_costs,
+                gap_penalties=config.solver_prior_gap_penalties,
+                cost_thresholds=config.solver_prior_cost_thresholds,
+            )
+            return run_track2p_loso_solver_prior_tuning(
+                config, solver_prior_options=options
+            ).to_benchmark_results()
+
+        from bayescatrack.experiments.solver_prior_tuning import (
+            run_track2p_loso_solver_priors,
+        )
+
+        return run_track2p_loso_solver_priors(
+            config, search=_solver_prior_search_config_from_benchmark_config(config)
+        ).to_benchmark_results()
+    if config.cost != "calibrated":
+        raise ValueError(
+            "LOSO benchmarking without --tune-solver-priors requires method='global-assignment' and cost='calibrated'"
+        )
+    from bayescatrack.experiments.track2p_loso_calibration import (
+        run_track2p_loso_calibration,
+    )
+
+    return run_track2p_loso_calibration(config).to_benchmark_results()
+
+
 def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
     pairwise_cost_kwargs = None
     if args.pairwise_cost_kwargs_json is not None:
@@ -1014,6 +1224,18 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         if not isinstance(parsed, dict):
             raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
         pairwise_cost_kwargs = parsed
+    activity_tie_breaker_weight = float(args.activity_tie_breaker_weight)
+    if (
+        not np.isfinite(activity_tie_breaker_weight)
+        or activity_tie_breaker_weight < 0.0
+    ):
+        raise ValueError(
+            "--activity-tie-breaker-weight must be non-negative and finite"
+        )
+    activity_event_threshold = float(args.activity_event_threshold)
+    if (not np.isfinite(activity_event_threshold)) or activity_event_threshold < 0.0:
+        raise ValueError("--activity-event-threshold must be non-negative and finite")
+
     return Track2pBenchmarkConfig(
         data=args.data,
         method=args.method,
@@ -1028,6 +1250,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
         cost=args.cost,
         max_gap=args.max_gap,
+        calibration_model=args.calibration_model,
         transform_type=args.transform_type,
         allow_fov_affine_fallback=args.allow_fov_affine_fallback,
         start_cost=args.start_cost,
@@ -1043,9 +1266,193 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         weighted_centroids=args.weighted_centroids,
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
+        calibration_feature_set=args.calibration_feature_set,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=_higher_order_consistency_config_from_args(args),
+        activity_tie_breaker_weight=activity_tie_breaker_weight,
+        activity_tie_breaker_component=args.activity_tie_breaker_component,
+        activity_trace_source=args.activity_trace_source,
+        activity_event_threshold=activity_event_threshold,
         progress=args.progress,
+        tune_solver_priors=args.tune_solver_priors,
+        solver_prior_objective=cast(SolverPriorObjective, args.solver_prior_objective),
+        solver_prior_start_costs=_parse_optional_solver_float_list(
+            args.solver_prior_start_costs,
+            name="--solver-prior-start-costs",
+            positive=True,
+        ),
+        solver_prior_end_costs=_parse_optional_solver_float_list(
+            args.solver_prior_end_costs,
+            name="--solver-prior-end-costs",
+            positive=True,
+        ),
+        solver_prior_gap_penalties=_parse_optional_solver_float_list(
+            args.solver_prior_gap_penalties,
+            name="--solver-prior-gap-penalties",
+            positive=False,
+        ),
+        solver_prior_cost_thresholds=_parse_optional_solver_threshold_list(
+            args.solver_prior_cost_thresholds
+        ),
     )
+
+
+def _add_higher_order_consistency_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--higher-order-triplet-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for triplet-projected higher-order consistency penalties; "
+            "0 disables the ablation."
+        ),
+    )
+    parser.add_argument(
+        "--higher-order-support-top-k",
+        type=int,
+        default=8,
+        help="Top-k compatible third-session candidates considered per anchor ROI.",
+    )
+    parser.add_argument(
+        "--higher-order-support-cost-cap",
+        type=float,
+        default=4.0,
+        help="Maximum pairwise cost admitted as third-session support evidence.",
+    )
+    parser.add_argument(
+        "--higher-order-max-penalty",
+        type=float,
+        default=2.0,
+        help="Maximum unweighted triplet-support penalty added to one edge.",
+    )
+    parser.add_argument(
+        "--higher-order-large-cost",
+        type=float,
+        default=1.0e6,
+        help="Sentinel cost treated as an inadmissible/gated edge.",
+    )
+
+
+def _higher_order_consistency_config_from_args(
+    args: argparse.Namespace,
+) -> dict[str, Any] | None:
+    config = HigherOrderConsistencyConfig(
+        triplet_weight=args.higher_order_triplet_weight,
+        support_top_k=args.higher_order_support_top_k,
+        support_cost_cap=args.higher_order_support_cost_cap,
+        max_penalty=args.higher_order_max_penalty,
+        large_cost=args.higher_order_large_cost,
+    )
+    if not config.enabled:
+        return None
+    return {
+        "triplet_weight": float(config.triplet_weight),
+        "support_top_k": int(config.support_top_k),
+        "support_cost_cap": float(config.support_cost_cap),
+        "max_penalty": float(config.max_penalty),
+        "large_cost": float(config.large_cost),
+    }
+
+
+def _solver_prior_search_config_from_benchmark_config(
+    config: Track2pBenchmarkConfig,
+) -> Any:
+    from bayescatrack.experiments.solver_prior_tuning import SolverPriorSearchConfig
+
+    defaults = SolverPriorSearchConfig()
+    start_costs = (
+        config.solver_prior_start_costs
+        if config.solver_prior_start_costs is not None
+        else _solver_float_search_values(defaults.start_costs, config.start_cost)
+    )
+    end_costs = (
+        config.solver_prior_end_costs
+        if config.solver_prior_end_costs is not None
+        else _solver_float_search_values(defaults.end_costs or start_costs, config.end_cost)
+    )
+    gap_penalties = (
+        config.solver_prior_gap_penalties
+        if config.solver_prior_gap_penalties is not None
+        else _solver_float_search_values(defaults.gap_penalties, config.gap_penalty)
+    )
+    cost_thresholds = (
+        config.solver_prior_cost_thresholds
+        if config.solver_prior_cost_thresholds is not None
+        else _solver_threshold_search_values(defaults.cost_thresholds, config.cost_threshold)
+    )
+    return SolverPriorSearchConfig(
+        start_costs=start_costs,
+        end_costs=end_costs,
+        gap_penalties=gap_penalties,
+        cost_thresholds=cost_thresholds,
+        objective=cast(Any, config.solver_prior_objective),
+    )
+
+
+def _solver_float_search_values(
+    defaults: Sequence[float], current: float
+) -> tuple[float, ...]:
+    return tuple(dict.fromkeys((*defaults, float(current))))
+
+
+def _solver_threshold_search_values(
+    defaults: Sequence[float | None], current: float | None
+) -> tuple[float | None, ...]:
+    current_value = None if current is None else float(current)
+    return tuple(dict.fromkeys((*defaults, current_value)))
+
+
+def _parse_optional_solver_float_list(
+    raw: str | None, *, name: str, positive: bool
+) -> tuple[float, ...] | None:
+    if raw is None:
+        return None
+    tokens = tuple(token.strip() for token in raw.split(","))
+    if not tokens or any(not token for token in tokens):
+        raise ValueError(f"{name} must be a comma-separated list without empty entries")
+    values = tuple(_parse_solver_float(token, name=name) for token in tokens)
+    for value in values:
+        invalid = value <= 0.0 if positive else value < 0.0
+        if invalid:
+            qualifier = "positive" if positive else "non-negative"
+            raise ValueError(f"{name} values must be {qualifier} finite numbers")
+    return values
+
+
+def _parse_optional_solver_threshold_list(
+    raw: str | None,
+) -> tuple[float | None, ...] | None:
+    if raw is None:
+        return None
+    values: list[float | None] = []
+    tokens = tuple(token.strip() for token in raw.split(","))
+    if not tokens or any(not token for token in tokens):
+        raise ValueError(
+            "--solver-prior-cost-thresholds must be a comma-separated list without "
+            "empty entries"
+        )
+    for token in tokens:
+        if token.casefold() in {"none", "null", "off", "disabled"}:
+            values.append(None)
+            continue
+        value = _parse_solver_float(token, name="--solver-prior-cost-thresholds")
+        if value < 0.0:
+            raise ValueError(
+                "--solver-prior-cost-thresholds values must be non-negative finite "
+                "numbers or none"
+            )
+        values.append(value)
+    return tuple(values)
+
+
+def _parse_solver_float(token: str, *, name: str) -> float:
+    try:
+        value = float(token)
+    except ValueError as exc:
+        raise ValueError(f"{name} contains a non-numeric value: {token!r}") from exc
+    if not np.isfinite(value):
+        raise ValueError(f"{name} values must be finite")
+    return value
 
 
 def _write_stdout(
@@ -1081,9 +1488,27 @@ def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
         "reference_seed_rois",
         "evaluated_prediction_tracks",
         "dropped_prediction_tracks",
+        "activity_tie_breaker_weight",
+        "activity_tie_breaker_component",
+        "activity_trace_source",
+        "activity_event_threshold",
         "training_examples",
         "positive_examples",
         "negative_examples",
+        "calibration_feature_set",
+        "calibration_feature_count",
+        "solver_prior_objective",
+        "solver_prior_objective_score",
+        "solver_prior_candidate_count",
+        "solver_prior_candidates",
+        "tuned_start_cost",
+        "tuned_end_cost",
+        "tuned_gap_penalty",
+        "tuned_cost_threshold",
+        "learned_start_cost",
+        "learned_end_cost",
+        "learned_gap_penalty",
+        "learned_cost_threshold",
     ]
     remaining = sorted({key for row in rows for key in row} - set(preferred))
     return [key for key in preferred if any(key in row for row in rows)] + remaining

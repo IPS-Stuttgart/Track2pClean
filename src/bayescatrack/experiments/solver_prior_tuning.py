@@ -18,6 +18,9 @@ from pathlib import Path
 from typing import Any, Literal, Protocol, cast
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    apply_higher_order_consistency,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     _load_pyrecest_multisession_solver,
@@ -30,6 +33,8 @@ from bayescatrack.experiments.track2p_benchmark import (
     ReferenceKind,
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
+    _add_higher_order_consistency_arguments,
+    _higher_order_consistency_config_from_args,
     _load_reference_for_subject,
     _load_subject_sessions,
     _score_prediction_against_reference,
@@ -296,7 +301,14 @@ def run_track2p_loso_solver_priors(
                 ),
                 benchmark=SubjectBenchmarkResult(
                     subject=held_out.subject_name,
-                    variant=f"{_variant_name(config.cost)} + LOSO learned solver priors",
+                    variant=(
+                        _variant_name(
+                            config.cost,
+                            higher_order_consistency_config=(
+                                config.higher_order_consistency_config
+                            ),
+                        ) + " + LOSO learned solver priors"
+                    ),
                     method=config.method,
                     scores=scores,
                     n_sessions=held_out.reference.n_sessions,
@@ -365,6 +377,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--weighted-centroids", action="store_true")
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
+    _add_higher_order_consistency_arguments(parser)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     parser.add_argument("--output", type=Path, default=None)
     return parser
@@ -397,6 +410,9 @@ def main(argv: list[str] | None = None) -> int:
         exclude_overlapping_pixels=args.exclude_overlapping_pixels,
         weighted_centroids=args.weighted_centroids,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=_higher_order_consistency_config_from_args(
+            args
+        ),
     )
     search = SolverPriorSearchConfig(
         start_costs=parse_positive_list(args.start_costs, name="--start-costs"),
@@ -423,6 +439,7 @@ def _prepare_subject(
     cost: AssociationCost,
     calibrated_model: Any | None,
 ) -> _PreparedSubject:
+    session_sizes = tuple(int(session.plane_data.n_rois) for session in subject.sessions)
     pairwise_costs = build_registered_pairwise_costs(
         subject.sessions,
         max_gap=config.max_gap,
@@ -435,14 +452,18 @@ def _prepare_subject(
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
     )
+    if config.higher_order_consistency_config is not None:
+        pairwise_costs = apply_higher_order_consistency(
+            pairwise_costs,
+            session_sizes=session_sizes,
+            config=config.higher_order_consistency_config,
+        )
     return _PreparedSubject(
         subject_name=subject.subject_name,
         sessions=tuple(subject.sessions),
         reference=subject.reference,
         pairwise_costs=pairwise_costs,
-        session_sizes=tuple(
-            int(session.plane_data.n_rois) for session in subject.sessions
-        ),
+        session_sizes=session_sizes,
     )
 
 

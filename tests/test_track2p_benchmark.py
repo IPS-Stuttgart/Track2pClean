@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from bayescatrack.experiments.track2p_benchmark import (
+    SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
     format_benchmark_table,
     run_track2p_benchmark,
@@ -125,6 +126,26 @@ def _install_fake_multisession_assignment(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "pyrecest.utils.multisession_assignment", fake_assignment
     )
+
+
+class _FakeLosoResult:
+    def __init__(self, variant: str):
+        self.variant = variant
+
+    def to_benchmark_results(self):
+        return [
+            SubjectBenchmarkResult(
+                subject="heldout",
+                variant=self.variant,
+                method="global-assignment",
+                scores={
+                    "pairwise_f1": 1.0,
+                    "complete_track_f1": 1.0,
+                },
+                n_sessions=2,
+                reference_source="ground_truth_csv",
+            )
+        ]
 
 
 def test_track2p_baseline_benchmark_scores_track2p_output_only_as_smoke_test(
@@ -391,3 +412,83 @@ def test_global_assignment_benchmark_uses_skip_edges(
     assert result["pairwise_f1"] == pytest.approx(2 / 3)
     assert result["complete_track_f1"] == pytest.approx(2 / 3)
     assert result["complete_tracks"] == 1
+
+
+def test_loso_benchmark_dispatches_noncalibrated_solver_prior_tuning(monkeypatch):
+    from bayescatrack.experiments import solver_prior_tuning
+
+    captured = {}
+
+    def fake_run_track2p_loso_solver_priors(config, *, search):
+        captured["config"] = config
+        captured["search"] = search
+        return _FakeLosoResult("noncalibrated priors")
+
+    monkeypatch.setattr(
+        solver_prior_tuning,
+        "run_track2p_loso_solver_priors",
+        fake_run_track2p_loso_solver_priors,
+    )
+
+    rows = run_track2p_benchmark(
+        Track2pBenchmarkConfig(
+            data=Path("unused"),
+            method="global-assignment",
+            split="leave-one-subject-out",
+            cost="registered-iou",
+            tune_solver_priors=True,
+            solver_prior_objective="pairwise_f1",
+            solver_prior_start_costs=(0.75,),
+            solver_prior_end_costs=(0.8,),
+            solver_prior_gap_penalties=(0.2,),
+            solver_prior_cost_thresholds=(None,),
+        )
+    )
+
+    assert rows[0].variant == "noncalibrated priors"
+    assert captured["config"].cost == "registered-iou"
+    assert captured["search"].objective == "pairwise_f1"
+    assert captured["search"].start_costs == (0.75,)
+    assert captured["search"].end_costs == (0.8,)
+    assert captured["search"].gap_penalties == (0.2,)
+    assert captured["search"].cost_thresholds == (None,)
+
+
+def test_loso_benchmark_dispatches_calibrated_solver_prior_tuning(monkeypatch):
+    from bayescatrack.experiments import track2p_solver_prior_tuning
+
+    captured = {}
+
+    def fake_run_track2p_loso_solver_prior_tuning(config, *, solver_prior_options):
+        captured["config"] = config
+        captured["options"] = solver_prior_options
+        return _FakeLosoResult("calibrated priors")
+
+    monkeypatch.setattr(
+        track2p_solver_prior_tuning,
+        "run_track2p_loso_solver_prior_tuning",
+        fake_run_track2p_loso_solver_prior_tuning,
+    )
+
+    rows = run_track2p_benchmark(
+        Track2pBenchmarkConfig(
+            data=Path("unused"),
+            method="global-assignment",
+            split="leave-one-subject-out",
+            cost="calibrated",
+            tune_solver_priors=True,
+            solver_prior_objective="pairwise_f1",
+            solver_prior_start_costs=(0.75,),
+            solver_prior_end_costs=(0.8,),
+            solver_prior_gap_penalties=(0.2,),
+            solver_prior_cost_thresholds=(None,),
+        )
+    )
+
+    assert rows[0].variant == "calibrated priors"
+    assert captured["config"].cost == "calibrated"
+    assert captured["options"].objective == "pairwise_f1"
+    assert captured["options"].start_costs == (0.75,)
+    assert captured["options"].end_costs == (0.8,)
+    assert captured["options"].gap_penalties == (0.2,)
+    assert captured["options"].cost_thresholds == (None,)

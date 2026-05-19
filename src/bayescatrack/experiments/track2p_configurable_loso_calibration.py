@@ -32,7 +32,10 @@ from bayescatrack.experiments.track2p_benchmark import (
     ProgressReporter,
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
+    _add_higher_order_consistency_arguments,
+    _higher_order_consistency_config_from_args,
     _score_prediction_against_reference,
+    _variant_name,
     discover_subject_dirs,
     format_benchmark_table,
     solve_configured_global_assignment,
@@ -42,9 +45,12 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     LosoCalibrationFold,
     LosoCalibrationResult,
     SubjectCalibrationData,
+    _config_with_pairwise_kwargs_for_features,
+    _feature_set_label,
     _load_subject_calibration_data,
     _reference_training_options,
     _score_holdout_calibration,
+    calibration_feature_names,
 )
 
 SampleWeightStrategy = Literal["none", "balanced"]
@@ -108,6 +114,7 @@ def run_track2p_configurable_loso_calibration(
         )
     subjects = _load_subjects(config)
     feature_names = tuple(feature_names)
+    config = _config_with_pairwise_kwargs_for_features(config, feature_names)
     sample_weight_strategy = _validate_sample_weight_strategy(sample_weight_strategy)
     model_kind = _validate_calibration_model_kind(model_kind)
     model_kwargs = _model_kwargs(model_kind, model_kwargs)
@@ -172,6 +179,8 @@ def run_track2p_configurable_loso_calibration(
             "training_examples": int(labels.shape[0]),
             "positive_examples": positives,
             "negative_examples": int(labels.shape[0] - positives),
+            "calibration_feature_set": _feature_set_label(config, feature_names),
+            "calibration_feature_count": int(len(feature_names)),
             "calibration_model": model_kind,
             "calibration_model_kwargs": json.dumps(
                 dict(model_kwargs),
@@ -191,7 +200,14 @@ def run_track2p_configurable_loso_calibration(
                 ),
                 benchmark=SubjectBenchmarkResult(
                     subject=held_out.subject_name,
-                    variant="Configurable calibrated costs + LOSO global assignment",
+                    variant="Configurable "
+                    + _variant_name(
+                        "calibrated",
+                        higher_order_consistency_config=(
+                            config.higher_order_consistency_config
+                        ),
+                        assignment_label="LOSO global assignment",
+                    ),
                     method=config.method,
                     scores=scores,
                     n_sessions=held_out.reference.n_sessions,
@@ -421,6 +437,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--velocity-variance", type=float, default=25.0)
     parser.add_argument("--regularization", type=float, default=1.0e-6)
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
+    _add_higher_order_consistency_arguments(parser)
+    parser.add_argument(
+        "--calibration-feature-set",
+        default="default",
+        choices=("default", "local-evidence", "default+local-evidence"),
+        help=(
+            "Calibrated-cost feature preset; local-evidence presets collect "
+            "their required pairwise components"
+        ),
+    )
     parser.add_argument(
         "--sample-weight-strategy", default="none", choices=("none", "balanced")
     )
@@ -449,6 +475,7 @@ def main(argv: list[str] | None = None) -> int:
     config = _config_from_args(args)
     result = run_track2p_configurable_loso_calibration(
         config,
+        feature_names=calibration_feature_names(args.calibration_feature_set),
         sample_weight_strategy=args.sample_weight_strategy,
         model_kind=args.calibration_model,
         model_kwargs=_json_object(
@@ -494,9 +521,13 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         weighted_centroids=args.weighted_centroids,
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
+        calibration_feature_set=args.calibration_feature_set,
         pairwise_cost_kwargs=_json_object(
             args.pairwise_cost_kwargs_json,
             "--pairwise-cost-kwargs-json",
+        ),
+        higher_order_consistency_config=_higher_order_consistency_config_from_args(
+            args
         ),
         progress=args.progress,
     )
@@ -559,6 +590,8 @@ def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
         "training_examples",
         "positive_examples",
         "negative_examples",
+        "calibration_feature_set",
+        "calibration_feature_count",
         "calibration_model",
         "calibration_sample_weight_strategy",
     ]

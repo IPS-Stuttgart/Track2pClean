@@ -7,7 +7,7 @@ import csv
 import json
 import sys
 from collections.abc import Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +48,9 @@ class CostSweepConfig:
     start_costs: tuple[float, ...] = ()
     end_costs: tuple[float, ...] = ()
     gap_penalties: tuple[float, ...] = ()
+    shifted_iou_radii: tuple[int, ...] = ()
+    shifted_iou_shift_penalty_weights: tuple[float, ...] = ()
+    shifted_iou_shift_penalty_scales: tuple[float | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -59,6 +62,9 @@ class CostSweepRun:
     start_cost: float
     end_cost: float
     gap_penalty: float
+    shifted_iou_radius: int | None
+    shifted_iou_shift_penalty_weight: float | None
+    shifted_iou_shift_penalty_scale: float | None
     sweep_index: int
     sweep_count: int
 
@@ -92,6 +98,10 @@ def iter_track2p_cost_sweep(
         _defaulted_positive_values(config.start_costs, (benchmark.start_cost,)),
         _defaulted_positive_values(config.end_costs, (benchmark.end_cost,)),
         _defaulted_nonnegative_values(config.gap_penalties, (benchmark.gap_penalty,)),
+        cost=benchmark.cost,
+        shifted_iou_radii=config.shifted_iou_radii,
+        shifted_iou_shift_penalty_weights=config.shifted_iou_shift_penalty_weights,
+        shifted_iou_shift_penalty_scales=config.shifted_iou_shift_penalty_scales,
     )
     subject_dirs = discover_subject_dirs(benchmark.data)
     if not subject_dirs:
@@ -113,47 +123,53 @@ def iter_track2p_cost_sweep(
         if reference.source == GROUND_TRUTH_REFERENCE_SOURCE:
             _validate_reference_roi_indices(reference, sessions)
 
-        base_costs = _build_sweep_pairwise_costs(sessions, benchmark)
         session_sizes = tuple(int(session.plane_data.n_rois) for session in sessions)
 
-        for run in runs:
-            progress.step(
-                f"running {subject_dir.name} scale={run.scale:g} threshold={_threshold_label(run.threshold)}"
-            )
-            scaled_costs = _scaled_pairwise_costs(base_costs, run.scale)
-            solver_result = _load_pyrecest_multisession_solver()(
-                scaled_costs,
-                session_sizes=session_sizes,
-                start_cost=run.start_cost,
-                end_cost=run.end_cost,
-                gap_penalty=run.gap_penalty,
-                cost_threshold=run.threshold,
-            )
-            predicted = tracks_to_suite2p_index_matrix(solver_result.tracks, sessions)
-            scores: dict[str, float | int | str] = dict(
-                _score_prediction_against_reference(
-                    predicted, reference, config=benchmark
+        for setting_runs in _group_runs_by_pairwise_setting(runs):
+            run_benchmark = _benchmark_for_pairwise_setting(benchmark, setting_runs[0])
+            base_costs = _build_sweep_pairwise_costs(sessions, run_benchmark)
+
+            for run in setting_runs:
+                progress.step(
+                    f"running {subject_dir.name} scale={run.scale:g} "
+                    f"threshold={_threshold_label(run.threshold)}"
+                    f"{_shifted_overlap_progress_suffix(run)}"
                 )
-            )
-            scores = {
-                **scores,
-                "sweep_index": int(run.sweep_index),
-                "sweep_count": int(run.sweep_count),
-                "cost_scale": float(run.scale),
-                "cost_threshold": _threshold_label(run.threshold),
-                "start_cost": float(run.start_cost),
-                "end_cost": float(run.end_cost),
-                "gap_penalty": float(run.gap_penalty),
-                **_pairwise_cost_statistics(scaled_costs, run.threshold),
-            }
-            yield SubjectBenchmarkResult(
-                subject=subject_dir.name,
-                variant=_variant_name(benchmark.cost),
-                method=benchmark.method,
-                scores=scores,
-                n_sessions=reference.n_sessions,
-                reference_source=reference.source,
-            )
+                scaled_costs = _scaled_pairwise_costs(base_costs, run.scale)
+                solver_result = _load_pyrecest_multisession_solver()(
+                    scaled_costs,
+                    session_sizes=session_sizes,
+                    start_cost=run.start_cost,
+                    end_cost=run.end_cost,
+                    gap_penalty=run.gap_penalty,
+                    cost_threshold=run.threshold,
+                )
+                predicted = tracks_to_suite2p_index_matrix(solver_result.tracks, sessions)
+                scores: dict[str, float | int | str] = dict(
+                    _score_prediction_against_reference(
+                        predicted, reference, config=benchmark
+                    )
+                )
+                scores = {
+                    **scores,
+                    "sweep_index": int(run.sweep_index),
+                    "sweep_count": int(run.sweep_count),
+                    "cost_scale": float(run.scale),
+                    "cost_threshold": _threshold_label(run.threshold),
+                    "start_cost": float(run.start_cost),
+                    "end_cost": float(run.end_cost),
+                    "gap_penalty": float(run.gap_penalty),
+                    **_shifted_overlap_score_values(run),
+                    **_pairwise_cost_statistics(scaled_costs, run.threshold),
+                }
+                yield SubjectBenchmarkResult(
+                    subject=subject_dir.name,
+                    variant=_variant_name(benchmark.cost),
+                    method=benchmark.method,
+                    scores=scores,
+                    n_sessions=reference.n_sessions,
+                    reference_source=reference.source,
+                )
 
 
 def _build_sweep_pairwise_costs(
@@ -199,30 +215,62 @@ def _sweep_runs(
     start_costs: Sequence[float],
     end_costs: Sequence[float],
     gap_penalties: Sequence[float],
+    *,
+    cost: str = "registered-iou",
+    shifted_iou_radii: Sequence[int] = (),
+    shifted_iou_shift_penalty_weights: Sequence[float] = (),
+    shifted_iou_shift_penalty_scales: Sequence[float | None] = (),
 ) -> tuple[CostSweepRun, ...]:
     scales = _normalise_cost_scales(cost_scales)
     thresholds = _normalise_cost_thresholds(cost_thresholds)
     starts = _normalise_positive_values(start_costs, name="Start costs")
     ends = _normalise_positive_values(end_costs, name="End costs")
     gaps = _normalise_nonnegative_values(gap_penalties, name="Gap penalties")
-    sweep_count = len(scales) * len(thresholds) * len(starts) * len(ends) * len(gaps)
+    shifted_radii, shifted_weights, shifted_scales = (
+        _normalise_shifted_overlap_sweep_values(
+            cost=cost,
+            shifted_iou_radii=shifted_iou_radii,
+            shifted_iou_shift_penalty_weights=shifted_iou_shift_penalty_weights,
+            shifted_iou_shift_penalty_scales=shifted_iou_shift_penalty_scales,
+        )
+    )
+    sweep_count = (
+        len(shifted_radii)
+        * len(shifted_weights)
+        * len(shifted_scales)
+        * len(scales)
+        * len(thresholds)
+        * len(starts)
+        * len(ends)
+        * len(gaps)
+    )
     runs: list[CostSweepRun] = []
-    for scale in scales:
-        for threshold in thresholds:
-            for start_cost in starts:
-                for end_cost in ends:
-                    for gap_penalty in gaps:
-                        runs.append(
-                            CostSweepRun(
-                                scale=scale,
-                                threshold=threshold,
-                                start_cost=start_cost,
-                                end_cost=end_cost,
-                                gap_penalty=gap_penalty,
-                                sweep_index=len(runs) + 1,
-                                sweep_count=sweep_count,
+    for shifted_iou_radius in shifted_radii:
+        for shifted_iou_shift_penalty_weight in shifted_weights:
+            for shifted_iou_shift_penalty_scale in shifted_scales:
+                for scale in scales:
+                    for threshold in thresholds:
+                        for start_cost in starts:
+                            for end_cost in ends:
+                                for gap_penalty in gaps:
+                                    runs.append(
+                                        CostSweepRun(
+                                            scale=scale,
+                                            threshold=threshold,
+                                            start_cost=start_cost,
+                                            end_cost=end_cost,
+                                            gap_penalty=gap_penalty,
+                                            shifted_iou_radius=shifted_iou_radius,
+                                            shifted_iou_shift_penalty_weight=(
+                                                shifted_iou_shift_penalty_weight
+                                            ),
+                                            shifted_iou_shift_penalty_scale=(
+                                                shifted_iou_shift_penalty_scale
+                                            ),
+                                            sweep_index=len(runs) + 1,
+                                            sweep_count=sweep_count,
+                                        )
                             )
-                        )
     return tuple(runs)
 
 
@@ -236,6 +284,81 @@ def _scaled_pairwise_costs(
         edge: np.asarray(costs, dtype=float) * scale
         for edge, costs in pairwise_costs.items()
     }
+
+
+def _group_runs_by_pairwise_setting(
+    runs: Sequence[CostSweepRun],
+) -> tuple[tuple[CostSweepRun, ...], ...]:
+    grouped: dict[
+        tuple[int | None, float | None, float | None], list[CostSweepRun]
+    ] = {}
+    for run in runs:
+        key = (
+            run.shifted_iou_radius,
+            run.shifted_iou_shift_penalty_weight,
+            run.shifted_iou_shift_penalty_scale,
+        )
+        grouped.setdefault(key, []).append(run)
+    return tuple(tuple(group) for group in grouped.values())
+
+
+def _benchmark_for_pairwise_setting(
+    benchmark: Track2pBenchmarkConfig, run: CostSweepRun
+) -> Track2pBenchmarkConfig:
+    shifted_kwargs = _shifted_pairwise_cost_kwargs(run)
+    if not shifted_kwargs:
+        return benchmark
+    pairwise_cost_kwargs = dict(benchmark.pairwise_cost_kwargs or {})
+    pairwise_cost_kwargs.update(shifted_kwargs)
+    return replace(benchmark, pairwise_cost_kwargs=pairwise_cost_kwargs)
+
+
+def _shifted_pairwise_cost_kwargs(run: CostSweepRun) -> dict[str, float | int]:
+    kwargs: dict[str, float | int] = {}
+    if run.shifted_iou_radius is not None:
+        kwargs["shifted_iou_radius"] = int(run.shifted_iou_radius)
+    if run.shifted_iou_shift_penalty_weight is not None:
+        kwargs["shifted_iou_shift_penalty_weight"] = float(
+            run.shifted_iou_shift_penalty_weight
+        )
+    if run.shifted_iou_shift_penalty_scale is not None:
+        kwargs["shifted_iou_shift_penalty_scale"] = float(
+            run.shifted_iou_shift_penalty_scale
+        )
+    return kwargs
+
+
+def _shifted_overlap_score_values(run: CostSweepRun) -> dict[str, float | int | str]:
+    if run.shifted_iou_radius is None:
+        return {}
+    scores: dict[str, float | int | str] = {
+        "shifted_iou_radius": int(run.shifted_iou_radius)
+    }
+    if run.shifted_iou_shift_penalty_weight is not None:
+        scores["shifted_iou_shift_penalty_weight"] = float(
+            run.shifted_iou_shift_penalty_weight
+        )
+    scores["shifted_iou_shift_penalty_scale"] = (
+        "default"
+        if run.shifted_iou_shift_penalty_scale is None
+        else float(run.shifted_iou_shift_penalty_scale)
+    )
+    return scores
+
+
+def _shifted_overlap_progress_suffix(run: CostSweepRun) -> str:
+    if run.shifted_iou_radius is None:
+        return ""
+    scale = (
+        "default"
+        if run.shifted_iou_shift_penalty_scale is None
+        else f"{run.shifted_iou_shift_penalty_scale:g}"
+    )
+    return (
+        f" radius={run.shifted_iou_radius:g}"
+        f" shift-penalty={run.shifted_iou_shift_penalty_weight:g}"
+        f" shift-scale={scale}"
+    )
 
 
 def _pairwise_cost_statistics(
@@ -392,6 +515,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--weighted-centroids", action="store_true")
     parser.add_argument("--velocity-variance", type=float, default=25.0)
     parser.add_argument("--regularization", type=float, default=1.0e-6)
+    parser.add_argument(
+        "--shifted-iou-radii",
+        "--shifted-iou-radius-sweep",
+        dest="shifted_iou_radii",
+        default=None,
+        help=(
+            "Optional comma-separated shifted-IoU search radii. "
+            "Requires --cost registered-shifted-iou or roi-aware-shifted."
+        ),
+    )
+    parser.add_argument(
+        "--shifted-iou-shift-penalty-weights",
+        "--shifted-iou-shift-penalty-weight-sweep",
+        dest="shifted_iou_shift_penalty_weights",
+        default=None,
+        help="Optional comma-separated residual-shift penalty weights.",
+    )
+    parser.add_argument(
+        "--shifted-iou-shift-penalty-scales",
+        "--shifted-iou-shift-penalty-scale-sweep",
+        dest="shifted_iou_shift_penalty_scales",
+        default=None,
+        help=(
+            "Optional comma-separated residual-shift penalty scales; use "
+            "default/none to use the radius-based scale."
+        ),
+    )
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
     parser.add_argument(
         "--progress", action=argparse.BooleanOptionalAction, default=True
@@ -484,6 +634,29 @@ def _config_from_args(args: argparse.Namespace) -> CostSweepConfig:
             if args.gap_penalties is not None
             else ()
         ),
+        shifted_iou_radii=(
+            _parse_nonnegative_int_values(
+                args.shifted_iou_radii, name="--shifted-iou-radii"
+            )
+            if args.shifted_iou_radii is not None
+            else ()
+        ),
+        shifted_iou_shift_penalty_weights=(
+            _parse_nonnegative_values(
+                args.shifted_iou_shift_penalty_weights,
+                name="--shifted-iou-shift-penalty-weights",
+            )
+            if args.shifted_iou_shift_penalty_weights is not None
+            else ()
+        ),
+        shifted_iou_shift_penalty_scales=(
+            _parse_optional_positive_values(
+                args.shifted_iou_shift_penalty_scales,
+                name="--shifted-iou-shift-penalty-scales",
+            )
+            if args.shifted_iou_shift_penalty_scales is not None
+            else ()
+        ),
     )
 
 
@@ -515,6 +688,25 @@ def _parse_nonnegative_values(raw: str, *, name: str) -> tuple[float, ...]:
     return _normalise_nonnegative_values(_parse_float_tokens(raw, name=name), name=name)
 
 
+def _parse_nonnegative_int_values(raw: str, *, name: str) -> tuple[int, ...]:
+    return _normalise_nonnegative_int_values(
+        tuple(_parse_int_token(token, name=name) for token in _split_tokens(raw, name=name)),
+        name=name,
+    )
+
+
+def _parse_optional_positive_values(
+    raw: str, *, name: str
+) -> tuple[float | None, ...]:
+    values: list[float | None] = []
+    for token in _split_tokens(raw, name=name):
+        if token.casefold() in {"none", "null", "default", "auto"}:
+            values.append(None)
+        else:
+            values.append(_parse_finite_float(token, name=name))
+    return _normalise_optional_positive_values(tuple(values), name=name)
+
+
 def _split_tokens(raw: str, *, name: str) -> tuple[str, ...]:
     tokens = tuple(token.strip() for token in raw.split(","))
     if not tokens or any(not token for token in tokens):
@@ -530,6 +722,68 @@ def _parse_finite_float(token: str, *, name: str) -> float:
     if not np.isfinite(value):
         raise ValueError(f"{name} values must be finite")
     return value
+
+
+def _parse_int_token(token: str, *, name: str) -> int:
+    try:
+        return int(token)
+    except ValueError as exc:
+        raise ValueError(f"{name} contains a non-integer value: {token!r}") from exc
+
+
+def _normalise_shifted_overlap_sweep_values(
+    *,
+    cost: str,
+    shifted_iou_radii: Sequence[int],
+    shifted_iou_shift_penalty_weights: Sequence[float],
+    shifted_iou_shift_penalty_scales: Sequence[float | None],
+) -> tuple[tuple[int | None, ...], tuple[float | None, ...], tuple[float | None, ...]]:
+    has_explicit_shifted_sweep = bool(
+        shifted_iou_radii
+        or shifted_iou_shift_penalty_weights
+        or shifted_iou_shift_penalty_scales
+    )
+    if not has_explicit_shifted_sweep:
+        return (None,), (None,), (None,)
+    if not _cost_supports_shifted_overlap_sweep(cost):
+        raise ValueError(
+            "Shifted-overlap sweep axes require cost='registered-shifted-iou' "
+            "or cost='roi-aware-shifted'"
+        )
+    radii = _normalise_nonnegative_int_values(
+        shifted_iou_radii or (_default_shifted_iou_radius(cost),),
+        name="Shifted-IoU radii",
+    )
+    weights = _normalise_nonnegative_values(
+        shifted_iou_shift_penalty_weights
+        or (_default_shifted_iou_shift_penalty_weight(cost),),
+        name="Shifted-IoU shift-penalty weights",
+    )
+    scales = _normalise_optional_positive_values(
+        shifted_iou_shift_penalty_scales or (None,),
+        name="Shifted-IoU shift-penalty scales",
+    )
+    return radii, weights, scales
+
+
+def _cost_supports_shifted_overlap_sweep(cost: str) -> bool:
+    return cost in {"registered-shifted-iou", "roi-aware-shifted"}
+
+
+def _default_shifted_iou_radius(cost: str) -> int:
+    if _cost_supports_shifted_overlap_sweep(cost):
+        return 2
+    raise ValueError(f"No shifted-IoU radius default is defined for cost={cost!r}")
+
+
+def _default_shifted_iou_shift_penalty_weight(cost: str) -> float:
+    if cost == "registered-shifted-iou":
+        return 0.0
+    if cost == "roi-aware-shifted":
+        return 0.25
+    raise ValueError(
+        f"No shifted-IoU shift-penalty default is defined for cost={cost!r}"
+    )
 
 
 def _normalise_cost_scales(values: Sequence[float]) -> tuple[float, ...]:
@@ -583,6 +837,31 @@ def _normalise_nonnegative_values(
         raise ValueError(f"At least one {name} value is required")
     if any((not np.isfinite(value)) or value < 0.0 for value in normalised):
         raise ValueError(f"{name} values must be non-negative finite numbers")
+    return normalised
+
+
+def _normalise_nonnegative_int_values(
+    values: Sequence[int], *, name: str
+) -> tuple[int, ...]:
+    normalised = tuple(int(value) for value in values)
+    if not normalised:
+        raise ValueError(f"At least one {name} value is required")
+    if any(value < 0 for value in normalised):
+        raise ValueError(f"{name} values must be non-negative integers")
+    return normalised
+
+
+def _normalise_optional_positive_values(
+    values: Sequence[float | None], *, name: str
+) -> tuple[float | None, ...]:
+    normalised = tuple(None if value is None else float(value) for value in values)
+    if not normalised:
+        raise ValueError(f"At least one {name} value is required")
+    if any(
+        value is not None and ((not np.isfinite(value)) or value <= 0.0)
+        for value in normalised
+    ):
+        raise ValueError(f"{name} values must be positive finite numbers or default")
     return normalised
 
 
@@ -662,6 +941,13 @@ def format_sweep_table(rows: Sequence[dict[str, float | int | str]]) -> str:
         "pairwise_precision",
         "pairwise_recall",
     ]
+    if any("shifted_iou_radius" in row for row in rows):
+        insert_at = columns.index("gap_penalty") + 1
+        columns[insert_at:insert_at] = [
+            "shifted_iou_radius",
+            "shifted_iou_shift_penalty_weight",
+            "shifted_iou_shift_penalty_scale",
+        ]
     header = "| " + " | ".join(columns) + " |"
     separator = "| " + " | ".join(["---"] + ["---:"] * (len(columns) - 1)) + " |"
     body = [header, separator]
@@ -688,6 +974,9 @@ def _sweep_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]
         "start_cost",
         "end_cost",
         "gap_penalty",
+        "shifted_iou_radius",
+        "shifted_iou_shift_penalty_weight",
+        "shifted_iou_shift_penalty_scale",
         "cost_edges",
         "cost_values",
         "cost_finite_values",

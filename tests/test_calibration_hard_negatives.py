@@ -4,8 +4,10 @@ import numpy as np
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
 from bayescatrack.experiments.calibration_hard_negatives import (
     CandidateHardNegativeOptions,
+    MonotoneRankerTrainingOptions,
     balanced_binary_sample_weights,
     collect_candidate_limited_training_examples,
+    fit_monotone_hard_negative_ranker,
 )
 
 
@@ -66,3 +68,25 @@ def test_balanced_binary_sample_weights_are_inverse_frequency():
     assert weights[0] == 2.0
     assert np.allclose(weights[1:], 2.0 / 3.0)
     assert np.isclose(float(np.sum(weights)), 4.0)
+
+
+def test_monotone_ranker_scores_positives_below_hard_negatives():
+    block = _example_block()
+    model = fit_monotone_hard_negative_ranker(
+        [block],
+        options=MonotoneRankerTrainingOptions(
+            hard_negative_options=CandidateHardNegativeOptions(
+                negative_to_positive_ratio=2.0,
+                candidate_top_k_per_anchor=2,
+                hardness_feature_names=("centroid_distance",),
+            ),
+            max_iter=80,
+        ),
+    )
+
+    costs = model.model.pairwise_cost_matrix(block.features)
+
+    assert np.all(np.asarray(model.model.weights) >= 0.0)
+    for index in range(3):
+        assert costs[index, index] < np.min(np.delete(costs[index, :], index))
+        assert costs[index, index] < np.min(np.delete(costs[:, index], index))

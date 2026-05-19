@@ -164,8 +164,14 @@ python -m bayescatrack benchmark track2p \
   --reference /path/to/manual_ground_truth_root \
   --reference-kind manual-gt \
   --transform-type fov-translation \
-  --max-gap 2
+  --max-gap 2 \
+  --calibration-feature-set default+local-evidence
 ```
+
+Use `--calibration-feature-set default+local-evidence` to augment the calibrated
+LOSO model with local ROI evidence such as weighted Dice overlap, containment,
+mask-distance, FOV-patch, neighbor-constellation, and centroid-rank features.
+Selecting this preset automatically enables the matching pairwise components.
 
 The benchmark prints a compact table by default and can also write JSON or CSV via `--format json --output results.json` or `--format csv --output results.csv`.
 

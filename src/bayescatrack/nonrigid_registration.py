@@ -627,12 +627,16 @@ def _smooth_field(values: np.ndarray, fallback: np.ndarray) -> np.ndarray:
 
 
 def _smooth_array(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    if values.ndim != 2:
+        raise ValueError("values must be a two-dimensional array")
+    padded = np.pad(values, ((1, 1), (1, 1)), mode="edge")
     return (
-        4.0 * values
-        + np.roll(values, 1, axis=0)
-        + np.roll(values, -1, axis=0)
-        + np.roll(values, 1, axis=1)
-        + np.roll(values, -1, axis=1)
+        4.0 * padded[1:-1, 1:-1]
+        + padded[:-2, 1:-1]
+        + padded[2:, 1:-1]
+        + padded[1:-1, :-2]
+        + padded[1:-1, 2:]
     ) / 8.0
 
 

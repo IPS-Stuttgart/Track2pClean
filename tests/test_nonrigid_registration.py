@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+from bayescatrack import nonrigid_registration
 from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.nonrigid_registration import (
     NONRIGID_REGISTRATION_TRANSFORM_TYPES,
@@ -138,6 +139,22 @@ def test_nonrigid_transform_names_are_registered() -> None:
     )
     assert set(NONRIGID_REGISTRATION_TRANSFORM_TYPES).issubset(
         set(REGISTRATION_TRANSFORM_TYPES)
+    )
+
+
+def test_smooth_array_uses_edge_padding_without_wraparound() -> None:
+    values = np.zeros((3, 3), dtype=float)
+    values[0, 0] = 8.0
+    smooth_array = getattr(nonrigid_registration, "_smooth_array")
+
+    smoothed = smooth_array(values)
+
+    np.testing.assert_allclose(
+        smoothed,
+        np.asarray(
+            [[6.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+            dtype=float,
+        ),
     )
 
 

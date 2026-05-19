@@ -24,8 +24,10 @@ from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.evaluation.calibration_diagnostics import calibration_summary
 from bayescatrack.experiments.calibration_hard_negatives import (
     CandidateHardNegativeOptions,
+    MonotoneRankerTrainingOptions,
     balanced_binary_sample_weights,
     collect_candidate_limited_training_examples,
+    fit_monotone_hard_negative_ranker,
 )
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
@@ -34,16 +36,20 @@ from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     _load_reference_for_subject,
     _load_subject_sessions,
+    _activity_tie_breaker_metadata,
+    _activity_variant_suffix,
     _score_prediction_against_reference,
     _assignment_registration_summary,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
+    _variant_name,
     discover_subject_dirs,
     solve_configured_global_assignment,
 )
 from bayescatrack.reference import Track2pReference
 
 SampleWeightStrategy = Literal["none", "balanced"]
+CalibrationModelKind = Literal["monotone-ranker", "logistic"]
 CalibrationFeatureSet = Literal["default", "local-evidence", "default+local-evidence"]
 _LOCAL_EVIDENCE_COMPONENT_KWARGS = frozenset(
     {
@@ -157,6 +163,7 @@ def run_track2p_loso_calibration(
     config: Track2pBenchmarkConfig,
     *,
     feature_names: Sequence[str] | None = None,
+    calibration_model: CalibrationModelKind | str | None = None,
     sample_weight: Any | None = None,
     sample_weight_strategy: SampleWeightStrategy = "none",
     model_kwargs: Mapping[str, Any] | None = None,
@@ -166,8 +173,8 @@ def run_track2p_loso_calibration(
     Hard-negative candidate limiting already changes the class prior seen by the
     logistic model. By default LOSO calibration therefore does not add
     inverse-frequency sample weights, and it disables PyRecEst's implicit
-    ``class_weight='balanced'`` behavior unless the caller explicitly overrides
-    ``model_kwargs['class_weight']``.
+    ``class_weight='balanced'`` behavior for logistic calibration unless the
+    caller explicitly overrides ``model_kwargs['class_weight']``.
     """
 
     if config.method != "global-assignment" or config.cost != "calibrated":
@@ -176,6 +183,11 @@ def run_track2p_loso_calibration(
         )
     feature_names = tuple(
         _feature_names_from_config(config) if feature_names is None else feature_names
+    )
+    calibration_model = _validate_calibration_model(
+        getattr(config, "calibration_model", "monotone-ranker")
+        if calibration_model is None
+        else calibration_model
     )
     config = _config_with_pairwise_kwargs_for_features(config, feature_names)
     subject_dirs = tuple(discover_subject_dirs(config.data))
@@ -193,6 +205,12 @@ def run_track2p_loso_calibration(
         subject_list.append(_load_subject_calibration_data(subject_dir, config=config))
     subjects = tuple(subject_list)
     sample_weight_strategy = _validate_sample_weight_strategy(sample_weight_strategy)
+    if calibration_model != "logistic" and (
+        sample_weight is not None or sample_weight_strategy != "none"
+    ):
+        raise ValueError(
+            "sample weights are only supported for calibration_model='logistic'"
+        )
     logistic_model_kwargs = _loso_logistic_model_kwargs(model_kwargs)
     folds: list[LosoCalibrationFold] = []
 
@@ -200,26 +218,43 @@ def run_track2p_loso_calibration(
         training_subjects = tuple(
             subject for index, subject in enumerate(subjects) if index != held_out_index
         )
-        training_features, training_labels = _collect_training_examples(
+        hard_negative_options = CandidateHardNegativeOptions()
+        training_pairwise_blocks = _collect_training_pairwise_blocks(
             training_subjects,
             config=config,
             feature_names=feature_names,
             progress=progress,
             held_out_subject=held_out.subject_name,
         )
-        weights = _training_sample_weight(
-            training_labels,
-            sample_weight=sample_weight,
-            strategy=sample_weight_strategy,
+        training_features, training_labels = (
+            collect_candidate_limited_training_examples(
+                training_pairwise_blocks, options=hard_negative_options
+            )
         )
+        weights = None
+        if calibration_model == "logistic":
+            weights = _training_sample_weight(
+                training_labels,
+                sample_weight=sample_weight,
+                strategy=sample_weight_strategy,
+            )
         progress.step(f"fitting model for {held_out.subject_name}")
-        calibrated_model = fit_logistic_association_model(
-            training_features,
-            training_labels,
-            feature_names=feature_names,
-            sample_weight=weights,
-            model_kwargs=logistic_model_kwargs,
-        )
+        if calibration_model == "logistic":
+            calibrated_model = fit_logistic_association_model(
+                training_features,
+                training_labels,
+                feature_names=feature_names,
+                sample_weight=weights,
+                model_kwargs=logistic_model_kwargs,
+            )
+        else:
+            calibrated_model = fit_monotone_hard_negative_ranker(
+                training_pairwise_blocks,
+                feature_names=feature_names,
+                options=MonotoneRankerTrainingOptions(
+                    hard_negative_options=hard_negative_options
+                ),
+            )
         progress.step(f"scoring calibration for {held_out.subject_name}")
         calibration_scores = _score_holdout_calibration(
             calibrated_model,
@@ -249,10 +284,12 @@ def run_track2p_loso_calibration(
             "negative_examples": int(training_labels.shape[0] - positives),
             "calibration_feature_set": _feature_set_label(config, feature_names),
             "calibration_feature_count": int(len(feature_names)),
+            "calibration_model": calibration_model,
             "calibration_sample_weight_strategy": sample_weight_strategy,
             "calibration_class_weight": _stringify_class_weight(
                 logistic_model_kwargs.get("class_weight")
             ),
+            **_activity_tie_breaker_metadata(config),
             **calibration_scores,
         }
         folds.append(
@@ -263,7 +300,15 @@ def run_track2p_loso_calibration(
                 ),
                 benchmark=SubjectBenchmarkResult(
                     subject=held_out.subject_name,
-                    variant="Calibrated costs + LOSO global assignment",
+                    variant=(
+                        _calibration_variant_name(
+                            calibration_model,
+                            higher_order_consistency_config=(
+                                config.higher_order_consistency_config
+                            ),
+                        )
+                        + _activity_variant_suffix(config)
+                    ),
                     method=config.method,
                     scores=scores,
                     n_sessions=held_out.reference.n_sessions,
@@ -338,6 +383,14 @@ def _validate_sample_weight_strategy(strategy: str) -> SampleWeightStrategy:
     if strategy not in {"none", "balanced"}:
         raise ValueError("sample_weight_strategy must be either 'none' or 'balanced'")
     return cast(SampleWeightStrategy, strategy)
+
+
+def _validate_calibration_model(model: str) -> CalibrationModelKind:
+    if model not in {"monotone-ranker", "logistic"}:
+        raise ValueError(
+            "calibration_model must be either 'monotone-ranker' or 'logistic'"
+        )
+    return cast(CalibrationModelKind, model)
 
 
 def _loso_logistic_model_kwargs(
@@ -423,31 +476,46 @@ def _collect_training_examples(
     progress: ProgressReporter | None = None,
     held_out_subject: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    feature_blocks: list[np.ndarray] = []
-    label_blocks: list[np.ndarray] = []
+    pairwise_blocks = _collect_training_pairwise_blocks(
+        training_subjects,
+        config=config,
+        feature_names=feature_names,
+        progress=progress,
+        held_out_subject=held_out_subject,
+    )
+    return collect_candidate_limited_training_examples(
+        pairwise_blocks, options=CandidateHardNegativeOptions()
+    )
+
+
+def _collect_training_pairwise_blocks(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str],
+    progress: ProgressReporter | None = None,
+    held_out_subject: str | None = None,
+) -> tuple[Any, ...]:
+    blocks: list[Any] = []
     training_options = _reference_training_options(config, feature_names)
-    hard_negative_options = CandidateHardNegativeOptions()
     for subject in training_subjects:
         if progress is not None:
             progress.step(
                 f"collecting {subject.subject_name} training features for {held_out_subject}"
             )
-        pairwise_blocks = collect_reference_pairwise_example_blocks(
-            subject.sessions,
-            subject.reference,
-            session_edges=session_edge_pairs(
-                len(subject.sessions), max_gap=config.max_gap
-            ),
-            options=training_options,
+        blocks.extend(
+            collect_reference_pairwise_example_blocks(
+                subject.sessions,
+                subject.reference,
+                session_edges=session_edge_pairs(
+                    len(subject.sessions), max_gap=config.max_gap
+                ),
+                options=training_options,
+            )
         )
-        features, labels = collect_candidate_limited_training_examples(
-            pairwise_blocks, options=hard_negative_options
-        )
-        feature_blocks.append(features)
-        label_blocks.append(labels)
-    if not feature_blocks:
+    if not blocks:
         raise ValueError("At least one training subject is required")
-    return np.concatenate(feature_blocks, axis=0), np.concatenate(label_blocks, axis=0)
+    return tuple(blocks)
 
 
 def _reference_training_options(
@@ -465,3 +533,20 @@ def _reference_training_options(
             config.pairwise_cost_kwargs, feature_names
         ),
     )
+
+
+def _calibration_variant_name(
+    calibration_model: CalibrationModelKind,
+    *,
+    higher_order_consistency_config: Mapping[str, Any] | None = None,
+) -> str:
+    if calibration_model == "logistic":
+        return _variant_name(
+            "calibrated",
+            higher_order_consistency_config=higher_order_consistency_config,
+            assignment_label="LOSO global assignment",
+        )
+    label = "Monotone-ranker calibrated costs + LOSO global assignment"
+    if higher_order_consistency_config is not None:
+        label = f"{label} + higher-order consistency"
+    return label
