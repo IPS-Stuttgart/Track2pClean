@@ -126,6 +126,14 @@ def estimate_fov_affine_transform(
         return _translation_estimate(
             reference, measurement, subtract_mean=subtract_mean
         )
+    translation_estimate = _translation_estimate(
+        reference, measurement, subtract_mean=subtract_mean
+    )
+    if _tile_shifts_support_global_translation(
+        shifts_yx,
+        translation_estimate.tile_shift_yx[0],
+    ):
+        return translation_estimate
     coef, _, _, _ = np.linalg.lstsq(_design(meas_xy), ref_xy, rcond=None)
     matrix_xy = np.asarray(coef.T, dtype=float)
     residual = _design(meas_xy) @ coef - ref_xy
@@ -463,6 +471,19 @@ def _translation_estimate(reference, measurement, *, subtract_mean):
         np.zeros((0, 2)),
         True,
     )
+
+
+def _tile_shifts_support_global_translation(
+    shifts_yx: np.ndarray, global_shift_yx: np.ndarray
+) -> bool:
+    shifts_yx = np.asarray(shifts_yx, dtype=float)
+    if shifts_yx.size == 0:
+        return False
+    global_shift_yx = np.rint(np.asarray(global_shift_yx, dtype=float)).astype(int)
+    rounded_shifts = np.rint(shifts_yx).astype(int)
+    matches = np.all(rounded_shifts == global_shift_yx[None, :], axis=1)
+    min_matches = max(3, int(np.ceil(0.75 * rounded_shifts.shape[0])))
+    return int(np.count_nonzero(matches)) >= min_matches
 
 
 def _make_estimate(matrix_xy, ref_xy, meas_xy, shifts_yx, peaks, residual, fallback):
