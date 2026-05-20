@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from bayescatrack.core._roi_stat_features import SPLIT_ROI_STAT_FEATURES
 from bayescatrack.association._pyrecest_feature_compat import (
     CalibratedPairwiseAssociationModel,
     FeatureTransform,
@@ -46,6 +45,7 @@ from bayescatrack.reference import Track2pReference
 from bayescatrack.track2p_registration import register_plane_pair
 
 ACTIVITY_ASSOCIATION_FEATURES = tuple(ACTIVITY_TIEBREAKER_FEATURES)
+EXPANDED_ACTIVITY_ASSOCIATION_FEATURES = tuple(ACTIVITY_TIEBREAKER_FEATURES)
 
 _ACTIVITY_FEATURES = {
     "activity_correlation",
@@ -108,6 +108,7 @@ DEFAULT_ASSOCIATION_FEATURES = (
     "covariance_logdet_cost",
     *SPLIT_ROI_STAT_FEATURES,
     "cell_probability_cost",
+    *EXPANDED_ACTIVITY_ASSOCIATION_FEATURES,
     "activity_similarity_cost",
     "activity_similarity_available",
     "session_gap",
