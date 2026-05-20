@@ -10,7 +10,9 @@ from bayescatrack.experiments.track2p_teacher_debug import (
     _BayesEdgeCostLookup,
     _edge_pairs,
     _summary_rows,
+    _track_matrix_edge_counter,
     _track_matrix_edge_set,
+    _valid_roi,
     classify_teacher_edge,
 )
 
@@ -65,6 +67,33 @@ def test_track_matrix_edge_set_uses_requested_edges_and_skips_missing_rois() -> 
         (1, 2, 2, 3),
         (1, 2, 8, 9),
     }
+
+
+def test_track_matrix_edge_counter_preserves_duplicate_edges() -> None:
+    matrix = np.asarray(
+        [
+            [1, 2],
+            [1, 2],
+            [1, 3],
+        ],
+        dtype=object,
+    )
+
+    counter = _track_matrix_edge_counter(matrix, edges=((0, 1),))
+
+    assert counter[(0, 1, 1, 2)] == 2
+    assert counter[(0, 1, 1, 3)] == 1
+    assert _track_matrix_edge_set(matrix, edges=((0, 1),)) == {
+        (0, 1, 1, 2),
+        (0, 1, 1, 3),
+    }
+
+
+def test_teacher_debug_valid_roi_rejects_fractional_values() -> None:
+    assert _valid_roi(1.0)
+    assert _valid_roi("1.0")
+    assert not _valid_roi(1.5)
+    assert not _valid_roi("1.5")
 
 
 def test_bayes_cost_lookup_reports_rank_threshold_and_missing_reason() -> None:

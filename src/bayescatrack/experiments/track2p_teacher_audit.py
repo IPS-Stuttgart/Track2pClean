@@ -115,9 +115,9 @@ def audit_track_matrices(
         seed_session,
         len(seed_rois),
         restrict_to_reference_seed_rois,
-        set(gt_e),
-        set(t2p_e),
-        set(bayes_e),
+        gt_e,
+        t2p_e,
+        bayes_e,
         edge_rows,
     )
     return Track2pTeacherAuditResult([summary], edge_rows)
@@ -338,32 +338,43 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _edge_rows(
-    subject: str, names: Sequence[str], gt: dict, t2p: dict, bayes: dict
+    subject: str,
+    names: Sequence[str],
+    gt: Counter[tuple[int, int, int, int]],
+    t2p: Counter[tuple[int, int, int, int]],
+    bayes: Counter[tuple[int, int, int, int]],
 ) -> list[dict[str, Any]]:
     rows = []
     for e in sorted(set(gt) | set(t2p) | set(bayes)):
         sa, sb, ra, rb = e
-        ingt, int2p, inb = e in gt, e in t2p, e in bayes
-        cat = f"GT{'+' if ingt else '-'}Track2p{'+' if int2p else '-'}Bayes{'+' if inb else '-'}"
-        rows.append(
-            {
-                "subject": subject,
-                "session_a": sa,
-                "session_b": sb,
-                "session_a_name": names[sa],
-                "session_b_name": names[sb],
-                "gap": sb - sa,
-                "roi_a": ra,
-                "roi_b": rb,
-                "in_ground_truth": ingt,
-                "in_track2p": int2p,
-                "in_bayes": inb,
-                "category": cat,
-                "ground_truth_track_row": gt.get(e, ""),
-                "track2p_track_row": t2p.get(e, ""),
-                "bayes_track_row": bayes.get(e, ""),
-            }
-        )
+        gt_count = int(gt[e])
+        track2p_count = int(t2p[e])
+        bayes_count = int(bayes[e])
+        for duplicate_index in range(max(gt_count, track2p_count, bayes_count)):
+            ingt = duplicate_index < gt_count
+            int2p = duplicate_index < track2p_count
+            inb = duplicate_index < bayes_count
+            cat = f"GT{'+' if ingt else '-'}Track2p{'+' if int2p else '-'}Bayes{'+' if inb else '-'}"
+            rows.append(
+                {
+                    "subject": subject,
+                    "session_a": sa,
+                    "session_b": sb,
+                    "session_a_name": names[sa],
+                    "session_b_name": names[sb],
+                    "gap": sb - sa,
+                    "roi_a": ra,
+                    "roi_b": rb,
+                    "in_ground_truth": ingt,
+                    "in_track2p": int2p,
+                    "in_bayes": inb,
+                    "category": cat,
+                    "edge_duplicate_index": duplicate_index,
+                    "ground_truth_edge_count": gt_count,
+                    "track2p_edge_count": track2p_count,
+                    "bayes_edge_count": bayes_count,
+                }
+            )
     return rows
 
 
@@ -375,9 +386,9 @@ def _summary(
     seed: int,
     n_seed: int,
     restrict: bool,
-    gt: set,
-    t2p: set,
-    bayes: set,
+    gt: Counter[tuple[int, int, int, int]],
+    t2p: Counter[tuple[int, int, int, int]],
+    bayes: Counter[tuple[int, int, int, int]],
     rows: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     c = Counter(str(r["category"]) for r in rows)
@@ -390,9 +401,9 @@ def _summary(
         "seed_session": seed,
         "reference_seed_rois": n_seed,
         "restrict_to_reference_seed_rois": int(restrict),
-        "ground_truth_edges": len(gt),
-        "track2p_edges": len(t2p),
-        "bayes_edges": len(bayes),
+        "ground_truth_edges": int(sum(gt.values())),
+        "track2p_edges": int(sum(t2p.values())),
+        "bayes_edges": int(sum(bayes.values())),
         "track2p_vs_gt_precision": s_t[0],
         "track2p_vs_gt_recall": s_t[1],
         "track2p_vs_gt_f1": s_t[2],
@@ -411,12 +422,12 @@ def _summary(
 
 def _edge_map(
     m: np.ndarray, pairs: Sequence[tuple[int, int]]
-) -> dict[tuple[int, int, int, int], int]:
-    out: dict[tuple[int, int, int, int], int] = {}
-    for r, row in enumerate(m):
+) -> Counter[tuple[int, int, int, int]]:
+    out: Counter[tuple[int, int, int, int]] = Counter()
+    for row in m:
         for a, b in pairs:
             if row[a] is not None and row[b] is not None:
-                out.setdefault((a, b, int(row[a]), int(row[b])), r)
+                out[(a, b, int(row[a]), int(row[b]))] += 1
     return out
 
 
@@ -447,14 +458,35 @@ def _parse(v: Any) -> int | None:
     if isinstance(v, str):
         if v.strip().lower() in {"", "none", "nan", "null"}:
             return None
-        v = v.strip()
-    if isinstance(v, (float, np.floating)) and np.isnan(v):
-        return None
-    try:
+        return _parse_integer_like_text(v.strip())
+    if isinstance(v, (int, np.integer)):
         i = int(v)
-    except (TypeError, ValueError):
-        return None
+    elif isinstance(v, (float, np.floating)):
+        if np.isnan(float(v)):
+            return None
+        if not float(v).is_integer():
+            return None
+        i = int(v)
+    else:
+        try:
+            i = int(v)
+        except (TypeError, ValueError):
+            return None
     return i if i >= 0 else None
+
+
+def _parse_integer_like_text(text: str) -> int | None:
+    try:
+        value = int(text)
+    except ValueError:
+        try:
+            numeric = float(text)
+        except ValueError:
+            return None
+        if not np.isfinite(numeric) or not float(numeric).is_integer():
+            return None
+        value = int(numeric)
+    return value if value >= 0 else None
 
 
 def _seed_filter(m: np.ndarray, seed_rois: set[int], seed: int) -> np.ndarray:
@@ -469,8 +501,13 @@ def _seed_filter(m: np.ndarray, seed_rois: set[int], seed: int) -> np.ndarray:
     )
 
 
-def _scores(pred: set, ref: set) -> tuple[float, float, float]:
-    tp, fp, fn = len(pred & ref), len(pred - ref), len(ref - pred)
+def _scores(
+    pred: Counter[tuple[int, int, int, int]],
+    ref: Counter[tuple[int, int, int, int]],
+) -> tuple[float, float, float]:
+    tp = int(sum((pred & ref).values()))
+    fp = int(sum(pred.values()) - tp)
+    fn = int(sum(ref.values()) - tp)
     p, r = _ratio(tp, tp + fp), _ratio(tp, tp + fn)
     return p, r, _ratio(2 * p * r, p + r)
 
