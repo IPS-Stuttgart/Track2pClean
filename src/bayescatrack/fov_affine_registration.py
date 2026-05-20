@@ -466,6 +466,7 @@ def _translation_estimate(reference, measurement, *, subtract_mean):
 
 
 def _make_estimate(matrix_xy, ref_xy, meas_xy, shifts_yx, peaks, residual, fallback):
+    matrix_xy = _snap_near_integer_affine(matrix_xy)
     residual_norm = (
         np.linalg.norm(residual, axis=1)
         if residual.size
@@ -482,6 +483,14 @@ def _make_estimate(matrix_xy, ref_xy, meas_xy, shifts_yx, peaks, residual, fallb
         float(np.sqrt(np.mean(residual_norm**2))) if residual_norm.size else 0.0,
         fallback,
     )
+
+
+def _snap_near_integer_affine(matrix_xy: np.ndarray) -> np.ndarray:
+    matrix_xy = np.asarray(matrix_xy, dtype=float).copy()
+    nearest = np.rint(matrix_xy)
+    close = np.abs(matrix_xy - nearest) < 1.0e-8
+    matrix_xy[close] = nearest[close]
+    return matrix_xy
 
 
 def _design(xy):
