@@ -7,13 +7,12 @@ import csv
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
 from bayescatrack.association.calibrated_costs import (
-    DEFAULT_ASSOCIATION_FEATURES,
     CalibratedAssociationModel,
     collect_reference_pairwise_example_blocks,
     fit_logistic_association_model,
@@ -189,7 +188,6 @@ def run_track2p_configurable_loso_calibration(
             ),
             "calibration_sample_weight_strategy": sample_weight_strategy,
             "calibration_class_weight": _class_weight_label(model_kwargs),
-            "calibration_feature_count": int(len(feature_names)),
             "calibration_feature_names": ",".join(feature_names),
             **_hard_negative_scores(hard_negative_options),
             **calibration_scores,

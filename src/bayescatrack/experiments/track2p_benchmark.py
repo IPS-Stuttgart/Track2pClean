@@ -13,15 +13,16 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
-from bayescatrack.association.higher_order_consistency import (
-    HigherOrderConsistencyConfig,
-)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,
     TripletSupportConsistencyConfig,
+    solve_global_assignment_from_pairwise_costs,
     solve_global_assignment_for_sessions,
     tracks_to_suite2p_index_matrix,
+)
+from bayescatrack.association.higher_order_consistency import (
+    HigherOrderConsistencyConfig,
 )
 from bayescatrack.core.bridge import (
     Track2pSession,
@@ -44,7 +45,6 @@ from bayescatrack.reference import (
     load_aligned_subject_reference,
     load_track2p_reference,
 )
-from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 ReferenceKind = Literal["auto", "manual-gt", "track2p-output", "aligned-subject-rows"]
 BenchmarkMethod = Literal["track2p-baseline", "global-assignment", "oracle-gt-links"]
@@ -106,6 +106,11 @@ class Track2pBenchmarkConfig:
     support_top_k: int = 3
     support_cost_cap: float | None = None
     triplet_max_penalty: float | None = None
+    higher_order_triplet_weight: float = 0.0
+    higher_order_support_top_k: int = 8
+    higher_order_support_cost_cap: float | None = None
+    higher_order_max_penalty: float | None = None
+    higher_order_large_cost: float = 1.0e6
     include_behavior: bool = True
     include_non_cells: bool = False
     cell_probability_threshold: float = 0.5
@@ -470,6 +475,26 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--no-cost-threshold",
         action="store_true",
         help="Disable the solver edge-cost threshold",
+    )
+    parser.add_argument(
+        "--sweep-start-costs",
+        default=None,
+        help="Comma-separated start costs to sweep for assignment-prior ablations",
+    )
+    parser.add_argument(
+        "--sweep-end-costs",
+        default=None,
+        help="Comma-separated end costs to sweep for assignment-prior ablations",
+    )
+    parser.add_argument(
+        "--sweep-gap-penalties",
+        default=None,
+        help="Comma-separated gap penalties to sweep for assignment-prior ablations",
+    )
+    parser.add_argument(
+        "--sweep-cost-thresholds",
+        default=None,
+        help="Comma-separated cost thresholds to sweep; use 'none' to disable",
     )
     parser.add_argument(
         "--triplet-weight",
@@ -868,10 +893,37 @@ def solve_configured_global_assignment(
         activity_tie_breaker_component=config.activity_tie_breaker_component,
         activity_trace_source=config.activity_trace_source,
         activity_event_threshold=config.activity_event_threshold,
-        higher_order_consistency_config=config.higher_order_consistency_config,
+        higher_order_consistency_config=_solver_higher_order_config(config),
         candidate_pruning_config=config.candidate_pruning_config,
         dynamic_edge_prior_config=config.dynamic_edge_prior_config,
         adaptive_edge_prior_config=config.adaptive_edge_prior_config,
+    )
+
+
+def _solver_higher_order_config(
+    config: Track2pBenchmarkConfig,
+) -> HigherOrderConsistencyConfig | Mapping[str, Any] | None:
+    if config.higher_order_consistency_config is not None:
+        if isinstance(
+            config.higher_order_consistency_config, HigherOrderConsistencyConfig
+        ):
+            return config.higher_order_consistency_config
+        return config.higher_order_consistency_config
+    if config.higher_order_triplet_weight <= 0.0:
+        return None
+    support_cost_cap = config.higher_order_support_cost_cap
+    if support_cost_cap is None and config.cost_threshold is not None:
+        support_cost_cap = 2.0 * float(config.cost_threshold)
+    return HigherOrderConsistencyConfig(
+        triplet_weight=float(config.higher_order_triplet_weight),
+        support_top_k=int(config.higher_order_support_top_k),
+        support_cost_cap=4.0 if support_cost_cap is None else float(support_cost_cap),
+        max_penalty=(
+            2.0
+            if config.higher_order_max_penalty is None
+            else float(config.higher_order_max_penalty)
+        ),
+        large_cost=float(config.higher_order_large_cost),
     )
 
 
@@ -1006,7 +1058,7 @@ def _variant_name(cost: AssociationCost) -> str:
     if cost == "registered-iou":
         return "Same costs + global assignment"
     if cost == "registered-soft-iou":
-        return "Soft registered-overlap costs + global assignment"
+        return "Registered soft-IoU + global assignment"
     if cost == "registered-shifted-iou":
         return "Shifted-IoU costs + global assignment"
     if cost == "roi-aware-shifted":
@@ -1375,8 +1427,9 @@ def _validate_reference_roi_indices(
                 "Reference ROI indices are absent from loaded session "
                 f"{session.session_name!r}: {preview}{suffix}. "
                 "This usually means the reference uses Suite2p stat.npy row indices, "
-                "but the benchmark loaded a filtered ROI set. Re-run with --include-non-cells "
-                "or adjust --cell-probability-threshold if this is intentional."
+                "but the benchmark loaded a filtered ROI set via --no-include-non-cells. "
+                "Re-run with --include-non-cells or adjust --cell-probability-threshold "
+                "if this is intentional."
             )
 
 
@@ -1458,14 +1511,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         if not isinstance(parsed, dict):
             raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
         pairwise_cost_kwargs = parsed
-    higher_order_consistency_config = None
-    if args.higher_order_consistency_json is not None:
-        parsed_higher_order = json.loads(args.higher_order_consistency_json)
-        if not isinstance(parsed_higher_order, dict):
-            raise ValueError(
-                "--higher-order-consistency-json must decode to a JSON object"
-            )
-        higher_order_consistency_config = parsed_higher_order
+    higher_order_consistency_config = _higher_order_consistency_config_from_args(args)
     candidate_pruning_config = None
     if args.candidate_pruning_json is not None:
         parsed_candidate_pruning = json.loads(args.candidate_pruning_json)
@@ -1510,6 +1556,23 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         support_top_k=args.support_top_k,
         support_cost_cap=args.support_cost_cap,
         triplet_max_penalty=args.triplet_max_penalty,
+        higher_order_triplet_weight=(
+            0.0
+            if args.higher_order_triplet_weight is None
+            else args.higher_order_triplet_weight
+        ),
+        higher_order_support_top_k=(
+            8
+            if args.higher_order_support_top_k is None
+            else args.higher_order_support_top_k
+        ),
+        higher_order_support_cost_cap=args.higher_order_support_cost_cap,
+        higher_order_max_penalty=args.higher_order_max_penalty,
+        higher_order_large_cost=(
+            1.0e6
+            if args.higher_order_large_cost is None
+            else args.higher_order_large_cost
+        ),
         include_behavior=args.include_behavior,
         include_non_cells=args.include_non_cells,
         cell_probability_threshold=args.cell_probability_threshold,
@@ -1520,9 +1583,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
-        higher_order_consistency_config=_higher_order_consistency_config_from_args(
-            args
-        ),
+        higher_order_consistency_config=higher_order_consistency_config,
         candidate_pruning_config=candidate_pruning_config,
         dynamic_edge_prior_config=dynamic_edge_prior_config,
         adaptive_edge_prior_config=adaptive_edge_prior_config,
@@ -1536,6 +1597,18 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
             args.calibration_candidate_top_k_per_anchor
         ),
         calibration_include_column_candidates=args.calibration_include_column_candidates,
+        sweep_start_costs=_coerce_float_sweep_values(
+            args.sweep_start_costs, "--sweep-start-costs"
+        ),
+        sweep_end_costs=_coerce_float_sweep_values(
+            args.sweep_end_costs, "--sweep-end-costs"
+        ),
+        sweep_gap_penalties=_coerce_float_sweep_values(
+            args.sweep_gap_penalties, "--sweep-gap-penalties"
+        ),
+        sweep_cost_thresholds=_coerce_threshold_sweep_values(
+            args.sweep_cost_thresholds, "--sweep-cost-thresholds"
+        ),
         progress=args.progress,
     )
 

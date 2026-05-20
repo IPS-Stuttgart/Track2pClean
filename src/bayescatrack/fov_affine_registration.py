@@ -64,6 +64,13 @@ def register_measurement_plane_by_fov_affine(
         output_shape=reference_plane.image_shape,
         fill_value=0.0,
     )
+    registered_fov[np.abs(registered_fov) < 1.0e-12] = 0.0
+    rounded_registered_fov = np.rint(registered_fov)
+    registered_fov = np.where(
+        np.abs(registered_fov - rounded_registered_fov) < 1.0e-12,
+        rounded_registered_fov,
+        registered_fov,
+    )
     ops = {} if measurement_plane.ops is None else dict(measurement_plane.ops)
     ops.update(
         {

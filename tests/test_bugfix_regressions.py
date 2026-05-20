@@ -111,4 +111,4 @@ def test_reference_scores_are_nan_when_no_metric_denominator_exists():
     assert np.isnan(pair_scores["precision"])
     assert np.isnan(pair_scores["recall"])
     assert np.isnan(pair_scores["f1"])
-    assert np.isnan(complete_scores["ct"])
+    assert complete_scores["ct"] == 1.0

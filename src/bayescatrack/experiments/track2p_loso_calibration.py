@@ -247,10 +247,12 @@ def run_track2p_loso_calibration(
     feature_names = tuple(
         _feature_names_from_config(config) if feature_names is None else feature_names
     )
-    sample_weight_strategy = cast(
+    config_sample_weight_strategy = cast(
         SampleWeightStrategy,
-        getattr(config, "calibration_sample_weight_strategy", sample_weight_strategy),
+        getattr(config, "calibration_sample_weight_strategy", "none"),
     )
+    if sample_weight_strategy == "none" and config_sample_weight_strategy != "none":
+        sample_weight_strategy = config_sample_weight_strategy
     hard_negative_options = _candidate_hard_negative_options_from_config(config)
     config = _config_with_pairwise_kwargs_for_features(config, feature_names)
     subject_dirs = tuple(discover_subject_dirs(config.data))

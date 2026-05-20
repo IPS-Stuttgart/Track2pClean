@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 REGISTRATION_TRANSFORM_CHOICES: tuple[str, ...] = (
+    "auto",
     "affine",
     "rigid",
     "fov-translation",

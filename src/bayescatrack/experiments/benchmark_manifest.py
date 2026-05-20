@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from bayescatrack.experiments.benchmark_comparison import (
     ComparisonInput,
@@ -27,17 +28,85 @@ from bayescatrack.experiments.track2p_benchmark import (
 ManifestObject = Mapping[str, Any]
 TRACK2P_CONFIG_FIELDS = {field.name for field in fields(Track2pBenchmarkConfig)}
 DEFAULT_RUNNER = "track2p"
+BenchmarkRunner = Literal[
+    "track2p",
+    "track2p-loso-calibration",
+    "track2p-monotone-loso",
+    "track2p-solver-prior-loso",
+    "registration-qa",
+]
 RUN_METADATA_FIELDS = {"name", "runner", "output", "format"}
 CONFIGURABLE_LOSO_FIELDS = {
     "feature_names",
     "sample_weight_strategy",
     "calibration_model",
     "calibration_model_kwargs",
+    "calibration_model_kwargs_json",
     "hard_negative_options",
+    "hard_negative_ratio",
+    "hard_negative_top_k",
+    "hard_negative_column_candidates",
+    "hard_negative_features",
 }
-MONOTONE_LOSO_FIELDS = {"feature_names", "monotone_options"}
-RUNNER_SPECIFIC_FIELDS = CONFIGURABLE_LOSO_FIELDS | MONOTONE_LOSO_FIELDS
-RUN_SPEC_FIELDS = TRACK2P_CONFIG_FIELDS | RUN_METADATA_FIELDS | RUNNER_SPECIFIC_FIELDS
+MONOTONE_LOSO_FIELDS = {
+    "feature_names",
+    "monotone_options",
+    "monotone_ranker_kwargs",
+    "monotone_ranker_kwargs_json",
+}
+SOLVER_PRIOR_FIELDS = {
+    "start_costs",
+    "end_costs",
+    "gap_penalties",
+    "cost_thresholds",
+    "objective",
+}
+REGISTRATION_QA_CONFIG_FIELDS = {
+    "data",
+    "reference",
+    "reference_kind",
+    "allow_track2p_as_reference_for_smoke_test",
+    "curated_only",
+    "plane_name",
+    "input_format",
+    "max_gap",
+    "transform_type",
+    "cost",
+    "cost_threshold",
+    "include_behavior",
+    "include_non_cells",
+    "cell_probability_threshold",
+    "weighted_masks",
+    "exclude_overlapping_pixels",
+    "order",
+    "weighted_centroids",
+    "velocity_variance",
+    "regularization",
+    "pairwise_cost_kwargs",
+    "progress",
+}
+REGISTRATION_QA_SPECIFIC_FIELDS = (
+    REGISTRATION_QA_CONFIG_FIELDS - TRACK2P_CONFIG_FIELDS
+) | {"level"}
+RUNNER_SPECIFIC_FIELDS = (
+    CONFIGURABLE_LOSO_FIELDS
+    | MONOTONE_LOSO_FIELDS
+    | SOLVER_PRIOR_FIELDS
+    | REGISTRATION_QA_SPECIFIC_FIELDS
+)
+RUN_SPEC_FIELDS = (
+    TRACK2P_CONFIG_FIELDS
+    | REGISTRATION_QA_CONFIG_FIELDS
+    | RUN_METADATA_FIELDS
+    | RUNNER_SPECIFIC_FIELDS
+)
+RUNNER_CONFIG_FIELDS: dict[str, set[str]] = {
+    DEFAULT_RUNNER: set(TRACK2P_CONFIG_FIELDS),
+    "track2p-loso-calibration": set(TRACK2P_CONFIG_FIELDS | CONFIGURABLE_LOSO_FIELDS),
+    "track2p-monotone-loso": set(TRACK2P_CONFIG_FIELDS | MONOTONE_LOSO_FIELDS),
+    "track2p-solver-prior-loso": set(TRACK2P_CONFIG_FIELDS | SOLVER_PRIOR_FIELDS),
+    "registration-qa": set(REGISTRATION_QA_CONFIG_FIELDS | {"level"}),
+}
 COMPARISON_FIELDS = {"name", "inputs", "output", "format", "highlight_best"}
 RUNNER_ALIASES = {
     DEFAULT_RUNNER: DEFAULT_RUNNER,
@@ -48,6 +117,8 @@ RUNNER_ALIASES = {
     "track2p-monotone-loso": "track2p-monotone-loso",
     "track2p-monotone-loso-calibration": "track2p-monotone-loso",
     "monotone-loso": "track2p-monotone-loso",
+    "track2p-solver-prior-loso": "track2p-solver-prior-loso",
+    "registration-qa": "registration-qa",
 }
 RUNNER_CHOICES = frozenset(RUNNER_ALIASES)
 
@@ -57,9 +128,9 @@ class BenchmarkRunSpec:
     """One configured benchmark run from a manifest."""
 
     name: str
-    config: Track2pBenchmarkConfig
+    config: Any
     output: Path
-    runner: str = DEFAULT_RUNNER
+    runner: BenchmarkRunner = DEFAULT_RUNNER
     output_format: OutputFormat = "csv"
     runner_kwargs: Mapping[str, Any] | None = None
 
@@ -274,8 +345,7 @@ def _parse_run_spec(
         default_name=f"{_slugify(name)}.{_benchmark_output_suffix(output_format)}",
         output_base_dir=output_base_dir,
     )
-    config_kwargs = _track2p_config_kwargs(run_data, base_dir=base_dir)
-    config = Track2pBenchmarkConfig(**config_kwargs)
+    config = _run_config(runner, run_data, base_dir=base_dir)
     if progress is not None:
         config = replace(config, progress=progress)
     return BenchmarkRunSpec(
@@ -290,36 +360,43 @@ def _parse_run_spec(
 
 def _run_benchmark_rows(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
     if run_spec.runner == DEFAULT_RUNNER:
-        return [result.to_dict() for result in run_track2p_benchmark(run_spec.config)]
+        return [
+            result.to_dict()
+            for result in run_track2p_benchmark(
+                cast(Track2pBenchmarkConfig, run_spec.config)
+            )
+        ]
     if run_spec.runner == "track2p-loso-calibration":
-        from bayescatrack.experiments.track2p_configurable_loso_calibration import (
-            run_track2p_configurable_loso_calibration,
+        return _run_configurable_loso_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
         )
-
-        return run_track2p_configurable_loso_calibration(
-            run_spec.config,
-            **dict(run_spec.runner_kwargs or {}),
-        ).to_rows()
     if run_spec.runner == "track2p-monotone-loso":
-        from bayescatrack.experiments.track2p_monotone_loso_calibration import (
-            run_track2p_monotone_loso_calibration,
+        return _run_monotone_loso_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
         )
-
-        return run_track2p_monotone_loso_calibration(
+    if run_spec.runner == "track2p-solver-prior-loso":
+        return _run_solver_prior_loso_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == "registration-qa":
+        return _run_registration_qa_rows(
             run_spec.config,
-            **dict(run_spec.runner_kwargs or {}),
-        ).to_rows()
+            dict(run_spec.runner_kwargs or {}),
+        )
     raise ValueError(f"Unsupported benchmark manifest runner: {run_spec.runner!r}")
 
 
-def _runner_name(value: Any) -> str:
+def _runner_name(value: Any) -> BenchmarkRunner:
     runner = str(value)
     if runner not in RUNNER_ALIASES:
         raise ValueError(
             "Manifest run runner must be one of: "
             + ", ".join(sorted(RUNNER_CHOICES))
         )
-    return RUNNER_ALIASES[runner]
+    return cast(BenchmarkRunner, RUNNER_ALIASES[runner])
 
 
 def _reject_incompatible_runner_keys(run_data: ManifestObject, runner: str) -> None:
@@ -341,6 +418,10 @@ def _runner_specific_fields(runner: str) -> set[str]:
         return set(CONFIGURABLE_LOSO_FIELDS)
     if runner == "track2p-monotone-loso":
         return set(MONOTONE_LOSO_FIELDS)
+    if runner == "track2p-solver-prior-loso":
+        return set(SOLVER_PRIOR_FIELDS)
+    if runner == "registration-qa":
+        return set(REGISTRATION_QA_SPECIFIC_FIELDS)
     raise ValueError(f"Unsupported benchmark manifest runner: {runner!r}")
 
 
@@ -351,6 +432,10 @@ def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
         return _configurable_loso_runner_kwargs(run_data)
     if runner == "track2p-monotone-loso":
         return _monotone_loso_runner_kwargs(run_data)
+    if runner == "track2p-solver-prior-loso":
+        return {key: run_data[key] for key in SOLVER_PRIOR_FIELDS if key in run_data}
+    if runner == "registration-qa":
+        return {"level": str(run_data["level"])} if "level" in run_data else {}
     raise ValueError(f"Unsupported benchmark manifest runner: {runner!r}")
 
 
@@ -363,10 +448,18 @@ def _configurable_loso_runner_kwargs(run_data: ManifestObject) -> dict[str, Any]
     if "sample_weight_strategy" in run_data:
         kwargs["sample_weight_strategy"] = str(run_data["sample_weight_strategy"])
     if "calibration_model" in run_data:
-        kwargs["model_kind"] = str(run_data["calibration_model"])
+        model_kind = str(run_data["calibration_model"])
+        kwargs["calibration_model"] = model_kind
+        kwargs["model_kind"] = model_kind
     if "calibration_model_kwargs" in run_data:
-        kwargs["model_kwargs"] = _mapping_option(
+        model_kwargs = _mapping_option(
             run_data["calibration_model_kwargs"], location="calibration_model_kwargs"
+        )
+        kwargs["calibration_model_kwargs"] = model_kwargs
+        kwargs["model_kwargs"] = model_kwargs
+    if "calibration_model_kwargs_json" in run_data:
+        kwargs["calibration_model_kwargs_json"] = str(
+            run_data["calibration_model_kwargs_json"]
         )
     if "hard_negative_options" in run_data:
         from bayescatrack.experiments.calibration_hard_negatives import (
@@ -378,6 +471,14 @@ def _configurable_loso_runner_kwargs(run_data: ManifestObject) -> dict[str, Any]
                 run_data["hard_negative_options"], location="hard_negative_options"
             )
         )
+    for key in (
+        "hard_negative_ratio",
+        "hard_negative_top_k",
+        "hard_negative_column_candidates",
+        "hard_negative_features",
+    ):
+        if key in run_data:
+            kwargs[key] = run_data[key]
     return kwargs
 
 
@@ -521,18 +622,24 @@ def _run_manifest_entry(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
         return [result.to_dict() for result in results]
     if run_spec.runner == "track2p-loso-calibration":
         return _run_configurable_loso_rows(
-            cast(Track2pBenchmarkConfig, run_spec.config), run_spec.options or {}
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
         )
     if run_spec.runner == "track2p-monotone-loso":
         return _run_monotone_loso_rows(
-            cast(Track2pBenchmarkConfig, run_spec.config), run_spec.options or {}
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
         )
     if run_spec.runner == "track2p-solver-prior-loso":
         return _run_solver_prior_loso_rows(
-            cast(Track2pBenchmarkConfig, run_spec.config), run_spec.options or {}
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
         )
     if run_spec.runner == "registration-qa":
-        return _run_registration_qa_rows(run_spec.config, run_spec.options or {})
+        return _run_registration_qa_rows(
+            run_spec.config,
+            dict(run_spec.runner_kwargs or {}),
+        )
     raise AssertionError(f"Unhandled benchmark runner: {run_spec.runner}")
 
 
@@ -546,15 +653,16 @@ def _run_configurable_loso_rows(
         run_track2p_configurable_loso_calibration,
     )
 
-    kwargs: dict[str, Any] = {
-        "sample_weight_strategy": str(options.get("sample_weight_strategy", "none")),
-        "model_kind": str(options.get("calibration_model", "logistic")),
-        "model_kwargs": _mapping_option(
-            options,
-            key="calibration_model_kwargs",
-            json_key="calibration_model_kwargs_json",
-        ),
-        "hard_negative_options": CandidateHardNegativeOptions(
+    if isinstance(options.get("hard_negative_options"), CandidateHardNegativeOptions):
+        hard_negative_options = options["hard_negative_options"]
+    elif "hard_negative_options" in options:
+        hard_negative_options = CandidateHardNegativeOptions(
+            **_mapping_option(
+                options["hard_negative_options"], location="hard_negative_options"
+            )
+        )
+    else:
+        hard_negative_options = CandidateHardNegativeOptions(
             negative_to_positive_ratio=_float_option(
                 options, "hard_negative_ratio", default=4.0
             ),
@@ -569,7 +677,24 @@ def _run_configurable_loso_rows(
                 name="hard_negative_features",
                 allow_empty=True,
             ),
+        )
+
+    if "model_kwargs" in options:
+        model_kwargs = _mapping_option(options["model_kwargs"], location="model_kwargs")
+    else:
+        model_kwargs = _mapping_option(
+            options,
+            key="calibration_model_kwargs",
+            json_key="calibration_model_kwargs_json",
+        )
+
+    kwargs: dict[str, Any] = {
+        "sample_weight_strategy": str(options.get("sample_weight_strategy", "none")),
+        "model_kind": str(
+            options.get("model_kind", options.get("calibration_model", "logistic"))
         ),
+        "model_kwargs": model_kwargs,
+        "hard_negative_options": hard_negative_options,
     }
     feature_names = _feature_names_option(options)
     if feature_names is not None:
@@ -589,11 +714,20 @@ def _run_monotone_loso_rows(
     feature_names = _feature_names_option(options)
     if feature_names is not None:
         kwargs["feature_names"] = feature_names
-    monotone_kwargs = _mapping_option(
-        options,
-        key="monotone_ranker_kwargs",
-        json_key="monotone_ranker_kwargs_json",
-    )
+    raw_monotone_options = options.get("monotone_options")
+    if isinstance(raw_monotone_options, MonotoneRankerOptions):
+        kwargs["monotone_options"] = raw_monotone_options
+        return run_track2p_monotone_loso_calibration(config, **kwargs).to_rows()
+    if raw_monotone_options is not None:
+        monotone_kwargs = _mapping_option(
+            raw_monotone_options, location="monotone_options"
+        )
+    else:
+        monotone_kwargs = _mapping_option(
+            options,
+            key="monotone_ranker_kwargs",
+            json_key="monotone_ranker_kwargs_json",
+        )
     if monotone_kwargs:
         kwargs["monotone_options"] = MonotoneRankerOptions(**monotone_kwargs)
     return run_track2p_monotone_loso_calibration(config, **kwargs).to_rows()
@@ -825,7 +959,14 @@ def _feature_names_option(options: ManifestObject) -> tuple[str, ...] | None:
     return feature_names
 
 
-def _string_tuple(value: Any, *, name: str, allow_empty: bool) -> tuple[str, ...]:
+def _string_tuple(
+    value: Any,
+    *,
+    location: str | None = None,
+    name: str | None = None,
+    allow_empty: bool = True,
+) -> tuple[str, ...]:
+    label = name or location or "value"
     if value is None:
         values: tuple[str, ...] = ()
     elif isinstance(value, str):
@@ -833,15 +974,30 @@ def _string_tuple(value: Any, *, name: str, allow_empty: bool) -> tuple[str, ...
     elif isinstance(value, Sequence):
         values = tuple(str(token) for token in value)
     else:
-        raise ValueError(f"{name} must be a comma-separated string or JSON array")
+        raise ValueError(f"{label} must be a comma-separated string or JSON array")
     if not values and not allow_empty:
-        raise ValueError(f"{name} must not be empty")
+        raise ValueError(f"{label} must not be empty")
     return values
 
 
 def _mapping_option(
-    options: ManifestObject, *, key: str, json_key: str
+    value_or_options: Any,
+    *,
+    location: str | None = None,
+    key: str | None = None,
+    json_key: str | None = None,
 ) -> dict[str, Any] | None:
+    if key is None:
+        if value_or_options is None:
+            return {}
+        if not isinstance(value_or_options, Mapping):
+            label = location or "value"
+            raise ValueError(f"Manifest {label!r} must be a JSON object")
+        return dict(value_or_options)
+
+    if json_key is None:
+        raise ValueError("json_key is required when key is provided")
+    options = cast(ManifestObject, value_or_options)
     has_mapping = key in options
     has_json = json_key in options
     if has_mapping and has_json:

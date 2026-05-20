@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Mapping, Sequence
+from typing import Any, Iterable, Literal, Mapping, Sequence
 
 import numpy as np
 
@@ -112,14 +112,34 @@ class SubjectTrackingResult:
         track_lengths = self.track_lengths()
         complete_mask = self.complete_track_mask()
         finite_link_costs = self.link_costs[np.isfinite(self.link_costs)]
-        pair_summaries = [
-            _match_result_summary(
-                match_result,
-                n_reference_rois=self.sessions[pair_index].plane_data.n_rois,
-                n_measurement_rois=self.sessions[pair_index + 1].plane_data.n_rois,
-            )
-            for pair_index, match_result in enumerate(self.match_results)
-        ]
+        if self.match_results:
+            pair_summaries = [
+                _match_result_summary(
+                    match_result,
+                    n_reference_rois=self.sessions[pair_index].plane_data.n_rois,
+                    n_measurement_rois=self.sessions[pair_index + 1].plane_data.n_rois,
+                )
+                for pair_index, match_result in enumerate(self.match_results)
+            ]
+        elif self.global_assignment is not None:
+            pair_summaries = [
+                _match_result_summary(
+                    match_result,
+                    n_reference_rois=self.sessions[source_index].plane_data.n_rois,
+                    n_measurement_rois=self.sessions[target_index].plane_data.n_rois,
+                )
+                for (
+                    source_index,
+                    target_index,
+                ), match_result in _global_assignment_edge_match_results(
+                    self.global_assignment,
+                    self.sessions,
+                    self.track_rows,
+                    fill_value=self.fill_value,
+                )
+            ]
+        else:
+            pair_summaries = []
         n_pairwise_matches = int(
             sum(summary["n_matches"] for summary in pair_summaries)
         )
@@ -288,16 +308,23 @@ def run_registered_subject_tracking(
             start_session_index=start_session_index,
             fill_value=fill_value,
         )
-        match_results = _consecutive_match_results_from_global_assignment(
+        derived_match_results = _consecutive_match_results_from_global_assignment(
             global_assignment,
             sessions,
             track_rows,
             fill_value=fill_value,
         )
-        link_costs = _build_link_cost_matrix(
+        link_costs = _build_global_link_cost_matrix(
+            global_assignment,
+            sessions,
             track_rows,
-            match_results,
+            fallback_match_results=derived_match_results,
             fill_value=fill_value,
+        )
+        match_results = (
+            ()
+            if isinstance(global_assignment, GlobalAssignmentRun)
+            else derived_match_results
         )
         return SubjectTrackingResult(
             sessions=sessions,
@@ -425,17 +452,48 @@ def _consecutive_match_results_from_global_assignment(
     *,
     fill_value: int,
 ) -> tuple[SessionMatchResult, ...]:
+    session_count = len(tuple(sessions))
+    edge_results = dict(
+        _global_assignment_edge_match_results(
+            global_assignment,
+            sessions,
+            track_rows,
+            fill_value=fill_value,
+            session_edges=(
+                (pair_index, pair_index + 1)
+                for pair_index in range(max(session_count - 1, 0))
+            ),
+        )
+    )
+    return tuple(
+        edge_results[(pair_index, pair_index + 1)]
+        for pair_index in range(max(session_count - 1, 0))
+    )
+
+
+def _global_assignment_edge_match_results(
+    global_assignment: GlobalAssignmentRun,
+    sessions: Sequence[Track2pSession],
+    track_rows: np.ndarray,
+    *,
+    fill_value: int,
+    session_edges: Iterable[tuple[int, int]] | None = None,
+) -> tuple[tuple[tuple[int, int], SessionMatchResult], ...]:
     sessions = tuple(sessions)
+    edges = tuple(global_assignment.session_edges if session_edges is None else session_edges)
     roi_position_maps = [_roi_position_map_for_session(session) for session in sessions]
     track_rows = np.asarray(track_rows, dtype=int)
-    match_results: list[SessionMatchResult] = []
+    match_results: list[tuple[tuple[int, int], SessionMatchResult]] = []
 
-    for pair_index in range(max(len(sessions) - 1, 0)):
-        cost_matrix = global_assignment.pairwise_costs.get(
-            (pair_index, pair_index + 1)
-        )
+    for source_index, target_index in edges:
+        cost_matrix = global_assignment.pairwise_costs.get((source_index, target_index))
         if cost_matrix is None:
-            match_results.append(_empty_consecutive_match_result(sessions, pair_index))
+            match_results.append(
+                (
+                    (source_index, target_index),
+                    _empty_session_match_result(sessions, source_index, target_index),
+                )
+            )
             continue
 
         cost_matrix = np.asarray(cost_matrix, dtype=float)
@@ -445,13 +503,17 @@ def _consecutive_match_results_from_global_assignment(
         measurement_roi_indices: list[int] = []
         costs: list[float] = []
         seen_pairs: set[tuple[int, int]] = set()
-        reference_position_by_roi = roi_position_maps[pair_index]
-        measurement_position_by_roi = roi_position_maps[pair_index + 1]
+        reference_position_by_roi = roi_position_maps[source_index]
+        measurement_position_by_roi = roi_position_maps[target_index]
 
         for row in track_rows:
-            reference_roi = int(row[pair_index])
-            measurement_roi = int(row[pair_index + 1])
+            reference_roi = int(row[source_index])
+            measurement_roi = int(row[target_index])
             if fill_value in (reference_roi, measurement_roi):
+                continue
+            if target_index > source_index + 1 and np.all(
+                row[source_index + 1 : target_index] != fill_value
+            ):
                 continue
             pair = (reference_roi, measurement_roi)
             if pair in seen_pairs:
@@ -471,25 +533,28 @@ def _consecutive_match_results_from_global_assignment(
             costs.append(float(cost_matrix[reference_position, measurement_position]))
 
         match_results.append(
-            SessionMatchResult(
-                reference_session_name=str(sessions[pair_index].session_name),
-                measurement_session_name=str(sessions[pair_index + 1].session_name),
-                reference_positions=np.asarray(reference_positions, dtype=int),
-                measurement_positions=np.asarray(measurement_positions, dtype=int),
-                reference_roi_indices=np.asarray(reference_roi_indices, dtype=int),
-                measurement_roi_indices=np.asarray(measurement_roi_indices, dtype=int),
-                costs=np.asarray(costs, dtype=float),
+            (
+                (source_index, target_index),
+                SessionMatchResult(
+                    reference_session_name=str(sessions[source_index].session_name),
+                    measurement_session_name=str(sessions[target_index].session_name),
+                    reference_positions=np.asarray(reference_positions, dtype=int),
+                    measurement_positions=np.asarray(measurement_positions, dtype=int),
+                    reference_roi_indices=np.asarray(reference_roi_indices, dtype=int),
+                    measurement_roi_indices=np.asarray(measurement_roi_indices, dtype=int),
+                    costs=np.asarray(costs, dtype=float),
+                ),
             )
         )
     return tuple(match_results)
 
 
-def _empty_consecutive_match_result(
-    sessions: Sequence[Track2pSession], pair_index: int
+def _empty_session_match_result(
+    sessions: Sequence[Track2pSession], source_index: int, target_index: int
 ) -> SessionMatchResult:
     return SessionMatchResult(
-        reference_session_name=str(sessions[pair_index].session_name),
-        measurement_session_name=str(sessions[pair_index + 1].session_name),
+        reference_session_name=str(sessions[source_index].session_name),
+        measurement_session_name=str(sessions[target_index].session_name),
         reference_positions=np.asarray([], dtype=int),
         measurement_positions=np.asarray([], dtype=int),
         reference_roi_indices=np.asarray([], dtype=int),
@@ -556,6 +621,50 @@ def _build_link_cost_matrix(
                 np.nan,
             )
     return link_costs
+
+
+def _build_global_link_cost_matrix(
+    global_assignment: GlobalAssignmentRun,
+    sessions: Sequence[Track2pSession],
+    track_rows: np.ndarray,
+    *,
+    fallback_match_results: Sequence[SessionMatchResult],
+    fill_value: int,
+) -> np.ndarray:
+    track_rows = np.asarray(track_rows, dtype=int)
+    link_costs = np.full((track_rows.shape[0], max(track_rows.shape[1] - 1, 0)), np.nan)
+    roi_position_maps = [_roi_position_map_for_session(session) for session in sessions]
+    for source_index, target_index in global_assignment.session_edges:
+        if source_index >= link_costs.shape[1]:
+            continue
+        cost_matrix = global_assignment.pairwise_costs.get((source_index, target_index))
+        if cost_matrix is None:
+            continue
+        cost_matrix = np.asarray(cost_matrix, dtype=float)
+        source_position_by_roi = roi_position_maps[source_index]
+        target_position_by_roi = roi_position_maps[target_index]
+        for track_index, row in enumerate(track_rows):
+            if np.isfinite(link_costs[track_index, source_index]):
+                continue
+            source_roi = int(row[source_index])
+            target_roi = int(row[target_index])
+            if fill_value in (source_roi, target_roi):
+                continue
+            if source_roi not in source_position_by_roi or target_roi not in target_position_by_roi:
+                continue
+            link_costs[track_index, source_index] = float(
+                cost_matrix[
+                    int(source_position_by_roi[source_roi]),
+                    int(target_position_by_roi[target_roi]),
+                ]
+            )
+    if np.isfinite(link_costs).any():
+        return link_costs
+    return _build_link_cost_matrix(
+        track_rows,
+        fallback_match_results,
+        fill_value=fill_value,
+    )
 
 
 def _match_result_summary(

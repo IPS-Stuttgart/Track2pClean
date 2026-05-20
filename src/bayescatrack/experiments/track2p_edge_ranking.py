@@ -44,7 +44,6 @@ from bayescatrack.experiments._cli_choices import (
     REGISTRATION_TRANSFORM_HELP,
 )
 from bayescatrack.soft_overlap_costs import registered_soft_iou_cost_kwargs
-from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 DEFAULT_EDGE_RANKING_FEATURES = (
     "pairwise_cost_matrix",

@@ -352,16 +352,19 @@ class CalciumPlaneData:
             roi_feature_cost = zero_cost
 
         if cell_probability_weight > 0.0 or return_components:
-            cell_probability_cost = _pairwise_cell_probability_cost(
+            cell_probability_cost, cell_probability_available = (
+                _pairwise_cell_probability_cost(
                 self.cell_probabilities,
                 other.cell_probabilities,
                 cost_shape=cost_shape,
                 similarity_epsilon=similarity_epsilon,
             )
+            )
             if cell_probability_weight > 0.0:
                 total_cost += cell_probability_weight * cell_probability_cost
         else:
             cell_probability_cost = zero_cost
+            cell_probability_available = zero_cost
 
         if max_centroid_distance is not None:
             if max_centroid_distance <= 0.0:
@@ -696,7 +699,6 @@ def load_suite2p_plane(
 
     iscell_path = plane_dir / "iscell.npy"
     iscell = np.load(iscell_path, allow_pickle=True) if iscell_path.exists() else None
-    has_cell_probabilities = iscell is not None
 
     ops_path = plane_dir / "ops.npy"
     ops = None

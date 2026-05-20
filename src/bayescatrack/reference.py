@@ -390,9 +390,11 @@ def score_complete_tracks(
     perfectly_reconstructed_tracks = int(
         sum((predicted_complete & reference_complete).values())
     )
-    complete_tracks_score = _ratio_or_nan(
-        2.0 * perfectly_reconstructed_tracks,
-        reconstructed_complete_tracks + ground_truth_complete_tracks,
+    denominator = reconstructed_complete_tracks + ground_truth_complete_tracks
+    complete_tracks_score = (
+        1.0
+        if denominator == 0
+        else _ratio_or_nan(2.0 * perfectly_reconstructed_tracks, denominator)
     )
 
     return {

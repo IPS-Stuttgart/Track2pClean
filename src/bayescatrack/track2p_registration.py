@@ -179,8 +179,6 @@ def register_plane_pair(
         return moving_plane
     if reference_plane.fov is None or moving_plane.fov is None:
         raise ValueError("Both planes must provide FOV images for registration.")
-    if transform_type == "auto":
-        return _auto_registered_plane(reference_plane, moving_plane)
     if transform_type == "fov-translation":
         return _fov_translation_registered_plane(reference_plane, moving_plane)
     if transform_type == "fov-affine":

@@ -30,7 +30,6 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     _load_subject_calibration_data,
     _reference_training_options,
 )
-from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 
 def export_loso_calibration_csv(

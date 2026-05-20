@@ -503,7 +503,11 @@ def complete_tracks_score(ground_truth: TrackTable, prediction: TrackTable) -> f
     false_negatives = ground_truth_total - true_positives
     denominator = 2 * true_positives + false_positives + false_negatives
     if denominator == 0:
-        return 0.0
+        return (
+            1.0
+            if ground_truth.tracks.shape[0] == 0 and prediction.tracks.shape[0] == 0
+            else 0.0
+        )
     return _safe_ratio(2.0 * true_positives, denominator)
 
 
@@ -527,7 +531,11 @@ def proportion_correct_by_horizon(
         )
         denominator = int(sum(ground_truth_rows.values()))
         if denominator == 0:
-            result[horizon] = 0.0
+            result[horizon] = (
+                1.0
+                if ground_truth.tracks.shape[0] == 0 and prediction.tracks.shape[0] == 0
+                else 0.0
+            )
             continue
         correctly_reconstructed = _multiset_intersection_size(
             ground_truth_rows,

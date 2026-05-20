@@ -20,8 +20,9 @@ def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
 def test_registered_soft_iou_cost_preset_is_supported() -> None:
     kwargs = _cost_kwargs_for_method("registered-soft-iou")
 
-    assert kwargs["soft_iou"] is True
-    assert kwargs["iou_weight"] == pytest.approx(1.0)
+    assert kwargs["soft_iou_weight"] == pytest.approx(1.0)
+    assert kwargs["soft_iou_radius"] > 0
+    assert kwargs["iou_weight"] == pytest.approx(0.0)
     assert kwargs["centroid_weight"] == pytest.approx(0.0)
     assert kwargs["mask_cosine_weight"] == pytest.approx(0.0)
 
@@ -30,8 +31,8 @@ def test_registered_soft_iou_kwargs_do_not_mutate_registered_iou_kwargs() -> Non
     soft_kwargs = registered_soft_iou_cost_kwargs()
     registered_kwargs = _cost_kwargs_for_method("registered-iou")
 
-    assert soft_kwargs["soft_iou"] is True
-    assert "soft_iou" not in registered_kwargs
+    assert soft_kwargs["soft_iou_weight"] == pytest.approx(1.0)
+    assert "soft_iou_weight" not in registered_kwargs
 
 
 def test_soft_iou_uses_mask_weights_not_only_binary_support() -> None:

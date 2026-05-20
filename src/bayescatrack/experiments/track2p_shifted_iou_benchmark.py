@@ -566,7 +566,10 @@ def _shifted_iou_fieldnames(rows: Sequence[dict[str, Any]]) -> list[str]:
 def _parse_string_values(raw: str | None, *, default: Sequence[str], name: str) -> tuple[str, ...]:
     if raw is None:
         return tuple(str(value) for value in default)
-    values = tuple(value.strip() for value in raw.split(",") if value.strip())
+    raw_values = tuple(value.strip() for value in raw.split(","))
+    if any(not value for value in raw_values):
+        raise ValueError(f"{name} must not contain empty values")
+    values = tuple(raw_values)
     if not values:
         raise ValueError(f"{name} must contain at least one value")
     return values

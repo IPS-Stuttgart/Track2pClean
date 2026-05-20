@@ -42,7 +42,6 @@ from bayescatrack.experiments.track2p_cost_sweep import (
     _parse_nonnegative_values,
     _threshold_label,
 )
-from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 # pylint: disable=protected-access,too-many-locals
 

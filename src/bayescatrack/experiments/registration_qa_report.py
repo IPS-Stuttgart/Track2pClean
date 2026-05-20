@@ -59,7 +59,6 @@ from bayescatrack.experiments.track2p_benchmark import (
     discover_subject_dirs,
 )
 from bayescatrack.track2p_registration import (
-    REGISTRATION_TRANSFORM_TYPES,
     register_plane_pair,
 )
 

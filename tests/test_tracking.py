@@ -174,7 +174,7 @@ def _write_three_session_subject(subject_dir: Path) -> None:
         )
 
 
-def test_run_registered_subject_tracking_uses_global_assignment_by_default(
+def test_run_registered_subject_tracking_default_solver_uses_global_assignment(
     tmp_path: Path, monkeypatch
 ):
     subject_dir = tmp_path / "jm271"

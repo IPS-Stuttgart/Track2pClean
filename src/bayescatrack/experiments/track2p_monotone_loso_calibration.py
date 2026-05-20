@@ -385,6 +385,25 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
     )
 
 
+def _feature_names_from_args(args: argparse.Namespace) -> tuple[str, ...]:
+    if args.calibration_features:
+        return tuple(
+            token.strip()
+            for token in args.calibration_features.split(",")
+            if token.strip()
+        )
+    return calibration_feature_names(args.calibration_feature_set)
+
+
+def _json_object(value: str | None, option_name: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{option_name} must decode to a JSON object")
+    return parsed
+
+
 def _monotone_options_from_args(args: argparse.Namespace) -> MonotoneRankerOptions:
     if args.monotone_ranker_kwargs_json is None:
         return MonotoneRankerOptions()

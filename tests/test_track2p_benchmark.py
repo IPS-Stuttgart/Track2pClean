@@ -330,6 +330,7 @@ def test_ground_truth_csv_validation_catches_filtered_stat_rows(tmp_path):
             data=subject_dir,
             method="track2p-baseline",
             input_format="suite2p",
+            include_non_cells=True,
         )
     )
 

@@ -18,7 +18,8 @@ def test_registered_soft_iou_only_switches_overlap_term() -> None:
     registered_soft_iou = registered_soft_iou_cost_kwargs()
 
     assert registered_soft_iou["iou_weight"] == 0.0
-    assert registered_soft_iou["mask_cosine_weight"] == 1.0
+    assert registered_soft_iou["mask_cosine_weight"] == 0.0
+    assert registered_soft_iou["soft_iou_weight"] == 1.0
 
     shared_keys = set(registered_iou) - {"iou_weight", "mask_cosine_weight"}
     for key in shared_keys:
