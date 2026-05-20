@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
+from bayescatrack.association.adaptive_priors import (
+    AdaptiveEdgePriorConfig,
+    apply_adaptive_edge_priors,
+)
 from bayescatrack.association.candidate_pruning import (
     CandidatePruningConfig,
     prune_pairwise_cost_matrix,
@@ -483,6 +487,9 @@ def solve_global_assignment_for_sessions(
     higher_order_consistency_config: (
         HigherOrderConsistencyConfig | Mapping[str, Any] | None
     ) = None,
+    adaptive_edge_prior_config: (
+        AdaptiveEdgePriorConfig | Mapping[str, Any] | None
+    ) = None,
 ) -> GlobalAssignmentRun:
     """Run PyRecEst's global path-cover assignment on registered BayesCaTrack costs."""
 
@@ -506,6 +513,12 @@ def solve_global_assignment_for_sessions(
         dynamic_edge_prior_config=dynamic_edge_prior_config,
     )
     session_sizes = tuple(int(session.plane_data.n_rois) for session in sessions)
+    if adaptive_edge_prior_config is not None:
+        pairwise_costs = apply_adaptive_edge_priors(
+            pairwise_costs,
+            sessions,
+            config=adaptive_edge_prior_config,
+        )
     if higher_order_consistency_config is not None:
         pairwise_costs = apply_higher_order_consistency(
             pairwise_costs,

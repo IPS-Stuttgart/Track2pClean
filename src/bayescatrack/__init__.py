@@ -4,6 +4,9 @@
 
 from . import cli as _cli
 from .core import bridge as _bridge
+from .advanced_roi_components import (
+    install_advanced_roi_components as _install_advanced_roi_components,
+)
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
 )
@@ -25,5 +28,6 @@ main = _cli.main
 summarize_subject = _bridge.summarize_subject
 
 _install_soft_overlap_costs()
+_install_advanced_roi_components()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))

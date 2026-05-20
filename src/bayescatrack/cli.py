@@ -63,6 +63,18 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Sweep Track2p global-assignment cost scales and thresholds",
         )
         subparsers.add_parser(
+            "track2p-search",
+            help="Run a compact grid search over Track2p global-assignment protocols",
+        )
+        subparsers.add_parser(
+            "track2p-oracle-variants",
+            help="Score reference-row, consecutive-link and gap-limited oracle variants",
+        )
+        subparsers.add_parser(
+            "track2p-error-taxonomy",
+            help="Classify prediction false-positive and false-negative links",
+        )
+        subparsers.add_parser(
             "track2p-activity-tie-breaker-sweep",
             help="Sweep weak activity tie-breaker weights for Track2p global assignment",
         )
@@ -163,6 +175,24 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_cost_sweep_main(args[1:]))
+    if args[0] == "track2p-search":
+        from bayescatrack.experiments.track2p_experiment_search import (
+            main as _track2p_experiment_search_main,
+        )
+
+        return int(_track2p_experiment_search_main(args[1:]))
+    if args[0] == "track2p-oracle-variants":
+        from bayescatrack.experiments.track2p_oracle_variants import (
+            main as _track2p_oracle_variants_main,
+        )
+
+        return int(_track2p_oracle_variants_main(args[1:]))
+    if args[0] == "track2p-error-taxonomy":
+        from bayescatrack.experiments.track2p_error_taxonomy import (
+            main as _track2p_error_taxonomy_main,
+        )
+
+        return int(_track2p_error_taxonomy_main(args[1:]))
     if args[0] == "track2p-activity-tie-breaker-sweep":
         from bayescatrack.experiments.track2p_activity_tie_breaker_sweep import (
             main as _track2p_activity_tie_breaker_sweep_main,
