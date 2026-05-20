@@ -485,15 +485,32 @@ def _parse_optional_int(value: Any) -> int | None:
     if isinstance(value, bytes):
         value = value.decode("utf-8")
     if isinstance(value, str):
-        if value.strip().lower() in _MISSING_STRINGS:
-            return None
         value = value.strip()
-    if isinstance(value, (float, np.floating)) and np.isnan(value):
-        return None
-    try:
+        if value.lower() in _MISSING_STRINGS:
+            return None
+        try:
+            integer_value = int(value)
+        except ValueError:
+            try:
+                numeric_value = float(value)
+            except ValueError:
+                return None
+            if np.isnan(numeric_value):
+                return None
+            if not numeric_value.is_integer():
+                raise ValueError(f"ROI index must be integer-like, got {value!r}")
+            integer_value = int(numeric_value)
+    elif isinstance(value, (float, np.floating)):
+        if np.isnan(value):
+            return None
+        if not float(value).is_integer():
+            raise ValueError(f"ROI index must be integer-like, got {value!r}")
         integer_value = int(value)
-    except (TypeError, ValueError):
-        return None
+    else:
+        try:
+            integer_value = int(value)
+        except (TypeError, ValueError):
+            return None
     if integer_value < 0:
         return None
     return integer_value

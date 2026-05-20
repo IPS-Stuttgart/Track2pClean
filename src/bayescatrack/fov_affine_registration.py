@@ -157,28 +157,130 @@ def apply_affine_roi_mask_warp(
         raise ValueError("roi_masks must have shape (n_roi, height, width)")
     if matrix_xy.shape != (2, 3):
         raise ValueError("matrix_xy must have shape (2, 3)")
+
+    source_y, source_x, valid = _affine_output_sample_coordinates(
+        matrix_xy,
+        source_shape=(int(roi_masks.shape[1]), int(roi_masks.shape[2])),
+        output_shape=output_shape,
+    )
     output = np.zeros(
         (roi_masks.shape[0], int(output_shape[0]), int(output_shape[1])),
         dtype=roi_masks.dtype,
     )
-    linear = matrix_xy[:, :2]
-    offset = matrix_xy[:, 2]
+    if roi_masks.dtype == np.bool_:
+        nearest_y = np.zeros(source_y.shape, dtype=int)
+        nearest_x = np.zeros(source_x.shape, dtype=int)
+        nearest_y[valid] = np.clip(
+            np.rint(source_y[valid]).astype(int), 0, roi_masks.shape[1] - 1
+        )
+        nearest_x[valid] = np.clip(
+            np.rint(source_x[valid]).astype(int), 0, roi_masks.shape[2] - 1
+        )
+        for roi_index, mask in enumerate(roi_masks):
+            sampled = np.zeros(output_shape, dtype=bool)
+            sampled[valid] = mask[nearest_y[valid], nearest_x[valid]] > 0
+            output[roi_index] = sampled
+        return output
+
     for roi_index, mask in enumerate(roi_masks):
-        yy, xx = np.nonzero(mask)
-        if yy.size == 0:
-            continue
-        src_xy = np.column_stack((xx.astype(float), yy.astype(float)))
-        dst_xy = src_xy @ linear.T + offset[None, :]
-        x = np.rint(dst_xy[:, 0]).astype(int)
-        y = np.rint(dst_xy[:, 1]).astype(int)
-        valid = (x >= 0) & (x < output.shape[2]) & (y >= 0) & (y < output.shape[1])
-        if not np.any(valid):
-            continue
-        if roi_masks.dtype == np.bool_:
-            output[roi_index, y[valid], x[valid]] = True
-        else:
-            values = np.asarray(mask[yy[valid], xx[valid]], dtype=output.dtype)
-            np.maximum.at(output[roi_index], (y[valid], x[valid]), values)
+        sampled = _bilinear_sample_image(
+            np.asarray(mask, dtype=float),
+            source_y,
+            source_x,
+            valid,
+            fill_value=0.0,
+        )
+        output[roi_index] = sampled.astype(output.dtype, copy=False)
+    return output
+
+
+def apply_affine_image_warp(
+    image: np.ndarray,
+    matrix_xy: np.ndarray,
+    *,
+    output_shape: tuple[int, int],
+    fill_value: float = 0.0,
+) -> np.ndarray:
+    """Warp a 2-D image by inverse sampling from an affine source-to-output map."""
+
+    image = np.asarray(image, dtype=float)
+    matrix_xy = np.asarray(matrix_xy, dtype=float)
+    if image.ndim != 2:
+        raise ValueError("image must have shape (height, width)")
+    if matrix_xy.shape != (2, 3):
+        raise ValueError("matrix_xy must have shape (2, 3)")
+
+    source_y, source_x, valid = _affine_output_sample_coordinates(
+        matrix_xy,
+        source_shape=image.shape,
+        output_shape=output_shape,
+    )
+    return _bilinear_sample_image(
+        image,
+        source_y,
+        source_x,
+        valid,
+        fill_value=fill_value,
+    )
+
+
+def _affine_output_sample_coordinates(
+    matrix_xy: np.ndarray,
+    *,
+    source_shape: tuple[int, int],
+    output_shape: tuple[int, int],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    inverse_xy = invert_affine_xy(matrix_xy)
+    yy, xx = np.indices(
+        (int(output_shape[0]), int(output_shape[1])),
+        dtype=float,
+    )
+    query_xy = np.column_stack((xx.ravel(), yy.ravel()))
+    source_xy = (
+        query_xy @ np.asarray(inverse_xy[:, :2], dtype=float).T
+        + np.asarray(inverse_xy[:, 2], dtype=float)[None, :]
+    )
+    source_x = source_xy[:, 0].reshape(output_shape)
+    source_y = source_xy[:, 1].reshape(output_shape)
+    valid = (
+        np.isfinite(source_y)
+        & np.isfinite(source_x)
+        & (source_y >= 0.0)
+        & (source_x >= 0.0)
+        & (source_y <= max(int(source_shape[0]) - 1, 0))
+        & (source_x <= max(int(source_shape[1]) - 1, 0))
+    )
+    return source_y, source_x, valid
+
+
+def _bilinear_sample_image(
+    image: np.ndarray,
+    source_y: np.ndarray,
+    source_x: np.ndarray,
+    valid: np.ndarray,
+    *,
+    fill_value: float,
+) -> np.ndarray:
+    output = np.full(source_y.shape, float(fill_value), dtype=float)
+    if not np.any(valid):
+        return output
+
+    y = source_y[valid]
+    x = source_x[valid]
+    y0 = np.floor(y).astype(int)
+    x0 = np.floor(x).astype(int)
+    y1 = np.clip(y0 + 1, 0, image.shape[0] - 1)
+    x1 = np.clip(x0 + 1, 0, image.shape[1] - 1)
+    y0 = np.clip(y0, 0, image.shape[0] - 1)
+    x0 = np.clip(x0, 0, image.shape[1] - 1)
+    wy = y - y0
+    wx = x - x0
+    output[valid] = (
+        (1.0 - wy) * (1.0 - wx) * image[y0, x0]
+        + (1.0 - wy) * wx * image[y0, x1]
+        + wy * (1.0 - wx) * image[y1, x0]
+        + wy * wx * image[y1, x1]
+    )
     return output
 
 
