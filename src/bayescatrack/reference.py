@@ -346,9 +346,9 @@ def score_pairwise_matches(
     false_positives = predicted_total - true_positives
     false_negatives = reference_total - true_positives
 
-    precision = _safe_ratio(true_positives, true_positives + false_positives)
-    recall = _safe_ratio(true_positives, true_positives + false_negatives)
-    f1 = _safe_ratio(2.0 * precision * recall, precision + recall)
+    precision = _ratio_or_nan(true_positives, true_positives + false_positives)
+    recall = _ratio_or_nan(true_positives, true_positives + false_negatives)
+    f1 = _ratio_or_nan(2.0 * precision * recall, precision + recall)
 
     return {
         "true_positives": true_positives,
@@ -390,7 +390,7 @@ def score_complete_tracks(
     perfectly_reconstructed_tracks = int(
         sum((predicted_complete & reference_complete).values())
     )
-    complete_tracks_score = _safe_ratio(
+    complete_tracks_score = _ratio_or_nan(
         2.0 * perfectly_reconstructed_tracks,
         reconstructed_complete_tracks + ground_truth_complete_tracks,
     )
@@ -653,7 +653,7 @@ def _pair_set(pairs: Sequence[Sequence[Any]] | np.ndarray) -> set[tuple[int, int
     return set(_pair_counter(pairs))
 
 
-def _safe_ratio(numerator: float, denominator: float) -> float:
+def _ratio_or_nan(numerator: float, denominator: float) -> float:
     if denominator == 0:
-        return 1.0
+        return float("nan")
     return float(numerator) / float(denominator)

@@ -467,7 +467,7 @@ def _gate_cost_matrix_for_linear_assignment(
     cost_matrix: np.ndarray,
     valid_assignment_mask: np.ndarray,
     *,
-    max_cost: float,
+    max_cost: float | None,
 ) -> np.ndarray:
     """Return a cost matrix where invalid candidate links cannot win cheaply.
 
@@ -489,7 +489,7 @@ def _gate_cost_matrix_for_linear_assignment(
     cost_scale = max(
         abs(valid_min),
         abs(valid_max),
-        abs(float(max_cost)),
+        0.0 if max_cost is None else abs(float(max_cost)),
         cost_span,
         1.0,
     )

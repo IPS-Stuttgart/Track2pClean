@@ -148,6 +148,54 @@ def estimate_fov_affine_transform(
     return estimate
 
 
+def apply_affine_image_warp(
+    image: np.ndarray,
+    matrix_xy: np.ndarray,
+    *,
+    output_shape: tuple[int, int],
+    fill_value: float | bool = 0.0,
+    interpolation: str = "bilinear",
+) -> np.ndarray:
+    """Warp a 2-D image into the reference frame by inverse resampling.
+
+    ``matrix_xy`` maps measurement/source ``(x, y)`` coordinates to
+    reference/destination coordinates. Sampling the destination grid through the
+    inverse transform avoids holes from forward splatting under rotations,
+    shears, and scale changes.
+    """
+
+    image = np.asarray(image)
+    matrix_xy = np.asarray(matrix_xy, dtype=float)
+    if image.ndim != 2:
+        raise ValueError("image must have shape (height, width)")
+    if matrix_xy.shape != (2, 3):
+        raise ValueError("matrix_xy must have shape (2, 3)")
+    if interpolation not in {"nearest", "bilinear"}:
+        raise ValueError("interpolation must be either 'nearest' or 'bilinear'")
+
+    output_shape = (int(output_shape[0]), int(output_shape[1]))
+    source_y, source_x, valid = _affine_output_sample_coordinates(
+        matrix_xy,
+        source_shape=image.shape,
+        output_shape=output_shape,
+    )
+    if interpolation == "nearest":
+        return _nearest_sample_image(
+            image,
+            source_y,
+            source_x,
+            valid,
+            fill_value=fill_value,
+        )
+    return _bilinear_sample_image(
+        image,
+        source_y,
+        source_x,
+        valid,
+        fill_value=float(fill_value),
+    )
+
+
 def apply_affine_roi_mask_warp(
     roi_masks: np.ndarray,
     matrix_xy: np.ndarray,
@@ -252,36 +300,6 @@ def _bilinear_splat(
             np.add.at(image, (yi[valid], xi[valid]), values[valid] * weights)
 
 
-def apply_affine_image_warp(
-    image: np.ndarray,
-    matrix_xy: np.ndarray,
-    *,
-    output_shape: tuple[int, int],
-    fill_value: float = 0.0,
-) -> np.ndarray:
-    """Warp a 2-D image by inverse sampling from an affine source-to-output map."""
-
-    image = np.asarray(image, dtype=float)
-    matrix_xy = np.asarray(matrix_xy, dtype=float)
-    if image.ndim != 2:
-        raise ValueError("image must have shape (height, width)")
-    if matrix_xy.shape != (2, 3):
-        raise ValueError("matrix_xy must have shape (2, 3)")
-
-    source_y, source_x, valid = _affine_output_sample_coordinates(
-        matrix_xy,
-        source_shape=image.shape,
-        output_shape=output_shape,
-    )
-    return _bilinear_sample_image(
-        image,
-        source_y,
-        source_x,
-        valid,
-        fill_value=fill_value,
-    )
-
-
 def _affine_output_sample_coordinates(
     matrix_xy: np.ndarray,
     *,
@@ -309,6 +327,25 @@ def _affine_output_sample_coordinates(
         & (source_x <= max(int(source_shape[1]) - 1, 0))
     )
     return source_y, source_x, valid
+
+
+def _nearest_sample_image(
+    image: np.ndarray,
+    source_y: np.ndarray,
+    source_x: np.ndarray,
+    valid: np.ndarray,
+    *,
+    fill_value: float | bool,
+) -> np.ndarray:
+    output = np.full(source_y.shape, fill_value, dtype=image.dtype)
+    if not np.any(valid):
+        return output
+    y = np.rint(source_y[valid]).astype(int)
+    x = np.rint(source_x[valid]).astype(int)
+    y = np.clip(y, 0, image.shape[0] - 1)
+    x = np.clip(x, 0, image.shape[1] - 1)
+    output[valid] = image[y, x]
+    return output
 
 
 def _bilinear_sample_image(
@@ -339,48 +376,6 @@ def _bilinear_sample_image(
         + wy * (1.0 - wx) * image[y1, x0]
         + wy * wx * image[y1, x1]
     )
-    return output
-
-
-def apply_affine_image_warp(
-    image: np.ndarray,
-    matrix_xy: np.ndarray,
-    *,
-    output_shape: tuple[int, int],
-    fill_value: float | bool = 0.0,
-) -> np.ndarray:
-    """Warp one 2-D image with a source-to-output affine transform."""
-
-    image = np.asarray(image)
-    matrix_xy = np.asarray(matrix_xy, dtype=float)
-    if image.ndim != 2:
-        raise ValueError("image must have shape (height, width)")
-    if matrix_xy.shape != (2, 3):
-        raise ValueError("matrix_xy must have shape (2, 3)")
-
-    output_shape = (int(output_shape[0]), int(output_shape[1]))
-    output = np.full(output_shape, fill_value, dtype=image.dtype)
-    inverse_matrix_xy = invert_affine_xy(matrix_xy)
-    yy, xx = np.indices(output_shape, dtype=float)
-    source_x = (
-        inverse_matrix_xy[0, 0] * xx
-        + inverse_matrix_xy[0, 1] * yy
-        + inverse_matrix_xy[0, 2]
-    )
-    source_y = (
-        inverse_matrix_xy[1, 0] * xx
-        + inverse_matrix_xy[1, 1] * yy
-        + inverse_matrix_xy[1, 2]
-    )
-    source_x = np.rint(source_x).astype(int)
-    source_y = np.rint(source_y).astype(int)
-    valid = (
-        (source_x >= 0)
-        & (source_x < image.shape[1])
-        & (source_y >= 0)
-        & (source_y < image.shape[0])
-    )
-    output[valid] = image[source_y[valid], source_x[valid]]
     return output
 
 

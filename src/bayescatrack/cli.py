@@ -5,6 +5,9 @@ from __future__ import annotations
 import argparse
 import sys
 
+from bayescatrack._argparse_compat import (
+    install_registration_transform_argparse_patch,
+)
 from bayescatrack.core.bridge import main as _core_main
 
 _TOP_LEVEL_HELP = """usage: bayescatrack {summary,export,benchmark,growth} ...
@@ -24,6 +27,7 @@ Run 'bayescatrack <command> --help' for command-specific options.
 def main(argv: list[str] | None = None) -> int:
     """Dispatch BayesCaTrack CLI commands."""
 
+    install_registration_transform_argparse_patch()
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in {"-h", "--help"}:
         print(_TOP_LEVEL_HELP)

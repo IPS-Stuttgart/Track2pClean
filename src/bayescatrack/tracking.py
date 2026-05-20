@@ -135,7 +135,7 @@ class SubjectTrackingResult:
             "global_session_edges": global_session_edges,
             "n_tracks_started": self.n_tracks,
             "n_complete_tracks": int(np.sum(complete_mask)),
-            "complete_track_fraction": _safe_ratio(
+            "complete_track_fraction": _coverage_ratio(
                 float(np.sum(complete_mask)), float(self.n_tracks)
             ),
             "mean_track_length": _mean_or_nan(track_lengths),
@@ -573,10 +573,10 @@ def _match_result_summary(
         "n_reference_rois": n_reference_rois,
         "n_measurement_rois": n_measurement_rois,
         "n_matches": match_result.n_matches,
-        "reference_match_fraction": _safe_ratio(
+        "reference_match_fraction": _coverage_ratio(
             match_result.n_matches, n_reference_rois
         ),
-        "measurement_match_fraction": _safe_ratio(
+        "measurement_match_fraction": _coverage_ratio(
             match_result.n_matches, n_measurement_rois
         ),
         "mean_cost": _mean_or_nan(costs),
@@ -586,9 +586,9 @@ def _match_result_summary(
     }
 
 
-def _safe_ratio(numerator: float, denominator: float) -> float:
+def _coverage_ratio(numerator: float, denominator: float) -> float:
     if denominator == 0.0:
-        return 1.0
+        return float("nan")
     return float(numerator) / float(denominator)
 
 
