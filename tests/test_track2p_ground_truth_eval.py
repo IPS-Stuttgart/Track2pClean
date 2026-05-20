@@ -1,8 +1,10 @@
 import numpy as np
 from bayescatrack.ground_truth_eval import (
     TrackTable,
+    complete_tracks_score,
     evaluate_track_table_prediction,
     load_track2p_ground_truth_csv,
+    proportion_correct_by_horizon,
 )
 
 
@@ -21,6 +23,24 @@ def test_evaluate_track_table_prediction_scores_exact_tracks():
     assert evaluation.n_exact_full_track_matches == 1
     assert evaluation.complete_tracks == 0.5
     assert evaluation.proportion_correct_by_horizon[2] == 0.5
+
+
+def test_empty_ground_truth_and_prediction_scores_as_vacuously_complete():
+    ground_truth = TrackTable(
+        session_names=("s1", "s2", "s3"),
+        tracks=np.zeros((0, 3), dtype=int),
+    )
+    prediction = TrackTable(
+        session_names=("s1", "s2", "s3"),
+        tracks=np.zeros((0, 3), dtype=int),
+    )
+
+    assert complete_tracks_score(ground_truth, prediction) == 1.0
+    assert proportion_correct_by_horizon(ground_truth, prediction) == {2: 1.0, 3: 1.0}
+
+    evaluation = evaluate_track_table_prediction(ground_truth, prediction)
+    assert evaluation.complete_tracks == 1.0
+    assert evaluation.proportion_correct_by_horizon == {2: 1.0, 3: 1.0}
 
 
 def test_load_track2p_ground_truth_csv_supports_semicolon_encoded_rows(tmp_path):

@@ -18,6 +18,11 @@ from bayescatrack.association.pyrecest_global_assignment import (
     solve_global_assignment_from_pairwise_costs,
     tracks_to_suite2p_index_matrix,
 )
+from bayescatrack.experiments._cli_choices import (
+    ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
     ProgressReporter,
@@ -239,19 +244,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cost",
         default="registered-iou",
-        choices=(
-            "registered-iou",
-            "registered-soft-iou",
-            "registered-shifted-iou",
-            "roi-aware",
-            "roi-aware-shifted",
-        ),
+        choices=ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
     )
     parser.add_argument("--max-gap", type=int, default=2)
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-affine", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_CHOICES,
+        help=REGISTRATION_TRANSFORM_HELP,
     )
     parser.add_argument("--start-cost", type=float, default=5.0)
     parser.add_argument("--end-cost", type=float, default=5.0)

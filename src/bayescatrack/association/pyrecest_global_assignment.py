@@ -7,6 +7,14 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
+from bayescatrack.association.adaptive_priors import (
+    AdaptiveEdgePriorConfig,
+    apply_adaptive_edge_priors,
+)
+from bayescatrack.association.candidate_pruning import (
+    CandidatePruningConfig,
+    prune_pairwise_cost_matrix,
+)
 from bayescatrack.association.activity_similarity import (
     add_activity_similarity_components,
 )
@@ -17,12 +25,18 @@ from bayescatrack.association.calibrated_costs import (
     CalibratedAssociationModel,
     calibrated_cost_matrix_from_bundle,
 )
+from bayescatrack.association.dynamic_edge_priors import (
+    DynamicEdgePriorConfig,
+    apply_dynamic_edge_priors,
+)
 from bayescatrack.association.higher_order_consistency import (
     HigherOrderConsistencyConfig,
     apply_higher_order_consistency,
 )
 from bayescatrack.association.registered_masks import (
-    replace_empty_registered_masks,
+    add_registered_roi_validity_components,
+    drop_empty_registered_masks,
+    expand_registered_pairwise_cost_columns,
 )
 from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
@@ -32,6 +46,10 @@ from bayescatrack.core.bridge import (
     CalciumPlaneData,
     Track2pSession,
     build_session_pair_association_bundle,
+)
+from bayescatrack.soft_overlap_costs import (
+    install_soft_overlap_costs,
+    registered_soft_iou_cost_kwargs as _registered_soft_overlap_cost_kwargs,
 )
 from bayescatrack.track2p_registration import register_plane_pair
 
@@ -44,6 +62,25 @@ AssociationCost = Literal[
     "calibrated",
 ]
 SessionEdge = tuple[int, int]
+SOFT_OVERLAP_COST_KWARG_NAMES = frozenset(
+    {
+        "soft_iou_weight",
+        "soft_iou_radius",
+        "distance_transform_overlap_weight",
+        "distance_transform_overlap_radius",
+        "distance_transform_overlap_scale",
+    }
+)
+
+
+@dataclass(frozen=True)
+class TripletSupportConsistencyConfig:
+    """Penalty for skip edges that lack support through intermediate sessions."""
+
+    triplet_weight: float = 0.0
+    support_top_k: int = 3
+    support_cost_cap: float | None = None
+    max_penalty: float | None = None
 
 
 @dataclass(frozen=True)
@@ -58,7 +95,7 @@ class GlobalAssignmentRun:
 
 def registered_iou_cost_kwargs(
     *, similarity_epsilon: float = 1.0e-6
-) -> dict[str, float]:
+) -> dict[str, Any]:
     """Return cost kwargs for a Track2p-style registered IoU ablation."""
 
     return {
@@ -70,6 +107,12 @@ def registered_iou_cost_kwargs(
         "cell_probability_weight": 0.0,
         "similarity_epsilon": float(similarity_epsilon),
     }
+
+
+def registered_soft_iou_cost_kwargs(**kwargs: Any) -> dict[str, Any]:
+    """Return registered near-miss soft-overlap cost kwargs."""
+
+    return dict(_registered_soft_overlap_cost_kwargs(**kwargs))
 
 
 def registered_shifted_iou_cost_kwargs(
@@ -158,6 +201,126 @@ def session_edge_pairs(
     )
 
 
+def apply_triplet_support_consistency(
+    pairwise_costs: Mapping[SessionEdge, np.ndarray],
+    *,
+    config: TripletSupportConsistencyConfig | None,
+) -> dict[SessionEdge, np.ndarray]:
+    """Penalize skip-session edges without a compatible two-hop support path.
+
+    A direct edge ``source -> target`` is considered supported when at least one
+    intermediate session ``middle`` contains a low-cost path
+    ``source -> middle -> target``.  The penalty is applied only to skip edges,
+    so consecutive-session costs remain unchanged.
+    """
+
+    adjusted = {
+        edge: np.asarray(cost_matrix, dtype=float).copy()
+        for edge, cost_matrix in pairwise_costs.items()
+    }
+    if config is None or config.triplet_weight <= 0.0:
+        return adjusted
+    if config.support_top_k < 1:
+        raise ValueError("support_top_k must be at least 1")
+    if config.support_cost_cap is not None and config.support_cost_cap < 0.0:
+        raise ValueError("support_cost_cap must be non-negative when provided")
+    if config.max_penalty is not None and config.max_penalty < 0.0:
+        raise ValueError("max_penalty must be non-negative when provided")
+
+    penalty_value = float(config.triplet_weight)
+    if config.max_penalty is not None:
+        penalty_value = min(penalty_value, float(config.max_penalty))
+    if penalty_value <= 0.0:
+        return adjusted
+
+    support_cost_cap = (
+        None if config.support_cost_cap is None else float(config.support_cost_cap)
+    )
+    for (source_session, target_session), direct_costs in tuple(adjusted.items()):
+        if target_session - source_session < 2:
+            continue
+        support_costs = _best_triplet_support_costs(
+            pairwise_costs,
+            source_session=source_session,
+            target_session=target_session,
+            support_top_k=config.support_top_k,
+        )
+        if support_costs is None:
+            continue
+        if support_costs.shape != direct_costs.shape:
+            raise ValueError(
+                "Triplet support matrix shape mismatch for edge "
+                f"{(source_session, target_session)!r}: "
+                f"expected {direct_costs.shape}, got {support_costs.shape}"
+            )
+        unsupported = ~np.isfinite(support_costs)
+        if support_cost_cap is not None:
+            unsupported |= support_costs > support_cost_cap
+        direct_costs[unsupported] += penalty_value
+
+    return adjusted
+
+
+def _best_triplet_support_costs(
+    pairwise_costs: Mapping[SessionEdge, np.ndarray],
+    *,
+    source_session: int,
+    target_session: int,
+    support_top_k: int,
+) -> np.ndarray | None:
+    best_support: np.ndarray | None = None
+    for middle_session in range(source_session + 1, target_session):
+        left = pairwise_costs.get((source_session, middle_session))
+        right = pairwise_costs.get((middle_session, target_session))
+        if left is None or right is None:
+            continue
+        candidate_support = _best_two_step_path_costs(
+            left,
+            right,
+            support_top_k=support_top_k,
+        )
+        if best_support is None:
+            best_support = candidate_support
+        else:
+            best_support = np.minimum(best_support, candidate_support)
+    return best_support
+
+
+def _best_two_step_path_costs(
+    source_to_middle: np.ndarray,
+    middle_to_target: np.ndarray,
+    *,
+    support_top_k: int,
+) -> np.ndarray:
+    left = np.asarray(source_to_middle, dtype=float)
+    right = np.asarray(middle_to_target, dtype=float)
+    if left.ndim != 2 or right.ndim != 2:
+        raise ValueError("Pairwise support costs must be two-dimensional matrices")
+    if left.shape[1] != right.shape[0]:
+        raise ValueError(
+            "Incompatible two-hop support shapes: "
+            f"{left.shape} cannot compose with {right.shape}"
+        )
+    best = np.full((left.shape[0], right.shape[1]), np.inf, dtype=float)
+    for source_index, row in enumerate(left):
+        middle_candidates = _top_finite_indices(row, support_top_k)
+        if middle_candidates.size == 0:
+            continue
+        best[source_index, :] = np.min(
+            row[middle_candidates, None] + right[middle_candidates, :], axis=0
+        )
+    return best
+
+
+def _top_finite_indices(costs: np.ndarray, top_k: int) -> np.ndarray:
+    finite_indices = np.flatnonzero(np.isfinite(costs))
+    if finite_indices.size <= top_k:
+        return finite_indices
+    finite_costs = np.asarray(costs, dtype=float)[finite_indices]
+    selected = np.argpartition(finite_costs, top_k - 1)[:top_k]
+    return finite_indices[selected]
+
+
 # pylint: disable=too-many-arguments,too-many-locals
 def build_registered_pairwise_costs(
     sessions: Sequence[Track2pSession],
@@ -176,6 +339,12 @@ def build_registered_pairwise_costs(
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
     activity_trace_source: str = "auto",
     activity_event_threshold: float = 0.0,
+    candidate_pruning_config: (
+        CandidatePruningConfig | Mapping[str, Any] | None
+    ) = None,
+    dynamic_edge_prior_config: (
+        DynamicEdgePriorConfig | Mapping[str, Any] | None
+    ) = None,
 ) -> dict[SessionEdge, np.ndarray]:
     """Build registered pairwise cost matrices for consecutive and skip-session edges."""
 
@@ -189,15 +358,18 @@ def build_registered_pairwise_costs(
         return_pairwise_components
         or cost == "calibrated"
         or activity_tie_breaker_weight > 0.0
+        or dynamic_edge_prior_config is not None
     )
 
     base_cost_kwargs = _cost_kwargs_for_method(cost)
     if pairwise_cost_kwargs is not None:
         base_cost_kwargs.update(dict(pairwise_cost_kwargs))
+    if _pairwise_kwargs_use_soft_overlap(base_cost_kwargs):
+        install_soft_overlap_costs()
 
-    previous_pairwise_cost_method = None
+    previous_pairwise_cost_methods: list[Any] = []
     if pairwise_kwargs_use_shifted_overlap(base_cost_kwargs):
-        previous_pairwise_cost_method = install_shifted_overlap_cost_patch()
+        previous_pairwise_cost_methods.append(install_shifted_overlap_cost_patch())
     try:
         pairwise_costs: dict[SessionEdge, np.ndarray] = {}
         for source_session, target_session in session_edge_pairs(
@@ -209,7 +381,7 @@ def build_registered_pairwise_costs(
                 transform_type=transform_type,
             )
             registered_measurement_plane, empty_registered_rois = (
-                replace_empty_registered_masks(registered_measurement_plane)
+                drop_empty_registered_masks(registered_measurement_plane)
             )
             bundle = build_session_pair_association_bundle(
                 sessions[source_session],
@@ -230,14 +402,24 @@ def build_registered_pairwise_costs(
                     trace_source=activity_trace_source,
                     event_threshold=activity_event_threshold,
                 )
+                add_registered_roi_validity_components(
+                    bundle.pairwise_components,
+                    ~empty_registered_rois,
+                    large_cost=float(base_cost_kwargs.get("large_cost", 1.0e6)),
+                )
             if cost == "calibrated":
                 assert calibrated_model is not None
+                probability_matrix = calibrated_model.pairwise_probability_matrix_from_bundle(
+                    bundle,
+                    session_gap=target_session - source_session,
+                )
                 cost_matrix = calibrated_cost_matrix_from_bundle(
                     bundle,
                     calibrated_model,
                     session_gap=target_session - source_session,
                 )
             else:
+                probability_matrix = None
                 cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
             if activity_tie_breaker_weight > 0.0:
                 cost_matrix = np.asarray(
@@ -247,8 +429,21 @@ def build_registered_pairwise_costs(
                     component_name=activity_tie_breaker_component,
                     weight=activity_tie_breaker_weight,
                 )
+            cost_matrix = apply_dynamic_edge_priors(
+                cost_matrix,
+                bundle.pairwise_components,
+                session_gap=target_session - source_session,
+                empty_registered_rois=empty_registered_rois,
+                config=dynamic_edge_prior_config,
+            )
+            cost_matrix = prune_pairwise_cost_matrix(
+                cost_matrix,
+                probability_matrix=probability_matrix,
+                config=candidate_pruning_config,
+                large_cost=float(base_cost_kwargs.get("large_cost", 1.0e6)),
+            )
             pairwise_costs[(source_session, target_session)] = (
-                _penalize_empty_registered_roi_columns(
+                expand_registered_pairwise_cost_columns(
                     cost_matrix,
                     empty_registered_rois,
                     large_cost=float(base_cost_kwargs.get("large_cost", 1.0e6)),
@@ -256,7 +451,7 @@ def build_registered_pairwise_costs(
             )
         return pairwise_costs
     finally:
-        if previous_pairwise_cost_method is not None:
+        for previous_pairwise_cost_method in reversed(previous_pairwise_cost_methods):
             CalciumPlaneData.build_pairwise_cost_matrix = (  # type: ignore[method-assign]
                 previous_pairwise_cost_method
             )
@@ -283,8 +478,17 @@ def solve_global_assignment_for_sessions(
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
     activity_trace_source: str = "auto",
     activity_event_threshold: float = 0.0,
+    candidate_pruning_config: (
+        CandidatePruningConfig | Mapping[str, Any] | None
+    ) = None,
+    dynamic_edge_prior_config: (
+        DynamicEdgePriorConfig | Mapping[str, Any] | None
+    ) = None,
     higher_order_consistency_config: (
         HigherOrderConsistencyConfig | Mapping[str, Any] | None
+    ) = None,
+    adaptive_edge_prior_config: (
+        AdaptiveEdgePriorConfig | Mapping[str, Any] | None
     ) = None,
 ) -> GlobalAssignmentRun:
     """Run PyRecEst's global path-cover assignment on registered BayesCaTrack costs."""
@@ -305,8 +509,16 @@ def solve_global_assignment_for_sessions(
         activity_tie_breaker_component=activity_tie_breaker_component,
         activity_trace_source=activity_trace_source,
         activity_event_threshold=activity_event_threshold,
+        candidate_pruning_config=candidate_pruning_config,
+        dynamic_edge_prior_config=dynamic_edge_prior_config,
     )
     session_sizes = tuple(int(session.plane_data.n_rois) for session in sessions)
+    if adaptive_edge_prior_config is not None:
+        pairwise_costs = apply_adaptive_edge_priors(
+            pairwise_costs,
+            sessions,
+            config=adaptive_edge_prior_config,
+        )
     if higher_order_consistency_config is not None:
         pairwise_costs = apply_higher_order_consistency(
             pairwise_costs,
@@ -402,6 +614,8 @@ def tracks_to_suite2p_index_matrix(
 def _cost_kwargs_for_method(cost: AssociationCost) -> dict[str, Any]:
     if cost == "registered-iou":
         return registered_iou_cost_kwargs()
+    if cost == "registered-soft-iou":
+        return registered_soft_iou_cost_kwargs()
     if cost == "registered-shifted-iou":
         return registered_shifted_iou_cost_kwargs()
     if cost == "roi-aware-shifted":
@@ -411,16 +625,10 @@ def _cost_kwargs_for_method(cost: AssociationCost) -> dict[str, Any]:
     raise ValueError(f"Unsupported association cost: {cost}")
 
 
-def _penalize_empty_registered_roi_columns(
-    cost_matrix: np.ndarray, empty_registered_rois: np.ndarray, *, large_cost: float
-) -> np.ndarray:
-    cost_matrix = np.asarray(cost_matrix, dtype=float).copy()
-    if empty_registered_rois.shape != (cost_matrix.shape[1],):
-        raise ValueError(
-            "empty_registered_rois must have one entry for each measurement ROI"
-        )
-    cost_matrix[:, empty_registered_rois] = large_cost
-    return cost_matrix
+def _pairwise_kwargs_use_soft_overlap(pairwise_cost_kwargs: Mapping[str, Any]) -> bool:
+    """Return whether pairwise kwargs need the soft-overlap cost extension."""
+
+    return bool(SOFT_OVERLAP_COST_KWARG_NAMES.intersection(pairwise_cost_kwargs))
 
 
 def _roi_indices_for_session(session: Track2pSession) -> np.ndarray:

@@ -154,16 +154,15 @@ def _score_identity_multisets(
     reference_total = int(sum(reference.values()))
     false_positives = predicted_total - true_positives
     false_negatives = reference_total - true_positives
-    precision = _safe_ratio(true_positives, true_positives + false_positives)
-    recall = _safe_ratio(true_positives, true_positives + false_negatives)
-    f1 = _safe_ratio(2.0 * precision * recall, precision + recall)
     return {
         f"{prefix}_true_positives": true_positives,
         f"{prefix}_false_positives": false_positives,
         f"{prefix}_false_negatives": false_negatives,
-        f"{prefix}_precision": precision,
-        f"{prefix}_recall": recall,
-        f"{prefix}_f1": f1,
+        f"{prefix}_precision": _precision(true_positives, predicted_total),
+        f"{prefix}_recall": _recall(true_positives, reference_total),
+        f"{prefix}_f1": _f1_from_counts(
+            true_positives, false_positives, false_negatives
+        ),
         predicted_total_name: predicted_total,
         reference_total_name: reference_total,
     }
@@ -178,7 +177,7 @@ def _complete_track_counter(
     counter: Counter[tuple[int, ...]] = Counter()
     for row in track_matrix:
         values = [row[session_index] for session_index in selected_sessions]
-        if all(value is not None for value in values):
+        if all(_is_valid_observation(value) for value in values):
             counter[tuple(int(value) for value in values)] += 1
     return counter
 
@@ -193,7 +192,9 @@ def _track_link_counter(
         for row in track_matrix:
             observation_a = row[session_a]
             observation_b = row[session_b]
-            if observation_a is not None and observation_b is not None:
+            if _is_valid_observation(observation_a) and _is_valid_observation(
+                observation_b
+            ):
                 counter[
                     (
                         int(session_a),
@@ -252,8 +253,36 @@ def _validate_compatible_shapes(predicted: np.ndarray, reference: np.ndarray) ->
         )
 
 
-def _safe_ratio(numerator: float, denominator: float) -> float:
-    return 1.0 if denominator == 0 else float(numerator) / float(denominator)
+def _is_valid_observation(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, (float, np.floating)) and np.isnan(value):
+        return False
+    try:
+        return int(value) >= 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _precision(true_positives: int, predicted_total: int) -> float:
+    if predicted_total == 0:
+        return 1.0
+    return float(true_positives / predicted_total)
+
+
+def _recall(true_positives: int, reference_total: int) -> float:
+    if reference_total == 0:
+        return 1.0
+    return float(true_positives / reference_total)
+
+
+def _f1_from_counts(
+    true_positives: int, false_positives: int, false_negatives: int
+) -> float:
+    denominator = 2 * true_positives + false_positives + false_negatives
+    if denominator == 0:
+        return 1.0
+    return float(2 * true_positives / denominator)
 
 
 __all__ = (

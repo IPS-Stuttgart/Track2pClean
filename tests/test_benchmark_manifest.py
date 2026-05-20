@@ -8,6 +8,7 @@ from bayescatrack.datasets.track2p import (
     SyntheticTrack2pSubjectConfig,
     write_synthetic_track2p_subject,
 )
+from bayescatrack.experiments import benchmark_manifest as bm
 from bayescatrack.experiments.benchmark_manifest import (
     load_benchmark_manifest,
     run_benchmark_manifest,
@@ -96,6 +97,218 @@ def test_benchmark_manifest_rejects_unknown_run_keys(tmp_path):
 
     with pytest.raises(ValueError, match="unexpected"):
         load_benchmark_manifest(manifest_path)
+
+
+def test_benchmark_manifest_accepts_hgb_loso_runner_options(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "hgb-loso",
+                    "runner": "track2p-loso-calibration",
+                    "feature_names": ["one_minus_iou", "centroid_distance"],
+                    "sample_weight_strategy": "balanced",
+                    "calibration_model": "hist-gradient-boosting",
+                    "calibration_model_kwargs": {"max_iter": 25},
+                    "hard_negative_options": {
+                        "negative_to_positive_ratio": 2.0,
+                        "candidate_top_k_per_anchor": 5,
+                        "include_column_candidates": False,
+                        "hardness_feature_names": ["one_minus_iou"],
+                    },
+                }
+            ],
+        },
+    )
+
+    run = load_benchmark_manifest(manifest_path).runs[0]
+    runner_kwargs = dict(run.runner_kwargs or {})
+    hard_negative_options = runner_kwargs["hard_negative_options"]
+
+    assert run.runner == "track2p-loso-calibration"
+    assert run.config.method == "global-assignment"
+    assert run.config.split == "leave-one-subject-out"
+    assert run.config.cost == "calibrated"
+    assert runner_kwargs["feature_names"] == ("one_minus_iou", "centroid_distance")
+    assert runner_kwargs["sample_weight_strategy"] == "balanced"
+    assert runner_kwargs["model_kind"] == "hist-gradient-boosting"
+    assert runner_kwargs["model_kwargs"] == {"max_iter": 25}
+    assert hard_negative_options.negative_to_positive_ratio == 2.0
+    assert hard_negative_options.candidate_top_k_per_anchor == 5
+    assert not hard_negative_options.include_column_candidates
+    assert hard_negative_options.hardness_feature_names == ("one_minus_iou",)
+
+
+def test_benchmark_manifest_accepts_monotone_loso_runner_options(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "monotone-loso",
+                    "runner": "track2p-monotone-loso",
+                    "feature_names": "one_minus_iou,centroid_distance",
+                    "monotone_options": {
+                        "monotone_feature_names": ["one_minus_iou"],
+                        "max_iter": 12,
+                        "max_negatives_per_positive": 3,
+                    },
+                }
+            ],
+        },
+    )
+
+    run = load_benchmark_manifest(manifest_path).runs[0]
+    runner_kwargs = dict(run.runner_kwargs or {})
+    options = runner_kwargs["monotone_options"]
+
+    assert run.runner == "track2p-monotone-loso"
+    assert runner_kwargs["feature_names"] == (
+        "one_minus_iou",
+        "centroid_distance",
+    )
+    assert options.monotone_feature_names == ("one_minus_iou",)
+    assert options.max_iter == 12
+    assert options.max_negatives_per_positive == 3
+
+
+def test_benchmark_manifest_rejects_runner_options_for_default_track2p(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "track2p-baseline",
+            },
+            "runs": [
+                {
+                    "name": "bad",
+                    "feature_names": ["one_minus_iou"],
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="does not support.*feature_names"):
+        load_benchmark_manifest(manifest_path)
+
+
+
+def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkeypatch):
+    calls = {}
+
+    def fake_configurable_loso(config, options):
+        calls["config"] = config
+        calls["options"] = dict(options)
+        return [
+            {
+                "subject": "jm_loso",
+                "variant": "fake configurable LOSO",
+                "method": "global-assignment",
+                "n_sessions": 2,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+        ]
+
+    monkeypatch.setattr(bm, "_run_configurable_loso_rows", fake_configurable_loso)
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "input_format": "suite2p",
+                "include_behavior": False,
+            },
+            "runs": [
+                {
+                    "name": "configurable-loso",
+                    "runner": "track2p-loso-calibration",
+                    "output": "results/configurable-loso.csv",
+                    "feature_names": ["registered_iou_cost", "centroid_distance"],
+                    "sample_weight_strategy": "balanced",
+                    "calibration_model": "hist-gradient-boosting",
+                    "calibration_model_kwargs": {"max_iter": 25},
+                    "hard_negative_ratio": 2.0,
+                    "hard_negative_top_k": 5,
+                    "hard_negative_column_candidates": False,
+                    "hard_negative_features": "registered_iou_cost",
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["config"].data == tmp_path / "data"
+    assert calls["config"].method == "global-assignment"
+    assert calls["config"].split == "leave-one-subject-out"
+    assert calls["config"].cost == "calibrated"
+    assert calls["config"].include_behavior is False
+    assert calls["options"]["sample_weight_strategy"] == "balanced"
+    assert calls["options"]["calibration_model_kwargs"] == {"max_iter": 25}
+    assert (tmp_path / "results" / "configurable-loso.csv").exists()
+
+
+def test_benchmark_manifest_dispatches_registration_qa_runner(tmp_path, monkeypatch):
+    calls = {}
+
+    def fake_registration_qa(config, options):
+        calls["config"] = config
+        calls["options"] = dict(options)
+        return [
+            {
+                "cost": "registered-iou",
+                "registration_backend": "suite2p-affine",
+                "transform_type": "affine",
+                "edge_count": 1,
+            }
+        ]
+
+    monkeypatch.setattr(bm, "_run_registration_qa_rows", fake_registration_qa)
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "backend-audit",
+                    "runner": "registration-qa",
+                    "data": "data",
+                    "level": "backend-audit",
+                    "format": "json",
+                    "output": "results/backend-audit.json",
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["config"].data == tmp_path / "data"
+    assert calls["options"]["level"] == "backend-audit"
+    output_rows = json.loads((tmp_path / "results" / "backend-audit.json").read_text())
+    assert output_rows[0]["registration_backend"] == "suite2p-affine"
 
 
 def test_benchmark_suite_cli_runs_manifest(tmp_path):

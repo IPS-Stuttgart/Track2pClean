@@ -50,7 +50,6 @@ def install_soft_overlap_costs() -> None:
     """Install soft-overlap cost extensions and cost presets."""
 
     _install_cost_matrix_patch()
-    _install_global_assignment_preset()
     _install_registration_qa_preset()
 
 
@@ -185,45 +184,6 @@ def _install_cost_matrix_patch() -> None:
     )
     CalciumPlaneData.build_pairwise_cost_matrix = (  # type: ignore[method-assign]
         _build_pairwise_cost_matrix_with_soft_overlap
-    )
-
-
-def _install_global_assignment_preset() -> None:
-    from bayescatrack.association import pyrecest_global_assignment as global_assignment
-
-    original = getattr(global_assignment, "_cost_kwargs_for_method")
-    if getattr(original, "_bayescatrack_soft_overlap_patch", False):
-        setattr(
-            global_assignment,
-            "registered_soft_iou_cost_kwargs",
-            registered_soft_iou_cost_kwargs,
-        )
-        return
-
-    def _cost_kwargs_for_method_with_soft_overlap(cost: str) -> dict[str, Any]:
-        if cost == "registered-soft-iou":
-            return dict(registered_soft_iou_cost_kwargs())
-        return original(cost)  # type: ignore[arg-type]
-
-    setattr(
-        _cost_kwargs_for_method_with_soft_overlap,
-        "_bayescatrack_soft_overlap_patch",
-        True,
-    )
-    setattr(
-        _cost_kwargs_for_method_with_soft_overlap,
-        "_bayescatrack_original",
-        original,
-    )
-    setattr(
-        global_assignment,
-        "_cost_kwargs_for_method",
-        _cost_kwargs_for_method_with_soft_overlap,
-    )
-    setattr(
-        global_assignment,
-        "registered_soft_iou_cost_kwargs",
-        registered_soft_iou_cost_kwargs,
     )
 
 

@@ -4,7 +4,13 @@ import numpy as np
 import numpy.testing as npt
 import pytest
 from bayescatrack.association import pyrecest_global_assignment as global_assignment
-from bayescatrack.association.registered_masks import replace_empty_registered_masks
+from bayescatrack.association.registered_masks import (
+    add_registered_roi_validity_components,
+    drop_empty_registered_masks,
+    expand_registered_pairwise_components,
+    expand_registered_pairwise_cost_columns,
+    mask_invalid_registered_roi_columns,
+)
 
 
 def test_registered_pairwise_costs_penalize_empty_registered_masks(
@@ -142,16 +148,79 @@ def test_registered_shifted_iou_cost_recovers_local_residual_shift(
     )
 
 
-def test_empty_registered_mask_placeholders_use_distinct_pixels(make_track2p_session):
+def test_empty_registered_masks_are_dropped_without_placeholders(
+    make_track2p_session,
+):
     roi_masks = np.zeros((3, 4, 4), dtype=bool)
     roi_masks[0, 1:3, 1:3] = True
     session = make_track2p_session("2024-05-01_a", roi_masks)
 
-    fixed_plane, empty_rois = replace_empty_registered_masks(session.plane_data)
+    filtered_plane, empty_rois = drop_empty_registered_masks(session.plane_data)
 
     assert empty_rois.tolist() == [False, True, True]
-    placeholder_pixels = [
-        tuple(np.argwhere(fixed_plane.roi_masks[roi_index])[0])
-        for roi_index in np.flatnonzero(empty_rois)
-    ]
-    assert len(set(placeholder_pixels)) == 2
+    assert filtered_plane.n_rois == 1
+    npt.assert_array_equal(filtered_plane.roi_masks, roi_masks[[0]])
+    assert not np.any(session.plane_data.roi_masks[1:])
+
+
+def test_expand_registered_pairwise_cost_columns_marks_empty_targets():
+    compact_costs = np.array([[0.25], [0.75]], dtype=float)
+    empty_rois = np.array([False, True, True])
+
+    expanded = expand_registered_pairwise_cost_columns(
+        compact_costs,
+        empty_rois,
+        large_cost=99.0,
+    )
+
+    npt.assert_allclose(
+        expanded,
+        np.array([[0.25, 99.0, 99.0], [0.75, 99.0, 99.0]]),
+    )
+
+
+def test_expand_registered_pairwise_components_marks_invalid_columns():
+    compact_components = {
+        "iou": np.array([[0.75]], dtype=float),
+        "gated": np.array([[False]], dtype=bool),
+        "activity_similarity_available": np.array([[1.0]], dtype=float),
+    }
+    empty_rois = np.array([False, True, True])
+
+    expanded = expand_registered_pairwise_components(compact_components, empty_rois)
+
+    npt.assert_allclose(expanded["iou"][:, :1], np.array([[0.75]]))
+    assert np.all(np.isnan(expanded["iou"][:, 1:]))
+    npt.assert_array_equal(expanded["gated"], np.array([[False, True, True]]))
+    npt.assert_allclose(
+        expanded["activity_similarity_available"],
+        np.array([[1.0, 0.0, 0.0]]),
+    )
+
+
+def test_invalid_registered_roi_columns_mask_placeholder_evidence():
+    pairwise_components = {
+        "iou": np.array([[0.75, 1.0]]),
+        "centroid_distance": np.array([[2.0, 0.0]]),
+        "area_ratio_cost": np.array([[0.1, 0.0]]),
+        "session_gap": np.array([[1.0, 1.0]]),
+        "gated": np.zeros((1, 2), dtype=bool),
+    }
+
+    add_registered_roi_validity_components(
+        pairwise_components,
+        np.array([True, False]),
+        large_cost=99.0,
+    )
+    masked = mask_invalid_registered_roi_columns(
+        pairwise_components,
+        large_cost=99.0,
+    )
+
+    assert masked["registered_roi_valid"].tolist() == [[True, False]]
+    assert masked["iou"].tolist() == [[0.75, 0.0]]
+    assert masked["centroid_distance"].tolist() == [[2.0, 99.0]]
+    assert masked["area_ratio_cost"].tolist() == [[0.1, 99.0]]
+    assert masked["session_gap"].tolist() == [[1.0, 1.0]]
+    assert masked["gated"].tolist() == [[False, True]]
+    assert masked["registered_roi_invalid_cost"].tolist() == [[0.0, 99.0]]

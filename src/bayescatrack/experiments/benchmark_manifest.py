@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from bayescatrack.experiments.benchmark_comparison import (
     ComparisonInput,
@@ -26,8 +27,100 @@ from bayescatrack.experiments.track2p_benchmark import (
 
 ManifestObject = Mapping[str, Any]
 TRACK2P_CONFIG_FIELDS = {field.name for field in fields(Track2pBenchmarkConfig)}
-RUN_METADATA_FIELDS = {"name", "output", "format"}
+DEFAULT_RUNNER = "track2p"
+BenchmarkRunner = Literal[
+    "track2p",
+    "track2p-loso-calibration",
+    "track2p-monotone-loso",
+    "track2p-solver-prior-loso",
+    "registration-qa",
+]
+RUN_METADATA_FIELDS = {"name", "runner", "output", "format"}
+CONFIGURABLE_LOSO_FIELDS = {
+    "feature_names",
+    "sample_weight_strategy",
+    "calibration_model",
+    "calibration_model_kwargs",
+    "calibration_model_kwargs_json",
+    "hard_negative_options",
+    "hard_negative_ratio",
+    "hard_negative_top_k",
+    "hard_negative_column_candidates",
+    "hard_negative_features",
+}
+MONOTONE_LOSO_FIELDS = {
+    "feature_names",
+    "monotone_options",
+    "monotone_ranker_kwargs",
+    "monotone_ranker_kwargs_json",
+}
+SOLVER_PRIOR_FIELDS = {
+    "start_costs",
+    "end_costs",
+    "gap_penalties",
+    "cost_thresholds",
+    "objective",
+}
+REGISTRATION_QA_CONFIG_FIELDS = {
+    "data",
+    "reference",
+    "reference_kind",
+    "allow_track2p_as_reference_for_smoke_test",
+    "curated_only",
+    "plane_name",
+    "input_format",
+    "max_gap",
+    "transform_type",
+    "cost",
+    "cost_threshold",
+    "include_behavior",
+    "include_non_cells",
+    "cell_probability_threshold",
+    "weighted_masks",
+    "exclude_overlapping_pixels",
+    "order",
+    "weighted_centroids",
+    "velocity_variance",
+    "regularization",
+    "pairwise_cost_kwargs",
+    "progress",
+}
+REGISTRATION_QA_SPECIFIC_FIELDS = (
+    REGISTRATION_QA_CONFIG_FIELDS - TRACK2P_CONFIG_FIELDS
+) | {"level"}
+RUNNER_SPECIFIC_FIELDS = (
+    CONFIGURABLE_LOSO_FIELDS
+    | MONOTONE_LOSO_FIELDS
+    | SOLVER_PRIOR_FIELDS
+    | REGISTRATION_QA_SPECIFIC_FIELDS
+)
+RUN_SPEC_FIELDS = (
+    TRACK2P_CONFIG_FIELDS
+    | REGISTRATION_QA_CONFIG_FIELDS
+    | RUN_METADATA_FIELDS
+    | RUNNER_SPECIFIC_FIELDS
+)
+RUNNER_CONFIG_FIELDS: dict[str, set[str]] = {
+    DEFAULT_RUNNER: set(TRACK2P_CONFIG_FIELDS),
+    "track2p-loso-calibration": set(TRACK2P_CONFIG_FIELDS | CONFIGURABLE_LOSO_FIELDS),
+    "track2p-monotone-loso": set(TRACK2P_CONFIG_FIELDS | MONOTONE_LOSO_FIELDS),
+    "track2p-solver-prior-loso": set(TRACK2P_CONFIG_FIELDS | SOLVER_PRIOR_FIELDS),
+    "registration-qa": set(REGISTRATION_QA_CONFIG_FIELDS | {"level"}),
+}
 COMPARISON_FIELDS = {"name", "inputs", "output", "format", "highlight_best"}
+RUNNER_ALIASES = {
+    DEFAULT_RUNNER: DEFAULT_RUNNER,
+    "track2p-benchmark": DEFAULT_RUNNER,
+    "track2p-loso-calibration": "track2p-loso-calibration",
+    "track2p-configurable-loso": "track2p-loso-calibration",
+    "track2p-configurable-loso-calibration": "track2p-loso-calibration",
+    "track2p-monotone-loso": "track2p-monotone-loso",
+    "track2p-monotone-loso-calibration": "track2p-monotone-loso",
+    "monotone-loso": "track2p-monotone-loso",
+    "track2p-solver-prior-loso": "track2p-solver-prior-loso",
+    "registration-qa": "registration-qa",
+}
+RUNNER_CHOICES = frozenset(RUNNER_ALIASES)
 
 
 @dataclass(frozen=True)
@@ -35,9 +128,11 @@ class BenchmarkRunSpec:
     """One configured benchmark run from a manifest."""
 
     name: str
-    config: Track2pBenchmarkConfig
+    config: Any
     output: Path
+    runner: BenchmarkRunner = DEFAULT_RUNNER
     output_format: OutputFormat = "csv"
+    runner_kwargs: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -106,7 +201,7 @@ def load_benchmark_manifest(
     defaults = raw_manifest.get("defaults", {})
     if not isinstance(defaults, Mapping):
         raise ValueError("Manifest 'defaults' must be a JSON object")
-    _reject_unknown_keys(defaults, TRACK2P_CONFIG_FIELDS, location="defaults")
+    _reject_unknown_keys(defaults, RUN_SPEC_FIELDS, location="defaults")
 
     raw_runs = raw_manifest.get("runs")
     if not isinstance(raw_runs, list) or not raw_runs:
@@ -145,8 +240,7 @@ def run_benchmark_manifest(manifest: BenchmarkManifest) -> BenchmarkManifestResu
     run_summaries: list[BenchmarkOutputSummary] = []
     run_outputs: dict[str, Path] = {}
     for run_spec in manifest.runs:
-        results = run_track2p_benchmark(run_spec.config)
-        rows = [result.to_dict() for result in results]
+        rows = _run_benchmark_rows(run_spec)
         write_results(rows, run_spec.output, run_spec.output_format)
         run_summaries.append(
             BenchmarkOutputSummary(
@@ -238,10 +332,12 @@ def _parse_run_spec(
     if not isinstance(raw_run, Mapping):
         raise ValueError("Each manifest run must be a JSON object")
     _reject_unknown_keys(
-        raw_run, TRACK2P_CONFIG_FIELDS | RUN_METADATA_FIELDS, location="runs[]"
+        raw_run, RUN_SPEC_FIELDS, location="runs[]"
     )
 
     run_data = {**defaults, **raw_run}
+    runner = _runner_name(run_data.get("runner", DEFAULT_RUNNER))
+    _reject_incompatible_runner_keys(run_data, runner)
     name = str(run_data.get("name", _default_run_name(run_data)))
     output_format = _output_format(run_data.get("format", "csv"))
     output = _resolve_output_path(
@@ -249,13 +345,156 @@ def _parse_run_spec(
         default_name=f"{_slugify(name)}.{_benchmark_output_suffix(output_format)}",
         output_base_dir=output_base_dir,
     )
-    config_kwargs = _track2p_config_kwargs(run_data, base_dir=base_dir)
-    config = Track2pBenchmarkConfig(**config_kwargs)
+    config = _run_config(runner, run_data, base_dir=base_dir)
     if progress is not None:
         config = replace(config, progress=progress)
     return BenchmarkRunSpec(
-        name=name, config=config, output=output, output_format=output_format
+        name=name,
+        config=config,
+        output=output,
+        runner=runner,
+        output_format=output_format,
+        runner_kwargs=_runner_kwargs(run_data, runner),
     )
+
+
+def _run_benchmark_rows(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
+    if run_spec.runner == DEFAULT_RUNNER:
+        return [
+            result.to_dict()
+            for result in run_track2p_benchmark(
+                cast(Track2pBenchmarkConfig, run_spec.config)
+            )
+        ]
+    if run_spec.runner == "track2p-loso-calibration":
+        return _run_configurable_loso_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == "track2p-monotone-loso":
+        return _run_monotone_loso_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == "track2p-solver-prior-loso":
+        return _run_solver_prior_loso_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == "registration-qa":
+        return _run_registration_qa_rows(
+            run_spec.config,
+            dict(run_spec.runner_kwargs or {}),
+        )
+    raise ValueError(f"Unsupported benchmark manifest runner: {run_spec.runner!r}")
+
+
+def _runner_name(value: Any) -> BenchmarkRunner:
+    runner = str(value)
+    if runner not in RUNNER_ALIASES:
+        raise ValueError(
+            "Manifest run runner must be one of: "
+            + ", ".join(sorted(RUNNER_CHOICES))
+        )
+    return cast(BenchmarkRunner, RUNNER_ALIASES[runner])
+
+
+def _reject_incompatible_runner_keys(run_data: ManifestObject, runner: str) -> None:
+    allowed_specific = _runner_specific_fields(runner)
+    disallowed = sorted(
+        key for key in RUNNER_SPECIFIC_FIELDS - allowed_specific if key in run_data
+    )
+    if disallowed:
+        raise ValueError(
+            f"Runner {runner!r} does not support manifest keys: "
+            + ", ".join(disallowed)
+        )
+
+
+def _runner_specific_fields(runner: str) -> set[str]:
+    if runner == DEFAULT_RUNNER:
+        return set()
+    if runner == "track2p-loso-calibration":
+        return set(CONFIGURABLE_LOSO_FIELDS)
+    if runner == "track2p-monotone-loso":
+        return set(MONOTONE_LOSO_FIELDS)
+    if runner == "track2p-solver-prior-loso":
+        return set(SOLVER_PRIOR_FIELDS)
+    if runner == "registration-qa":
+        return set(REGISTRATION_QA_SPECIFIC_FIELDS)
+    raise ValueError(f"Unsupported benchmark manifest runner: {runner!r}")
+
+
+def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
+    if runner == DEFAULT_RUNNER:
+        return {}
+    if runner == "track2p-loso-calibration":
+        return _configurable_loso_runner_kwargs(run_data)
+    if runner == "track2p-monotone-loso":
+        return _monotone_loso_runner_kwargs(run_data)
+    if runner == "track2p-solver-prior-loso":
+        return {key: run_data[key] for key in SOLVER_PRIOR_FIELDS if key in run_data}
+    if runner == "registration-qa":
+        return {"level": str(run_data["level"])} if "level" in run_data else {}
+    raise ValueError(f"Unsupported benchmark manifest runner: {runner!r}")
+
+
+def _configurable_loso_runner_kwargs(run_data: ManifestObject) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    if "feature_names" in run_data:
+        kwargs["feature_names"] = _string_tuple(
+            run_data["feature_names"], location="feature_names"
+        )
+    if "sample_weight_strategy" in run_data:
+        kwargs["sample_weight_strategy"] = str(run_data["sample_weight_strategy"])
+    if "calibration_model" in run_data:
+        model_kind = str(run_data["calibration_model"])
+        kwargs["calibration_model"] = model_kind
+        kwargs["model_kind"] = model_kind
+    if "calibration_model_kwargs" in run_data:
+        model_kwargs = _mapping_option(
+            run_data["calibration_model_kwargs"], location="calibration_model_kwargs"
+        )
+        kwargs["calibration_model_kwargs"] = model_kwargs
+        kwargs["model_kwargs"] = model_kwargs
+    if "calibration_model_kwargs_json" in run_data:
+        kwargs["calibration_model_kwargs_json"] = str(
+            run_data["calibration_model_kwargs_json"]
+        )
+    if "hard_negative_options" in run_data:
+        from bayescatrack.experiments.calibration_hard_negatives import (
+            CandidateHardNegativeOptions,
+        )
+
+        kwargs["hard_negative_options"] = CandidateHardNegativeOptions(
+            **_mapping_option(
+                run_data["hard_negative_options"], location="hard_negative_options"
+            )
+        )
+    for key in (
+        "hard_negative_ratio",
+        "hard_negative_top_k",
+        "hard_negative_column_candidates",
+        "hard_negative_features",
+    ):
+        if key in run_data:
+            kwargs[key] = run_data[key]
+    return kwargs
+
+
+def _monotone_loso_runner_kwargs(run_data: ManifestObject) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    if "feature_names" in run_data:
+        kwargs["feature_names"] = _string_tuple(
+            run_data["feature_names"], location="feature_names"
+        )
+    if "monotone_options" in run_data:
+        from bayescatrack.association.monotone_ranker import MonotoneRankerOptions
+
+        kwargs["monotone_options"] = MonotoneRankerOptions(
+            **_mapping_option(run_data["monotone_options"], location="monotone_options")
+        )
+    return kwargs
 
 
 def _parse_comparison_spec(
@@ -293,16 +532,54 @@ def _parse_comparison_spec(
     )
 
 
+def _run_config(
+    runner: BenchmarkRunner, run_data: ManifestObject, *, base_dir: Path
+) -> Any:
+    if runner == "registration-qa":
+        return _registration_qa_config(run_data, base_dir=base_dir)
+
+    config_defaults: dict[str, Any] = {}
+    required = ("data", "method")
+    if runner in {"track2p-loso-calibration", "track2p-monotone-loso"}:
+        config_defaults = {
+            "method": "global-assignment",
+            "split": "leave-one-subject-out",
+            "cost": "calibrated",
+        }
+        required = ("data",)
+    elif runner == "track2p-solver-prior-loso":
+        config_defaults = {
+            "method": "global-assignment",
+            "split": "leave-one-subject-out",
+            "cost": "registered-iou",
+        }
+        required = ("data",)
+
+    config_kwargs = _track2p_config_kwargs(
+        run_data,
+        base_dir=base_dir,
+        config_defaults=config_defaults,
+        required=required,
+    )
+    return Track2pBenchmarkConfig(**config_kwargs)
+
+
 def _track2p_config_kwargs(
-    run_data: ManifestObject, *, base_dir: Path
+    run_data: ManifestObject,
+    *,
+    base_dir: Path,
+    config_defaults: Mapping[str, Any] | None = None,
+    required: Sequence[str] = ("data", "method"),
 ) -> dict[str, Any]:
-    config_kwargs = {
-        key: value for key, value in run_data.items() if key in TRACK2P_CONFIG_FIELDS
-    }
-    missing_required = [key for key in ("data", "method") if key not in config_kwargs]
+    config_kwargs = dict(config_defaults or {})
+    config_kwargs.update(
+        {key: value for key, value in run_data.items() if key in TRACK2P_CONFIG_FIELDS}
+    )
+    missing_required = [key for key in required if key not in config_kwargs]
     if missing_required:
         raise ValueError(
-            f"Manifest run is missing required Track2p config keys: {', '.join(missing_required)}"
+            "Manifest run is missing required Track2p config keys: "
+            + ", ".join(missing_required)
         )
     for key in ("data", "reference"):
         if key in config_kwargs and config_kwargs[key] is not None:
@@ -310,6 +587,226 @@ def _track2p_config_kwargs(
                 config_kwargs[key], base_dir=base_dir
             )
     return config_kwargs
+
+
+def _registration_qa_config(run_data: ManifestObject, *, base_dir: Path) -> Any:
+    from bayescatrack.experiments.registration_qa_report import RegistrationQAConfig
+
+    config_kwargs = {
+        key: value
+        for key, value in run_data.items()
+        if key in REGISTRATION_QA_CONFIG_FIELDS
+    }
+    if "data" not in config_kwargs:
+        raise ValueError(
+            "Manifest run is missing required registration-qa config key: data"
+        )
+    for key in ("data", "reference"):
+        if key in config_kwargs and config_kwargs[key] is not None:
+            config_kwargs[key] = _resolve_input_path(
+                config_kwargs[key], base_dir=base_dir
+            )
+    return RegistrationQAConfig(**config_kwargs)
+
+
+def _run_options(runner: BenchmarkRunner, run_data: ManifestObject) -> ManifestObject:
+    option_fields = RUNNER_CONFIG_FIELDS[runner] - TRACK2P_CONFIG_FIELDS
+    if runner == "registration-qa":
+        option_fields = {"level"}
+    return {key: run_data[key] for key in option_fields if key in run_data}
+
+
+def _run_manifest_entry(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
+    if run_spec.runner == "track2p":
+        results = run_track2p_benchmark(cast(Track2pBenchmarkConfig, run_spec.config))
+        return [result.to_dict() for result in results]
+    if run_spec.runner == "track2p-loso-calibration":
+        return _run_configurable_loso_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == "track2p-monotone-loso":
+        return _run_monotone_loso_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == "track2p-solver-prior-loso":
+        return _run_solver_prior_loso_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == "registration-qa":
+        return _run_registration_qa_rows(
+            run_spec.config,
+            dict(run_spec.runner_kwargs or {}),
+        )
+    raise AssertionError(f"Unhandled benchmark runner: {run_spec.runner}")
+
+
+def _run_configurable_loso_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.calibration_hard_negatives import (
+        CandidateHardNegativeOptions,
+    )
+    from bayescatrack.experiments.track2p_configurable_loso_calibration import (
+        run_track2p_configurable_loso_calibration,
+    )
+
+    if isinstance(options.get("hard_negative_options"), CandidateHardNegativeOptions):
+        hard_negative_options = options["hard_negative_options"]
+    elif "hard_negative_options" in options:
+        hard_negative_options = CandidateHardNegativeOptions(
+            **_mapping_option(
+                options["hard_negative_options"], location="hard_negative_options"
+            )
+        )
+    else:
+        hard_negative_options = CandidateHardNegativeOptions(
+            negative_to_positive_ratio=_float_option(
+                options, "hard_negative_ratio", default=4.0
+            ),
+            candidate_top_k_per_anchor=_positive_int_or_none(
+                options.get("hard_negative_top_k", 20), name="hard_negative_top_k"
+            ),
+            include_column_candidates=_bool_option(
+                options, "hard_negative_column_candidates", default=True
+            ),
+            hardness_feature_names=_string_tuple(
+                options.get("hard_negative_features", ()),
+                name="hard_negative_features",
+                allow_empty=True,
+            ),
+        )
+
+    if "model_kwargs" in options:
+        model_kwargs = _mapping_option(options["model_kwargs"], location="model_kwargs")
+    else:
+        model_kwargs = _mapping_option(
+            options,
+            key="calibration_model_kwargs",
+            json_key="calibration_model_kwargs_json",
+        )
+
+    kwargs: dict[str, Any] = {
+        "sample_weight_strategy": str(options.get("sample_weight_strategy", "none")),
+        "model_kind": str(
+            options.get("model_kind", options.get("calibration_model", "logistic"))
+        ),
+        "model_kwargs": model_kwargs,
+        "hard_negative_options": hard_negative_options,
+    }
+    feature_names = _feature_names_option(options)
+    if feature_names is not None:
+        kwargs["feature_names"] = feature_names
+    return run_track2p_configurable_loso_calibration(config, **kwargs).to_rows()
+
+
+def _run_monotone_loso_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.association.monotone_ranker import MonotoneRankerOptions
+    from bayescatrack.experiments.track2p_monotone_loso_calibration import (
+        run_track2p_monotone_loso_calibration,
+    )
+
+    kwargs: dict[str, Any] = {}
+    feature_names = _feature_names_option(options)
+    if feature_names is not None:
+        kwargs["feature_names"] = feature_names
+    raw_monotone_options = options.get("monotone_options")
+    if isinstance(raw_monotone_options, MonotoneRankerOptions):
+        kwargs["monotone_options"] = raw_monotone_options
+        return run_track2p_monotone_loso_calibration(config, **kwargs).to_rows()
+    if raw_monotone_options is not None:
+        monotone_kwargs = _mapping_option(
+            raw_monotone_options, location="monotone_options"
+        )
+    else:
+        monotone_kwargs = _mapping_option(
+            options,
+            key="monotone_ranker_kwargs",
+            json_key="monotone_ranker_kwargs_json",
+        )
+    if monotone_kwargs:
+        kwargs["monotone_options"] = MonotoneRankerOptions(**monotone_kwargs)
+    return run_track2p_monotone_loso_calibration(config, **kwargs).to_rows()
+
+
+def _run_solver_prior_loso_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.solver_prior_tuning import (
+        SolverPriorSearchConfig,
+        run_track2p_loso_solver_priors,
+    )
+
+    search_kwargs: dict[str, Any] = {}
+    if "start_costs" in options:
+        search_kwargs["start_costs"] = _float_tuple(
+            options["start_costs"], name="start_costs", positive=True
+        )
+    if "end_costs" in options:
+        search_kwargs["end_costs"] = _float_tuple(
+            options["end_costs"], name="end_costs", positive=True, allow_empty=True
+        )
+    if "gap_penalties" in options:
+        search_kwargs["gap_penalties"] = _float_tuple(
+            options["gap_penalties"], name="gap_penalties", nonnegative=True
+        )
+    if "cost_thresholds" in options:
+        search_kwargs["cost_thresholds"] = _threshold_tuple(
+            options["cost_thresholds"], name="cost_thresholds"
+        )
+    if "objective" in options:
+        search_kwargs["objective"] = str(options["objective"])
+    return run_track2p_loso_solver_priors(
+        config, search=SolverPriorSearchConfig(**search_kwargs)
+    ).to_rows()
+
+
+def _run_registration_qa_rows(
+    config: Any, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.registration_qa_report import (
+        run_registration_qa_report,
+        summarize_registration_backend_usage,
+        summarize_registration_qa_links,
+    )
+
+    level = _registration_qa_level(options.get("level", "summary"))
+    rows: Sequence[Mapping[str, Any]] = run_registration_qa_report(config)
+    if level == "summary":
+        rows = summarize_registration_qa_links(rows)
+    elif level == "backend-audit":
+        rows = summarize_registration_backend_usage(rows)
+    return [dict(row) for row in rows]
+
+
+def _write_run_rows(
+    run_spec: BenchmarkRunSpec, rows: Sequence[Mapping[str, Any]]
+) -> None:
+    if run_spec.runner == "registration-qa":
+        _write_registration_qa_run_rows(run_spec, rows)
+        return
+    write_results(rows, run_spec.output, run_spec.output_format)
+
+
+def _write_registration_qa_run_rows(
+    run_spec: BenchmarkRunSpec, rows: Sequence[Mapping[str, Any]]
+) -> None:
+    from bayescatrack.experiments.registration_qa_report import (
+        write_registration_backend_audit_results,
+        write_registration_qa_results,
+    )
+
+    level = _registration_qa_level((run_spec.options or {}).get("level", "summary"))
+    if level == "backend-audit":
+        write_registration_backend_audit_results(
+            rows, run_spec.output, run_spec.output_format
+        )
+    else:
+        write_registration_qa_results(rows, run_spec.output, run_spec.output_format)
 
 
 def _comparison_inputs(
@@ -382,11 +879,15 @@ def _validate_unique_names(names: Iterable[str]) -> None:
 
 
 def _default_run_name(run_data: ManifestObject) -> str:
+    runner = _runner_name(run_data.get("runner", DEFAULT_RUNNER))
+    if runner == "track2p-loso-calibration":
+        model = run_data.get("calibration_model")
+        return runner if model is None else f"{runner}-{model}"
+    if runner != DEFAULT_RUNNER:
+        return runner
     method = str(run_data.get("method", "run"))
     cost = run_data.get("cost")
-    if cost is None:
-        return method
-    return f"{method}-{cost}"
+    return method if cost is None else f"{method}-{cost}"
 
 
 def _output_format(value: Any) -> OutputFormat:
@@ -409,6 +910,22 @@ def _slugify(value: str) -> str:
     return slug or "benchmark"
 
 
+def _mapping_option(value: Any, *, location: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError(f"Manifest {location!r} must be a JSON object")
+    return dict(value)
+
+
+def _string_tuple(value: Any, *, location: str) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return tuple(token.strip() for token in value.split(",") if token.strip())
+    if isinstance(value, Sequence):
+        return tuple(str(item) for item in value)
+    raise ValueError(f"Manifest {location!r} must be a string or JSON list")
+
+
 def _format_summary_table(result: BenchmarkManifestResult) -> str:
     rows: list[tuple[str, str, int, Path]] = []
     rows.extend(
@@ -429,6 +946,154 @@ def _format_summary_table(result: BenchmarkManifestResult) -> str:
         for kind, name, row_count, output in rows
     )
     return "\n".join(body)
+
+
+def _feature_names_option(options: ManifestObject) -> tuple[str, ...] | None:
+    if "feature_names" not in options:
+        return None
+    feature_names = _string_tuple(
+        options["feature_names"], name="feature_names", allow_empty=False
+    )
+    if not feature_names:
+        raise ValueError("feature_names must contain at least one feature")
+    return feature_names
+
+
+def _string_tuple(
+    value: Any,
+    *,
+    location: str | None = None,
+    name: str | None = None,
+    allow_empty: bool = True,
+) -> tuple[str, ...]:
+    label = name or location or "value"
+    if value is None:
+        values: tuple[str, ...] = ()
+    elif isinstance(value, str):
+        values = tuple(token.strip() for token in value.split(",") if token.strip())
+    elif isinstance(value, Sequence):
+        values = tuple(str(token) for token in value)
+    else:
+        raise ValueError(f"{label} must be a comma-separated string or JSON array")
+    if not values and not allow_empty:
+        raise ValueError(f"{label} must not be empty")
+    return values
+
+
+def _mapping_option(
+    value_or_options: Any,
+    *,
+    location: str | None = None,
+    key: str | None = None,
+    json_key: str | None = None,
+) -> dict[str, Any] | None:
+    if key is None:
+        if value_or_options is None:
+            return {}
+        if not isinstance(value_or_options, Mapping):
+            label = location or "value"
+            raise ValueError(f"Manifest {label!r} must be a JSON object")
+        return dict(value_or_options)
+
+    if json_key is None:
+        raise ValueError("json_key is required when key is provided")
+    options = cast(ManifestObject, value_or_options)
+    has_mapping = key in options
+    has_json = json_key in options
+    if has_mapping and has_json:
+        raise ValueError(f"Use either {key!r} or {json_key!r}, not both")
+    if has_json:
+        parsed = json.loads(str(options[json_key]))
+    elif has_mapping:
+        parsed = options[key]
+    else:
+        return None
+    if not isinstance(parsed, Mapping):
+        raise ValueError(f"{key} must be a JSON object")
+    return dict(parsed)
+
+
+def _float_option(options: ManifestObject, key: str, *, default: float) -> float:
+    value = float(options.get(key, default))
+    if not math.isfinite(value):
+        raise ValueError(f"{key} must be finite")
+    return value
+
+
+def _bool_option(options: ManifestObject, key: str, *, default: bool) -> bool:
+    value = options.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean")
+    return value
+
+
+def _positive_int_or_none(value: Any, *, name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and value.casefold() in {"none", "null", "all"}:
+        return None
+    parsed = int(value)
+    if parsed <= 0:
+        raise ValueError(f"{name} must be positive or null")
+    return parsed
+
+
+def _float_tuple(
+    value: Any,
+    *,
+    name: str,
+    positive: bool = False,
+    nonnegative: bool = False,
+    allow_empty: bool = False,
+) -> tuple[float, ...]:
+    raw_values = _sequence_option(value, name=name, allow_empty=allow_empty)
+    parsed = tuple(float(item) for item in raw_values)
+    if not parsed and not allow_empty:
+        raise ValueError(f"{name} must not be empty")
+    for item in parsed:
+        if not math.isfinite(item):
+            raise ValueError(f"{name} values must be finite")
+        if positive and item <= 0.0:
+            raise ValueError(f"{name} values must be positive")
+        if nonnegative and item < 0.0:
+            raise ValueError(f"{name} values must be non-negative")
+    return parsed
+
+
+def _threshold_tuple(value: Any, *, name: str) -> tuple[float | None, ...]:
+    parsed: list[float | None] = []
+    for item in _sequence_option(value, name=name, allow_empty=False):
+        if item is None or (
+            isinstance(item, str) and item.casefold() in {"none", "null"}
+        ):
+            parsed.append(None)
+            continue
+        threshold = float(item)
+        if not math.isfinite(threshold):
+            raise ValueError(f"{name} values must be finite or null")
+        parsed.append(threshold)
+    return tuple(parsed)
+
+
+def _sequence_option(value: Any, *, name: str, allow_empty: bool) -> tuple[Any, ...]:
+    if isinstance(value, str):
+        values = tuple(token.strip() for token in value.split(",") if token.strip())
+    elif isinstance(value, Sequence):
+        values = tuple(value)
+    else:
+        raise ValueError(f"{name} must be a comma-separated string or JSON array")
+    if not values and not allow_empty:
+        raise ValueError(f"{name} must not be empty")
+    return values
+
+
+def _registration_qa_level(value: Any) -> str:
+    level = str(value)
+    if level not in {"summary", "links", "backend-audit"}:
+        raise ValueError(
+            "registration-qa level must be 'summary', 'links', or 'backend-audit'"
+        )
+    return level
 
 
 if __name__ == "__main__":  # pragma: no cover

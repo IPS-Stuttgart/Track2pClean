@@ -11,6 +11,10 @@ from typing import Any
 
 import numpy as np
 from bayescatrack.core.bridge import CalciumPlaneData
+from bayescatrack.experiments._cli_choices import (
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.experiments.track2p_benchmark import (
     _config_from_args,
     _csv_fieldnames,
@@ -46,16 +50,10 @@ def _register_plane_pair_with_fov_affine(
 def _enable_fov_affine_choice(parser: Any) -> None:
     for action in parser._actions:  # pylint: disable=protected-access
         if action.dest == "transform_type":
-            action.choices = (
-                "affine",
-                "rigid",
-                "fov-affine",
-                "fov-translation",
-                "none",
-            )
+            action.choices = REGISTRATION_TRANSFORM_CHOICES
             action.default = "fov-affine"
             action.help = (
-                "Registration transform; fov-affine is the default for this wrapper"
+                f"{REGISTRATION_TRANSFORM_HELP} fov-affine is the default for this wrapper."
             )
             return
     raise RuntimeError("Could not find --transform-type action")

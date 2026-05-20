@@ -132,9 +132,21 @@ def solve_bundle_linear_assignment(
     if cost_matrix.shape[0] == 0 or cost_matrix.shape[1] == 0:
         return _empty_match_result(bundle)
 
+    finite_assignment_mask = np.isfinite(cost_matrix)
+    if not np.any(finite_assignment_mask):
+        return _empty_match_result(bundle)
+
     assignment_cost_matrix = cost_matrix
     valid_assignment_mask: np.ndarray | None = None
-    if max_cost is not None:
+    if max_cost is None:
+        if not np.all(finite_assignment_mask):
+            valid_assignment_mask = finite_assignment_mask
+            assignment_cost_matrix = _gate_cost_matrix_for_linear_assignment(
+                cost_matrix,
+                valid_assignment_mask,
+                max_cost=float(np.max(np.abs(cost_matrix[valid_assignment_mask]))),
+            )
+    else:
         valid_assignment_mask = np.isfinite(cost_matrix) & (cost_matrix <= max_cost)
         if not np.any(valid_assignment_mask):
             return _empty_match_result(bundle)
@@ -455,7 +467,7 @@ def _gate_cost_matrix_for_linear_assignment(
     cost_matrix: np.ndarray,
     valid_assignment_mask: np.ndarray,
     *,
-    max_cost: float,
+    max_cost: float | None,
 ) -> np.ndarray:
     """Return a cost matrix where invalid candidate links cannot win cheaply.
 
@@ -477,7 +489,7 @@ def _gate_cost_matrix_for_linear_assignment(
     cost_scale = max(
         abs(valid_min),
         abs(valid_max),
-        abs(float(max_cost)),
+        0.0 if max_cost is None else abs(float(max_cost)),
         cost_span,
         1.0,
     )

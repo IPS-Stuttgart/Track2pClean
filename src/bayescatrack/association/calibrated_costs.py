@@ -17,12 +17,23 @@ from bayescatrack.association._pyrecest_feature_compat import (
     pairwise_feature_tensor as pyrecest_pairwise_feature_tensor,
 )
 from bayescatrack.association.activity_similarity import (
+    ACTIVITY_TIEBREAKER_FEATURES,
     add_activity_similarity_components,
 )
-from bayescatrack.association.registered_masks import replace_empty_registered_masks
+from bayescatrack.association.registered_masks import (
+    add_registered_roi_validity_components,
+    mask_invalid_registered_roi_columns,
+    replace_empty_registered_masks,
+)
 from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
     pairwise_kwargs_use_shifted_overlap,
+)
+from bayescatrack.core._local_evidence import (
+    LOCAL_EVIDENCE_ASSOCIATION_FEATURES as _LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
+)
+from bayescatrack.core._roi_stat_features import (
+    SPLIT_ROI_STAT_FEATURES as _SPLIT_ROI_STAT_FEATURES,
 )
 from bayescatrack.core.bridge import (
     CalciumPlaneData,
@@ -33,12 +44,59 @@ from bayescatrack.core.bridge import (
 from bayescatrack.reference import Track2pReference
 from bayescatrack.track2p_registration import register_plane_pair
 
+ACTIVITY_ASSOCIATION_FEATURES = tuple(ACTIVITY_TIEBREAKER_FEATURES)
+EXPANDED_ACTIVITY_ASSOCIATION_FEATURES = tuple(ACTIVITY_TIEBREAKER_FEATURES)
+
 _ACTIVITY_FEATURES = {
     "activity_correlation",
     "activity_similarity",
     "activity_similarity_cost",
     "activity_similarity_available",
+    "activity_tiebreaker_available",
+    "activity_tiebreaker_cost",
+    "activity_tiebreaker_missing",
+    "event_rate_absdiff",
+    "event_rate_available",
+    "fluorescence_correlation",
+    "fluorescence_similarity",
+    "fluorescence_similarity_available",
+    "fluorescence_similarity_cost",
+    "neuropil_correlation",
+    "neuropil_ratio_absdiff",
+    "neuropil_ratio_available",
+    "neuropil_similarity",
+    "neuropil_similarity_available",
+    "neuropil_similarity_cost",
+    "spike_correlation",
+    "spike_similarity",
+    "spike_similarity_available",
+    "spike_similarity_cost",
+    "trace_skew_absdiff",
+    "trace_skew_available",
+    "trace_std_absdiff",
+    "trace_std_available",
 }
+
+SPLIT_ROI_STAT_FEATURES: tuple[str, ...] = _SPLIT_ROI_STAT_FEATURES
+LOCAL_EVIDENCE_ASSOCIATION_FEATURES: tuple[str, ...] = (
+    _LOCAL_EVIDENCE_ASSOCIATION_FEATURES
+)
+SHIFTED_OVERLAP_ASSOCIATION_FEATURES = (
+    "shifted_iou_cost",
+    "shifted_mask_cosine_cost",
+    "shifted_iou_shift_norm",
+    "shifted_iou_shift_penalty_cost",
+)
+DEFAULT_SHIFTED_OVERLAP_PAIRWISE_COST_KWARGS: dict[str, Any] = {
+    "shifted_iou_radius": 2,
+}
+_OPTIONAL_ZERO_FEATURES = frozenset(
+    (
+        *_ACTIVITY_FEATURES,
+        *LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
+        *SHIFTED_OVERLAP_ASSOCIATION_FEATURES,
+    )
+)
 
 DEFAULT_ASSOCIATION_FEATURES = (
     "centroid_distance",
@@ -48,14 +106,18 @@ DEFAULT_ASSOCIATION_FEATURES = (
     "area_ratio_cost",
     "covariance_shape_cost",
     "covariance_logdet_cost",
-    "roi_feature_cost",
+    *SPLIT_ROI_STAT_FEATURES,
     "cell_probability_cost",
+    *EXPANDED_ACTIVITY_ASSOCIATION_FEATURES,
     "activity_similarity_cost",
     "activity_similarity_available",
     "session_gap",
 )
-SPLIT_ROI_STAT_FEATURES: tuple[str, ...] = ()
-LOCAL_EVIDENCE_ASSOCIATION_FEATURES: tuple[str, ...] = ()
+_LOCAL_EVIDENCE_DIRECT_COMPONENT_FEATURES = frozenset(
+    feature_name
+    for feature_name in LOCAL_EVIDENCE_ASSOCIATION_FEATURES
+    if not feature_name.startswith("one_minus_")
+)
 
 
 @dataclass(frozen=True)
@@ -77,9 +139,10 @@ class CalibratedAssociationModel:
     def pairwise_cost_matrix_from_components(
         self, pairwise_components: Mapping[str, Any]
     ) -> np.ndarray:
+        components = mask_invalid_registered_roi_columns(pairwise_components)
         return np.asarray(
             self._pyrecest_model().pairwise_cost_matrix_from_components(
-                pairwise_components
+                components
             ),
             dtype=float,
         )
@@ -101,9 +164,10 @@ class CalibratedAssociationModel:
     ) -> np.ndarray:
         """Convert pairwise components into calibrated match probabilities."""
 
+        components = mask_invalid_registered_roi_columns(pairwise_components)
         return np.asarray(
             self._pyrecest_model().pairwise_probability_matrix_from_components(
-                pairwise_components
+                components
             ),
             dtype=float,
         )
@@ -412,10 +476,22 @@ def _feature_transforms_for(
             transforms[feature_name] = lambda components: 1.0 - _finite_component(
                 components, "activity_similarity"
             )
-        elif feature_name in _ACTIVITY_FEATURES:
+        elif feature_name in _OPTIONAL_ZERO_FEATURES:
+            transforms[feature_name] = _optional_zero_component_transform(feature_name)
+        elif feature_name == "one_minus_weighted_dice":
+            transforms[feature_name] = _optional_one_minus_component_transform(
+                "weighted_dice_similarity"
+            )
+        elif feature_name == "one_minus_overlap_min_fraction":
+            transforms[feature_name] = _optional_one_minus_component_transform(
+                "overlap_min_fraction"
+            )
+        elif feature_name in _LOCAL_EVIDENCE_DIRECT_COMPONENT_FEATURES:
             transforms[feature_name] = _optional_zero_component_transform(feature_name)
         elif feature_name == "session_gap":
             transforms[feature_name] = _session_gap_transform
+        elif feature_name == "cell_probability_available":
+            transforms[feature_name] = _optional_zero_component_transform(feature_name)
     return transforms
 
 
@@ -430,10 +506,55 @@ def _optional_zero_component_transform(
     return transform
 
 
+def _optional_one_minus_component_transform(
+    component_name: str,
+) -> FeatureTransform:
+    def transform(pairwise_components: Mapping[str, Any]) -> np.ndarray:
+        if component_name not in pairwise_components:
+            return _zero_like_pairwise_component(pairwise_components)
+        return 1.0 - np.clip(
+            _finite_component(pairwise_components, component_name),
+            0.0,
+            1.0,
+        )
+
+    return transform
+
+
 def _session_gap_transform(pairwise_components: Mapping[str, Any]) -> np.ndarray:
     if "session_gap" not in pairwise_components:
         return np.ones_like(_zero_like_pairwise_component(pairwise_components))
     return _finite_component(pairwise_components, "session_gap")
+
+
+def _pairwise_cost_kwargs_for_training_features(
+    pairwise_cost_kwargs: Mapping[str, Any] | None,
+    *,
+    feature_names: Sequence[str],
+) -> dict[str, Any] | None:
+    """Return cost kwargs needed to materialize the requested feature planes."""
+
+    kwargs = dict(pairwise_cost_kwargs or {})
+    if _uses_local_evidence_features(feature_names):
+        kwargs.setdefault("local_evidence_components", True)
+    if _uses_shifted_overlap_features(feature_names):
+        for key, value in DEFAULT_SHIFTED_OVERLAP_PAIRWISE_COST_KWARGS.items():
+            kwargs.setdefault(key, value)
+    return kwargs or None
+
+
+def _uses_local_evidence_features(feature_names: Sequence[str]) -> bool:
+    local_evidence_features = frozenset(LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
+    return any(
+        feature_name in local_evidence_features for feature_name in feature_names
+    )
+
+
+def _uses_shifted_overlap_features(feature_names: Sequence[str]) -> bool:
+    shifted_overlap_features = frozenset(SHIFTED_OVERLAP_ASSOCIATION_FEATURES)
+    return any(
+        feature_name in shifted_overlap_features for feature_name in feature_names
+    )
 
 
 def _build_training_bundle(
@@ -447,11 +568,15 @@ def _build_training_bundle(
         sessions[session_b].plane_data,
         transform_type=options.transform_type,
     )
-    registered_measurement_plane, _ = replace_empty_registered_masks(
+    registered_measurement_plane, empty_registered_rois = replace_empty_registered_masks(
         registered_measurement_plane
     )
+    pairwise_cost_kwargs = _pairwise_cost_kwargs_for_training_features(
+        options.pairwise_cost_kwargs,
+        feature_names=options.feature_names,
+    )
     previous_pairwise_cost_method = None
-    if pairwise_kwargs_use_shifted_overlap(options.pairwise_cost_kwargs):
+    if pairwise_kwargs_use_shifted_overlap(pairwise_cost_kwargs):
         previous_pairwise_cost_method = install_shifted_overlap_cost_patch()
     try:
         bundle = build_session_pair_association_bundle(
@@ -462,7 +587,7 @@ def _build_training_bundle(
             weighted_centroids=options.weighted_centroids,
             velocity_variance=options.velocity_variance,
             regularization=options.regularization,
-            pairwise_cost_kwargs=options.pairwise_cost_kwargs,
+            pairwise_cost_kwargs=pairwise_cost_kwargs,
             return_pairwise_components=True,
         )
     finally:
@@ -474,6 +599,11 @@ def _build_training_bundle(
         bundle.pairwise_components,
         sessions[session_a].plane_data,
         registered_measurement_plane,
+    )
+    add_registered_roi_validity_components(
+        bundle.pairwise_components,
+        ~empty_registered_rois,
+        large_cost=float((options.pairwise_cost_kwargs or {}).get("large_cost", 1.0e6)),
     )
     return bundle
 

@@ -7,7 +7,8 @@ import csv
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from itertools import product
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -15,13 +16,23 @@ import numpy as np
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,
+    TripletSupportConsistencyConfig,
+    solve_global_assignment_from_pairwise_costs,
     solve_global_assignment_for_sessions,
     tracks_to_suite2p_index_matrix,
+)
+from bayescatrack.association.higher_order_consistency import (
+    HigherOrderConsistencyConfig,
 )
 from bayescatrack.core.bridge import (
     Track2pSession,
     find_track2p_session_dirs,
     load_track2p_subject,
+)
+from bayescatrack.experiments._cli_choices import (
+    ASSOCIATION_COST_CHOICES,
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
 )
 from bayescatrack.evaluation.track2p_metrics import (
     normalize_track_matrix,
@@ -38,12 +49,31 @@ from bayescatrack.reference import (
 ReferenceKind = Literal["auto", "manual-gt", "track2p-output", "aligned-subject-rows"]
 BenchmarkMethod = Literal["track2p-baseline", "global-assignment", "oracle-gt-links"]
 BenchmarkSplit = Literal["subject", "leave-one-subject-out"]
+CalibrationFeatureSet = Literal[
+    "default",
+    "local-evidence",
+    "default+local-evidence",
+    "activity",
+    "default+activity",
+    "activity+local-evidence",
+    "default+activity+local-evidence",
+    "shifted-overlap",
+    "default+shifted-overlap",
+    "default+local-evidence+shifted-overlap",
+]
 OutputFormat = Literal["table", "json", "csv"]
 GROUND_TRUTH_CSV_NAME = "ground_truth.csv"
 GROUND_TRUTH_REFERENCE_SOURCE = "ground_truth_csv"
 ALIGNED_REFERENCE_SOURCE = "aligned_subject_rows"
 TRACK2P_REFERENCE_SOURCES = frozenset(
     {"track2p_output_suite2p_indices", "track2p_output_match_mat"}
+)
+HIGHER_ORDER_ARG_KEYS = (
+    ("higher_order_triplet_weight", "triplet_weight"),
+    ("higher_order_support_top_k", "support_top_k"),
+    ("higher_order_support_cost_cap", "support_cost_cap"),
+    ("higher_order_max_penalty", "max_penalty"),
+    ("higher_order_large_cost", "large_cost"),
 )
 
 
@@ -62,14 +92,25 @@ class Track2pBenchmarkConfig:
     allow_track2p_as_reference_for_smoke_test: bool = False
     curated_only: bool = False
     seed_session: int = 0
+    seed_sessions: tuple[int, ...] = ()
     restrict_to_reference_seed_rois: bool = True
     cost: AssociationCost = "registered-iou"
+    calibration_feature_set: str = "default"
     max_gap: int = 2
     transform_type: str = "affine"
     start_cost: float = 5.0
     end_cost: float = 5.0
     gap_penalty: float = 1.0
     cost_threshold: float | None = 6.0
+    triplet_weight: float = 0.0
+    support_top_k: int = 3
+    support_cost_cap: float | None = None
+    triplet_max_penalty: float | None = None
+    higher_order_triplet_weight: float = 0.0
+    higher_order_support_top_k: int = 8
+    higher_order_support_cost_cap: float | None = None
+    higher_order_max_penalty: float | None = None
+    higher_order_large_cost: float = 1.0e6
     include_behavior: bool = True
     include_non_cells: bool = False
     cell_probability_threshold: float = 0.5
@@ -80,7 +121,33 @@ class Track2pBenchmarkConfig:
     velocity_variance: float = 25.0
     regularization: float = 1.0e-6
     pairwise_cost_kwargs: dict[str, Any] | None = None
+    higher_order_consistency_config: dict[str, Any] | None = None
+    candidate_pruning_config: dict[str, Any] | None = None
+    dynamic_edge_prior_config: dict[str, Any] | None = None
+    adaptive_edge_prior_config: dict[str, Any] | None = None
+    activity_tie_breaker_weight: float = 0.0
+    activity_tie_breaker_component: str = "activity_tiebreaker_cost"
+    activity_trace_source: str = "auto"
+    activity_event_threshold: float = 0.0
+    calibration_sample_weight_strategy: str = "none"
+    calibration_hard_negative_ratio: float = 4.0
+    calibration_candidate_top_k_per_anchor: int | None = 20
+    calibration_include_column_candidates: bool = True
+    sweep_start_costs: tuple[float, ...] | str = ()
+    sweep_end_costs: tuple[float, ...] | str = ()
+    sweep_gap_penalties: tuple[float, ...] | str = ()
+    sweep_cost_thresholds: tuple[float | None, ...] | str = ()
     progress: bool = False
+
+
+@dataclass(frozen=True)
+class AssignmentPriorSetting:
+    """One global-assignment solver-prior setting."""
+
+    start_cost: float
+    end_cost: float
+    gap_penalty: float
+    cost_threshold: float | None
 
 
 @dataclass(frozen=True)
@@ -168,22 +235,37 @@ def run_track2p_benchmark(
             _validate_reference_roi_indices(
                 reference, _load_subject_sessions(subject_dir, config)
             )
-        predicted_matrix, variant = _predict_subject_tracks(
-            subject_dir, config, reference=reference
+        seed_sessions = _resolved_seed_sessions(
+            config, n_sessions=reference.n_sessions
         )
-        scores = _score_prediction_against_reference(
-            predicted_matrix, reference, config=config
-        )
-        results.append(
-            SubjectBenchmarkResult(
-                subject=subject_dir.name,
-                variant=variant,
-                method=config.method,
-                scores=scores,
-                n_sessions=reference.n_sessions,
-                reference_source=reference.source,
+        for seed_session in seed_sessions:
+            seed_config = replace(config, seed_session=seed_session)
+            prediction_variants = _predict_subject_track_variants(
+                subject_dir, seed_config, reference=reference
             )
-        )
+            for (
+                predicted_matrix,
+                variant,
+                assignment_prior_metadata,
+            ) in prediction_variants:
+                scores = _score_prediction_against_reference(
+                    predicted_matrix, reference, config=seed_config
+                )
+                if assignment_prior_metadata:
+                    scores = {**scores, **assignment_prior_metadata}
+                if len(seed_sessions) > 1:
+                    scores = {**scores, "seed_session_sweep": int(seed_session)}
+                    variant = f"{variant} (seed session {seed_session})"
+                results.append(
+                    SubjectBenchmarkResult(
+                        subject=subject_dir.name,
+                        variant=variant,
+                        method=seed_config.method,
+                        scores=scores,
+                        n_sessions=reference.n_sessions,
+                        reference_source=reference.source,
+                    )
+                )
     return results
 
 
@@ -199,6 +281,23 @@ def discover_subject_dirs(data_path: str | Path) -> list[Path]:
         if child.is_dir() and _looks_like_subject_dir(child)
     ]
     return subjects
+
+
+def _resolved_seed_sessions(
+    config: Track2pBenchmarkConfig,
+    *,
+    n_sessions: int,
+) -> tuple[int, ...]:
+    seed_sessions = tuple(config.seed_sessions or (config.seed_session,))
+    if not seed_sessions:
+        return (int(config.seed_session),)
+    normalized = tuple(int(seed_session) for seed_session in seed_sessions)
+    for seed_session in normalized:
+        if seed_session < 0 or seed_session >= int(n_sessions):
+            raise IndexError(
+                f"seed_session {seed_session} out of bounds for {n_sessions} sessions"
+            )
+    return normalized
 
 
 def format_benchmark_table(rows: Sequence[dict[str, float | int | str]]) -> str:
@@ -306,6 +405,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Reference seed session used for sparse-GT filtering",
     )
     parser.add_argument(
+        "--seed-sessions",
+        default=None,
+        help=(
+            "Optional comma-separated seed sessions to score; overrides --seed-session for subject-level benchmarks"
+        ),
+    )
+    parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -314,15 +420,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cost",
         default="registered-iou",
-        choices=(
-            "registered-iou",
-            "registered-soft-iou",
-            "registered-shifted-iou",
-            "roi-aware",
-            "roi-aware-shifted",
-            "calibrated",
-        ),
+        choices=ASSOCIATION_COST_CHOICES,
         help="Pairwise cost used by global assignment",
+    )
+    parser.add_argument(
+        "--calibration-feature-set",
+        default="default",
+        choices=(
+            "default",
+            "local-evidence",
+            "default+local-evidence",
+            "activity",
+            "default+activity",
+            "activity+local-evidence",
+            "default+activity+local-evidence",
+            "shifted-overlap",
+            "default+shifted-overlap",
+            "default+local-evidence+shifted-overlap",
+        ),
+        help=(
+            "Named feature preset for cost='calibrated' LOSO runs. "
+            "Use default+activity to let the calibrated model learn from "
+            "fluorescence, spike, event-rate, and neuropil-ratio cues."
+        ),
     )
     parser.add_argument(
         "--max-gap",
@@ -333,8 +453,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
-        help="Track2p registration transform type",
+        choices=REGISTRATION_TRANSFORM_CHOICES,
+        help=REGISTRATION_TRANSFORM_HELP,
     )
     parser.add_argument(
         "--start-cost", type=float, default=5.0, help="PyRecEst track start cost"
@@ -357,6 +477,56 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Disable the solver edge-cost threshold",
     )
     parser.add_argument(
+        "--sweep-start-costs",
+        default=None,
+        help="Comma-separated start costs to sweep for assignment-prior ablations",
+    )
+    parser.add_argument(
+        "--sweep-end-costs",
+        default=None,
+        help="Comma-separated end costs to sweep for assignment-prior ablations",
+    )
+    parser.add_argument(
+        "--sweep-gap-penalties",
+        default=None,
+        help="Comma-separated gap penalties to sweep for assignment-prior ablations",
+    )
+    parser.add_argument(
+        "--sweep-cost-thresholds",
+        default=None,
+        help="Comma-separated cost thresholds to sweep; use 'none' to disable",
+    )
+    parser.add_argument(
+        "--triplet-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Penalty added to skip-session edges that lack low-cost support "
+            "through an intermediate session; 0 disables higher-order consistency"
+        ),
+    )
+    parser.add_argument(
+        "--support-top-k",
+        type=int,
+        default=3,
+        help="Number of best source-to-intermediate candidates used for triplet support",
+    )
+    parser.add_argument(
+        "--support-cost-cap",
+        type=float,
+        default=None,
+        help=(
+            "Maximum two-hop support cost accepted as compatible. If omitted, "
+            "the benchmark uses 2 * --cost-threshold when the threshold is enabled."
+        ),
+    )
+    parser.add_argument(
+        "--triplet-max-penalty",
+        type=float,
+        default=None,
+        help="Optional upper bound for the per-edge triplet-support penalty",
+    )
+    parser.add_argument(
         "--include-behavior",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -364,14 +534,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--include-non-cells",
-        action="store_true",
-        help="Keep Suite2p ROIs that fail iscell filtering",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Keep Suite2p ROIs that fail iscell filtering. This is the "
+            "benchmark default because manual references use Suite2p stat.npy "
+            "row indices; cell probability is then handled as a soft "
+            "association feature. Pass --no-include-non-cells for a legacy "
+            "hard filter."
+        ),
     )
     parser.add_argument(
         "--cell-probability-threshold",
         type=float,
         default=0.5,
-        help="Suite2p iscell probability threshold",
+        help=(
+            "Suite2p iscell probability threshold used only when "
+            "--no-include-non-cells is active"
+        ),
     )
     parser.add_argument(
         "--weighted-masks",
@@ -410,6 +590,106 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="JSON object merged into pairwise cost kwargs",
     )
     parser.add_argument(
+        "--higher-order-consistency-json",
+        default=None,
+        help=(
+            "JSON object passed to HigherOrderConsistencyConfig. Individual "
+            "--higher-order-* options override keys from this object."
+        ),
+    )
+    parser.add_argument(
+        "--candidate-pruning-json",
+        default=None,
+        help="JSON object for row/column top-k, probability, and cost candidate pruning",
+    )
+    parser.add_argument(
+        "--dynamic-edge-prior-json",
+        default=None,
+        help="JSON object for additive ROI-, gap-, activity-, and registration-quality edge priors",
+    )
+    parser.add_argument(
+        "--adaptive-edge-prior-json",
+        default=None,
+        help="JSON object configuring ROI-conditioned adaptive edge priors",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-weight",
+        type=float,
+        default=0.0,
+        help="Small non-negative weight for activity-derived pairwise tie-breaking",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-component",
+        default="activity_tiebreaker_cost",
+        help="Activity component used by the tie-breaker",
+    )
+    parser.add_argument(
+        "--activity-trace-source",
+        default="auto",
+        choices=("auto", "spike_traces", "traces", "neuropil_traces"),
+        help="Trace source for activity-similarity components",
+    )
+    parser.add_argument(
+        "--activity-event-threshold",
+        type=float,
+        default=0.0,
+        help="Event threshold used by activity feature extraction",
+    )
+    parser.add_argument(
+        "--calibration-sample-weight-strategy",
+        default="none",
+        choices=("none", "balanced"),
+        help="Sample weighting strategy for LOSO logistic calibration",
+    )
+    parser.add_argument(
+        "--calibration-hard-negative-ratio",
+        type=float,
+        default=4.0,
+        help="Maximum hard negatives per positive calibration example",
+    )
+    parser.add_argument(
+        "--calibration-candidate-top-k-per-anchor",
+        type=int,
+        default=20,
+        help="Candidate hard negatives per anchor; use <=0 to disable the top-k prefilter",
+    )
+    parser.add_argument(
+        "--calibration-include-column-candidates",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Also collect top-k hard negatives per candidate measurement column",
+    )
+    parser.add_argument(
+        "--higher-order-triplet-weight",
+        type=float,
+        default=None,
+        help="Weight for triplet-projected higher-order consistency penalties",
+    )
+    parser.add_argument(
+        "--higher-order-support-top-k",
+        type=int,
+        default=None,
+        help="Number of low-cost third-session support edges retained per ROI",
+    )
+    parser.add_argument(
+        "--higher-order-support-cost-cap",
+        type=float,
+        default=None,
+        help="Maximum support-edge cost considered as triplet evidence",
+    )
+    parser.add_argument(
+        "--higher-order-max-penalty",
+        type=float,
+        default=None,
+        help="Maximum unweighted penalty added to an unsupported edge",
+    )
+    parser.add_argument(
+        "--higher-order-large-cost",
+        type=float,
+        default=None,
+        help="Large-cost sentinel used to preserve already-gated edges",
+    )
+    parser.add_argument(
         "--progress",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -439,6 +719,50 @@ def main(argv: list[str] | None = None) -> int:
     else:
         _write_stdout(rows, args.format)
     return 0
+
+
+def _predict_subject_track_variants(
+    subject_dir: Path,
+    config: Track2pBenchmarkConfig,
+    *,
+    reference: Track2pReference | None = None,
+) -> tuple[tuple[np.ndarray, str, Mapping[str, float | str]], ...]:
+    """Predict one subject, optionally sweeping solver priors cheaply.
+
+    Pairwise registration and cost construction are expensive.  When the caller
+    requests a solver-prior sweep, build the pairwise costs only once and rerun
+    PyRecEst's path-cover solver on the cached matrices for each requested
+    start/end/gap/threshold setting.
+    """
+
+    if not assignment_prior_sweep_is_enabled(config):
+        predicted_matrix, variant = _predict_subject_tracks(
+            subject_dir, config, reference=reference
+        )
+        return ((predicted_matrix, variant, {}),)
+
+    if config.method != "global-assignment":
+        raise ValueError(
+            "assignment-prior sweeps require method='global-assignment'"
+        )
+
+    sessions = _load_subject_sessions(subject_dir, config)
+    base_assignment = solve_configured_global_assignment(sessions, config)
+    base_variant = _variant_name(config.cost)
+
+    predictions: list[tuple[np.ndarray, str, Mapping[str, float | str]]] = []
+    for prior_setting, assignment in assignment_prior_assignment_runs(
+        base_assignment, config
+    ):
+        predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
+        predictions.append(
+            (
+                predicted,
+                assignment_prior_variant_name(base_variant, prior_setting, config),
+                assignment_prior_score_metadata(prior_setting),
+            )
+        )
+    return tuple(predictions)
 
 
 def _predict_subject_tracks(
@@ -525,6 +849,22 @@ def oracle_ground_truth_link_tracks(
     )
 
 
+def _triplet_support_consistency_config(
+    config: Track2pBenchmarkConfig,
+) -> TripletSupportConsistencyConfig | None:
+    if config.triplet_weight <= 0.0:
+        return None
+    support_cost_cap = config.support_cost_cap
+    if support_cost_cap is None and config.cost_threshold is not None:
+        support_cost_cap = 2.0 * float(config.cost_threshold)
+    return TripletSupportConsistencyConfig(
+        triplet_weight=float(config.triplet_weight),
+        support_top_k=int(config.support_top_k),
+        support_cost_cap=support_cost_cap,
+        max_penalty=config.triplet_max_penalty,
+    )
+
+
 def solve_configured_global_assignment(
     sessions: Sequence[Track2pSession],
     config: Track2pBenchmarkConfig,
@@ -549,14 +889,176 @@ def solve_configured_global_assignment(
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+        activity_tie_breaker_weight=config.activity_tie_breaker_weight,
+        activity_tie_breaker_component=config.activity_tie_breaker_component,
+        activity_trace_source=config.activity_trace_source,
+        activity_event_threshold=config.activity_event_threshold,
+        higher_order_consistency_config=_solver_higher_order_config(config),
+        candidate_pruning_config=config.candidate_pruning_config,
+        dynamic_edge_prior_config=config.dynamic_edge_prior_config,
+        adaptive_edge_prior_config=config.adaptive_edge_prior_config,
     )
+
+
+def _solver_higher_order_config(
+    config: Track2pBenchmarkConfig,
+) -> HigherOrderConsistencyConfig | Mapping[str, Any] | None:
+    if config.higher_order_consistency_config is not None:
+        if isinstance(
+            config.higher_order_consistency_config, HigherOrderConsistencyConfig
+        ):
+            return config.higher_order_consistency_config
+        return config.higher_order_consistency_config
+    if config.higher_order_triplet_weight <= 0.0:
+        return None
+    support_cost_cap = config.higher_order_support_cost_cap
+    if support_cost_cap is None and config.cost_threshold is not None:
+        support_cost_cap = 2.0 * float(config.cost_threshold)
+    return HigherOrderConsistencyConfig(
+        triplet_weight=float(config.higher_order_triplet_weight),
+        support_top_k=int(config.higher_order_support_top_k),
+        support_cost_cap=4.0 if support_cost_cap is None else float(support_cost_cap),
+        max_penalty=(
+            2.0
+            if config.higher_order_max_penalty is None
+            else float(config.higher_order_max_penalty)
+        ),
+        large_cost=float(config.higher_order_large_cost),
+    )
+
+
+def assignment_prior_sweep_is_enabled(config: Track2pBenchmarkConfig) -> bool:
+    """Return whether the benchmark config requests a solver-prior sweep."""
+
+    return any(
+        (
+            _coerce_float_sweep_values(config.sweep_start_costs, "sweep_start_costs"),
+            _coerce_float_sweep_values(config.sweep_end_costs, "sweep_end_costs"),
+            _coerce_float_sweep_values(
+                config.sweep_gap_penalties, "sweep_gap_penalties"
+            ),
+            _coerce_threshold_sweep_values(
+                config.sweep_cost_thresholds, "sweep_cost_thresholds"
+            ),
+        )
+    )
+
+
+def assignment_prior_settings_from_config(
+    config: Track2pBenchmarkConfig,
+) -> tuple[AssignmentPriorSetting, ...]:
+    """Return the solver-prior grid requested by a benchmark config."""
+
+    start_costs = _sweep_or_default_float_values(
+        config.sweep_start_costs, config.start_cost, "sweep_start_costs"
+    )
+    end_costs = _sweep_or_default_float_values(
+        config.sweep_end_costs, config.end_cost, "sweep_end_costs"
+    )
+    gap_penalties = _sweep_or_default_float_values(
+        config.sweep_gap_penalties, config.gap_penalty, "sweep_gap_penalties"
+    )
+    cost_thresholds = _sweep_or_default_threshold_values(
+        config.sweep_cost_thresholds,
+        config.cost_threshold,
+        "sweep_cost_thresholds",
+    )
+
+    settings: list[AssignmentPriorSetting] = []
+    seen: set[tuple[float, float, float, float | None]] = set()
+    for start_cost, end_cost, gap_penalty, cost_threshold in product(
+        start_costs, end_costs, gap_penalties, cost_thresholds
+    ):
+        setting = AssignmentPriorSetting(
+            start_cost=start_cost,
+            end_cost=end_cost,
+            gap_penalty=gap_penalty,
+            cost_threshold=cost_threshold,
+        )
+        key = (
+            setting.start_cost,
+            setting.end_cost,
+            setting.gap_penalty,
+            setting.cost_threshold,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        settings.append(setting)
+    return tuple(settings)
+
+
+def assignment_prior_assignment_runs(
+    base_assignment: GlobalAssignmentRun,
+    config: Track2pBenchmarkConfig,
+) -> tuple[tuple[AssignmentPriorSetting, GlobalAssignmentRun], ...]:
+    """Rerun global assignment for each requested solver-prior setting.
+
+    ``base_assignment`` is reused when the grid contains the config's primary
+    start/end/gap/threshold values; all other settings are solved from the
+    cached pairwise cost matrices.
+    """
+
+    base_setting = AssignmentPriorSetting(
+        start_cost=float(config.start_cost),
+        end_cost=float(config.end_cost),
+        gap_penalty=float(config.gap_penalty),
+        cost_threshold=(
+            None if config.cost_threshold is None else float(config.cost_threshold)
+        ),
+    )
+    runs: list[tuple[AssignmentPriorSetting, GlobalAssignmentRun]] = []
+    for setting in assignment_prior_settings_from_config(config):
+        if setting == base_setting:
+            assignment = base_assignment
+        else:
+            assignment = solve_global_assignment_from_pairwise_costs(
+                base_assignment.pairwise_costs,
+                session_sizes=base_assignment.session_sizes,
+                session_edges=base_assignment.session_edges,
+                start_cost=setting.start_cost,
+                end_cost=setting.end_cost,
+                gap_penalty=setting.gap_penalty,
+                cost_threshold=setting.cost_threshold,
+            )
+        runs.append((setting, assignment))
+    return tuple(runs)
+
+
+def assignment_prior_variant_name(
+    base_variant: str,
+    setting: AssignmentPriorSetting,
+    config: Track2pBenchmarkConfig,
+) -> str:
+    """Append a compact solver-prior label when a sweep is active."""
+
+    if not assignment_prior_sweep_is_enabled(config):
+        return base_variant
+    return f"{base_variant} [{_assignment_prior_label(setting)}]"
+
+
+def assignment_prior_score_metadata(
+    setting: AssignmentPriorSetting,
+) -> dict[str, float | str]:
+    """Return output columns describing one solver-prior grid point."""
+
+    return {
+        "assignment_start_cost": float(setting.start_cost),
+        "assignment_end_cost": float(setting.end_cost),
+        "assignment_gap_penalty": float(setting.gap_penalty),
+        "assignment_cost_threshold": (
+            "none"
+            if setting.cost_threshold is None
+            else float(setting.cost_threshold)
+        ),
+    }
 
 
 def _variant_name(cost: AssociationCost) -> str:
     if cost == "registered-iou":
         return "Same costs + global assignment"
     if cost == "registered-soft-iou":
-        return "Soft-IoU costs + global assignment"
+        return "Registered soft-IoU + global assignment"
     if cost == "registered-shifted-iou":
         return "Shifted-IoU costs + global assignment"
     if cost == "roi-aware-shifted":
@@ -925,8 +1427,9 @@ def _validate_reference_roi_indices(
                 "Reference ROI indices are absent from loaded session "
                 f"{session.session_name!r}: {preview}{suffix}. "
                 "This usually means the reference uses Suite2p stat.npy row indices, "
-                "but the benchmark loaded a filtered ROI set. Re-run with --include-non-cells "
-                "or adjust --cell-probability-threshold if this is intentional."
+                "but the benchmark loaded a filtered ROI set via --no-include-non-cells. "
+                "Re-run with --include-non-cells or adjust --cell-probability-threshold "
+                "if this is intentional."
             )
 
 
@@ -935,6 +1438,26 @@ def _loaded_suite2p_index_set(session: Track2pSession) -> set[int]:
     if roi_indices is None:
         return set(range(session.plane_data.n_rois))
     return {int(value) for value in np.asarray(roi_indices, dtype=int).reshape(-1)}
+
+
+def _higher_order_consistency_config_from_args(
+    args: argparse.Namespace,
+) -> dict[str, Any] | None:
+    config: dict[str, Any] = {}
+    if args.higher_order_consistency_json is not None:
+        parsed = json.loads(args.higher_order_consistency_json)
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                "--higher-order-consistency-json must decode to a JSON object"
+            )
+        config.update(parsed)
+
+    for arg_name, config_key in HIGHER_ORDER_ARG_KEYS:
+        value = getattr(args, arg_name)
+        if value is not None:
+            config[config_key] = value
+
+    return config or None
 
 
 def _reference_matrix(reference: Track2pReference, *, curated_only: bool) -> np.ndarray:
@@ -956,6 +1479,31 @@ def _looks_like_subject_dir(path: Path) -> bool:
     return bool(find_track2p_session_dirs(path))
 
 
+def _parse_json_object(raw: str | None, *, name: str) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{name} must decode to a JSON object")
+    return parsed
+
+
+def _parse_int_list(raw: str | None, *, name: str) -> tuple[int, ...]:
+    if raw is None:
+        return ()
+    tokens = tuple(token.strip() for token in raw.split(","))
+    if not tokens or any(not token for token in tokens):
+        raise ValueError(f"{name} must be a comma-separated list of integers")
+    return tuple(int(token) for token in tokens)
+
+
+def _optional_positive_int(value: int | None) -> int | None:
+    if value is None:
+        return None
+    value = int(value)
+    return None if value <= 0 else value
+
+
 def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
     pairwise_cost_kwargs = None
     if args.pairwise_cost_kwargs_json is not None:
@@ -963,6 +1511,23 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         if not isinstance(parsed, dict):
             raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
         pairwise_cost_kwargs = parsed
+    higher_order_consistency_config = _higher_order_consistency_config_from_args(args)
+    candidate_pruning_config = None
+    if args.candidate_pruning_json is not None:
+        parsed_candidate_pruning = json.loads(args.candidate_pruning_json)
+        if not isinstance(parsed_candidate_pruning, dict):
+            raise ValueError("--candidate-pruning-json must decode to a JSON object")
+        candidate_pruning_config = parsed_candidate_pruning
+    dynamic_edge_prior_config = None
+    if args.dynamic_edge_prior_json is not None:
+        parsed_dynamic_edge_prior = json.loads(args.dynamic_edge_prior_json)
+        if not isinstance(parsed_dynamic_edge_prior, dict):
+            raise ValueError("--dynamic-edge-prior-json must decode to a JSON object")
+        dynamic_edge_prior_config = parsed_dynamic_edge_prior
+    adaptive_edge_prior_config = _parse_json_object(
+        getattr(args, "adaptive_edge_prior_json", None),
+        name="--adaptive-edge-prior-json",
+    )
     return Track2pBenchmarkConfig(
         data=args.data,
         method=args.method,
@@ -974,14 +1539,40 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
         curated_only=args.curated_only,
         seed_session=args.seed_session,
+        seed_sessions=_parse_int_list(
+            getattr(args, "seed_sessions", None),
+            name="--seed-sessions",
+        ),
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
         cost=args.cost,
+        calibration_feature_set=args.calibration_feature_set,
         max_gap=args.max_gap,
         transform_type=args.transform_type,
         start_cost=args.start_cost,
         end_cost=args.end_cost,
         gap_penalty=args.gap_penalty,
         cost_threshold=None if args.no_cost_threshold else args.cost_threshold,
+        triplet_weight=args.triplet_weight,
+        support_top_k=args.support_top_k,
+        support_cost_cap=args.support_cost_cap,
+        triplet_max_penalty=args.triplet_max_penalty,
+        higher_order_triplet_weight=(
+            0.0
+            if args.higher_order_triplet_weight is None
+            else args.higher_order_triplet_weight
+        ),
+        higher_order_support_top_k=(
+            8
+            if args.higher_order_support_top_k is None
+            else args.higher_order_support_top_k
+        ),
+        higher_order_support_cost_cap=args.higher_order_support_cost_cap,
+        higher_order_max_penalty=args.higher_order_max_penalty,
+        higher_order_large_cost=(
+            1.0e6
+            if args.higher_order_large_cost is None
+            else args.higher_order_large_cost
+        ),
         include_behavior=args.include_behavior,
         include_non_cells=args.include_non_cells,
         cell_probability_threshold=args.cell_probability_threshold,
@@ -992,8 +1583,132 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=higher_order_consistency_config,
+        candidate_pruning_config=candidate_pruning_config,
+        dynamic_edge_prior_config=dynamic_edge_prior_config,
+        adaptive_edge_prior_config=adaptive_edge_prior_config,
+        activity_tie_breaker_weight=args.activity_tie_breaker_weight,
+        activity_tie_breaker_component=args.activity_tie_breaker_component,
+        activity_trace_source=args.activity_trace_source,
+        activity_event_threshold=args.activity_event_threshold,
+        calibration_sample_weight_strategy=args.calibration_sample_weight_strategy,
+        calibration_hard_negative_ratio=args.calibration_hard_negative_ratio,
+        calibration_candidate_top_k_per_anchor=_optional_positive_int(
+            args.calibration_candidate_top_k_per_anchor
+        ),
+        calibration_include_column_candidates=args.calibration_include_column_candidates,
+        sweep_start_costs=_coerce_float_sweep_values(
+            args.sweep_start_costs, "--sweep-start-costs"
+        ),
+        sweep_end_costs=_coerce_float_sweep_values(
+            args.sweep_end_costs, "--sweep-end-costs"
+        ),
+        sweep_gap_penalties=_coerce_float_sweep_values(
+            args.sweep_gap_penalties, "--sweep-gap-penalties"
+        ),
+        sweep_cost_thresholds=_coerce_threshold_sweep_values(
+            args.sweep_cost_thresholds, "--sweep-cost-thresholds"
+        ),
         progress=args.progress,
     )
+
+
+def _sweep_or_default_float_values(
+    values: Sequence[float] | str | None, default: float, option_name: str
+) -> tuple[float, ...]:
+    coerced = _coerce_float_sweep_values(values, option_name)
+    return coerced if coerced else (_finite_float(default, option_name),)
+
+
+def _sweep_or_default_threshold_values(
+    values: Sequence[float | None] | str | None,
+    default: float | None,
+    option_name: str,
+) -> tuple[float | None, ...]:
+    coerced = _coerce_threshold_sweep_values(values, option_name)
+    if coerced:
+        return coerced
+    if default is None:
+        return (None,)
+    return (_finite_float(default, option_name),)
+
+
+def _coerce_float_sweep_values(
+    values: Sequence[float] | str | None, option_name: str
+) -> tuple[float, ...]:
+    if values is None:
+        return ()
+    if isinstance(values, str):
+        return _parse_float_sweep_values(values, option_name)
+    return tuple(_finite_float(value, option_name) for value in values)
+
+
+def _coerce_threshold_sweep_values(
+    values: Sequence[float | None] | str | None, option_name: str
+) -> tuple[float | None, ...]:
+    if values is None:
+        return ()
+    if isinstance(values, str):
+        return _parse_threshold_sweep_values(values, option_name)
+    return tuple(
+        None if value is None else _finite_float(value, option_name)
+        for value in values
+    )
+
+
+def _parse_float_sweep_values(raw_value: str | None, option_name: str) -> tuple[float, ...]:
+    if raw_value is None:
+        return ()
+    tokens = _split_sweep_values(raw_value, option_name)
+    return tuple(_finite_float(token, option_name) for token in tokens)
+
+
+def _parse_threshold_sweep_values(
+    raw_value: str | None, option_name: str
+) -> tuple[float | None, ...]:
+    if raw_value is None:
+        return ()
+    values: list[float | None] = []
+    for token in _split_sweep_values(raw_value, option_name):
+        if token.casefold() in {"none", "null", "off", "disabled"}:
+            values.append(None)
+        else:
+            values.append(_finite_float(token, option_name))
+    return tuple(values)
+
+
+def _split_sweep_values(raw_value: str, option_name: str) -> tuple[str, ...]:
+    tokens = tuple(token.strip() for token in raw_value.split(",") if token.strip())
+    if not tokens:
+        raise ValueError(f"{option_name} must contain at least one value")
+    return tokens
+
+
+def _finite_float(value: object, option_name: str) -> float:
+    try:
+        converted = float(cast(Any, value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{option_name} values must be finite numbers") from exc
+    if not np.isfinite(converted):
+        raise ValueError(f"{option_name} values must be finite numbers")
+    return converted
+
+
+def _assignment_prior_label(setting: AssignmentPriorSetting) -> str:
+    return ",".join(
+        (
+            f"start={_format_assignment_prior_value(setting.start_cost)}",
+            f"end={_format_assignment_prior_value(setting.end_cost)}",
+            f"gap={_format_assignment_prior_value(setting.gap_penalty)}",
+            f"threshold={_format_assignment_prior_value(setting.cost_threshold)}",
+        )
+    )
+
+
+def _format_assignment_prior_value(value: float | None) -> str:
+    if value is None:
+        return "none"
+    return f"{float(value):g}"
 
 
 def _write_stdout(
@@ -1030,6 +1745,10 @@ def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
         "training_examples",
         "positive_examples",
         "negative_examples",
+        "assignment_start_cost",
+        "assignment_end_cost",
+        "assignment_gap_penalty",
+        "assignment_cost_threshold",
     ]
     remaining = sorted({key for row in rows for key in row} - set(preferred))
     return [key for key in preferred if any(key in row for row in rows)] + remaining

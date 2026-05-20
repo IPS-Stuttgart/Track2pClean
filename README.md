@@ -82,9 +82,11 @@ If a subject directory contains `ground_truth.csv`, the benchmark can use it as
 the reference automatically. You can also point `--reference` at a
 `ground_truth.csv` file or at a separate ground-truth root and declare
 `--reference-kind manual-gt`. Ground-truth ROI indices are validated against the
-loaded Suite2p ROI indices, so references that use raw `stat.npy` row indices
-will fail clearly if Suite2p cell filtering removed any referenced ROI; use
-`--include-non-cells` when benchmarking against all `stat.npy` rows.
+loaded Suite2p ROI indices. The benchmark keeps all Suite2p `stat.npy` rows by
+default and lets calibrated costs use Suite2p `iscell` probability as a soft
+feature rather than discarding low-confidence ROIs before association. Pass
+`--no-include-non-cells` only for a legacy hard-filtered ablation; validation
+will fail clearly if such filtering removes any referenced ROI.
 
 The benchmark refuses Track2p outputs and already row-aligned Suite2p rows as
 references by default because those are not independent evidence for a
@@ -140,6 +142,24 @@ python -m bayescatrack benchmark track2p \
   --max-gap 2
 ```
 
+Add triplet-projected higher-order consistency to penalize pairwise links that
+cannot be embedded into coherent three-session paths:
+
+```bash
+python -m bayescatrack benchmark track2p \
+  --data /path/to/track2p_zenodo \
+  --method global-assignment \
+  --cost roi-aware \
+  --reference /path/to/manual_ground_truth_root \
+  --reference-kind manual-gt \
+  --transform-type fov-translation \
+  --max-gap 2 \
+  --higher-order-triplet-weight 0.25 \
+  --higher-order-support-top-k 8 \
+  --higher-order-support-cost-cap 4.0 \
+  --higher-order-max-penalty 2.0
+```
+
 Run the BayesCaTrack ROI-aware cost ablation:
 
 ```bash
@@ -166,6 +186,45 @@ python -m bayescatrack benchmark track2p \
   --transform-type fov-translation \
   --max-gap 2
 ```
+
+Run the richer LOSO calibrated-cost path with split Suite2p ROI-stat features,
+local evidence components, automatic registration selection, and the configurable
+hard-negative calibration harness:
+
+```bash
+python -m bayescatrack benchmark track2p-loso-calibration \
+  --data /path/to/track2p_zenodo \
+  --reference /path/to/manual_ground_truth_root \
+  --reference-kind manual-gt \
+  --transform-type auto \
+  --weighted-masks \
+  --pairwise-cost-kwargs-json '{"local_evidence_components": true}' \
+  --calibration-feature-set rich \
+  --calibration-model hist-gradient-boosting
+```
+
+Use calibrated candidate pruning and dynamic edge priors to reject ambiguous
+links before global assignment:
+
+```bash
+python -m bayescatrack benchmark track2p-loso-calibration \
+  --data /path/to/track2p_zenodo \
+  --reference /path/to/manual_ground_truth_root \
+  --reference-kind manual-gt \
+  --transform-type auto \
+  --include-non-cells \
+  --cell-probability-threshold 0.0 \
+  --pairwise-cost-kwargs-json '{"local_evidence_components": true}' \
+  --calibration-feature-set rich \
+  --candidate-pruning-json '{"row_top_k": 20, "column_top_k": 20, "probability_threshold": 0.1}' \
+  --dynamic-edge-prior-json '{"session_gap_weight": 0.25, "cell_probability_weight": 0.5, "registration_empty_roi_weight": 8.0}' \
+  --calibration-model hist-gradient-boosting
+```
+
+For diagnosis-first tuning, run `edge-ranking`, then select feature names with
+`bayescatrack benchmark select-edge-ranking-features`, and finally select
+benchmark variants by complete-track F1 with
+`bayescatrack benchmark select-structured-objective`.
 
 The benchmark prints a compact table by default and can also write JSON or CSV via `--format json --output results.json` or `--format csv --output results.csv`.
 
@@ -213,6 +272,19 @@ Run a reproducible benchmark suite from one JSON manifest:
       "cost": "registered-iou",
       "max_gap": 2,
       "output": "results/registered_iou.csv"
+    },
+    {
+      "name": "registered-iou-triplet",
+      "method": "global-assignment",
+      "cost": "registered-iou",
+      "max_gap": 2,
+      "higher_order_consistency_config": {
+        "triplet_weight": 0.25,
+        "support_top_k": 8,
+        "support_cost_cap": 4.0,
+        "max_penalty": 2.0
+      },
+      "output": "results/registered_iou_triplet.csv"
     }
   ],
   "comparisons": [
@@ -220,7 +292,8 @@ Run a reproducible benchmark suite from one JSON manifest:
       "name": "summary",
       "inputs": {
         "Track2p default": "track2p-default",
-        "BayesCaTrack registered IoU": "registered-iou"
+        "BayesCaTrack registered IoU": "registered-iou",
+        "BayesCaTrack triplet consistency": "registered-iou-triplet"
       },
       "output": "results/comparison.md"
     }

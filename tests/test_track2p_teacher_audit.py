@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from bayescatrack.experiments.track2p_teacher_audit import (
     TRACK2P_TEACHER_MISS_CATEGORY,
+    _parse,
     audit_track_matrices,
     format_teacher_audit_table,
     teacher_training_rows,
@@ -95,6 +96,33 @@ def test_teacher_training_rows_and_csv_output(tmp_path):
         rows = list(csv.DictReader(handle))
     assert {row["teacher_label"] for row in rows} == {"0", "1"}
     assert "teacher_label_source" in rows[0]
+
+
+def test_teacher_audit_counts_duplicate_edges_as_extra_errors():
+    result = audit_track_matrices(
+        subject="jm001",
+        session_names=("s0", "s1"),
+        ground_truth_tracks=np.asarray([[0, 0], [0, 0]], dtype=object),
+        track2p_tracks=np.asarray([[0, 0]], dtype=object),
+        bayes_tracks=np.zeros((0, 2), dtype=object),
+        restrict_to_reference_seed_rois=False,
+    )
+
+    summary = result.summary_rows[0]
+    assert summary["ground_truth_edges"] == 2
+    assert summary["track2p_edges"] == 1
+    assert summary["bayes_edges"] == 0
+    assert summary["edges_gt_track2p_not_bayes"] == 1
+    assert summary["edges_gt_not_track2p_not_bayes"] == 1
+    assert summary["track2p_vs_gt_precision"] == pytest.approx(1.0)
+    assert summary["track2p_vs_gt_recall"] == pytest.approx(0.5)
+
+
+def test_teacher_audit_parse_rejects_fractional_roi_ids():
+    assert _parse(1.0) == 1
+    assert _parse("1.0") == 1
+    assert _parse(1.5) is None
+    assert _parse("1.5") is None
 
 
 def test_format_teacher_audit_table_contains_key_debug_metric():

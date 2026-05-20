@@ -114,6 +114,7 @@ def test_default_calibrated_features_use_split_roi_stats_not_scalar_summary() ->
     assert "cell_probability_cost" in DEFAULT_ASSOCIATION_FEATURES
     for feature_name in SPLIT_ROI_STAT_FEATURES:
         assert feature_name in DEFAULT_ASSOCIATION_FEATURES
+    assert len(DEFAULT_ASSOCIATION_FEATURES) == len(set(DEFAULT_ASSOCIATION_FEATURES))
 
 
 def test_missing_indicators_cover_planes_without_suite2p_stats() -> None:

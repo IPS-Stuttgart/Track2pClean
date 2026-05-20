@@ -8,7 +8,7 @@ import csv
 import json
 import sys
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -43,14 +43,17 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     SubjectCalibrationData,
     _load_subject_calibration_data,
     _reference_training_options,
+    calibration_feature_names,
+    pairwise_cost_kwargs_for_calibration_features,
 )
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 
 # pylint: disable=too-many-arguments,too-many-locals
 def run_track2p_monotone_loso_calibration(
     config: Track2pBenchmarkConfig,
     *,
-    feature_names: Sequence[str] = DEFAULT_ASSOCIATION_FEATURES,
+    feature_names: Sequence[str] | None = None,
     monotone_options: MonotoneRankerOptions | None = None,
 ) -> LosoCalibrationResult:
     """Run LOSO global assignment with a monotone hard-negative ranking model."""
@@ -59,6 +62,15 @@ def run_track2p_monotone_loso_calibration(
         raise ValueError(
             "Monotone LOSO calibration requires method='global-assignment' and cost='calibrated'"
         )
+    feature_names = tuple(
+        DEFAULT_ASSOCIATION_FEATURES if feature_names is None else feature_names
+    )
+    config = replace(
+        config,
+        pairwise_cost_kwargs=pairwise_cost_kwargs_for_calibration_features(
+            config.pairwise_cost_kwargs, feature_names
+        ),
+    )
     subject_dirs = tuple(discover_subject_dirs(config.data))
     if len(subject_dirs) < 2:
         raise ValueError("LOSO calibration requires at least two subject directories")
@@ -74,7 +86,6 @@ def run_track2p_monotone_loso_calibration(
         subjects.append(_load_subject_calibration_data(subject_dir, config=config))
 
     options = monotone_options or MonotoneRankerOptions()
-    feature_names = tuple(feature_names)
     folds: list[LosoCalibrationFold] = []
     for held_out_index, held_out in enumerate(subjects):
         training_subjects = tuple(
@@ -119,6 +130,8 @@ def run_track2p_monotone_loso_calibration(
             "positive_examples": positives,
             "negative_examples": int(training_examples - positives),
             "calibration_model": "monotone-ranker",
+            "calibration_feature_count": int(len(feature_names)),
+            "calibration_feature_names": ",".join(feature_names),
             "monotone_feature_names": ",".join(calibrated_model.monotone_feature_names),
             "monotone_rank_constraints": int(calibrated_model.n_rank_constraints),
             "monotone_training_rank_loss": float(calibrated_model.training_rank_loss),
@@ -238,7 +251,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_TYPES,
     )
     parser.add_argument("--start-cost", type=float, default=5.0)
     parser.add_argument("--end-cost", type=float, default=5.0)
@@ -261,6 +274,31 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--velocity-variance", type=float, default=25.0)
     parser.add_argument("--regularization", type=float, default=1.0e-6)
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
+    parser.add_argument(
+        "--calibration-feature-set",
+        default="default",
+        choices=(
+            "default",
+            "split-roi",
+            "local-evidence",
+            "default+split-roi",
+            "default+local-evidence",
+            "default+split-roi+local-evidence",
+            "rich",
+        ),
+    )
+    parser.add_argument(
+        "--calibration-features",
+        default=None,
+        help="Comma-separated explicit calibrated feature names; overrides --calibration-feature-set",
+    )
+    parser.add_argument("--activity-tie-breaker-weight", type=float, default=0.0)
+    parser.add_argument("--activity-tie-breaker-component", default="activity_tiebreaker_cost")
+    parser.add_argument("--activity-trace-source", default="auto")
+    parser.add_argument("--activity-event-threshold", type=float, default=0.0)
+    parser.add_argument("--higher-order-consistency-json", default=None)
+    parser.add_argument("--candidate-pruning-json", default=None)
+    parser.add_argument("--dynamic-edge-prior-json", default=None)
     parser.add_argument("--monotone-ranker-kwargs-json", default=None)
     parser.add_argument(
         "--progress", action=argparse.BooleanOptionalAction, default=True
@@ -278,7 +316,9 @@ def main(argv: list[str] | None = None) -> int:
     rows = [
         fold.benchmark.to_dict()
         for fold in run_track2p_monotone_loso_calibration(
-            config, monotone_options=options
+            config,
+            feature_names=_feature_names_from_args(args),
+            monotone_options=options,
         ).folds
     ]
     if args.output is not None:
@@ -295,6 +335,14 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         if not isinstance(parsed, dict):
             raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
         pairwise_cost_kwargs = parsed
+    higher_order_consistency_config = None
+    if args.higher_order_consistency_json is not None:
+        parsed_higher_order = json.loads(args.higher_order_consistency_json)
+        if not isinstance(parsed_higher_order, dict):
+            raise ValueError(
+                "--higher-order-consistency-json must decode to a JSON object"
+            )
+        higher_order_consistency_config = parsed_higher_order
     return Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -324,8 +372,36 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=higher_order_consistency_config,
+        candidate_pruning_config=_json_object(
+            args.candidate_pruning_json,
+            "--candidate-pruning-json",
+        ),
+        dynamic_edge_prior_config=_json_object(
+            args.dynamic_edge_prior_json,
+            "--dynamic-edge-prior-json",
+        ),
         progress=args.progress,
     )
+
+
+def _feature_names_from_args(args: argparse.Namespace) -> tuple[str, ...]:
+    if args.calibration_features:
+        return tuple(
+            token.strip()
+            for token in args.calibration_features.split(",")
+            if token.strip()
+        )
+    return calibration_feature_names(args.calibration_feature_set)
+
+
+def _json_object(value: str | None, option_name: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{option_name} must decode to a JSON object")
+    return parsed
 
 
 def _monotone_options_from_args(args: argparse.Namespace) -> MonotoneRankerOptions:

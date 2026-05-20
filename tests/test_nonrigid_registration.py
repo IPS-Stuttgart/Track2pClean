@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.nonrigid_registration import (
     NONRIGID_REGISTRATION_TRANSFORM_TYPES,
@@ -166,6 +167,19 @@ def test_nonrigid_registration_accepts_tps_alias() -> None:
     assert registration.transform_type == "tps"
     assert registration.inverse_y.shape == reference.image_shape
     assert registration.inverse_x.shape == reference.image_shape
+
+
+def test_nonrigid_registration_rejects_unknown_options() -> None:
+    reference = _plane((72, 72), (36, 34))
+    moving = _plane((72, 72), (32, 37))
+
+    with pytest.raises(TypeError, match="typo_option"):
+        register_measurement_plane_by_nonrigid_fov(
+            reference,
+            moving,
+            transform_type="tps",
+            typo_option=True,
+        )
 
 
 def test_tps_registration_handles_lower_left_anchor_upper_right_growth() -> None:

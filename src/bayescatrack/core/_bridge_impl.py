@@ -36,6 +36,7 @@ import argparse
 import json
 import re
 import sys
+import warnings
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -216,6 +217,7 @@ class CalciumPlaneData:
         cell_probability_weight: float = 0.0,
         large_cost: float = 1.0e6,
         similarity_epsilon: float = 1.0e-6,
+        soft_iou: bool = False,
         return_components: bool = False,
     ) -> (
         np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]
@@ -242,6 +244,9 @@ class CalciumPlaneData:
         centroid_scale
             Characteristic spatial scale in pixels. If omitted, it is estimated
             from the pooled ROI areas as an equivalent-cell diameter.
+        soft_iou
+            If true, compute IoU from non-negative mask weights using
+            ``sum(min(mask_a, mask_b)) / sum(max(mask_a, mask_b))``.
         max_centroid_distance
             Optional hard gate in pixels. Pairs beyond the threshold are set to
             ``large_cost``.
@@ -297,7 +302,10 @@ class CalciumPlaneData:
             centroid_cost = zero_cost
 
         if iou_weight > 0.0 or return_components:
-            iou_matrix = _pairwise_iou_matrix(self.roi_masks, other.roi_masks)
+            if soft_iou:
+                iou_matrix = _pairwise_soft_iou_matrix(self.roi_masks, other.roi_masks)
+            else:
+                iou_matrix = _pairwise_iou_matrix(self.roi_masks, other.roi_masks)
             iou_cost = -np.log(np.clip(iou_matrix, similarity_epsilon, 1.0))
             if iou_weight > 0.0:
                 total_cost += iou_weight * iou_cost
@@ -343,25 +351,20 @@ class CalciumPlaneData:
         else:
             roi_feature_cost = zero_cost
 
-        if (
-            (cell_probability_weight > 0.0 or return_components)
-            and self.cell_probabilities is not None
-            and other.cell_probabilities is not None
-        ):
-            probabilities_self = np.clip(
-                self.cell_probabilities, similarity_epsilon, 1.0
+        if cell_probability_weight > 0.0 or return_components:
+            cell_probability_cost, cell_probability_available = (
+                _pairwise_cell_probability_cost(
+                self.cell_probabilities,
+                other.cell_probabilities,
+                cost_shape=cost_shape,
+                similarity_epsilon=similarity_epsilon,
             )
-            probabilities_other = np.clip(
-                other.cell_probabilities, similarity_epsilon, 1.0
-            )
-            cell_probability_cost = -0.5 * (
-                np.log(probabilities_self[:, None])
-                + np.log(probabilities_other[None, :])
             )
             if cell_probability_weight > 0.0:
                 total_cost += cell_probability_weight * cell_probability_cost
         else:
             cell_probability_cost = zero_cost
+            cell_probability_available = zero_cost
 
         if max_centroid_distance is not None:
             if max_centroid_distance <= 0.0:
@@ -387,6 +390,7 @@ class CalciumPlaneData:
             "area_ratio_cost": area_ratio_cost,
             "roi_feature_cost": roi_feature_cost,
             "cell_probability_cost": cell_probability_cost,
+            "cell_probability_available": cell_probability_available,
             "gated": gated.astype(bool),
         }
         return total_cost, components
@@ -709,7 +713,7 @@ def load_suite2p_plane(
 
     selected_indices: list[int] = []
     roi_masks: list[np.ndarray] = []
-    cell_probabilities: list[float] = []
+    cell_probabilities: list[float] | None = [] if iscell is not None else None
     feature_names = (
         "radius",
         "aspect_ratio",
@@ -766,7 +770,8 @@ def load_suite2p_plane(
 
         selected_indices.append(roi_index)
         roi_masks.append(mask)
-        cell_probabilities.append(probability)
+        if cell_probabilities is not None:
+            cell_probabilities.append(probability)
         for feature_name in feature_names:
             collected_features[feature_name].append(
                 float(roi_stat.get(feature_name, np.nan))
@@ -778,8 +783,8 @@ def load_suite2p_plane(
     selected_indices_array = np.asarray(selected_indices, dtype=int)
     probability_array = (
         np.asarray(cell_probabilities, dtype=float)
-        if roi_masks
-        else np.zeros((0,), dtype=float)
+        if cell_probabilities is not None
+        else None
     )
     feature_arrays = {
         key: np.asarray(value, dtype=float)
@@ -873,9 +878,16 @@ def load_track2p_subject(
     plane_name: str = "plane0",
     input_format: str = "auto",
     include_behavior: bool = True,
+    strict: bool = False,
     **suite2p_kwargs: Any,
 ) -> list[Track2pSession]:
-    """Load all sessions of one Track2p-style subject folder."""
+    """Load all sessions of one Track2p-style subject folder.
+
+    In ``auto`` mode, recognized session folders without loadable data for the
+    requested plane are skipped with a warning by default. Set ``strict=True``
+    to raise :class:`FileNotFoundError` instead so incomplete benchmark inputs
+    cannot silently reduce the number of evaluated sessions.
+    """
 
     if input_format not in {"auto", "suite2p", "npy"}:
         raise ValueError("input_format must be 'auto', 'suite2p', or 'npy'")
@@ -894,9 +906,18 @@ def load_track2p_subject(
 
         if plane_data is None:
             if input_format == "auto":
-                continue
+                message = (
+                    "Skipping recognized Track2p session "
+                    f"'{session_dir.name}' for plane '{plane_name}' because "
+                    f"neither '{suite2p_plane_dir}' nor '{npy_plane_dir}' exists"
+                )
+                if not strict:
+                    warnings.warn(message, RuntimeWarning, stacklevel=2)
+                    continue
+                raise FileNotFoundError(message)
             raise FileNotFoundError(
-                f"Could not find {input_format} data for session '{session_dir.name}' and plane '{plane_name}'"
+                f"Could not find {input_format} data for session "
+                f"'{session_dir.name}' and plane '{plane_name}'"
             )
 
         motion_energy = None
@@ -1107,7 +1128,7 @@ def export_subject_to_npz(
 
     payload: dict[str, np.ndarray] = {
         "session_names": np.asarray(
-            [session.session_name for session in sessions], dtype=object
+            [session.session_name for session in sessions], dtype=np.str_
         ),
         "session_dates": np.asarray(
             [
@@ -1118,10 +1139,10 @@ def export_subject_to_npz(
                 )
                 for session in sessions
             ],
-            dtype=object,
+            dtype=np.str_,
         ),
-        "plane_name": np.asarray(plane_name, dtype=object),
-        "input_format": np.asarray(input_format, dtype=object),
+        "plane_name": np.asarray(str(plane_name), dtype=np.str_),
+        "input_format": np.asarray(str(input_format), dtype=np.str_),
     }
 
     summary_sessions: list[dict[str, Any]] = []
@@ -1267,6 +1288,42 @@ def _ensure_finite_cost_matrix(
     return sanitized
 
 
+def _pairwise_cell_probability_cost(
+    reference_probabilities: np.ndarray | None,
+    measurement_probabilities: np.ndarray | None,
+    *,
+    cost_shape: tuple[int, int],
+    similarity_epsilon: float,
+) -> np.ndarray:
+    cost = np.zeros(cost_shape, dtype=float)
+    if reference_probabilities is None or measurement_probabilities is None:
+        return cost
+
+    reference_probabilities = np.asarray(reference_probabilities, dtype=float)
+    measurement_probabilities = np.asarray(measurement_probabilities, dtype=float)
+    if reference_probabilities.shape != (cost_shape[0],):
+        raise ValueError("reference cell probabilities must match reference ROIs")
+    if measurement_probabilities.shape != (cost_shape[1],):
+        raise ValueError("measurement cell probabilities must match measurement ROIs")
+
+    finite_reference = np.isfinite(reference_probabilities)
+    finite_measurement = np.isfinite(measurement_probabilities)
+    if not np.any(finite_reference) or not np.any(finite_measurement):
+        return cost
+
+    probabilities_reference = np.clip(
+        reference_probabilities[finite_reference], similarity_epsilon, 1.0
+    )
+    probabilities_measurement = np.clip(
+        measurement_probabilities[finite_measurement], similarity_epsilon, 1.0
+    )
+    cost[np.ix_(finite_reference, finite_measurement)] = -0.5 * (
+        np.log(probabilities_reference[:, None])
+        + np.log(probabilities_measurement[None, :])
+    )
+    return cost
+
+
 def _estimate_default_centroid_scale(
     reference_plane: CalciumPlaneData,
     measurement_plane: CalciumPlaneData,
@@ -1304,6 +1361,98 @@ def _pairwise_iou_matrix(
     valid = unions > 0.0
     iou[valid] = intersections[valid] / unions[valid]
     return iou
+
+
+def _pairwise_soft_iou_matrix(
+    reference_masks: np.ndarray, measurement_masks: np.ndarray
+) -> np.ndarray:
+    """Return weighted Jaccard overlap for non-negative ROI mask weights.
+
+    The binary IoU path intentionally measures support overlap. This soft variant
+    keeps Suite2p ``lam`` values meaningful when ``--weighted-masks`` is used by
+    replacing support intersections/unions with per-pixel min/max sums.
+    """
+    reference_array = _nonnegative_mask_array(reference_masks)
+    measurement_array = _nonnegative_mask_array(measurement_masks)
+    if reference_array.shape[1:] != measurement_array.shape[1:]:
+        raise ValueError("Mask stacks must have matching spatial shapes")
+    intersections = _pairwise_sparse_mask_min_sum(reference_array, measurement_array)
+    areas_reference = np.sum(reference_array, axis=(1, 2), dtype=float)
+    areas_measurement = np.sum(measurement_array, axis=(1, 2), dtype=float)
+    unions = areas_reference[:, None] + areas_measurement[None, :] - intersections
+    iou = np.zeros_like(intersections, dtype=float)
+    valid = unions > 0.0
+    iou[valid] = intersections[valid] / unions[valid]
+    return np.clip(iou, 0.0, 1.0)
+
+
+def _nonnegative_mask_array(masks: np.ndarray) -> np.ndarray:
+    mask_array = np.asarray(masks, dtype=float)
+    if mask_array.ndim != 3:
+        raise ValueError("masks must have shape (n_roi, height, width)")
+    return np.nan_to_num(
+        np.maximum(mask_array, 0.0), nan=0.0, posinf=1.0e6, neginf=0.0
+    )
+
+
+def _pairwise_sparse_mask_min_sum(
+    reference_masks: np.ndarray, measurement_masks: np.ndarray
+) -> np.ndarray:
+    reference_array = np.asarray(reference_masks, dtype=float)
+    measurement_array = np.asarray(measurement_masks, dtype=float)
+    if reference_array.shape[1:] != measurement_array.shape[1:]:
+        raise ValueError("Mask stacks must have matching spatial shapes")
+    n_reference = int(reference_array.shape[0])
+    n_measurement = int(measurement_array.shape[0])
+    result = np.zeros((n_reference, n_measurement), dtype=float)
+    if n_reference == 0 or n_measurement == 0:
+        return result
+
+    reference_flat = reference_array.reshape(n_reference, -1)
+    measurement_flat = measurement_array.reshape(n_measurement, -1)
+    reference_roi, reference_pixel = np.nonzero(reference_flat > 0.0)
+    measurement_roi, measurement_pixel = np.nonzero(measurement_flat > 0.0)
+    if reference_pixel.size == 0 or measurement_pixel.size == 0:
+        return result
+    reference_values = reference_flat[reference_roi, reference_pixel]
+    measurement_values = measurement_flat[measurement_roi, measurement_pixel]
+
+    reference_order = np.argsort(reference_pixel, kind="stable")
+    measurement_order = np.argsort(measurement_pixel, kind="stable")
+    reference_pixel = reference_pixel[reference_order]
+    reference_roi = reference_roi[reference_order]
+    reference_values = reference_values[reference_order]
+    measurement_pixel = measurement_pixel[measurement_order]
+    measurement_roi = measurement_roi[measurement_order]
+    measurement_values = measurement_values[measurement_order]
+
+    reference_index = 0
+    measurement_index = 0
+    while (
+        reference_index < reference_pixel.size
+        and measurement_index < measurement_pixel.size
+    ):
+        reference_current_pixel = reference_pixel[reference_index]
+        measurement_current_pixel = measurement_pixel[measurement_index]
+        if reference_current_pixel < measurement_current_pixel:
+            reference_index = _advance_equal_values(reference_pixel, reference_index)
+            continue
+        if measurement_current_pixel < reference_current_pixel:
+            measurement_index = _advance_equal_values(measurement_pixel, measurement_index)
+            continue
+        reference_stop = _advance_equal_values(reference_pixel, reference_index)
+        measurement_stop = _advance_equal_values(measurement_pixel, measurement_index)
+        reference_slice = slice(reference_index, reference_stop)
+        measurement_slice = slice(measurement_index, measurement_stop)
+        result[
+            np.ix_(reference_roi[reference_slice], measurement_roi[measurement_slice])
+        ] += np.minimum(
+            reference_values[reference_slice, None],
+            measurement_values[measurement_slice][None, :],
+        )
+        reference_index = reference_stop
+        measurement_index = measurement_stop
+    return result
 
 
 def _pairwise_sparse_mask_dot(
@@ -1486,6 +1635,49 @@ def _pairwise_mask_cosine_similarity(
     return numerator / denominator
 
 
+def _pairwise_cell_probability_cost(
+    probabilities_self: np.ndarray | None,
+    probabilities_other: np.ndarray | None,
+    *,
+    cost_shape: tuple[int, int],
+    similarity_epsilon: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return optional cell-probability costs plus an availability indicator."""
+
+    zero_cost = np.zeros(cost_shape, dtype=float)
+    zero_available = np.zeros(cost_shape, dtype=float)
+    if probabilities_self is None or probabilities_other is None:
+        return zero_cost, zero_available
+
+    probabilities_self = np.asarray(probabilities_self, dtype=float).reshape(-1)
+    probabilities_other = np.asarray(probabilities_other, dtype=float).reshape(-1)
+    if probabilities_self.shape != (cost_shape[0],):
+        raise ValueError(
+            "cell_probabilities for the reference plane must have shape (n_roi,)"
+        )
+    if probabilities_other.shape != (cost_shape[1],):
+        raise ValueError(
+            "cell_probabilities for the measurement plane must have shape (n_roi,)"
+        )
+
+    valid_self = np.isfinite(probabilities_self) & (probabilities_self >= 0.0)
+    valid_other = np.isfinite(probabilities_other) & (probabilities_other >= 0.0)
+    available = valid_self[:, None] & valid_other[None, :]
+    if not np.any(available):
+        return zero_cost, zero_available
+
+    clipped_self = np.clip(probabilities_self, similarity_epsilon, 1.0)
+    clipped_other = np.clip(probabilities_other, similarity_epsilon, 1.0)
+    raw_cost = -0.5 * (
+        np.log(clipped_self[:, None])
+        + np.log(clipped_other[None, :])
+    )
+
+    cost = np.zeros(cost_shape, dtype=float)
+    cost[available] = raw_cost[available]
+    return cost, available.astype(float)
+
+
 # pylint: disable=too-many-locals
 def _pairwise_roi_feature_distance(
     reference_plane: CalciumPlaneData,
@@ -1517,7 +1709,7 @@ def _pairwise_roi_feature_distance(
     feature_distance = np.zeros(
         (reference_plane.n_rois, measurement_plane.n_rois), dtype=float
     )
-    used_feature_dims = 0
+    valid_feature_dims = np.zeros_like(feature_distance, dtype=int)
 
     for feature_name in feature_names:
         reference_feature = np.asarray(
@@ -1551,12 +1743,17 @@ def _pairwise_roi_feature_distance(
                 np.abs(reference_values[:, None] - measurement_values[None, :])[valid]
                 / feature_scale
             )
-            feature_distance += diff
-            used_feature_dims += 1
+            feature_distance[valid] += diff[valid]
+            valid_feature_dims[valid] += 1
 
-    if used_feature_dims == 0:
-        return np.zeros((reference_plane.n_rois, measurement_plane.n_rois), dtype=float)
-    return feature_distance / used_feature_dims
+    valid_pairs = valid_feature_dims > 0
+    if not np.any(valid_pairs):
+        return np.ones((reference_plane.n_rois, measurement_plane.n_rois), dtype=float)
+    normalized_feature_distance = np.ones_like(feature_distance)
+    normalized_feature_distance[valid_pairs] = (
+        feature_distance[valid_pairs] / valid_feature_dims[valid_pairs]
+    )
+    return normalized_feature_distance
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

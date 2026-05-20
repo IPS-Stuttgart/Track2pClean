@@ -20,6 +20,7 @@ from bayescatrack.nonrigid_registration import (
 )
 
 RegistrationTransform = Literal[
+    "auto",
     "affine",
     "rigid",
     "fov-translation",
@@ -34,6 +35,7 @@ RegistrationTransform = Literal[
     "none",
 ]
 REGISTRATION_TRANSFORM_TYPES: tuple[str, ...] = (
+    "auto",
     "affine",
     "rigid",
     "fov-translation",
@@ -164,6 +166,13 @@ def register_plane_pair(
     if transform_type not in REGISTRATION_TRANSFORM_TYPES:
         valid_types = ", ".join(repr(value) for value in REGISTRATION_TRANSFORM_TYPES)
         raise ValueError(f"transform_type must be one of {valid_types}")
+    if transform_type == "auto":
+        from bayescatrack.registration_selection import select_registration_transform
+
+        return select_registration_transform(
+            reference_plane,
+            moving_plane,
+        ).registered_plane
     if transform_type == "none":
         if reference_plane.image_shape != moving_plane.image_shape:
             raise ValueError("transform_type='none' requires matching image shapes")
@@ -307,4 +316,26 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
         sessions,
         measurement_planes_in_reference_frames=registered_measurement_planes,
         **association_kwargs,
+    )
+
+
+def _with_auto_registration_metadata(
+    plane: CalciumPlaneData,
+    *,
+    selected_transform: str,
+    attempts: Sequence[Mapping[str, object]],
+) -> CalciumPlaneData:
+    ops = {} if plane.ops is None else dict(plane.ops)
+    ops.update(
+        {
+            "registration_transform_type": "auto",
+            "auto_registration_selected_transform": selected_transform,
+            "auto_registration_candidate_scores": tuple(dict(attempt) for attempt in attempts),
+        }
+    )
+    return plane.with_replaced_masks(
+        plane.roi_masks,
+        fov=plane.fov,
+        source=plane.source,
+        ops=ops,
     )

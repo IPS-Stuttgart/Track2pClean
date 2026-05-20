@@ -57,3 +57,18 @@ def test_score_track_matrices_respects_duplicate_scoring_with_session_subsets():
     assert scores["complete_track_false_positives"] == 1
     assert scores["complete_track_false_negatives"] == 0
     assert scores["complete_track_f1"] == pytest.approx(2.0 / 3.0)
+
+
+def test_score_track_matrices_reports_zero_f1_when_no_links_match():
+    reference = np.array([[0, 10]], dtype=object)
+    predicted = np.array([[1, 11]], dtype=object)
+
+    scores = score_track_matrices(predicted, reference)
+
+    assert scores["pairwise_true_positives"] == 0
+    assert scores["pairwise_false_positives"] == 1
+    assert scores["pairwise_false_negatives"] == 1
+    assert scores["pairwise_precision"] == pytest.approx(0.0)
+    assert scores["pairwise_recall"] == pytest.approx(0.0)
+    assert scores["pairwise_f1"] == pytest.approx(0.0)
+    assert scores["complete_track_f1"] == pytest.approx(0.0)

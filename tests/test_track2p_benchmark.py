@@ -6,10 +6,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from bayescatrack.experiments import track2p_benchmark as benchmark_module
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
+    build_arg_parser,
     format_benchmark_table,
     run_track2p_benchmark,
+    solve_configured_global_assignment,
 )
 
 
@@ -313,11 +316,14 @@ def test_ground_truth_csv_validation_catches_filtered_stat_rows(tmp_path):
         subject_dir, ("2024-05-01_a", "2024-05-02_a"), ((0, 0), (1, 1))
     )
 
-    config = Track2pBenchmarkConfig(
-        data=subject_dir, method="track2p-baseline", input_format="suite2p"
+    hard_filter_config = Track2pBenchmarkConfig(
+        data=subject_dir,
+        method="track2p-baseline",
+        input_format="suite2p",
+        include_non_cells=False,
     )
-    with pytest.raises(ValueError, match="--include-non-cells"):
-        run_track2p_benchmark(config)
+    with pytest.raises(ValueError, match="--no-include-non-cells"):
+        run_track2p_benchmark(hard_filter_config)
 
     rows = run_track2p_benchmark(
         Track2pBenchmarkConfig(
@@ -333,6 +339,26 @@ def test_ground_truth_csv_validation_catches_filtered_stat_rows(tmp_path):
     assert result["pairwise_recall"] == pytest.approx(1.0)
     assert result["pairwise_precision"] == pytest.approx(1.0)
     assert result["dropped_prediction_tracks"] == 1
+
+
+def test_benchmark_cli_keeps_suite2p_non_cells_by_default(tmp_path):
+    parser = build_arg_parser()
+
+    default_args = parser.parse_args(
+        ["--data", str(tmp_path), "--method", "track2p-baseline"]
+    )
+    assert default_args.include_non_cells is True
+
+    hard_filter_args = parser.parse_args(
+        [
+            "--data",
+            str(tmp_path),
+            "--method",
+            "track2p-baseline",
+            "--no-include-non-cells",
+        ]
+    )
+    assert hard_filter_args.include_non_cells is False
 
 
 def test_ground_truth_scoring_filters_predictions_to_reference_seed_rois(tmp_path):
@@ -391,3 +417,69 @@ def test_global_assignment_benchmark_uses_skip_edges(
     assert result["pairwise_f1"] == pytest.approx(2 / 3)
     assert result["complete_track_f1"] == pytest.approx(2 / 3)
     assert result["complete_tracks"] == 1
+
+
+def test_benchmark_cli_parses_higher_order_consistency_config():
+    parser = build_arg_parser()
+    args = parser.parse_args(
+        [
+            "--data",
+            "/tmp/track2p",
+            "--method",
+            "global-assignment",
+            "--higher-order-consistency-json",
+            '{"support_top_k": 4, "support_cost_cap": 3.5}',
+            "--higher-order-triplet-weight",
+            "0.25",
+            "--higher-order-max-penalty",
+            "1.75",
+            "--higher-order-large-cost",
+            "1234.0",
+            "--no-progress",
+        ]
+    )
+
+    config = benchmark_module._config_from_args(args)
+
+    assert config.higher_order_consistency_config == {
+        "support_top_k": 4,
+        "support_cost_cap": 3.5,
+        "triplet_weight": 0.25,
+        "max_penalty": 1.75,
+        "large_cost": 1234.0,
+    }
+
+
+def test_configured_global_assignment_forwards_higher_order_consistency_config(
+    monkeypatch,
+):
+    seen = {}
+
+    def fake_solve_global_assignment_for_sessions(sessions, **kwargs):
+        seen["sessions"] = sessions
+        seen.update(kwargs)
+        return "assignment"
+
+    monkeypatch.setattr(
+        benchmark_module,
+        "solve_global_assignment_for_sessions",
+        fake_solve_global_assignment_for_sessions,
+    )
+    higher_order_config = {
+        "triplet_weight": 0.25,
+        "support_top_k": 8,
+        "support_cost_cap": 4.0,
+        "max_penalty": 2.0,
+    }
+    config = Track2pBenchmarkConfig(
+        data=Path("."),
+        method="global-assignment",
+        higher_order_consistency_config=higher_order_config,
+    )
+    sessions = [object()]
+
+    result = solve_configured_global_assignment(sessions, config)
+
+    assert result == "assignment"
+    assert seen["sessions"] == sessions
+    assert seen["higher_order_consistency_config"] == higher_order_config

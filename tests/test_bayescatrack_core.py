@@ -2,7 +2,8 @@ import json
 
 import numpy as np
 import numpy.testing as npt
-from bayescatrack import CalciumPlaneData
+import pytest
+from bayescatrack import CalciumPlaneData, load_track2p_subject
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
@@ -13,6 +14,15 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     pairwise_cost_kwargs_for_calibration_features,
 )
 from tests._support import run_module
+
+
+def _write_minimal_raw_npy_plane(plane_dir):
+    plane_dir.mkdir(parents=True)
+    roi_masks: np.ndarray = np.zeros((1, 2, 2), dtype=bool)
+    roi_masks[0, 0, 1] = True
+    np.save(plane_dir / "rois.npy", roi_masks)
+    np.save(plane_dir / "F.npy", np.array([[1.0, 2.0, 3.0]], dtype=float))
+    np.save(plane_dir / "fov.npy", np.ones((2, 2), dtype=float))
 
 
 def test_calcium_plane_data_builds_measurements_and_state_moments():
@@ -44,7 +54,7 @@ def test_local_image_and_weighted_mask_evidence_components_rank_diagonal_pairs()
     reference = CalciumPlaneData(roi_masks=reference_masks, fov=fov)
     measurement = CalciumPlaneData(roi_masks=measurement_masks, fov=fov.copy())
 
-    # Local-evidence kwargs are installed by BayesCaTrack's compatibility patch.
+    # Local-evidence kwargs are installed by BayesCaTrack's core bridge support.
     # pylint: disable=unexpected-keyword-arg
     cost, components = reference.build_pairwise_cost_matrix(
         measurement,
@@ -112,6 +122,27 @@ def test_local_evidence_calibration_feature_preset_enables_components():
     assert local_kwargs == {"patch_radius": 3, "local_evidence_components": True}
 
 
+def test_load_track2p_subject_auto_warns_before_skipping_missing_session(tmp_path):
+    subject_dir = tmp_path / "jm123"
+    _write_minimal_raw_npy_plane(
+        subject_dir / "2024-05-01_a" / "data_npy" / "plane0"
+    )
+    (subject_dir / "2024-05-02_missing").mkdir(parents=True)
+
+    with pytest.warns(RuntimeWarning, match="2024-05-02_missing"):
+        sessions = load_track2p_subject(subject_dir)
+
+    assert [session.session_name for session in sessions] == ["2024-05-01_a"]
+
+
+def test_load_track2p_subject_auto_strict_raises_on_missing_session(tmp_path):
+    subject_dir = tmp_path / "jm123"
+    (subject_dir / "2024-05-02_missing").mkdir(parents=True)
+
+    with pytest.raises(FileNotFoundError, match="2024-05-02_missing"):
+        load_track2p_subject(subject_dir, strict=True)
+
+
 def test_cli_summary_and_export(tmp_path):
     subject_dir = tmp_path / "jm123"
     plane_dir = subject_dir / "2024-05-01_a" / "data_npy" / "plane0"
@@ -134,3 +165,15 @@ def test_cli_summary_and_export(tmp_path):
     export_summary = json.loads(export_proc.stdout)
     assert export_summary["n_sessions"] == 1
     assert output_path.exists()
+
+    with np.load(output_path, allow_pickle=False) as exported:
+        for metadata_key in (
+            "session_names",
+            "session_dates",
+            "plane_name",
+            "input_format",
+        ):
+            assert exported[metadata_key].dtype.kind == "U"
+
+        assert exported["session_names"].tolist() == ["2024-05-01_a"]
+        assert exported["session_dates"].tolist() == ["2024-05-01"]

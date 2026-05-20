@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from bayescatrack.analysis.growth import (
+    _optional_roi,
     affine_growth_summaries,
     radial_displacement_rows,
     radial_growth_summaries,
@@ -90,6 +91,17 @@ def test_affine_growth_summary_recovers_scale_and_translation():
     assert summary.determinant == pytest.approx(4.0)
     assert summary.isotropic_scale == pytest.approx(2.0)
     assert summary.residual_rmse == pytest.approx(0.0)
+
+
+def test_growth_optional_roi_rejects_fractional_values():
+    assert _optional_roi(1) == 1
+    assert _optional_roi(1.0) == 1
+    assert _optional_roi("1.0") == 1
+    with pytest.raises(ValueError, match="integer-like"):
+        _optional_roi(1.5)
+    with pytest.raises(ValueError, match="integer-like"):
+        _optional_roi("1.5")
+    assert _optional_roi("nan") is None
 
 
 def test_growth_cli_help_is_registered():

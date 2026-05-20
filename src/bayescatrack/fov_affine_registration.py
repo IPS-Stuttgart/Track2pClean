@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
@@ -37,6 +38,7 @@ def register_measurement_plane_by_fov_affine(
     grid_shape: tuple[int, int] = (3, 3),
     min_tile_size: int = 32,
     max_shift_fraction: float = 0.55,
+    mask_warp_mode: Literal["nearest", "bilinear"] = "nearest",
 ) -> FovAffineRegistration:
     if reference_plane.fov is None or measurement_plane.fov is None:
         raise ValueError(
@@ -54,6 +56,20 @@ def register_measurement_plane_by_fov_affine(
         measurement_plane.roi_masks,
         estimate.matrix_xy,
         output_shape=reference_plane.image_shape,
+        mode=mask_warp_mode,
+    )
+    registered_fov = apply_affine_image_warp(
+        measurement_plane.fov,
+        estimate.matrix_xy,
+        output_shape=reference_plane.image_shape,
+        fill_value=0.0,
+    )
+    registered_fov[np.abs(registered_fov) < 1.0e-12] = 0.0
+    rounded_registered_fov = np.rint(registered_fov)
+    registered_fov = np.where(
+        np.abs(registered_fov - rounded_registered_fov) < 1.0e-12,
+        rounded_registered_fov,
+        registered_fov,
     )
     ops = {} if measurement_plane.ops is None else dict(measurement_plane.ops)
     ops.update(
@@ -70,7 +86,7 @@ def register_measurement_plane_by_fov_affine(
     )
     registered_plane = measurement_plane.with_replaced_masks(
         masks,
-        fov=reference_plane.fov,
+        fov=registered_fov,
         source=f"{measurement_plane.source}_fov_affine_registered",
         ops=ops,
     )
@@ -110,6 +126,14 @@ def estimate_fov_affine_transform(
         return _translation_estimate(
             reference, measurement, subtract_mean=subtract_mean
         )
+    translation_estimate = _translation_estimate(
+        reference, measurement, subtract_mean=subtract_mean
+    )
+    if _tile_shifts_support_global_translation(
+        shifts_yx,
+        translation_estimate.tile_shift_yx[0],
+    ):
+        return translation_estimate
     coef, _, _, _ = np.linalg.lstsq(_design(meas_xy), ref_xy, rcond=None)
     matrix_xy = np.asarray(coef.T, dtype=float)
     residual = _design(meas_xy) @ coef - ref_xy
@@ -139,11 +163,60 @@ def estimate_fov_affine_transform(
     return estimate
 
 
+def apply_affine_image_warp(
+    image: np.ndarray,
+    matrix_xy: np.ndarray,
+    *,
+    output_shape: tuple[int, int],
+    fill_value: float | bool = 0.0,
+    interpolation: str = "bilinear",
+) -> np.ndarray:
+    """Warp a 2-D image into the reference frame by inverse resampling.
+
+    ``matrix_xy`` maps measurement/source ``(x, y)`` coordinates to
+    reference/destination coordinates. Sampling the destination grid through the
+    inverse transform avoids holes from forward splatting under rotations,
+    shears, and scale changes.
+    """
+
+    image = np.asarray(image)
+    matrix_xy = np.asarray(matrix_xy, dtype=float)
+    if image.ndim != 2:
+        raise ValueError("image must have shape (height, width)")
+    if matrix_xy.shape != (2, 3):
+        raise ValueError("matrix_xy must have shape (2, 3)")
+    if interpolation not in {"nearest", "bilinear"}:
+        raise ValueError("interpolation must be either 'nearest' or 'bilinear'")
+
+    output_shape = (int(output_shape[0]), int(output_shape[1]))
+    source_y, source_x, valid = _affine_output_sample_coordinates(
+        matrix_xy,
+        source_shape=image.shape,
+        output_shape=output_shape,
+    )
+    if interpolation == "nearest":
+        return _nearest_sample_image(
+            image,
+            source_y,
+            source_x,
+            valid,
+            fill_value=fill_value,
+        )
+    return _bilinear_sample_image(
+        image,
+        source_y,
+        source_x,
+        valid,
+        fill_value=float(fill_value),
+    )
+
+
 def apply_affine_roi_mask_warp(
     roi_masks: np.ndarray,
     matrix_xy: np.ndarray,
     *,
     output_shape: tuple[int, int],
+    mode: Literal["nearest", "bilinear"] = "nearest",
 ) -> np.ndarray:
     roi_masks = np.asarray(roi_masks)
     matrix_xy = np.asarray(matrix_xy, dtype=float)
@@ -151,9 +224,64 @@ def apply_affine_roi_mask_warp(
         raise ValueError("roi_masks must have shape (n_roi, height, width)")
     if matrix_xy.shape != (2, 3):
         raise ValueError("matrix_xy must have shape (2, 3)")
+    if mode not in {"nearest", "bilinear"}:
+        raise ValueError("mode must be either 'nearest' or 'bilinear'")
+    if mode == "bilinear":
+        return _apply_affine_roi_mask_warp_bilinear(
+            roi_masks,
+            matrix_xy,
+            output_shape=output_shape,
+        )
+
+    source_y, source_x, valid = _affine_output_sample_coordinates(
+        matrix_xy,
+        source_shape=(int(roi_masks.shape[1]), int(roi_masks.shape[2])),
+        output_shape=output_shape,
+    )
     output = np.zeros(
         (roi_masks.shape[0], int(output_shape[0]), int(output_shape[1])),
         dtype=roi_masks.dtype,
+    )
+    if roi_masks.dtype == np.bool_:
+        nearest_y = np.zeros(source_y.shape, dtype=int)
+        nearest_x = np.zeros(source_x.shape, dtype=int)
+        nearest_y[valid] = np.clip(
+            np.rint(source_y[valid]).astype(int), 0, roi_masks.shape[1] - 1
+        )
+        nearest_x[valid] = np.clip(
+            np.rint(source_x[valid]).astype(int), 0, roi_masks.shape[2] - 1
+        )
+        for roi_index, mask in enumerate(roi_masks):
+            sampled = np.zeros(output_shape, dtype=bool)
+            sampled[valid] = mask[nearest_y[valid], nearest_x[valid]] > 0
+            output[roi_index] = sampled
+        return output
+
+    for roi_index, mask in enumerate(roi_masks):
+        sampled = _bilinear_sample_image(
+            np.asarray(mask, dtype=float),
+            source_y,
+            source_x,
+            valid,
+            fill_value=0.0,
+        )
+        output[roi_index] = sampled.astype(output.dtype, copy=False)
+    return output
+
+
+def _apply_affine_roi_mask_warp_bilinear(
+    roi_masks: np.ndarray,
+    matrix_xy: np.ndarray,
+    *,
+    output_shape: tuple[int, int],
+) -> np.ndarray:
+    """Splat ROI pixels with bilinear weights to preserve soft mask evidence."""
+
+    roi_masks = np.asarray(roi_masks)
+    matrix_xy = np.asarray(matrix_xy, dtype=float)
+    output = np.zeros(
+        (roi_masks.shape[0], int(output_shape[0]), int(output_shape[1])),
+        dtype=float,
     )
     linear = matrix_xy[:, :2]
     offset = matrix_xy[:, 2]
@@ -163,16 +291,106 @@ def apply_affine_roi_mask_warp(
             continue
         src_xy = np.column_stack((xx.astype(float), yy.astype(float)))
         dst_xy = src_xy @ linear.T + offset[None, :]
-        x = np.rint(dst_xy[:, 0]).astype(int)
-        y = np.rint(dst_xy[:, 1]).astype(int)
-        valid = (x >= 0) & (x < output.shape[2]) & (y >= 0) & (y < output.shape[1])
-        if not np.any(valid):
-            continue
-        if roi_masks.dtype == np.bool_:
-            output[roi_index, y[valid], x[valid]] = True
-        else:
-            values = np.asarray(mask[yy[valid], xx[valid]], dtype=output.dtype)
-            np.maximum.at(output[roi_index], (y[valid], x[valid]), values)
+        values = np.asarray(mask[yy, xx], dtype=float)
+        _bilinear_splat(output[roi_index], dst_xy[:, 0], dst_xy[:, 1], values)
+    return output
+
+
+def _bilinear_splat(
+    image: np.ndarray, x: np.ndarray, y: np.ndarray, values: np.ndarray
+) -> None:
+    height, width = image.shape
+    x0 = np.floor(x).astype(int)
+    y0 = np.floor(y).astype(int)
+    for dx in (0, 1):
+        for dy in (0, 1):
+            xi = x0 + dx
+            yi = y0 + dy
+            valid = (xi >= 0) & (xi < width) & (yi >= 0) & (yi < height)
+            if not np.any(valid):
+                continue
+            wx = 1.0 - np.abs(x[valid] - xi[valid])
+            wy = 1.0 - np.abs(y[valid] - yi[valid])
+            weights = np.clip(wx, 0.0, 1.0) * np.clip(wy, 0.0, 1.0)
+            np.add.at(image, (yi[valid], xi[valid]), values[valid] * weights)
+
+
+def _affine_output_sample_coordinates(
+    matrix_xy: np.ndarray,
+    *,
+    source_shape: tuple[int, int],
+    output_shape: tuple[int, int],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    inverse_xy = invert_affine_xy(matrix_xy)
+    yy, xx = np.indices(
+        (int(output_shape[0]), int(output_shape[1])),
+        dtype=float,
+    )
+    query_xy = np.column_stack((xx.ravel(), yy.ravel()))
+    source_xy = (
+        query_xy @ np.asarray(inverse_xy[:, :2], dtype=float).T
+        + np.asarray(inverse_xy[:, 2], dtype=float)[None, :]
+    )
+    source_x = source_xy[:, 0].reshape(output_shape)
+    source_y = source_xy[:, 1].reshape(output_shape)
+    valid = (
+        np.isfinite(source_y)
+        & np.isfinite(source_x)
+        & (source_y >= 0.0)
+        & (source_x >= 0.0)
+        & (source_y <= max(int(source_shape[0]) - 1, 0))
+        & (source_x <= max(int(source_shape[1]) - 1, 0))
+    )
+    return source_y, source_x, valid
+
+
+def _nearest_sample_image(
+    image: np.ndarray,
+    source_y: np.ndarray,
+    source_x: np.ndarray,
+    valid: np.ndarray,
+    *,
+    fill_value: float | bool,
+) -> np.ndarray:
+    output = np.full(source_y.shape, fill_value, dtype=image.dtype)
+    if not np.any(valid):
+        return output
+    y = np.rint(source_y[valid]).astype(int)
+    x = np.rint(source_x[valid]).astype(int)
+    y = np.clip(y, 0, image.shape[0] - 1)
+    x = np.clip(x, 0, image.shape[1] - 1)
+    output[valid] = image[y, x]
+    return output
+
+
+def _bilinear_sample_image(
+    image: np.ndarray,
+    source_y: np.ndarray,
+    source_x: np.ndarray,
+    valid: np.ndarray,
+    *,
+    fill_value: float,
+) -> np.ndarray:
+    output = np.full(source_y.shape, float(fill_value), dtype=float)
+    if not np.any(valid):
+        return output
+
+    y = source_y[valid]
+    x = source_x[valid]
+    y0 = np.floor(y).astype(int)
+    x0 = np.floor(x).astype(int)
+    y1 = np.clip(y0 + 1, 0, image.shape[0] - 1)
+    x1 = np.clip(x0 + 1, 0, image.shape[1] - 1)
+    y0 = np.clip(y0, 0, image.shape[0] - 1)
+    x0 = np.clip(x0, 0, image.shape[1] - 1)
+    wy = y - y0
+    wx = x - x0
+    output[valid] = (
+        (1.0 - wy) * (1.0 - wx) * image[y0, x0]
+        + (1.0 - wy) * wx * image[y0, x1]
+        + wy * (1.0 - wx) * image[y1, x0]
+        + wy * wx * image[y1, x1]
+    )
     return output
 
 
@@ -255,7 +473,21 @@ def _translation_estimate(reference, measurement, *, subtract_mean):
     )
 
 
+def _tile_shifts_support_global_translation(
+    shifts_yx: np.ndarray, global_shift_yx: np.ndarray
+) -> bool:
+    shifts_yx = np.asarray(shifts_yx, dtype=float)
+    if shifts_yx.size == 0:
+        return False
+    global_shift_yx = np.rint(np.asarray(global_shift_yx, dtype=float)).astype(int)
+    rounded_shifts = np.rint(shifts_yx).astype(int)
+    matches = np.all(rounded_shifts == global_shift_yx[None, :], axis=1)
+    min_matches = max(3, int(np.ceil(0.75 * rounded_shifts.shape[0])))
+    return int(np.count_nonzero(matches)) >= min_matches
+
+
 def _make_estimate(matrix_xy, ref_xy, meas_xy, shifts_yx, peaks, residual, fallback):
+    matrix_xy = _snap_near_integer_affine(matrix_xy)
     residual_norm = (
         np.linalg.norm(residual, axis=1)
         if residual.size
@@ -272,6 +504,14 @@ def _make_estimate(matrix_xy, ref_xy, meas_xy, shifts_yx, peaks, residual, fallb
         float(np.sqrt(np.mean(residual_norm**2))) if residual_norm.size else 0.0,
         fallback,
     )
+
+
+def _snap_near_integer_affine(matrix_xy: np.ndarray) -> np.ndarray:
+    matrix_xy = np.asarray(matrix_xy, dtype=float).copy()
+    nearest = np.rint(matrix_xy)
+    close = np.abs(matrix_xy - nearest) < 1.0e-8
+    matrix_xy[close] = nearest[close]
+    return matrix_xy
 
 
 def _design(xy):

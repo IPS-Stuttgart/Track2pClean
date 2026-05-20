@@ -5,6 +5,9 @@ from __future__ import annotations
 import argparse
 import sys
 
+from bayescatrack._argparse_compat import (
+    install_registration_transform_argparse_patch,
+)
 from bayescatrack.core.bridge import main as _core_main
 
 _TOP_LEVEL_HELP = """usage: bayescatrack {summary,export,benchmark,growth} ...
@@ -24,6 +27,7 @@ Run 'bayescatrack <command> --help' for command-specific options.
 def main(argv: list[str] | None = None) -> int:
     """Dispatch BayesCaTrack CLI commands."""
 
+    install_registration_transform_argparse_patch()
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in {"-h", "--help"}:
         print(_TOP_LEVEL_HELP)
@@ -59,12 +63,32 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Sweep Track2p global-assignment cost scales and thresholds",
         )
         subparsers.add_parser(
+            "track2p-search",
+            help="Run a compact grid search over Track2p global-assignment protocols",
+        )
+        subparsers.add_parser(
+            "track2p-oracle-variants",
+            help="Score reference-row, consecutive-link and gap-limited oracle variants",
+        )
+        subparsers.add_parser(
+            "track2p-error-taxonomy",
+            help="Classify prediction false-positive and false-negative links",
+        )
+        subparsers.add_parser(
             "track2p-activity-tie-breaker-sweep",
             help="Sweep weak activity tie-breaker weights for Track2p global assignment",
         )
         subparsers.add_parser(
+            "track2p-mask-input-sweep",
+            help="Sweep Suite2p ROI filtering, weighted masks, and overlap-pixel handling",
+        )
+        subparsers.add_parser(
             "track2p-solver-prior-loso",
             help="Tune Track2p global-assignment solver priors inside LOSO folds",
+        )
+        subparsers.add_parser(
+            "track2p-calibrated-solver-prior-loso",
+            help="Run calibrated LOSO global assignment with fold-internal solver-prior tuning",
         )
         subparsers.add_parser(
             "track2p-loso-calibration",
@@ -87,8 +111,20 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Alias for track2p-teacher-debug",
         )
         subparsers.add_parser(
+            "track2p-diagnose",
+            help="Triage Track2p result failures into registration, ranking, solver, or scoring fixes",
+        )
+        subparsers.add_parser(
             "edge-ranking",
             help="Rank manual-GT Track2p edges within pairwise cost/feature matrices",
+        )
+        subparsers.add_parser(
+            "select-edge-ranking-features",
+            help="Select calibrated feature names from edge-ranking summary CSVs",
+        )
+        subparsers.add_parser(
+            "select-structured-objective",
+            help="Rank benchmark variants by complete-track or other structured metrics",
         )
         subparsers.add_parser(
             "registration-qa",
@@ -139,18 +175,48 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_cost_sweep_main(args[1:]))
+    if args[0] == "track2p-search":
+        from bayescatrack.experiments.track2p_experiment_search import (
+            main as _track2p_experiment_search_main,
+        )
+
+        return int(_track2p_experiment_search_main(args[1:]))
+    if args[0] == "track2p-oracle-variants":
+        from bayescatrack.experiments.track2p_oracle_variants import (
+            main as _track2p_oracle_variants_main,
+        )
+
+        return int(_track2p_oracle_variants_main(args[1:]))
+    if args[0] == "track2p-error-taxonomy":
+        from bayescatrack.experiments.track2p_error_taxonomy import (
+            main as _track2p_error_taxonomy_main,
+        )
+
+        return int(_track2p_error_taxonomy_main(args[1:]))
     if args[0] == "track2p-activity-tie-breaker-sweep":
         from bayescatrack.experiments.track2p_activity_tie_breaker_sweep import (
             main as _track2p_activity_tie_breaker_sweep_main,
         )
 
         return int(_track2p_activity_tie_breaker_sweep_main(args[1:]))
+    if args[0] == "track2p-mask-input-sweep":
+        from bayescatrack.experiments.track2p_mask_input_sweep import (
+            main as _track2p_mask_input_sweep_main,
+        )
+
+        return int(_track2p_mask_input_sweep_main(args[1:]))
     if args[0] == "track2p-solver-prior-loso":
         from bayescatrack.experiments.solver_prior_tuning import (
             main as _track2p_solver_prior_loso_main,
         )
 
         return int(_track2p_solver_prior_loso_main(args[1:]))
+    if args[0] == "track2p-calibrated-solver-prior-loso":
+        from bayescatrack.experiments.track2p_solver_prior_tuning import (
+            main as _track2p_calibrated_solver_prior_loso_main,
+        )
+
+        return int(_track2p_calibrated_solver_prior_loso_main(args[1:]))
     if args[0] == "track2p-loso-calibration":
         from bayescatrack.experiments.track2p_configurable_loso_calibration import (
             main as _track2p_loso_calibration_main,
@@ -175,12 +241,30 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_teacher_debug_main(args[1:]))
+    if args[0] == "track2p-diagnose":
+        from bayescatrack.experiments.track2p_failure_diagnosis import (
+            main as _track2p_failure_diagnosis_main,
+        )
+
+        return int(_track2p_failure_diagnosis_main(args[1:]))
     if args[0] == "edge-ranking":
         from bayescatrack.experiments.track2p_edge_ranking import (
             main as _track2p_edge_ranking_main,
         )
 
         return int(_track2p_edge_ranking_main(args[1:]))
+    if args[0] == "select-edge-ranking-features":
+        from bayescatrack.experiments.edge_ranking_feature_selection import (
+            main as _edge_ranking_feature_selection_main,
+        )
+
+        return int(_edge_ranking_feature_selection_main(args[1:]))
+    if args[0] == "select-structured-objective":
+        from bayescatrack.experiments.structured_objective_tuning import (
+            main as _structured_objective_tuning_main,
+        )
+
+        return int(_structured_objective_tuning_main(args[1:]))
     if args[0] == "registration-qa":
         from bayescatrack.experiments.registration_qa_report import (
             main as _registration_qa_main,

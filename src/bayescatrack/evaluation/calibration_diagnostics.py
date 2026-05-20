@@ -14,10 +14,12 @@ CalibrationBinRow: TypeAlias = dict[str, float | int | None]
 __all__ = (
     "CalibrationBinRow",
     "brier_score",
+    "best_f1_threshold",
     "calibration_summary",
     "expected_calibration_error",
     "format_reliability_bin_table",
     "maximum_calibration_error",
+    "precision_recall_threshold_table",
     "reliability_bin_table",
 )
 
@@ -153,11 +155,77 @@ def calibration_summary(
     }
 
 
+def precision_recall_threshold_table(
+    probabilities: Any,
+    labels: Any,
+    *,
+    thresholds: Sequence[float] | None = None,
+) -> list[dict[str, float | int]]:
+    """Return precision/recall/F1 rows for probability rejection thresholds."""
+
+    probabilities, labels = _validate_probability_label_inputs(probabilities, labels)
+    if thresholds is None:
+        thresholds = tuple(np.linspace(0.0, 1.0, 101))
+    rows: list[dict[str, float | int]] = []
+    for threshold in thresholds:
+        threshold = float(threshold)
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError("thresholds must lie in [0, 1]")
+        predicted_positive = probabilities >= threshold
+        positive = labels.astype(bool)
+        tp = int(np.count_nonzero(predicted_positive & positive))
+        fp = int(np.count_nonzero(predicted_positive & ~positive))
+        fn = int(np.count_nonzero(~predicted_positive & positive))
+        precision = _safe_ratio(tp, tp + fp)
+        recall = _safe_ratio(tp, tp + fn)
+        f1 = _safe_ratio(2.0 * precision * recall, precision + recall)
+        rows.append(
+            {
+                "threshold": threshold,
+                "accepted_edges": int(np.count_nonzero(predicted_positive)),
+                "true_positives": tp,
+                "false_positives": fp,
+                "false_negatives": fn,
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+            }
+        )
+    return rows
+
+
+def best_f1_threshold(
+    probabilities: Any,
+    labels: Any,
+    *,
+    thresholds: Sequence[float] | None = None,
+) -> dict[str, float | int]:
+    """Return the rejection threshold row with maximum F1."""
+
+    rows = precision_recall_threshold_table(
+        probabilities,
+        labels,
+        thresholds=thresholds,
+    )
+    return max(
+        rows,
+        key=lambda row: (
+            float(row["f1"]),
+            float(row["precision"]),
+            -float(row["threshold"]),
+        ),
+    )
+
+
 def brier_score(probabilities: Any, labels: Any) -> float:
     """Return the mean squared error between probabilities and binary labels."""
 
     probabilities, labels = _validate_probability_label_inputs(probabilities, labels)
     return float(np.mean((probabilities - labels) ** 2))
+
+
+def _safe_ratio(numerator: float, denominator: float) -> float:
+    return 1.0 if denominator == 0 else float(numerator) / float(denominator)
 
 
 def format_reliability_bin_table(rows: Sequence[Mapping[str, object]]) -> str:

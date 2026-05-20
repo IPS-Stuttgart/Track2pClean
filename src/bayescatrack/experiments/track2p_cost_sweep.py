@@ -12,12 +12,20 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    apply_higher_order_consistency,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     _load_pyrecest_multisession_solver,
     build_registered_pairwise_costs,
     tracks_to_suite2p_index_matrix,
 )
 from bayescatrack.core.bridge import CalciumPlaneData
+from bayescatrack.experiments._cli_choices import (
+    ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
     ProgressReporter,
@@ -25,6 +33,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     _load_reference_for_subject,
     _load_subject_sessions,
+    _parse_json_object,
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
@@ -36,6 +45,21 @@ from bayescatrack.experiments.track2p_fov_affine_benchmark import (
 )
 
 # pylint: disable=protected-access,too-many-locals
+
+DEFAULT_SELECTION_METRIC = "complete_track_f1"
+SWEEP_PARAMETER_COLUMNS = (
+    "cost_scale",
+    "cost_threshold",
+    "start_cost",
+    "end_cost",
+    "gap_penalty",
+)
+DIAGNOSTIC_SELECTION_METRICS = (
+    "complete_track_f1",
+    "pairwise_f1",
+    "pairwise_precision",
+    "pairwise_recall",
+)
 
 
 @dataclass(frozen=True)
@@ -177,7 +201,7 @@ def _build_sweep_pairwise_costs(
     if benchmark.cost == "registered-iou":
         CalciumPlaneData.build_pairwise_cost_matrix = _patched_pairwise_cost  # type: ignore[method-assign]
     try:
-        return build_registered_pairwise_costs(
+        pairwise_costs = build_registered_pairwise_costs(
             sessions,
             max_gap=benchmark.max_gap,
             cost=benchmark.cost,
@@ -187,7 +211,20 @@ def _build_sweep_pairwise_costs(
             velocity_variance=benchmark.velocity_variance,
             regularization=benchmark.regularization,
             pairwise_cost_kwargs=benchmark.pairwise_cost_kwargs,
+            activity_tie_breaker_weight=benchmark.activity_tie_breaker_weight,
+            activity_tie_breaker_component=benchmark.activity_tie_breaker_component,
+            activity_trace_source=benchmark.activity_trace_source,
+            activity_event_threshold=benchmark.activity_event_threshold,
         )
+        if benchmark.higher_order_consistency_config is not None:
+            pairwise_costs = apply_higher_order_consistency(
+                pairwise_costs,
+                session_sizes=tuple(
+                    int(session.plane_data.n_rois) for session in sessions
+                ),
+                config=benchmark.higher_order_consistency_config,
+            )
+        return pairwise_costs
     finally:
         if benchmark.cost == "registered-iou":
             CalciumPlaneData.build_pairwise_cost_matrix = original_pairwise_cost  # type: ignore[method-assign]
@@ -291,6 +328,105 @@ def _pairwise_cost_statistics(
     return stats
 
 
+def summarize_sweep_results(
+    rows: Sequence[Mapping[str, float | int | str]],
+    *,
+    metric: str = DEFAULT_SELECTION_METRIC,
+) -> list[dict[str, float | int | str]]:
+    """Aggregate and rank solver settings across subjects.
+
+    Cost and threshold sweeps are intended to select solver hyperparameters for
+    longitudinal tracking.  The default objective is therefore complete-track F1
+    rather than adjacent-session pairwise F1: a setting that links most adjacent
+    pairs but fragments cells across the full experiment should not rank first.
+    """
+
+    if not rows:
+        return []
+
+    grouped: dict[
+        tuple[float | int | str, ...], list[Mapping[str, float | int | str]]
+    ] = {}
+    for row in rows:
+        key = tuple(row.get(column, "") for column in SWEEP_PARAMETER_COLUMNS)
+        grouped.setdefault(key, []).append(row)
+
+    summaries: list[dict[str, float | int | str]] = []
+    for key, group_rows in grouped.items():
+        metric_values = _finite_metric_values(group_rows, metric)
+        if not metric_values:
+            raise ValueError(
+                f"Cannot rank cost sweep by {metric!r}; no finite values were found"
+            )
+
+        summary: dict[str, float | int | str] = {
+            column: key[index]
+            for index, column in enumerate(SWEEP_PARAMETER_COLUMNS)
+        }
+        summary.update(
+            {
+                "selection_metric": metric,
+                "selection_metric_mean": float(np.mean(metric_values)),
+                "selection_metric_std": float(np.std(metric_values)),
+                "selection_metric_min": float(np.min(metric_values)),
+                "selection_metric_max": float(np.max(metric_values)),
+                "evaluated_subjects": int(len(group_rows)),
+                "selection_metric_subjects": int(len(metric_values)),
+                "selection_metric_missing_subjects": int(
+                    len(group_rows) - len(metric_values)
+                ),
+            }
+        )
+        for diagnostic_metric in DIAGNOSTIC_SELECTION_METRICS:
+            diagnostic_values = _finite_metric_values(group_rows, diagnostic_metric)
+            if diagnostic_values:
+                summary[f"{diagnostic_metric}_mean"] = float(
+                    np.mean(diagnostic_values)
+                )
+        summaries.append(summary)
+
+    ranked = sorted(
+        summaries,
+        key=lambda row: (
+            _summary_metric(row, "selection_metric_mean"),
+            _summary_metric(row, "complete_track_f1_mean"),
+            _summary_metric(row, "pairwise_f1_mean"),
+        ),
+        reverse=True,
+    )
+    for rank, row in enumerate(ranked, start=1):
+        row["selection_rank"] = int(rank)
+    return ranked
+
+
+def _finite_metric_values(
+    rows: Sequence[Mapping[str, float | int | str]], metric: str
+) -> tuple[float, ...]:
+    values: list[float] = []
+    for row in rows:
+        value = _coerce_finite_float(row.get(metric))
+        if value is not None:
+            values.append(value)
+    return tuple(values)
+
+
+def _coerce_finite_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        converted = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(converted):
+        return None
+    return converted
+
+
+def _summary_metric(row: Mapping[str, float | int | str], key: str) -> float:
+    value = _coerce_finite_float(row.get(key))
+    return float("-inf") if value is None else value
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="bayescatrack benchmark track2p-sweep",
@@ -325,19 +461,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cost",
         default="registered-iou",
-        choices=(
-            "registered-iou",
-            "registered-soft-iou",
-            "registered-shifted-iou",
-            "roi-aware",
-            "roi-aware-shifted",
-        ),
+        choices=ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
     )
     parser.add_argument("--max-gap", type=int, default=2)
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-affine", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_CHOICES,
+        help=REGISTRATION_TRANSFORM_HELP,
     )
     parser.add_argument("--start-cost", type=float, default=5.0)
     parser.add_argument("--end-cost", type=float, default=5.0)
@@ -394,10 +525,54 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--regularization", type=float, default=1.0e-6)
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
     parser.add_argument(
+        "--higher-order-consistency-json",
+        default=None,
+        help=(
+            "JSON object forwarded to HigherOrderConsistencyConfig before scaling the pairwise costs"
+        ),
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-weight",
+        type=float,
+        default=0.0,
+        help="Small non-negative weight for activity-derived pairwise tie-breaking",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-component",
+        default="activity_tiebreaker_cost",
+    )
+    parser.add_argument(
+        "--activity-trace-source",
+        default="auto",
+        choices=("auto", "spike_traces", "traces", "neuropil_traces"),
+    )
+    parser.add_argument(
+        "--activity-event-threshold",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
         "--progress", action=argparse.BooleanOptionalAction, default=True
     )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
+    parser.add_argument(
+        "--selection-metric",
+        default=DEFAULT_SELECTION_METRIC,
+        help=(
+            "Metric used to rank aggregate solver settings for --selection-output; "
+            "defaults to complete_track_f1."
+        ),
+    )
+    parser.add_argument(
+        "--selection-output",
+        type=Path,
+        default=None,
+        help=(
+            "Optional path for an aggregate per-setting ranking. "
+            "Uses --format and ranks by --selection-metric."
+        ),
+    )
     parser.add_argument(
         "--write-incrementally",
         action="store_true",
@@ -418,6 +593,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--write-incrementally requires --output")
         if args.format != "csv":
             parser.error("--write-incrementally currently supports --format csv only")
+        if args.selection_output is not None:
+            parser.error("--selection-output requires non-incremental sweep execution")
         write_sweep_results_incrementally(iter_track2p_cost_sweep(config), args.output)
         return 0
 
@@ -426,16 +603,25 @@ def main(argv: list[str] | None = None) -> int:
         write_sweep_results(rows, args.output, args.format)
     else:
         _write_sweep_stdout(rows, args.format)
+    if args.selection_output is not None:
+        selection_rows = summarize_sweep_results(
+            rows, metric=str(args.selection_metric)
+        )
+        write_sweep_selection_results(
+            selection_rows, args.selection_output, args.format
+        )
     return 0
 
 
 def _config_from_args(args: argparse.Namespace) -> CostSweepConfig:
-    pairwise_cost_kwargs = None
-    if args.pairwise_cost_kwargs_json is not None:
-        parsed = json.loads(args.pairwise_cost_kwargs_json)
-        if not isinstance(parsed, dict):
-            raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
-        pairwise_cost_kwargs = parsed
+    pairwise_cost_kwargs = _parse_json_object(
+        args.pairwise_cost_kwargs_json,
+        name="--pairwise-cost-kwargs-json",
+    )
+    higher_order_consistency_config = _parse_json_object(
+        args.higher_order_consistency_json,
+        name="--higher-order-consistency-json",
+    )
     benchmark = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -463,6 +649,11 @@ def _config_from_args(args: argparse.Namespace) -> CostSweepConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=higher_order_consistency_config,
+        activity_tie_breaker_weight=args.activity_tie_breaker_weight,
+        activity_tie_breaker_component=args.activity_tie_breaker_component,
+        activity_trace_source=args.activity_trace_source,
+        activity_event_threshold=args.activity_event_threshold,
         progress=args.progress,
     )
     return CostSweepConfig(
@@ -604,6 +795,32 @@ def write_sweep_results(
     output_path.write_text(format_sweep_table(rows) + "\n", encoding="utf-8")
 
 
+def write_sweep_selection_results(
+    rows: Sequence[dict[str, float | int | str]],
+    output_path: Path,
+    output_format: str,
+) -> None:
+    """Write aggregate solver-setting rankings."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_format == "json":
+        output_path.write_text(
+            json.dumps(list(rows), indent=2) + "\n", encoding="utf-8"
+        )
+        return
+    if output_format == "csv":
+        with output_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle, fieldnames=_selection_sweep_fieldnames(rows)
+            )
+            writer.writeheader()
+            writer.writerows(rows)
+        return
+    output_path.write_text(
+        format_sweep_selection_table(rows) + "\n", encoding="utf-8"
+    )
+
+
 def write_sweep_results_incrementally(
     results: Iterable[SubjectBenchmarkResult], output_path: Path
 ) -> int:
@@ -674,6 +891,36 @@ def format_sweep_table(rows: Sequence[dict[str, float | int | str]]) -> str:
     return "\n".join(body)
 
 
+def format_sweep_selection_table(
+    rows: Sequence[dict[str, float | int | str]]
+) -> str:
+    columns = [
+        "selection_rank",
+        "selection_metric",
+        "selection_metric_mean",
+        "selection_metric_std",
+        "complete_track_f1_mean",
+        "pairwise_f1_mean",
+        "evaluated_subjects",
+        "selection_metric_missing_subjects",
+        "cost_scale",
+        "cost_threshold",
+        "start_cost",
+        "end_cost",
+        "gap_penalty",
+    ]
+    header = "| " + " | ".join(columns) + " |"
+    separator = "| " + " | ".join(["---"] + ["---:"] * (len(columns) - 1)) + " |"
+    body = [header, separator]
+    for row in rows:
+        body.append(
+            "| "
+            + " | ".join(_format_value(row.get(column, "")) for column in columns)
+            + " |"
+        )
+    return "\n".join(body)
+
+
 def _sweep_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
     preferred = [
         "subject",
@@ -705,6 +952,33 @@ def _sweep_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]
         "pairwise_recall",
         "complete_tracks",
         "mean_track_length",
+    ]
+    remaining = sorted({key for row in rows for key in row} - set(preferred))
+    return [key for key in preferred if any(key in row for row in rows)] + remaining
+
+
+def _selection_sweep_fieldnames(
+    rows: Sequence[dict[str, float | int | str]]
+) -> list[str]:
+    preferred = [
+        "selection_rank",
+        "selection_metric",
+        "selection_metric_mean",
+        "selection_metric_std",
+        "selection_metric_min",
+        "selection_metric_max",
+        "evaluated_subjects",
+        "selection_metric_subjects",
+        "selection_metric_missing_subjects",
+        "cost_scale",
+        "cost_threshold",
+        "start_cost",
+        "end_cost",
+        "gap_penalty",
+        "complete_track_f1_mean",
+        "pairwise_f1_mean",
+        "pairwise_precision_mean",
+        "pairwise_recall_mean",
     ]
     remaining = sorted({key for row in rows for key in row} - set(preferred))
     return [key for key in preferred if any(key in row for row in rows)] + remaining

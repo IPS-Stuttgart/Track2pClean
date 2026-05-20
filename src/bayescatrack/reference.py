@@ -337,16 +337,18 @@ def score_pairwise_matches(
 ) -> dict[str, float | int]:
     """Score explicit pairwise matches with precision/recall/F1."""
 
-    predicted = _pair_set(predicted_pairs)
-    reference = _pair_set(reference_pairs)
+    predicted = _pair_counter(predicted_pairs)
+    reference = _pair_counter(reference_pairs)
 
-    true_positives = len(predicted & reference)
-    false_positives = len(predicted - reference)
-    false_negatives = len(reference - predicted)
+    true_positives = int(sum((predicted & reference).values()))
+    predicted_total = int(sum(predicted.values()))
+    reference_total = int(sum(reference.values()))
+    false_positives = predicted_total - true_positives
+    false_negatives = reference_total - true_positives
 
-    precision = _safe_ratio(true_positives, true_positives + false_positives)
-    recall = _safe_ratio(true_positives, true_positives + false_negatives)
-    f1 = _safe_ratio(2.0 * precision * recall, precision + recall)
+    precision = _ratio_or_nan(true_positives, true_positives + false_positives)
+    recall = _ratio_or_nan(true_positives, true_positives + false_negatives)
+    f1 = _ratio_or_nan(2.0 * precision * recall, precision + recall)
 
     return {
         "true_positives": true_positives,
@@ -388,9 +390,11 @@ def score_complete_tracks(
     perfectly_reconstructed_tracks = int(
         sum((predicted_complete & reference_complete).values())
     )
-    complete_tracks_score = _safe_ratio(
-        2.0 * perfectly_reconstructed_tracks,
-        reconstructed_complete_tracks + ground_truth_complete_tracks,
+    denominator = reconstructed_complete_tracks + ground_truth_complete_tracks
+    complete_tracks_score = (
+        1.0
+        if denominator == 0
+        else _ratio_or_nan(2.0 * perfectly_reconstructed_tracks, denominator)
     )
 
     return {
@@ -485,15 +489,32 @@ def _parse_optional_int(value: Any) -> int | None:
     if isinstance(value, bytes):
         value = value.decode("utf-8")
     if isinstance(value, str):
-        if value.strip().lower() in _MISSING_STRINGS:
-            return None
         value = value.strip()
-    if isinstance(value, (float, np.floating)) and np.isnan(value):
-        return None
-    try:
+        if value.lower() in _MISSING_STRINGS:
+            return None
+        try:
+            integer_value = int(value)
+        except ValueError:
+            try:
+                numeric_value = float(value)
+            except ValueError:
+                return None
+            if np.isnan(numeric_value):
+                return None
+            if not numeric_value.is_integer():
+                raise ValueError(f"ROI index must be integer-like, got {value!r}")
+            integer_value = int(numeric_value)
+    elif isinstance(value, (float, np.floating)):
+        if np.isnan(value):
+            return None
+        if not float(value).is_integer():
+            raise ValueError(f"ROI index must be integer-like, got {value!r}")
         integer_value = int(value)
-    except (TypeError, ValueError):
-        return None
+    else:
+        try:
+            integer_value = int(value)
+        except (TypeError, ValueError):
+            return None
     if integer_value < 0:
         return None
     return integer_value
@@ -613,24 +634,28 @@ def _label_vector_to_mapping(labels: Sequence[Any]) -> dict[int, int]:
     return mapping
 
 
-def _pair_set(pairs: Sequence[Sequence[Any]] | np.ndarray) -> set[tuple[int, int]]:
+def _pair_counter(pairs: Sequence[Sequence[Any]] | np.ndarray) -> Counter[tuple[int, int]]:
     pair_array = np.asarray(pairs, dtype=object)
     if pair_array.size == 0:
-        return set()
+        return Counter()
     if pair_array.ndim != 2 or pair_array.shape[1] != 2:
         raise ValueError("Pair arrays must have shape (n_pairs, 2)")
 
-    normalized: set[tuple[int, int]] = set()
+    normalized: Counter[tuple[int, int]] = Counter()
     for first, second in pair_array.tolist():
         first_int = _parse_optional_int(first)
         second_int = _parse_optional_int(second)
         if first_int is None or second_int is None:
             raise ValueError("Pair arrays must not contain missing values")
-        normalized.add((first_int, second_int))
+        normalized[(first_int, second_int)] += 1
     return normalized
 
 
-def _safe_ratio(numerator: float, denominator: float) -> float:
+def _pair_set(pairs: Sequence[Sequence[Any]] | np.ndarray) -> set[tuple[int, int]]:
+    return set(_pair_counter(pairs))
+
+
+def _ratio_or_nan(numerator: float, denominator: float) -> float:
     if denominator == 0:
-        return 1.0
+        return float("nan")
     return float(numerator) / float(denominator)

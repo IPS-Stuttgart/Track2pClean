@@ -59,6 +59,17 @@ def test_solve_bundle_linear_assignment_can_disable_cost_gate():
     npt.assert_array_equal(result.costs, np.array([0.0, 100.0]))
 
 
+def test_solve_bundle_linear_assignment_with_disabled_gate_filters_invalid_costs():
+    result = solve_bundle_linear_assignment(
+        _Bundle([[0.0, np.nan], [np.inf, 1.0]]),
+        max_cost=None,
+    )
+
+    npt.assert_array_equal(result.reference_roi_indices, np.array([10, 20]))
+    npt.assert_array_equal(result.measurement_roi_indices, np.array([100, 200]))
+    npt.assert_array_equal(result.costs, np.array([0.0, 1.0]))
+
+
 def test_solve_bundle_linear_assignment_gates_before_hungarian():
     result = solve_bundle_linear_assignment(_Bundle([[6.0, 7.0], [0.0, 6.0]]))
 

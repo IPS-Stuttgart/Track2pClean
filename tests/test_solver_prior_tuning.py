@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import pytest
 from bayescatrack.experiments import solver_prior_tuning as tuning
+from bayescatrack.experiments import track2p_solver_prior_tuning as calibrated_tuning
 from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
 from bayescatrack.experiments.track2p_solver_prior_tuning import (
     DEFAULT_SOLVER_PRIOR_COST_THRESHOLDS,
@@ -190,3 +191,65 @@ def test_positive_list_parser_rejects_invalid_values(raw):
 
 def test_threshold_parser_accepts_none():
     assert tuning.parse_threshold_list("none,2") == (None, 2.0)
+
+
+def test_calibrated_solver_prior_cli_wires_training_fold_options(monkeypatch, tmp_path, capsys):
+    captured = {}
+
+    class FakeResult:
+        def to_rows(self):
+            return [
+                {
+                    "subject": "held-out",
+                    "variant": "fake calibrated tuned priors",
+                    "method": "global-assignment",
+                    "pairwise_f1": 0.75,
+                    "complete_track_f1": 0.5,
+                }
+            ]
+
+    def fake_run(config, *, feature_names, sample_weight_strategy, model_kwargs, solver_prior_options):
+        captured["config"] = config
+        captured["feature_names"] = tuple(feature_names)
+        captured["sample_weight_strategy"] = sample_weight_strategy
+        captured["model_kwargs"] = model_kwargs
+        captured["solver_prior_options"] = solver_prior_options
+        return FakeResult()
+
+    monkeypatch.setattr(
+        calibrated_tuning, "run_track2p_loso_solver_prior_tuning", fake_run
+    )
+
+    assert calibrated_tuning.main(
+        [
+            "--data",
+            str(tmp_path),
+            "--sample-weight-strategy",
+            "balanced",
+            "--calibration-model-kwargs-json",
+            '{"class_weight":"balanced"}',
+            "--solver-start-costs",
+            "0.5,1.0",
+            "--solver-end-costs",
+            "1.5",
+            "--solver-gap-penalties",
+            "0,0.3",
+            "--solver-cost-thresholds",
+            "none,2",
+            "--solver-prior-objective",
+            "complete_track_f1",
+            "--format",
+            "json",
+            "--no-progress",
+        ]
+    ) == 0
+
+    assert captured["config"].cost == "calibrated"
+    assert captured["config"].split == "leave-one-subject-out"
+    assert captured["sample_weight_strategy"] == "balanced"
+    assert captured["model_kwargs"] == {"class_weight": "balanced"}
+    assert captured["solver_prior_options"].start_costs == (0.5, 1.0)
+    assert captured["solver_prior_options"].end_costs == (1.5,)
+    assert captured["solver_prior_options"].gap_penalties == (0.0, 0.3)
+    assert captured["solver_prior_options"].cost_thresholds == (None, 2.0)
+    assert "complete_track_f1" in capsys.readouterr().out

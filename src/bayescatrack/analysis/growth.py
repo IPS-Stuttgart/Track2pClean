@@ -734,27 +734,57 @@ def _normalize_track_matrix(track_matrix: Any, *, n_sessions: int) -> np.ndarray
 
 
 def _optional_roi(value: object) -> int | None:
+    """Return a non-negative integer ROI id, or ``None`` for missing values.
+
+    ROI IDs are categorical indices. Integer-like floats or strings such as
+    ``1.0`` are accepted, but fractional values are rejected rather than being
+    silently truncated to a different ROI.
+    """
+
     if value is None:
         return None
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
     if isinstance(value, (int, np.integer)):
         roi = int(value)
     elif isinstance(value, (float, np.floating)):
-        if np.isnan(float(value)):
+        parsed = _parse_integer_like_roi(float(value), original=value)
+        if parsed is None:
             return None
-        roi = int(value)
+        roi = parsed
     elif isinstance(value, str):
         text = value.strip()
-        if not text:
+        if text.lower() in {"", "none", "nan", "null"}:
             return None
-        try:
-            roi = int(text)
-        except ValueError:
+        parsed = _parse_integer_like_roi_text(text)
+        if parsed is None:
             return None
+        roi = parsed
     else:
         return None
     if roi < 0:
         return None
     return roi
+
+
+def _parse_integer_like_roi(value: float, *, original: object) -> int | None:
+    if np.isnan(value):
+        return None
+    if not np.isfinite(value) or not float(value).is_integer():
+        raise ValueError(f"ROI index must be integer-like, got {original!r}")
+    return int(value)
+
+
+def _parse_integer_like_roi_text(text: str) -> int | None:
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        numeric = float(text)
+    except ValueError:
+        return None
+    return _parse_integer_like_roi(numeric, original=text)
 
 
 def _one_sided_binomial_tail(successes: int, trials: int) -> float:

@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +43,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     discover_subject_dirs,
 )
 from bayescatrack.reference import Track2pReference, load_track2p_reference
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 CSVValue = str | int | float | bool | None
 CSVRow = dict[str, CSVValue]
@@ -355,7 +356,6 @@ def run_track2p_teacher_debug(
     report = Track2pTeacherDebugReport(
         tuple(detail_rows), tuple(summary_rows), tuple(metric_rows)
     )
-    write_teacher_debug_report(report, config)
     return report
 
 
@@ -437,7 +437,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_TYPES,
         help="Registration transform used for Bayes costs",
     )
     parser.add_argument("--start-cost", type=float, default=5.0)
@@ -624,36 +624,45 @@ def _subject_detail_rows(
     edges = _edge_pairs(
         manual_matrix.shape[1], max_gap=benchmark.max_gap, scope=config.edge_scope
     )
-    manual_edges = _track_matrix_edge_set(manual_matrix, edges=edges)
-    track2p_edges = _track_matrix_edge_set(track2p_matrix, edges=edges)
-    bayes_edges = _track_matrix_edge_set(bayes_matrix, edges=edges)
-    all_edges = sorted(manual_edges | track2p_edges | bayes_edges)
+    manual_edges = _track_matrix_edge_counter(manual_matrix, edges=edges)
+    track2p_edges = _track_matrix_edge_counter(track2p_matrix, edges=edges)
+    bayes_edges = _track_matrix_edge_counter(bayes_matrix, edges=edges)
+    all_edges = sorted(set(manual_edges) | set(track2p_edges) | set(bayes_edges))
 
     rows: list[CSVRow] = []
     for session_a, session_b, roi_a, roi_b in all_edges:
-        manual = (session_a, session_b, roi_a, roi_b) in manual_edges
-        teacher = (session_a, session_b, roi_a, roi_b) in track2p_edges
-        bayes = (session_a, session_b, roi_a, roi_b) in bayes_edges
-        row: CSVRow = {
-            "subject": subject,
-            "session_a": int(session_a),
-            "session_b": int(session_b),
-            "session_a_name": session_names[session_a],
-            "session_b_name": session_names[session_b],
-            "gap": int(session_b - session_a),
-            "roi_a": int(roi_a),
-            "roi_b": int(roi_b),
-            "category": classify_teacher_edge(manual, teacher, bayes),
-            "manual_gt_label": manual,
-            "track2p_label": teacher,
-            "bayescatrack_label": bayes,
-            "edge_source": _edge_source_label(manual, teacher, bayes),
-            "cost_scale": float(config.cost_scale),
-            "cost_threshold": _threshold_label(benchmark.cost_threshold),
-            "gap_penalty": float(benchmark.gap_penalty),
-        }
-        row.update(lookup.lookup(session_a, session_b, roi_a, roi_b))
-        rows.append(row)
+        edge = (session_a, session_b, roi_a, roi_b)
+        manual_count = int(manual_edges[edge])
+        teacher_count = int(track2p_edges[edge])
+        bayes_count = int(bayes_edges[edge])
+        for duplicate_index in range(max(manual_count, teacher_count, bayes_count)):
+            manual = duplicate_index < manual_count
+            teacher = duplicate_index < teacher_count
+            bayes = duplicate_index < bayes_count
+            row: CSVRow = {
+                "subject": subject,
+                "session_a": int(session_a),
+                "session_b": int(session_b),
+                "session_a_name": session_names[session_a],
+                "session_b_name": session_names[session_b],
+                "gap": int(session_b - session_a),
+                "roi_a": int(roi_a),
+                "roi_b": int(roi_b),
+                "category": classify_teacher_edge(manual, teacher, bayes),
+                "manual_gt_label": manual,
+                "track2p_label": teacher,
+                "bayescatrack_label": bayes,
+                "edge_source": _edge_source_label(manual, teacher, bayes),
+                "edge_duplicate_index": duplicate_index,
+                "manual_gt_edge_count": manual_count,
+                "track2p_edge_count": teacher_count,
+                "bayescatrack_edge_count": bayes_count,
+                "cost_scale": float(config.cost_scale),
+                "cost_threshold": _threshold_label(benchmark.cost_threshold),
+                "gap_penalty": float(benchmark.gap_penalty),
+            }
+            row.update(lookup.lookup(session_a, session_b, roi_a, roi_b))
+            rows.append(row)
     return rows
 
 
@@ -693,18 +702,24 @@ def _edge_pairs(
     raise ValueError(f"Unsupported edge scope: {scope!r}")
 
 
+def _track_matrix_edge_counter(
+    track_matrix: np.ndarray, *, edges: Sequence[tuple[int, int]]
+) -> Counter[EdgeKey]:
+    matrix = normalize_track_matrix(track_matrix)
+    edge_counter: Counter[EdgeKey] = Counter()
+    for row in matrix:
+        for session_a, session_b in edges:
+            roi_a = _optional_roi(row[session_a])
+            roi_b = _optional_roi(row[session_b])
+            if roi_a is not None and roi_b is not None:
+                edge_counter[(int(session_a), int(session_b), roi_a, roi_b)] += 1
+    return edge_counter
+
+
 def _track_matrix_edge_set(
     track_matrix: np.ndarray, *, edges: Sequence[tuple[int, int]]
 ) -> set[EdgeKey]:
-    matrix = normalize_track_matrix(track_matrix)
-    edge_set: set[EdgeKey] = set()
-    for row in matrix:
-        for session_a, session_b in edges:
-            roi_a = row[session_a]
-            roi_b = row[session_b]
-            if _valid_roi(roi_a) and _valid_roi(roi_b):
-                edge_set.add((int(session_a), int(session_b), int(roi_a), int(roi_b)))
-    return edge_set
+    return set(_track_matrix_edge_counter(track_matrix, edges=edges))
 
 
 def _summary_rows(detail_rows: Sequence[CSVRow]) -> tuple[CSVRow, ...]:
@@ -829,14 +844,42 @@ def _edge_source_label(manual: bool, track2p: bool, bayes: bool) -> str:
 
 
 def _valid_roi(value: object) -> bool:
+    return _optional_roi(value) is not None
+
+
+def _optional_roi(value: object) -> int | None:
     if value is None:
-        return False
-    if isinstance(value, (float, np.floating)) and np.isnan(value):
-        return False
+        return None
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
+    if isinstance(value, str):
+        text = value.strip()
+        if text.lower() in {"", "none", "nan", "null"}:
+            return None
+        return _parse_optional_roi_text(text)
+    if isinstance(value, (int, np.integer)):
+        roi = int(value)
+    elif isinstance(value, (float, np.floating)):
+        if np.isnan(float(value)) or not float(value).is_integer():
+            return None
+        roi = int(value)
+    else:
+        return None
+    return roi if roi >= 0 else None
+
+
+def _parse_optional_roi_text(text: str) -> int | None:
     try:
-        return int(cast(Any, value)) >= 0
-    except (TypeError, ValueError):
-        return False
+        roi = int(text)
+    except ValueError:
+        try:
+            numeric = float(text)
+        except ValueError:
+            return None
+        if not np.isfinite(numeric) or not float(numeric).is_integer():
+            return None
+        roi = int(numeric)
+    return roi if roi >= 0 else None
 
 
 def _threshold_label(threshold: float | None) -> str | float:
