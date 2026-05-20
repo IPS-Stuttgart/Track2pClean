@@ -337,12 +337,14 @@ def score_pairwise_matches(
 ) -> dict[str, float | int]:
     """Score explicit pairwise matches with precision/recall/F1."""
 
-    predicted = _pair_set(predicted_pairs)
-    reference = _pair_set(reference_pairs)
+    predicted = _pair_counter(predicted_pairs)
+    reference = _pair_counter(reference_pairs)
 
-    true_positives = len(predicted & reference)
-    false_positives = len(predicted - reference)
-    false_negatives = len(reference - predicted)
+    true_positives = int(sum((predicted & reference).values()))
+    predicted_total = int(sum(predicted.values()))
+    reference_total = int(sum(reference.values()))
+    false_positives = predicted_total - true_positives
+    false_negatives = reference_total - true_positives
 
     precision = _safe_ratio(true_positives, true_positives + false_positives)
     recall = _safe_ratio(true_positives, true_positives + false_negatives)
@@ -630,21 +632,25 @@ def _label_vector_to_mapping(labels: Sequence[Any]) -> dict[int, int]:
     return mapping
 
 
-def _pair_set(pairs: Sequence[Sequence[Any]] | np.ndarray) -> set[tuple[int, int]]:
+def _pair_counter(pairs: Sequence[Sequence[Any]] | np.ndarray) -> Counter[tuple[int, int]]:
     pair_array = np.asarray(pairs, dtype=object)
     if pair_array.size == 0:
-        return set()
+        return Counter()
     if pair_array.ndim != 2 or pair_array.shape[1] != 2:
         raise ValueError("Pair arrays must have shape (n_pairs, 2)")
 
-    normalized: set[tuple[int, int]] = set()
+    normalized: Counter[tuple[int, int]] = Counter()
     for first, second in pair_array.tolist():
         first_int = _parse_optional_int(first)
         second_int = _parse_optional_int(second)
         if first_int is None or second_int is None:
             raise ValueError("Pair arrays must not contain missing values")
-        normalized.add((first_int, second_int))
+        normalized[(first_int, second_int)] += 1
     return normalized
+
+
+def _pair_set(pairs: Sequence[Sequence[Any]] | np.ndarray) -> set[tuple[int, int]]:
+    return set(_pair_counter(pairs))
 
 
 def _safe_ratio(numerator: float, denominator: float) -> float:

@@ -130,6 +130,13 @@ def _overlap_slices(
     source_start = max(0, -shift)
     source_stop = min(source_size, output_size - shift)
     length = max(0, source_stop - source_start)
+    if length == 0:
+        empty_source = min(max(source_start, 0), source_size)
+        empty_destination = min(max(shift, 0), output_size)
+        return slice(empty_source, empty_source), slice(
+            empty_destination, empty_destination
+        )
+    source_stop = source_start + length
     destination_start = max(0, shift)
     destination_stop = destination_start + length
     return slice(source_start, source_stop), slice(destination_start, destination_stop)
