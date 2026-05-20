@@ -247,6 +247,11 @@ def run_track2p_loso_calibration(
     feature_names = tuple(
         _feature_names_from_config(config) if feature_names is None else feature_names
     )
+    sample_weight_strategy = cast(
+        SampleWeightStrategy,
+        getattr(config, "calibration_sample_weight_strategy", sample_weight_strategy),
+    )
+    hard_negative_options = _candidate_hard_negative_options_from_config(config)
     config = _config_with_pairwise_kwargs_for_features(config, feature_names)
     subject_dirs = tuple(discover_subject_dirs(config.data))
     if len(subject_dirs) < 2:
@@ -276,6 +281,7 @@ def run_track2p_loso_calibration(
             feature_names=feature_names,
             progress=progress,
             held_out_subject=held_out.subject_name,
+            hard_negative_options=hard_negative_options,
         )
         weights = _training_sample_weight(
             training_labels,
@@ -328,6 +334,15 @@ def run_track2p_loso_calibration(
                 "calibration_sample_weight_strategy": sample_weight_strategy,
                 "calibration_class_weight": _stringify_class_weight(
                     logistic_model_kwargs.get("class_weight")
+                ),
+                "calibration_hard_negative_ratio": float(
+                    hard_negative_options.negative_to_positive_ratio
+                ),
+                "calibration_candidate_top_k_per_anchor": _top_k_label(
+                    hard_negative_options.candidate_top_k_per_anchor
+                ),
+                "calibration_include_column_candidates": int(
+                    hard_negative_options.include_column_candidates
                 ),
                 **calibration_scores,
                 **assignment_prior_scores,
@@ -528,11 +543,12 @@ def _collect_training_examples(
     feature_names: Sequence[str],
     progress: ProgressReporter | None = None,
     held_out_subject: str | None = None,
+    hard_negative_options: CandidateHardNegativeOptions | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     feature_blocks: list[np.ndarray] = []
     label_blocks: list[np.ndarray] = []
     training_options = _reference_training_options(config, feature_names)
-    hard_negative_options = CandidateHardNegativeOptions()
+    hard_negative_options = hard_negative_options or CandidateHardNegativeOptions()
     for subject in training_subjects:
         if progress is not None:
             progress.step(
@@ -554,6 +570,29 @@ def _collect_training_examples(
     if not feature_blocks:
         raise ValueError("At least one training subject is required")
     return np.concatenate(feature_blocks, axis=0), np.concatenate(label_blocks, axis=0)
+
+
+def _candidate_hard_negative_options_from_config(
+    config: Track2pBenchmarkConfig,
+) -> CandidateHardNegativeOptions:
+    top_k = getattr(config, "calibration_candidate_top_k_per_anchor", 20)
+    if top_k is not None:
+        top_k = int(top_k)
+        if top_k <= 0:
+            top_k = None
+    return CandidateHardNegativeOptions(
+        negative_to_positive_ratio=float(
+            getattr(config, "calibration_hard_negative_ratio", 4.0)
+        ),
+        candidate_top_k_per_anchor=top_k,
+        include_column_candidates=bool(
+            getattr(config, "calibration_include_column_candidates", True)
+        ),
+    )
+
+
+def _top_k_label(top_k: int | None) -> int | str:
+    return "none" if top_k is None else int(top_k)
 
 
 def _reference_training_options(

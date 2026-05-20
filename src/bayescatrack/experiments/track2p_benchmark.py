@@ -7,7 +7,7 @@ import csv
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import product
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -92,6 +92,7 @@ class Track2pBenchmarkConfig:
     allow_track2p_as_reference_for_smoke_test: bool = False
     curated_only: bool = False
     seed_session: int = 0
+    seed_sessions: tuple[int, ...] = ()
     restrict_to_reference_seed_rois: bool = True
     cost: AssociationCost = "registered-iou"
     calibration_feature_set: str = "default"
@@ -118,6 +119,18 @@ class Track2pBenchmarkConfig:
     higher_order_consistency_config: dict[str, Any] | None = None
     candidate_pruning_config: dict[str, Any] | None = None
     dynamic_edge_prior_config: dict[str, Any] | None = None
+    activity_tie_breaker_weight: float = 0.0
+    activity_tie_breaker_component: str = "activity_tiebreaker_cost"
+    activity_trace_source: str = "auto"
+    activity_event_threshold: float = 0.0
+    calibration_sample_weight_strategy: str = "none"
+    calibration_hard_negative_ratio: float = 4.0
+    calibration_candidate_top_k_per_anchor: int | None = 20
+    calibration_include_column_candidates: bool = True
+    sweep_start_costs: tuple[float, ...] | str = ()
+    sweep_end_costs: tuple[float, ...] | str = ()
+    sweep_gap_penalties: tuple[float, ...] | str = ()
+    sweep_cost_thresholds: tuple[float | None, ...] | str = ()
     progress: bool = False
 
 
@@ -216,25 +229,37 @@ def run_track2p_benchmark(
             _validate_reference_roi_indices(
                 reference, _load_subject_sessions(subject_dir, config)
             )
-        prediction_variants = _predict_subject_track_variants(
-            subject_dir, config, reference=reference
+        seed_sessions = _resolved_seed_sessions(
+            config, n_sessions=reference.n_sessions
         )
-        for predicted_matrix, variant, assignment_prior_metadata in prediction_variants:
-            scores = _score_prediction_against_reference(
-                predicted_matrix, reference, config=config
+        for seed_session in seed_sessions:
+            seed_config = replace(config, seed_session=seed_session)
+            prediction_variants = _predict_subject_track_variants(
+                subject_dir, seed_config, reference=reference
             )
-            if assignment_prior_metadata:
-                scores = {**scores, **assignment_prior_metadata}
-            results.append(
-                SubjectBenchmarkResult(
-                    subject=subject_dir.name,
-                    variant=variant,
-                    method=config.method,
-                    scores=scores,
-                    n_sessions=reference.n_sessions,
-                    reference_source=reference.source,
+            for (
+                predicted_matrix,
+                variant,
+                assignment_prior_metadata,
+            ) in prediction_variants:
+                scores = _score_prediction_against_reference(
+                    predicted_matrix, reference, config=seed_config
                 )
-            )
+                if assignment_prior_metadata:
+                    scores = {**scores, **assignment_prior_metadata}
+                if len(seed_sessions) > 1:
+                    scores = {**scores, "seed_session_sweep": int(seed_session)}
+                    variant = f"{variant} (seed session {seed_session})"
+                results.append(
+                    SubjectBenchmarkResult(
+                        subject=subject_dir.name,
+                        variant=variant,
+                        method=seed_config.method,
+                        scores=scores,
+                        n_sessions=reference.n_sessions,
+                        reference_source=reference.source,
+                    )
+                )
     return results
 
 
@@ -250,6 +275,23 @@ def discover_subject_dirs(data_path: str | Path) -> list[Path]:
         if child.is_dir() and _looks_like_subject_dir(child)
     ]
     return subjects
+
+
+def _resolved_seed_sessions(
+    config: Track2pBenchmarkConfig,
+    *,
+    n_sessions: int,
+) -> tuple[int, ...]:
+    seed_sessions = tuple(config.seed_sessions or (config.seed_session,))
+    if not seed_sessions:
+        return (int(config.seed_session),)
+    normalized = tuple(int(seed_session) for seed_session in seed_sessions)
+    for seed_session in normalized:
+        if seed_session < 0 or seed_session >= int(n_sessions):
+            raise IndexError(
+                f"seed_session {seed_session} out of bounds for {n_sessions} sessions"
+            )
+    return normalized
 
 
 def format_benchmark_table(rows: Sequence[dict[str, float | int | str]]) -> str:
@@ -355,6 +397,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         help="Reference seed session used for sparse-GT filtering",
+    )
+    parser.add_argument(
+        "--seed-sessions",
+        default=None,
+        help=(
+            "Optional comma-separated seed sessions to score; overrides --seed-session for subject-level benchmarks"
+        ),
     )
     parser.add_argument(
         "--restrict-to-reference-seed-rois",
@@ -531,6 +580,53 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--dynamic-edge-prior-json",
         default=None,
         help="JSON object for additive ROI-, gap-, activity-, and registration-quality edge priors",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-weight",
+        type=float,
+        default=0.0,
+        help="Small non-negative weight for activity-derived pairwise tie-breaking",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-component",
+        default="activity_tiebreaker_cost",
+        help="Activity component used by the tie-breaker",
+    )
+    parser.add_argument(
+        "--activity-trace-source",
+        default="auto",
+        choices=("auto", "spike_traces", "traces", "neuropil_traces"),
+        help="Trace source for activity-similarity components",
+    )
+    parser.add_argument(
+        "--activity-event-threshold",
+        type=float,
+        default=0.0,
+        help="Event threshold used by activity feature extraction",
+    )
+    parser.add_argument(
+        "--calibration-sample-weight-strategy",
+        default="none",
+        choices=("none", "balanced"),
+        help="Sample weighting strategy for LOSO logistic calibration",
+    )
+    parser.add_argument(
+        "--calibration-hard-negative-ratio",
+        type=float,
+        default=4.0,
+        help="Maximum hard negatives per positive calibration example",
+    )
+    parser.add_argument(
+        "--calibration-candidate-top-k-per-anchor",
+        type=int,
+        default=20,
+        help="Candidate hard negatives per anchor; use <=0 to disable the top-k prefilter",
+    )
+    parser.add_argument(
+        "--calibration-include-column-candidates",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Also collect top-k hard negatives per candidate measurement column",
     )
     parser.add_argument(
         "--higher-order-triplet-weight",
@@ -762,6 +858,10 @@ def solve_configured_global_assignment(
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+        activity_tie_breaker_weight=config.activity_tie_breaker_weight,
+        activity_tie_breaker_component=config.activity_tie_breaker_component,
+        activity_trace_source=config.activity_trace_source,
+        activity_event_threshold=config.activity_event_threshold,
         higher_order_consistency_config=config.higher_order_consistency_config,
         candidate_pruning_config=config.candidate_pruning_config,
         dynamic_edge_prior_config=config.dynamic_edge_prior_config,
@@ -1319,6 +1419,31 @@ def _looks_like_subject_dir(path: Path) -> bool:
     return bool(find_track2p_session_dirs(path))
 
 
+def _parse_json_object(raw: str | None, *, name: str) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{name} must decode to a JSON object")
+    return parsed
+
+
+def _parse_int_list(raw: str | None, *, name: str) -> tuple[int, ...]:
+    if raw is None:
+        return ()
+    tokens = tuple(token.strip() for token in raw.split(","))
+    if not tokens or any(not token for token in tokens):
+        raise ValueError(f"{name} must be a comma-separated list of integers")
+    return tuple(int(token) for token in tokens)
+
+
+def _optional_positive_int(value: int | None) -> int | None:
+    if value is None:
+        return None
+    value = int(value)
+    return None if value <= 0 else value
+
+
 def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
     pairwise_cost_kwargs = None
     if args.pairwise_cost_kwargs_json is not None:
@@ -1357,6 +1482,10 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
         curated_only=args.curated_only,
         seed_session=args.seed_session,
+        seed_sessions=_parse_int_list(
+            getattr(args, "seed_sessions", None),
+            name="--seed-sessions",
+        ),
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
         cost=args.cost,
         calibration_feature_set=args.calibration_feature_set,
@@ -1385,6 +1514,16 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         ),
         candidate_pruning_config=candidate_pruning_config,
         dynamic_edge_prior_config=dynamic_edge_prior_config,
+        activity_tie_breaker_weight=args.activity_tie_breaker_weight,
+        activity_tie_breaker_component=args.activity_tie_breaker_component,
+        activity_trace_source=args.activity_trace_source,
+        activity_event_threshold=args.activity_event_threshold,
+        calibration_sample_weight_strategy=args.calibration_sample_weight_strategy,
+        calibration_hard_negative_ratio=args.calibration_hard_negative_ratio,
+        calibration_candidate_top_k_per_anchor=_optional_positive_int(
+            args.calibration_candidate_top_k_per_anchor
+        ),
+        calibration_include_column_candidates=args.calibration_include_column_candidates,
         progress=args.progress,
     )
 

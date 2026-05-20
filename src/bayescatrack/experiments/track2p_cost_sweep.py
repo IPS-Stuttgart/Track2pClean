@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    apply_higher_order_consistency,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     _load_pyrecest_multisession_solver,
     build_registered_pairwise_costs,
@@ -30,6 +33,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     _load_reference_for_subject,
     _load_subject_sessions,
+    _parse_json_object,
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
@@ -198,7 +202,7 @@ def _build_sweep_pairwise_costs(
     if benchmark.cost == "registered-iou":
         CalciumPlaneData.build_pairwise_cost_matrix = _patched_pairwise_cost  # type: ignore[method-assign]
     try:
-        return build_registered_pairwise_costs(
+        pairwise_costs = build_registered_pairwise_costs(
             sessions,
             max_gap=benchmark.max_gap,
             cost=benchmark.cost,
@@ -208,7 +212,20 @@ def _build_sweep_pairwise_costs(
             velocity_variance=benchmark.velocity_variance,
             regularization=benchmark.regularization,
             pairwise_cost_kwargs=benchmark.pairwise_cost_kwargs,
+            activity_tie_breaker_weight=benchmark.activity_tie_breaker_weight,
+            activity_tie_breaker_component=benchmark.activity_tie_breaker_component,
+            activity_trace_source=benchmark.activity_trace_source,
+            activity_event_threshold=benchmark.activity_event_threshold,
         )
+        if benchmark.higher_order_consistency_config is not None:
+            pairwise_costs = apply_higher_order_consistency(
+                pairwise_costs,
+                session_sizes=tuple(
+                    int(session.plane_data.n_rois) for session in sessions
+                ),
+                config=benchmark.higher_order_consistency_config,
+            )
+        return pairwise_costs
     finally:
         if benchmark.cost == "registered-iou":
             CalciumPlaneData.build_pairwise_cost_matrix = original_pairwise_cost  # type: ignore[method-assign]
@@ -509,6 +526,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--regularization", type=float, default=1.0e-6)
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
     parser.add_argument(
+        "--higher-order-consistency-json",
+        default=None,
+        help=(
+            "JSON object forwarded to HigherOrderConsistencyConfig before scaling the pairwise costs"
+        ),
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-weight",
+        type=float,
+        default=0.0,
+        help="Small non-negative weight for activity-derived pairwise tie-breaking",
+    )
+    parser.add_argument(
+        "--activity-tie-breaker-component",
+        default="activity_tiebreaker_cost",
+    )
+    parser.add_argument(
+        "--activity-trace-source",
+        default="auto",
+        choices=("auto", "spike_traces", "traces", "neuropil_traces"),
+    )
+    parser.add_argument(
+        "--activity-event-threshold",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
         "--progress", action=argparse.BooleanOptionalAction, default=True
     )
     parser.add_argument("--output", type=Path, default=None)
@@ -571,12 +615,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _config_from_args(args: argparse.Namespace) -> CostSweepConfig:
-    pairwise_cost_kwargs = None
-    if args.pairwise_cost_kwargs_json is not None:
-        parsed = json.loads(args.pairwise_cost_kwargs_json)
-        if not isinstance(parsed, dict):
-            raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
-        pairwise_cost_kwargs = parsed
+    pairwise_cost_kwargs = _parse_json_object(
+        args.pairwise_cost_kwargs_json,
+        name="--pairwise-cost-kwargs-json",
+    )
+    higher_order_consistency_config = _parse_json_object(
+        args.higher_order_consistency_json,
+        name="--higher-order-consistency-json",
+    )
     benchmark = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -604,6 +650,11 @@ def _config_from_args(args: argparse.Namespace) -> CostSweepConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=higher_order_consistency_config,
+        activity_tie_breaker_weight=args.activity_tie_breaker_weight,
+        activity_tie_breaker_component=args.activity_tie_breaker_component,
+        activity_trace_source=args.activity_trace_source,
+        activity_event_threshold=args.activity_event_threshold,
         progress=args.progress,
     )
     return CostSweepConfig(

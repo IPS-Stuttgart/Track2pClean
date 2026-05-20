@@ -363,9 +363,9 @@ def build_registered_pairwise_costs(
     if _pairwise_kwargs_use_soft_overlap(base_cost_kwargs):
         install_soft_overlap_costs()
 
-    previous_pairwise_cost_method = None
+    previous_pairwise_cost_methods: list[Any] = []
     if pairwise_kwargs_use_shifted_overlap(base_cost_kwargs):
-        previous_pairwise_cost_method = install_shifted_overlap_cost_patch()
+        previous_pairwise_cost_methods.append(install_shifted_overlap_cost_patch())
     try:
         pairwise_costs: dict[SessionEdge, np.ndarray] = {}
         for source_session, target_session in session_edge_pairs(
@@ -447,7 +447,7 @@ def build_registered_pairwise_costs(
             )
         return pairwise_costs
     finally:
-        if previous_pairwise_cost_method is not None:
+        for previous_pairwise_cost_method in reversed(previous_pairwise_cost_methods):
             CalciumPlaneData.build_pairwise_cost_matrix = (  # type: ignore[method-assign]
                 previous_pairwise_cost_method
             )
