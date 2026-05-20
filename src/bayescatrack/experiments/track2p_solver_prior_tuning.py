@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
+import csv
+import json
+import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from typing import Any, Literal
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Any, Literal, cast
 
 import numpy as np
 from bayescatrack.association.calibrated_costs import (
@@ -19,23 +24,33 @@ from bayescatrack.association.pyrecest_global_assignment import (
     tracks_to_suite2p_index_matrix,
 )
 from bayescatrack.experiments.track2p_benchmark import (
+    OutputFormat,
     ProgressReporter,
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
     _score_prediction_against_reference,
     discover_subject_dirs,
+    format_benchmark_table,
+    write_results,
 )
 from bayescatrack.experiments.track2p_loso_calibration import (
     LosoCalibrationFold,
     LosoCalibrationResult,
     SubjectCalibrationData,
     _collect_training_examples,
+    calibration_feature_names,
     _load_subject_calibration_data,
     _loso_logistic_model_kwargs,
     _score_holdout_calibration,
     _stringify_class_weight,
     _training_sample_weight,
     _validate_sample_weight_strategy,
+    pairwise_cost_kwargs_for_calibration_features,
+)
+from bayescatrack.experiments.solver_prior_tuning import (
+    parse_nonnegative_list,
+    parse_positive_list,
+    parse_threshold_list,
 )
 
 SampleWeightStrategy = Literal["none", "balanced"]
@@ -128,6 +143,11 @@ def run_track2p_loso_solver_prior_tuning(
         )
 
     feature_names = tuple(feature_names)
+    pairwise_cost_kwargs = pairwise_cost_kwargs_for_calibration_features(
+        config.pairwise_cost_kwargs, feature_names
+    )
+    if pairwise_cost_kwargs != config.pairwise_cost_kwargs:
+        config = replace(config, pairwise_cost_kwargs=pairwise_cost_kwargs)
     sample_weight_strategy = _validate_sample_weight_strategy(sample_weight_strategy)
     logistic_model_kwargs = _loso_logistic_model_kwargs(model_kwargs)
     solver_prior_options = solver_prior_options or SolverPriorTuningOptions()
@@ -207,6 +227,7 @@ def run_track2p_loso_solver_prior_tuning(
             "calibration_class_weight": _stringify_class_weight(
                 logistic_model_kwargs.get("class_weight")
             ),
+            "calibration_feature_count": int(len(feature_names)),
             **tuning_result.to_score_dict(),
             **calibration_scores,
         }
@@ -484,3 +505,261 @@ def _dedupe_threshold_values(
 
 def _threshold_label(threshold: float | None) -> float | str:
     return "none" if threshold is None else float(threshold)
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Return the CLI parser for calibrated LOSO solver-prior tuning."""
+
+    parser = argparse.ArgumentParser(
+        prog="bayescatrack benchmark track2p-calibrated-solver-prior-loso",
+        description=(
+            "Fit calibrated association costs in leave-one-subject-out folds, "
+            "tune global-assignment start/end/gap/threshold priors on the "
+            "training subjects, and evaluate the held-out subject."
+        ),
+    )
+    parser.add_argument("--data", required=True, type=Path)
+    parser.add_argument("--reference", type=Path, default=None)
+    parser.add_argument(
+        "--reference-kind",
+        default="manual-gt",
+        choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
+    )
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
+    parser.add_argument("--plane", dest="plane_name", default="plane0")
+    parser.add_argument(
+        "--input-format", default="auto", choices=("auto", "suite2p", "npy")
+    )
+    parser.add_argument("--curated-only", action="store_true")
+    parser.add_argument("--include-non-cells", action="store_true")
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument("--cell-probability-threshold", type=float, default=0.5)
+    parser.add_argument("--weighted-masks", action="store_true")
+    parser.add_argument(
+        "--exclude-overlapping-pixels",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument("--seed-session", type=int, default=0)
+    parser.add_argument(
+        "--restrict-to-reference-seed-rois",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument("--max-gap", type=int, default=2)
+    parser.add_argument(
+        "--transform-type",
+        default="affine",
+        choices=("affine", "rigid", "fov-translation", "none"),
+    )
+    parser.add_argument("--start-cost", type=float, default=5.0)
+    parser.add_argument("--end-cost", type=float, default=5.0)
+    parser.add_argument("--gap-penalty", type=float, default=1.0)
+    parser.add_argument("--cost-threshold", type=float, default=6.0)
+    parser.add_argument("--no-cost-threshold", action="store_true")
+    parser.add_argument("--order", default="xy", choices=("xy", "yx"))
+    parser.add_argument("--weighted-centroids", action="store_true")
+    parser.add_argument("--velocity-variance", type=float, default=25.0)
+    parser.add_argument("--regularization", type=float, default=1.0e-6)
+    parser.add_argument("--pairwise-cost-kwargs-json", default=None)
+    parser.add_argument(
+        "--calibration-feature-set",
+        default="default",
+        choices=("default", "local-evidence", "default+local-evidence"),
+        help="Feature preset for the calibrated pairwise association model.",
+    )
+    parser.add_argument(
+        "--sample-weight-strategy", default="none", choices=("none", "balanced")
+    )
+    parser.add_argument("--calibration-model-kwargs-json", default=None)
+    parser.add_argument(
+        "--solver-prior-objective",
+        default="complete_track_f1",
+        choices=("pairwise_f1", "complete_track_f1"),
+        help="Training-fold metric used to select start/end/gap/threshold priors.",
+    )
+    parser.add_argument(
+        "--solver-start-costs",
+        default=None,
+        help=(
+            "Comma-separated candidate start costs. If omitted, the built-in "
+            "grid plus --start-cost are used."
+        ),
+    )
+    parser.add_argument(
+        "--solver-end-costs",
+        default=None,
+        help=(
+            "Comma-separated candidate end costs. If omitted, the built-in "
+            "grid plus --end-cost are used."
+        ),
+    )
+    parser.add_argument(
+        "--solver-gap-penalties",
+        default=None,
+        help=(
+            "Comma-separated candidate skip/gap penalties. If omitted, the "
+            "built-in grid plus --gap-penalty are used."
+        ),
+    )
+    parser.add_argument(
+        "--solver-cost-thresholds",
+        default=None,
+        help=(
+            "Comma-separated candidate edge-admission thresholds; accepts "
+            "'none'. If omitted, the built-in grid plus --cost-threshold are used."
+        ),
+    )
+    parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run calibrated LOSO solver-prior tuning from the command line."""
+
+    args = build_arg_parser().parse_args(argv)
+    feature_names = calibration_feature_names(args.calibration_feature_set)
+    config = _config_from_args(args, feature_names=feature_names)
+    result = run_track2p_loso_solver_prior_tuning(
+        config,
+        feature_names=feature_names,
+        sample_weight_strategy=args.sample_weight_strategy,
+        model_kwargs=_json_object(
+            args.calibration_model_kwargs_json,
+            "--calibration-model-kwargs-json",
+        ),
+        solver_prior_options=_solver_prior_options_from_args(args),
+    )
+    rows = result.to_rows()
+    if args.output is None:
+        _write_stdout(rows, cast(OutputFormat, args.format))
+    else:
+        write_results(rows, args.output, cast(OutputFormat, args.format))
+    return 0
+
+
+def _config_from_args(
+    args: argparse.Namespace,
+    *,
+    feature_names: Sequence[str],
+) -> Track2pBenchmarkConfig:
+    pairwise_cost_kwargs = pairwise_cost_kwargs_for_calibration_features(
+        _json_object(args.pairwise_cost_kwargs_json, "--pairwise-cost-kwargs-json"),
+        feature_names,
+    )
+    return Track2pBenchmarkConfig(
+        data=args.data,
+        method="global-assignment",
+        split="leave-one-subject-out",
+        plane_name=args.plane_name,
+        input_format=args.input_format,
+        reference=args.reference,
+        reference_kind=args.reference_kind,
+        allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
+        curated_only=args.curated_only,
+        seed_session=args.seed_session,
+        restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        cost="calibrated",
+        max_gap=args.max_gap,
+        transform_type=args.transform_type,
+        start_cost=args.start_cost,
+        end_cost=args.end_cost,
+        gap_penalty=args.gap_penalty,
+        cost_threshold=None if args.no_cost_threshold else args.cost_threshold,
+        include_behavior=args.include_behavior,
+        include_non_cells=args.include_non_cells,
+        cell_probability_threshold=args.cell_probability_threshold,
+        weighted_masks=args.weighted_masks,
+        exclude_overlapping_pixels=args.exclude_overlapping_pixels,
+        order=args.order,
+        weighted_centroids=args.weighted_centroids,
+        velocity_variance=args.velocity_variance,
+        regularization=args.regularization,
+        pairwise_cost_kwargs=pairwise_cost_kwargs,
+        progress=args.progress,
+    )
+
+
+def _solver_prior_options_from_args(args: argparse.Namespace) -> SolverPriorTuningOptions:
+    return SolverPriorTuningOptions(
+        objective=cast(SolverPriorObjective, args.solver_prior_objective),
+        start_costs=(
+            parse_positive_list(args.solver_start_costs, name="--solver-start-costs")
+            if args.solver_start_costs is not None
+            else None
+        ),
+        end_costs=(
+            parse_positive_list(args.solver_end_costs, name="--solver-end-costs")
+            if args.solver_end_costs is not None
+            else None
+        ),
+        gap_penalties=(
+            parse_nonnegative_list(
+                args.solver_gap_penalties, name="--solver-gap-penalties"
+            )
+            if args.solver_gap_penalties is not None
+            else None
+        ),
+        cost_thresholds=(
+            parse_threshold_list(args.solver_cost_thresholds)
+            if args.solver_cost_thresholds is not None
+            else None
+        ),
+    )
+
+
+def _json_object(value: str | None, option_name: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    parsed = json.loads(value)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{option_name} must decode to a JSON object")
+    return parsed
+
+
+def _write_stdout(
+    rows: Sequence[dict[str, float | int | str]], output_format: OutputFormat
+) -> None:
+    if output_format == "json":
+        print(json.dumps(list(rows), indent=2))
+        return
+    if output_format == "csv":
+        writer = csv.DictWriter(sys.stdout, fieldnames=_csv_fieldnames(rows))
+        writer.writeheader()
+        writer.writerows(rows)
+        return
+    print(format_benchmark_table(rows))
+
+
+def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
+    preferred = [
+        "subject",
+        "variant",
+        "method",
+        "held_out_subject",
+        "training_subjects",
+        "pairwise_f1",
+        "complete_track_f1",
+        "training_examples",
+        "positive_examples",
+        "negative_examples",
+        "tuned_start_cost",
+        "tuned_end_cost",
+        "tuned_gap_penalty",
+        "tuned_cost_threshold",
+        "solver_prior_objective",
+        "solver_prior_objective_score",
+        "solver_prior_candidate_count",
+    ]
+    remaining = sorted({key for row in rows for key in row} - set(preferred))
+    return [key for key in preferred if any(key in row for row in rows)] + remaining
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

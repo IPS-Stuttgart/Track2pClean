@@ -473,6 +473,12 @@ def _multiset_intersection_size(
     return int(sum((left & right).values()))
 
 
+def _safe_ratio(numerator: float, denominator: float) -> float:
+    if denominator == 0:
+        return 1.0
+    return float(numerator) / float(denominator)
+
+
 def complete_tracks_score(ground_truth: TrackTable, prediction: TrackTable) -> float:
     """Return the Track2p 'complete tracks' (CT) score.
 
@@ -486,9 +492,7 @@ def complete_tracks_score(ground_truth: TrackTable, prediction: TrackTable) -> f
     false_positives = prediction.n_tracks - true_positives
     false_negatives = ground_truth.n_tracks - true_positives
     denominator = 2 * true_positives + false_positives + false_negatives
-    if denominator == 0:
-        return 0.0
-    return (2.0 * true_positives) / denominator
+    return _safe_ratio(2.0 * true_positives, denominator)
 
 
 def proportion_correct_by_horizon(
@@ -499,9 +503,6 @@ def proportion_correct_by_horizon(
     prediction = _align_prediction_to_ground_truth(ground_truth, prediction)
     result: dict[int, float] = {}
     denominator = ground_truth.n_tracks
-    if denominator == 0:
-        return {horizon: 0.0 for horizon in range(2, ground_truth.n_sessions + 1)}
-
     for horizon in range(2, ground_truth.n_sessions + 1):
         ground_truth_rows = _row_counter(ground_truth, horizon=horizon)
         prediction_rows = _row_counter(
@@ -513,7 +514,7 @@ def proportion_correct_by_horizon(
             ground_truth_rows,
             prediction_rows,
         )
-        result[horizon] = correctly_reconstructed / denominator
+        result[horizon] = _safe_ratio(correctly_reconstructed, denominator)
     return result
 
 

@@ -7,7 +7,7 @@ import csv
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -100,7 +100,7 @@ class SklearnPairwiseProbabilityAdapter:
 def run_track2p_configurable_loso_calibration(
     config: Track2pBenchmarkConfig,
     *,
-    feature_names: Sequence[str] = DEFAULT_ASSOCIATION_FEATURES,
+    feature_names: Sequence[str] | None = None,
     sample_weight: Any | None = None,
     sample_weight_strategy: SampleWeightStrategy = "none",
     model_kind: CalibrationModelKind = "logistic",
@@ -464,6 +464,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=True,
     )
     parser.add_argument("--hard-negative-features", default="")
+    parser.add_argument("--activity-tie-breaker-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--activity-tie-breaker-component", default="activity_tiebreaker_cost"
+    )
+    parser.add_argument("--activity-trace-source", default="auto")
+    parser.add_argument("--activity-event-threshold", type=float, default=0.0)
+    parser.add_argument("--higher-order-consistency-json", default=None)
     parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")

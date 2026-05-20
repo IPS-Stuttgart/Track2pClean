@@ -15,6 +15,7 @@ already transformed into earlier-session coordinates, pass them via
 from __future__ import annotations
 
 import argparse
+import inspect
 import importlib
 import json
 import sys
@@ -217,6 +218,57 @@ def build_multisession_pairwise_costs(
     return pairwise_costs, tuple(pairwise_bundles)
 
 
+def _compatible_solver_call_attempts(
+    solver: Callable[..., Any],
+    attempts: Sequence[dict[str, Any]],
+) -> tuple[tuple[dict[str, Any], bool], ...]:
+    """Return solver-call attempts and whether TypeError may indicate API drift.
+
+    Older PyRecEst revisions used slightly different names for the same costs.
+    The previous implementation tried every keyword set and caught every
+    ``TypeError``. That made real ``TypeError`` exceptions raised inside the
+    solver indistinguishable from signature mismatches. When the signature is
+    inspectable, filter attempts before the call and let solver-internal
+    ``TypeError`` exceptions propagate unchanged.
+    """
+
+    try:
+        signature = inspect.signature(solver)
+    except (TypeError, ValueError):
+        # Some callables cannot be introspected. Preserve the old compatibility
+        # fallback for those rare cases because there is no safer way to select
+        # an API variant ahead of the call.
+        return tuple((kwargs, True) for kwargs in attempts)
+
+    if any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    ):
+        # A solver that explicitly accepts **kwargs is expected to perform its
+        # own keyword validation. Do not retry on TypeError, because such an
+        # error is no longer evidence of an unsupported call signature.
+        return ((attempts[0], False),)
+
+    supported_keyword_names = {
+        name
+        for name, parameter in signature.parameters.items()
+        if parameter.kind
+        in {inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY}
+    }
+
+    compatible_attempts: list[tuple[dict[str, Any], bool]] = []
+    seen_keyword_sets: set[tuple[str, ...]] = set()
+    for kwargs in attempts:
+        if not set(kwargs).issubset(supported_keyword_names):
+            continue
+        keyword_set = tuple(sorted(kwargs))
+        if keyword_set in seen_keyword_sets:
+            continue
+        seen_keyword_sets.add(keyword_set)
+        compatible_attempts.append((kwargs, False))
+    return tuple(compatible_attempts)
+
+
 def _call_multisession_solver(
     solver: Callable[..., Any],
     pairwise_costs: Mapping[tuple[int, int], np.ndarray],
@@ -250,11 +302,19 @@ def _call_multisession_solver(
         {},
     ]
 
+    call_attempts = _compatible_solver_call_attempts(solver, attempts)
+    if not call_attempts:
+        raise TypeError(
+            "Could not call solve_multisession_assignment with any supported signature"
+        )
+
     last_error: Exception | None = None
-    for kwargs in attempts:
+    for kwargs, retry_on_type_error in call_attempts:
         try:
             return solver(pairwise_costs, **kwargs)
         except TypeError as exc:
+            if not retry_on_type_error:
+                raise
             last_error = exc
             continue
 

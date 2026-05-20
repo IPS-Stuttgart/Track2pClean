@@ -39,6 +39,7 @@ from bayescatrack.experiments.track2p_benchmark import (
 from bayescatrack.experiments.track2p_fov_affine_benchmark import (
     _soft_iou_pairwise_cost_matrix,
 )
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 # pylint: disable=protected-access,too-many-locals
 

@@ -187,6 +187,22 @@ python -m bayescatrack benchmark track2p \
   --max-gap 2
 ```
 
+Run the richer LOSO calibrated-cost path with split Suite2p ROI-stat features,
+local evidence components, automatic registration selection, and the configurable
+hard-negative calibration harness:
+
+```bash
+python -m bayescatrack benchmark track2p-loso-calibration \
+  --data /path/to/track2p_zenodo \
+  --reference /path/to/manual_ground_truth_root \
+  --reference-kind manual-gt \
+  --transform-type auto \
+  --weighted-masks \
+  --pairwise-cost-kwargs-json '{"local_evidence_components": true}' \
+  --calibration-feature-set rich \
+  --calibration-model hist-gradient-boosting
+```
+
 The benchmark prints a compact table by default and can also write JSON or CSV via `--format json --output results.json` or `--format csv --output results.csv`.
 
 Analyze radial growth from an existing track table:

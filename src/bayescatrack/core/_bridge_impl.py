@@ -36,6 +36,7 @@ import argparse
 import json
 import re
 import sys
+import warnings
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -386,6 +387,7 @@ class CalciumPlaneData:
             "area_ratio_cost": area_ratio_cost,
             "roi_feature_cost": roi_feature_cost,
             "cell_probability_cost": cell_probability_cost,
+            "cell_probability_available": cell_probability_available,
             "gated": gated.astype(bool),
         }
         return total_cost, components
@@ -694,6 +696,7 @@ def load_suite2p_plane(
 
     iscell_path = plane_dir / "iscell.npy"
     iscell = np.load(iscell_path, allow_pickle=True) if iscell_path.exists() else None
+    has_cell_probabilities = iscell is not None
 
     ops_path = plane_dir / "ops.npy"
     ops = None
@@ -873,9 +876,16 @@ def load_track2p_subject(
     plane_name: str = "plane0",
     input_format: str = "auto",
     include_behavior: bool = True,
+    strict: bool = False,
     **suite2p_kwargs: Any,
 ) -> list[Track2pSession]:
-    """Load all sessions of one Track2p-style subject folder."""
+    """Load all sessions of one Track2p-style subject folder.
+
+    In ``auto`` mode, recognized session folders without loadable data for the
+    requested plane are skipped with a warning by default. Set ``strict=True``
+    to raise :class:`FileNotFoundError` instead so incomplete benchmark inputs
+    cannot silently reduce the number of evaluated sessions.
+    """
 
     if input_format not in {"auto", "suite2p", "npy"}:
         raise ValueError("input_format must be 'auto', 'suite2p', or 'npy'")
@@ -894,9 +904,18 @@ def load_track2p_subject(
 
         if plane_data is None:
             if input_format == "auto":
-                continue
+                message = (
+                    "Skipping recognized Track2p session "
+                    f"'{session_dir.name}' for plane '{plane_name}' because "
+                    f"neither '{suite2p_plane_dir}' nor '{npy_plane_dir}' exists"
+                )
+                if not strict:
+                    warnings.warn(message, RuntimeWarning, stacklevel=2)
+                    continue
+                raise FileNotFoundError(message)
             raise FileNotFoundError(
-                f"Could not find {input_format} data for session '{session_dir.name}' and plane '{plane_name}'"
+                f"Could not find {input_format} data for session "
+                f"'{session_dir.name}' and plane '{plane_name}'"
             )
 
         motion_energy = None
@@ -1107,7 +1126,7 @@ def export_subject_to_npz(
 
     payload: dict[str, np.ndarray] = {
         "session_names": np.asarray(
-            [session.session_name for session in sessions], dtype=object
+            [session.session_name for session in sessions], dtype=np.str_
         ),
         "session_dates": np.asarray(
             [
@@ -1118,10 +1137,10 @@ def export_subject_to_npz(
                 )
                 for session in sessions
             ],
-            dtype=object,
+            dtype=np.str_,
         ),
-        "plane_name": np.asarray(plane_name, dtype=object),
-        "input_format": np.asarray(input_format, dtype=object),
+        "plane_name": np.asarray(str(plane_name), dtype=np.str_),
+        "input_format": np.asarray(str(input_format), dtype=np.str_),
     }
 
     summary_sessions: list[dict[str, Any]] = []
@@ -1614,6 +1633,49 @@ def _pairwise_mask_cosine_similarity(
     return numerator / denominator
 
 
+def _pairwise_cell_probability_cost(
+    probabilities_self: np.ndarray | None,
+    probabilities_other: np.ndarray | None,
+    *,
+    cost_shape: tuple[int, int],
+    similarity_epsilon: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return optional cell-probability costs plus an availability indicator."""
+
+    zero_cost = np.zeros(cost_shape, dtype=float)
+    zero_available = np.zeros(cost_shape, dtype=float)
+    if probabilities_self is None or probabilities_other is None:
+        return zero_cost, zero_available
+
+    probabilities_self = np.asarray(probabilities_self, dtype=float).reshape(-1)
+    probabilities_other = np.asarray(probabilities_other, dtype=float).reshape(-1)
+    if probabilities_self.shape != (cost_shape[0],):
+        raise ValueError(
+            "cell_probabilities for the reference plane must have shape (n_roi,)"
+        )
+    if probabilities_other.shape != (cost_shape[1],):
+        raise ValueError(
+            "cell_probabilities for the measurement plane must have shape (n_roi,)"
+        )
+
+    valid_self = np.isfinite(probabilities_self) & (probabilities_self >= 0.0)
+    valid_other = np.isfinite(probabilities_other) & (probabilities_other >= 0.0)
+    available = valid_self[:, None] & valid_other[None, :]
+    if not np.any(available):
+        return zero_cost, zero_available
+
+    clipped_self = np.clip(probabilities_self, similarity_epsilon, 1.0)
+    clipped_other = np.clip(probabilities_other, similarity_epsilon, 1.0)
+    raw_cost = -0.5 * (
+        np.log(clipped_self[:, None])
+        + np.log(clipped_other[None, :])
+    )
+
+    cost = np.zeros(cost_shape, dtype=float)
+    cost[available] = raw_cost[available]
+    return cost, available.astype(float)
+
+
 # pylint: disable=too-many-locals
 def _pairwise_roi_feature_distance(
     reference_plane: CalciumPlaneData,
@@ -1645,7 +1707,7 @@ def _pairwise_roi_feature_distance(
     feature_distance = np.zeros(
         (reference_plane.n_rois, measurement_plane.n_rois), dtype=float
     )
-    used_feature_dims = 0
+    valid_feature_dims = np.zeros_like(feature_distance, dtype=int)
 
     for feature_name in feature_names:
         reference_feature = np.asarray(
@@ -1679,12 +1741,17 @@ def _pairwise_roi_feature_distance(
                 np.abs(reference_values[:, None] - measurement_values[None, :])[valid]
                 / feature_scale
             )
-            feature_distance += diff
-            used_feature_dims += 1
+            feature_distance[valid] += diff[valid]
+            valid_feature_dims[valid] += 1
 
-    if used_feature_dims == 0:
-        return np.zeros((reference_plane.n_rois, measurement_plane.n_rois), dtype=float)
-    return feature_distance / used_feature_dims
+    valid_pairs = valid_feature_dims > 0
+    if not np.any(valid_pairs):
+        return np.ones((reference_plane.n_rois, measurement_plane.n_rois), dtype=float)
+    normalized_feature_distance = np.ones_like(feature_distance)
+    normalized_feature_distance[valid_pairs] = (
+        feature_distance[valid_pairs] / valid_feature_dims[valid_pairs]
+    )
+    return normalized_feature_distance
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:

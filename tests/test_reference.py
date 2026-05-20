@@ -291,6 +291,18 @@ def test_score_complete_tracks_counts_duplicate_predictions_as_reconstructed_tra
     assert scores["ct"] == pytest.approx(0.5)
 
 
+def test_score_complete_tracks_empty_tables_use_vacuous_score():
+    scores = score_complete_tracks(
+        np.zeros((0, 2), dtype=object),
+        np.zeros((0, 2), dtype=object),
+    )
+
+    assert scores["T_rc"] == 0
+    assert scores["T_c"] == 0
+    assert scores["T_gt"] == 0
+    assert scores["ct"] == pytest.approx(1.0)
+
+
 def test_score_complete_tracks_validates_shapes():
     with pytest.raises(ValueError, match="same number of sessions"):
         score_complete_tracks(

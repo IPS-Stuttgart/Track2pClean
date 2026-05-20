@@ -71,6 +71,10 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Tune Track2p global-assignment solver priors inside LOSO folds",
         )
         subparsers.add_parser(
+            "track2p-calibrated-solver-prior-loso",
+            help="Run calibrated LOSO global assignment with fold-internal solver-prior tuning",
+        )
+        subparsers.add_parser(
             "track2p-loso-calibration",
             help="Run configurable hard-negative LOSO calibrated global assignment",
         )
@@ -89,6 +93,10 @@ def _handle_benchmark(args: list[str]) -> int:
         subparsers.add_parser(
             "track2p-teacher-diagnostics",
             help="Alias for track2p-teacher-debug",
+        )
+        subparsers.add_parser(
+            "track2p-diagnose",
+            help="Triage Track2p result failures into registration, ranking, solver, or scoring fixes",
         )
         subparsers.add_parser(
             "edge-ranking",
@@ -161,6 +169,12 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_solver_prior_loso_main(args[1:]))
+    if args[0] == "track2p-calibrated-solver-prior-loso":
+        from bayescatrack.experiments.track2p_solver_prior_tuning import (
+            main as _track2p_calibrated_solver_prior_loso_main,
+        )
+
+        return int(_track2p_calibrated_solver_prior_loso_main(args[1:]))
     if args[0] == "track2p-loso-calibration":
         from bayescatrack.experiments.track2p_configurable_loso_calibration import (
             main as _track2p_loso_calibration_main,
@@ -185,6 +199,12 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_teacher_debug_main(args[1:]))
+    if args[0] == "track2p-diagnose":
+        from bayescatrack.experiments.track2p_failure_diagnosis import (
+            main as _track2p_failure_diagnosis_main,
+        )
+
+        return int(_track2p_failure_diagnosis_main(args[1:]))
     if args[0] == "edge-ranking":
         from bayescatrack.experiments.track2p_edge_ranking import (
             main as _track2p_edge_ranking_main,

@@ -46,6 +46,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     solve_configured_global_assignment,
 )
 from bayescatrack.reference import Track2pReference
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 SolverPriorObjective = Literal["pairwise_f1", "complete_track_f1", "mean_f1"]
 

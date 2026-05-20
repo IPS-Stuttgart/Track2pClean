@@ -6,7 +6,11 @@ from bayescatrack.association.activity_similarity import (
     ACTIVITY_TIEBREAKER_FEATURES,
     activity_similarity_components,
 )
-from bayescatrack.association.calibrated_costs import pairwise_feature_tensor
+from bayescatrack.association.calibrated_costs import (
+    DEFAULT_ASSOCIATION_FEATURES,
+    EXPANDED_ACTIVITY_ASSOCIATION_FEATURES,
+    pairwise_feature_tensor,
+)
 from bayescatrack.core.bridge import CalciumPlaneData
 
 
@@ -111,3 +115,30 @@ def test_activity_tiebreaker_features_work_with_calibrated_feature_tensor() -> N
 
     assert features.shape == (2, 2, len(ACTIVITY_TIEBREAKER_FEATURES))
     assert np.all(np.isfinite(features))
+
+
+def test_default_calibrated_features_include_expanded_activity_cues() -> None:
+    assert EXPANDED_ACTIVITY_ASSOCIATION_FEATURES == ACTIVITY_TIEBREAKER_FEATURES
+    for feature_name in EXPANDED_ACTIVITY_ASSOCIATION_FEATURES:
+        assert feature_name in DEFAULT_ASSOCIATION_FEATURES
+
+
+def test_expanded_activity_features_remain_optional_for_legacy_components() -> None:
+    features = pairwise_feature_tensor(
+        {"pairwise_cost_matrix": np.zeros((2, 3), dtype=float)},
+        feature_names=EXPANDED_ACTIVITY_ASSOCIATION_FEATURES,
+    )
+
+    assert features.shape == (2, 3, len(EXPANDED_ACTIVITY_ASSOCIATION_FEATURES))
+    npt.assert_allclose(
+        features,
+        np.zeros((2, 3, len(EXPANDED_ACTIVITY_ASSOCIATION_FEATURES))),
+    )
+
+
+def test_default_calibrated_schema_contains_specific_activity_cues() -> None:
+    assert "fluorescence_similarity_cost" in DEFAULT_ASSOCIATION_FEATURES
+    assert "spike_similarity_cost" in DEFAULT_ASSOCIATION_FEATURES
+    assert "trace_std_absdiff" in DEFAULT_ASSOCIATION_FEATURES
+    assert "event_rate_absdiff" in DEFAULT_ASSOCIATION_FEATURES
+    assert "neuropil_ratio_absdiff" in DEFAULT_ASSOCIATION_FEATURES

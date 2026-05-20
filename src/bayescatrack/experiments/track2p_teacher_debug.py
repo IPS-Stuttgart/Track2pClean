@@ -43,6 +43,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     discover_subject_dirs,
 )
 from bayescatrack.reference import Track2pReference, load_track2p_reference
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 CSVValue = str | int | float | bool | None
 CSVRow = dict[str, CSVValue]
@@ -437,7 +438,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_TYPES,
         help="Registration transform used for Bayes costs",
     )
     parser.add_argument("--start-cost", type=float, default=5.0)

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 from bayescatrack.association.pyrecest_global_assignment import AssociationCost
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 if TYPE_CHECKING:
     from bayescatrack.experiments.track2p_benchmark import (
@@ -276,7 +277,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=("registered-iou", "roi-aware", "roi-aware-shifted"),
     )
     p.add_argument("--max-gap", type=int, default=2)
-    p.add_argument("--transform-type", default="affine")
+    p.add_argument(
+        "--transform-type",
+        default="affine",
+        choices=REGISTRATION_TRANSFORM_TYPES,
+    )
     p.add_argument("--start-cost", type=float, default=5.0)
     p.add_argument("--end-cost", type=float, default=5.0)
     p.add_argument("--gap-penalty", type=float, default=1.0)

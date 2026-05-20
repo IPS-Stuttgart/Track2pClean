@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 from bayescatrack import CalciumPlaneData
+from bayescatrack.association import (
+    pyrecest_global_assignment as global_assignment,
+)
 from bayescatrack.soft_overlap_costs import registered_soft_iou_cost_kwargs
 
 
@@ -39,9 +42,15 @@ def test_soft_overlap_components_capture_near_miss_with_zero_exact_iou():
     assert np.isfinite(components["pairwise_cost_matrix"][0, 0])
 
 
-def test_registered_soft_iou_preset_is_available_to_global_assignment():
-    kwargs = registered_soft_iou_cost_kwargs()
+def test_registered_soft_iou_preset_is_available_to_global_assignment_dispatcher():
+    direct_kwargs = registered_soft_iou_cost_kwargs()
+    dispatcher_kwargs = (
+        global_assignment._cost_kwargs_for_method(  # pylint: disable=protected-access
+            "registered-soft-iou"
+        )
+    )
 
-    assert kwargs["iou_weight"] == 0.0
-    assert kwargs["soft_iou_weight"] > 0.0
-    assert kwargs["distance_transform_overlap_weight"] > 0.0
+    assert dispatcher_kwargs == direct_kwargs
+    assert dispatcher_kwargs["iou_weight"] == 0.0
+    assert dispatcher_kwargs["soft_iou_weight"] > 0.0
+    assert dispatcher_kwargs["distance_transform_overlap_weight"] > 0.0

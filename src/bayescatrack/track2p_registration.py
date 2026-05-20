@@ -179,6 +179,8 @@ def register_plane_pair(
         return moving_plane
     if reference_plane.fov is None or moving_plane.fov is None:
         raise ValueError("Both planes must provide FOV images for registration.")
+    if transform_type == "auto":
+        return _auto_registered_plane(reference_plane, moving_plane)
     if transform_type == "fov-translation":
         return _fov_translation_registered_plane(reference_plane, moving_plane)
     if transform_type == "fov-affine":
@@ -316,4 +318,26 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
         sessions,
         measurement_planes_in_reference_frames=registered_measurement_planes,
         **association_kwargs,
+    )
+
+
+def _with_auto_registration_metadata(
+    plane: CalciumPlaneData,
+    *,
+    selected_transform: str,
+    attempts: Sequence[Mapping[str, object]],
+) -> CalciumPlaneData:
+    ops = {} if plane.ops is None else dict(plane.ops)
+    ops.update(
+        {
+            "registration_transform_type": "auto",
+            "auto_registration_selected_transform": selected_transform,
+            "auto_registration_candidate_scores": tuple(dict(attempt) for attempt in attempts),
+        }
+    )
+    return plane.with_replaced_masks(
+        plane.roi_masks,
+        fov=plane.fov,
+        source=plane.source,
+        ops=ops,
     )

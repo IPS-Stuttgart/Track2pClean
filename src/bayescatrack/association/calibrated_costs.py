@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+from bayescatrack.core._roi_stat_features import SPLIT_ROI_STAT_FEATURES
 from bayescatrack.association._pyrecest_feature_compat import (
     CalibratedPairwiseAssociationModel,
     FeatureTransform,
@@ -488,6 +489,8 @@ def _feature_transforms_for(
             transforms[feature_name] = _optional_zero_component_transform(feature_name)
         elif feature_name == "session_gap":
             transforms[feature_name] = _session_gap_transform
+        elif feature_name == "cell_probability_available":
+            transforms[feature_name] = _optional_zero_component_transform(feature_name)
     return transforms
 
 

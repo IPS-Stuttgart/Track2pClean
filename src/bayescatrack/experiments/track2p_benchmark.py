@@ -44,6 +44,7 @@ from bayescatrack.reference import (
     load_aligned_subject_reference,
     load_track2p_reference,
 )
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 ReferenceKind = Literal["auto", "manual-gt", "track2p-output", "aligned-subject-rows"]
 BenchmarkMethod = Literal["track2p-baseline", "global-assignment", "oracle-gt-links"]
@@ -1311,6 +1312,14 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         if not isinstance(parsed, dict):
             raise ValueError("--pairwise-cost-kwargs-json must decode to a JSON object")
         pairwise_cost_kwargs = parsed
+    higher_order_consistency_config = None
+    if args.higher_order_consistency_json is not None:
+        parsed_higher_order = json.loads(args.higher_order_consistency_json)
+        if not isinstance(parsed_higher_order, dict):
+            raise ValueError(
+                "--higher-order-consistency-json must decode to a JSON object"
+            )
+        higher_order_consistency_config = parsed_higher_order
     return Track2pBenchmarkConfig(
         data=args.data,
         method=args.method,
