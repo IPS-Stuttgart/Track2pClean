@@ -36,7 +36,15 @@ def score_track_matrices(
     session_pairs: Iterable[tuple[int, int]] | None = None,
     complete_session_indices: Sequence[int] | None = None,
 ) -> dict[str, float | int]:
-    """Return aggregate track metrics with duplicate-aware benchmark F1 counts."""
+    """Return aggregate track metrics with duplicate-aware benchmark F1 counts.
+
+    PyRecEst's generic track metrics score pairwise links and complete tracks as
+    sets. That is useful for identity-set comparison, but Track2p-style
+    benchmark rows should count duplicate predicted rows/links as false
+    positives. This wrapper preserves the PyRecEst diagnostic ledger and summary
+    fields, then replaces pairwise, track-link, and complete-track precision,
+    recall, F1, and count fields with multiset counts.
+    """
 
     normalized_session_pairs = _normalize_session_pairs(session_pairs)
     normalized_complete_session_indices = _normalize_complete_session_indices(
@@ -53,6 +61,7 @@ def score_track_matrices(
     predicted = normalize_track_matrix(predicted_track_matrix)
     reference = normalize_track_matrix(reference_track_matrix)
     _validate_compatible_shapes(predicted, reference)
+
     scores.update(
         _score_multiset_track_links(
             predicted,
