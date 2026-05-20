@@ -116,6 +116,8 @@ class Track2pBenchmarkConfig:
     regularization: float = 1.0e-6
     pairwise_cost_kwargs: dict[str, Any] | None = None
     higher_order_consistency_config: dict[str, Any] | None = None
+    candidate_pruning_config: dict[str, Any] | None = None
+    dynamic_edge_prior_config: dict[str, Any] | None = None
     progress: bool = False
 
 
@@ -521,6 +523,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--candidate-pruning-json",
+        default=None,
+        help="JSON object for row/column top-k, probability, and cost candidate pruning",
+    )
+    parser.add_argument(
+        "--dynamic-edge-prior-json",
+        default=None,
+        help="JSON object for additive ROI-, gap-, activity-, and registration-quality edge priors",
+    )
+    parser.add_argument(
         "--higher-order-triplet-weight",
         type=float,
         default=None,
@@ -751,6 +763,8 @@ def solve_configured_global_assignment(
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
         higher_order_consistency_config=config.higher_order_consistency_config,
+        candidate_pruning_config=config.candidate_pruning_config,
+        dynamic_edge_prior_config=config.dynamic_edge_prior_config,
     )
 
 
@@ -1320,6 +1334,18 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
                 "--higher-order-consistency-json must decode to a JSON object"
             )
         higher_order_consistency_config = parsed_higher_order
+    candidate_pruning_config = None
+    if args.candidate_pruning_json is not None:
+        parsed_candidate_pruning = json.loads(args.candidate_pruning_json)
+        if not isinstance(parsed_candidate_pruning, dict):
+            raise ValueError("--candidate-pruning-json must decode to a JSON object")
+        candidate_pruning_config = parsed_candidate_pruning
+    dynamic_edge_prior_config = None
+    if args.dynamic_edge_prior_json is not None:
+        parsed_dynamic_edge_prior = json.loads(args.dynamic_edge_prior_json)
+        if not isinstance(parsed_dynamic_edge_prior, dict):
+            raise ValueError("--dynamic-edge-prior-json must decode to a JSON object")
+        dynamic_edge_prior_config = parsed_dynamic_edge_prior
     return Track2pBenchmarkConfig(
         data=args.data,
         method=args.method,
@@ -1357,6 +1383,8 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         higher_order_consistency_config=_higher_order_consistency_config_from_args(
             args
         ),
+        candidate_pruning_config=candidate_pruning_config,
+        dynamic_edge_prior_config=dynamic_edge_prior_config,
         progress=args.progress,
     )
 

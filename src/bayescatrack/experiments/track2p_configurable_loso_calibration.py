@@ -471,6 +471,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--activity-trace-source", default="auto")
     parser.add_argument("--activity-event-threshold", type=float, default=0.0)
     parser.add_argument("--higher-order-consistency-json", default=None)
+    parser.add_argument("--candidate-pruning-json", default=None)
+    parser.add_argument("--dynamic-edge-prior-json", default=None)
     parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
@@ -531,6 +533,18 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         pairwise_cost_kwargs=_json_object(
             args.pairwise_cost_kwargs_json,
             "--pairwise-cost-kwargs-json",
+        ),
+        higher_order_consistency_config=_json_object(
+            args.higher_order_consistency_json,
+            "--higher-order-consistency-json",
+        ),
+        candidate_pruning_config=_json_object(
+            args.candidate_pruning_json,
+            "--candidate-pruning-json",
+        ),
+        dynamic_edge_prior_config=_json_object(
+            args.dynamic_edge_prior_json,
+            "--dynamic-edge-prior-json",
         ),
         calibration_feature_set=args.calibration_feature_set,
         progress=args.progress,

@@ -297,6 +297,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--activity-trace-source", default="auto")
     parser.add_argument("--activity-event-threshold", type=float, default=0.0)
     parser.add_argument("--higher-order-consistency-json", default=None)
+    parser.add_argument("--candidate-pruning-json", default=None)
+    parser.add_argument("--dynamic-edge-prior-json", default=None)
     parser.add_argument("--monotone-ranker-kwargs-json", default=None)
     parser.add_argument(
         "--progress", action=argparse.BooleanOptionalAction, default=True
@@ -370,6 +372,15 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        higher_order_consistency_config=higher_order_consistency_config,
+        candidate_pruning_config=_json_object(
+            args.candidate_pruning_json,
+            "--candidate-pruning-json",
+        ),
+        dynamic_edge_prior_config=_json_object(
+            args.dynamic_edge_prior_json,
+            "--dynamic-edge-prior-json",
+        ),
         progress=args.progress,
     )
 

@@ -103,6 +103,14 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Rank manual-GT Track2p edges within pairwise cost/feature matrices",
         )
         subparsers.add_parser(
+            "select-edge-ranking-features",
+            help="Select calibrated feature names from edge-ranking summary CSVs",
+        )
+        subparsers.add_parser(
+            "select-structured-objective",
+            help="Rank benchmark variants by complete-track or other structured metrics",
+        )
+        subparsers.add_parser(
             "registration-qa",
             help="Report registration quality on manual-GT Track2p links",
         )
@@ -211,6 +219,18 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_edge_ranking_main(args[1:]))
+    if args[0] == "select-edge-ranking-features":
+        from bayescatrack.experiments.edge_ranking_feature_selection import (
+            main as _edge_ranking_feature_selection_main,
+        )
+
+        return int(_edge_ranking_feature_selection_main(args[1:]))
+    if args[0] == "select-structured-objective":
+        from bayescatrack.experiments.structured_objective_tuning import (
+            main as _structured_objective_tuning_main,
+        )
+
+        return int(_structured_objective_tuning_main(args[1:]))
     if args[0] == "registration-qa":
         from bayescatrack.experiments.registration_qa_report import (
             main as _registration_qa_main,

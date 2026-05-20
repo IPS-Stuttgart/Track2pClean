@@ -203,6 +203,29 @@ python -m bayescatrack benchmark track2p-loso-calibration \
   --calibration-model hist-gradient-boosting
 ```
 
+Use calibrated candidate pruning and dynamic edge priors to reject ambiguous
+links before global assignment:
+
+```bash
+python -m bayescatrack benchmark track2p-loso-calibration \
+  --data /path/to/track2p_zenodo \
+  --reference /path/to/manual_ground_truth_root \
+  --reference-kind manual-gt \
+  --transform-type auto \
+  --include-non-cells \
+  --cell-probability-threshold 0.0 \
+  --pairwise-cost-kwargs-json '{"local_evidence_components": true}' \
+  --calibration-feature-set rich \
+  --candidate-pruning-json '{"row_top_k": 20, "column_top_k": 20, "probability_threshold": 0.1}' \
+  --dynamic-edge-prior-json '{"session_gap_weight": 0.25, "cell_probability_weight": 0.5, "registration_empty_roi_weight": 8.0}' \
+  --calibration-model hist-gradient-boosting
+```
+
+For diagnosis-first tuning, run `edge-ranking`, then select feature names with
+`bayescatrack benchmark select-edge-ranking-features`, and finally select
+benchmark variants by complete-track F1 with
+`bayescatrack benchmark select-structured-objective`.
+
 The benchmark prints a compact table by default and can also write JSON or CSV via `--format json --output results.json` or `--format csv --output results.csv`.
 
 Analyze radial growth from an existing track table:

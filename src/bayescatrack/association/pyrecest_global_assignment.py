@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
+from bayescatrack.association.candidate_pruning import (
+    CandidatePruningConfig,
+    prune_pairwise_cost_matrix,
+)
 from bayescatrack.association.activity_similarity import (
     add_activity_similarity_components,
 )
@@ -16,6 +20,10 @@ from bayescatrack.association.activity_tie_breaker import (
 from bayescatrack.association.calibrated_costs import (
     CalibratedAssociationModel,
     calibrated_cost_matrix_from_bundle,
+)
+from bayescatrack.association.dynamic_edge_priors import (
+    DynamicEdgePriorConfig,
+    apply_dynamic_edge_priors,
 )
 from bayescatrack.association.higher_order_consistency import (
     HigherOrderConsistencyConfig,
@@ -327,6 +335,12 @@ def build_registered_pairwise_costs(
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
     activity_trace_source: str = "auto",
     activity_event_threshold: float = 0.0,
+    candidate_pruning_config: (
+        CandidatePruningConfig | Mapping[str, Any] | None
+    ) = None,
+    dynamic_edge_prior_config: (
+        DynamicEdgePriorConfig | Mapping[str, Any] | None
+    ) = None,
 ) -> dict[SessionEdge, np.ndarray]:
     """Build registered pairwise cost matrices for consecutive and skip-session edges."""
 
@@ -340,6 +354,7 @@ def build_registered_pairwise_costs(
         return_pairwise_components
         or cost == "calibrated"
         or activity_tie_breaker_weight > 0.0
+        or dynamic_edge_prior_config is not None
     )
 
     base_cost_kwargs = _cost_kwargs_for_method(cost)
@@ -390,12 +405,17 @@ def build_registered_pairwise_costs(
                 )
             if cost == "calibrated":
                 assert calibrated_model is not None
+                probability_matrix = calibrated_model.pairwise_probability_matrix_from_bundle(
+                    bundle,
+                    session_gap=target_session - source_session,
+                )
                 cost_matrix = calibrated_cost_matrix_from_bundle(
                     bundle,
                     calibrated_model,
                     session_gap=target_session - source_session,
                 )
             else:
+                probability_matrix = None
                 cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
             if activity_tie_breaker_weight > 0.0:
                 cost_matrix = np.asarray(
@@ -405,6 +425,19 @@ def build_registered_pairwise_costs(
                     component_name=activity_tie_breaker_component,
                     weight=activity_tie_breaker_weight,
                 )
+            cost_matrix = apply_dynamic_edge_priors(
+                cost_matrix,
+                bundle.pairwise_components,
+                session_gap=target_session - source_session,
+                empty_registered_rois=empty_registered_rois,
+                config=dynamic_edge_prior_config,
+            )
+            cost_matrix = prune_pairwise_cost_matrix(
+                cost_matrix,
+                probability_matrix=probability_matrix,
+                config=candidate_pruning_config,
+                large_cost=float(base_cost_kwargs.get("large_cost", 1.0e6)),
+            )
             pairwise_costs[(source_session, target_session)] = (
                 expand_registered_pairwise_cost_columns(
                     cost_matrix,
@@ -441,6 +474,12 @@ def solve_global_assignment_for_sessions(
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
     activity_trace_source: str = "auto",
     activity_event_threshold: float = 0.0,
+    candidate_pruning_config: (
+        CandidatePruningConfig | Mapping[str, Any] | None
+    ) = None,
+    dynamic_edge_prior_config: (
+        DynamicEdgePriorConfig | Mapping[str, Any] | None
+    ) = None,
     higher_order_consistency_config: (
         HigherOrderConsistencyConfig | Mapping[str, Any] | None
     ) = None,
@@ -463,6 +502,8 @@ def solve_global_assignment_for_sessions(
         activity_tie_breaker_component=activity_tie_breaker_component,
         activity_trace_source=activity_trace_source,
         activity_event_threshold=activity_event_threshold,
+        candidate_pruning_config=candidate_pruning_config,
+        dynamic_edge_prior_config=dynamic_edge_prior_config,
     )
     session_sizes = tuple(int(session.plane_data.n_rois) for session in sessions)
     if higher_order_consistency_config is not None:

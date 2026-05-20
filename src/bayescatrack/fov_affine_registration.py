@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
@@ -37,6 +38,7 @@ def register_measurement_plane_by_fov_affine(
     grid_shape: tuple[int, int] = (3, 3),
     min_tile_size: int = 32,
     max_shift_fraction: float = 0.55,
+    mask_warp_mode: Literal["nearest", "bilinear"] = "nearest",
 ) -> FovAffineRegistration:
     if reference_plane.fov is None or measurement_plane.fov is None:
         raise ValueError(
@@ -54,6 +56,7 @@ def register_measurement_plane_by_fov_affine(
         measurement_plane.roi_masks,
         estimate.matrix_xy,
         output_shape=reference_plane.image_shape,
+        mode=mask_warp_mode,
     )
     registered_fov = apply_affine_image_warp(
         measurement_plane.fov,
@@ -150,6 +153,7 @@ def apply_affine_roi_mask_warp(
     matrix_xy: np.ndarray,
     *,
     output_shape: tuple[int, int],
+    mode: Literal["nearest", "bilinear"] = "nearest",
 ) -> np.ndarray:
     roi_masks = np.asarray(roi_masks)
     matrix_xy = np.asarray(matrix_xy, dtype=float)
@@ -157,6 +161,14 @@ def apply_affine_roi_mask_warp(
         raise ValueError("roi_masks must have shape (n_roi, height, width)")
     if matrix_xy.shape != (2, 3):
         raise ValueError("matrix_xy must have shape (2, 3)")
+    if mode not in {"nearest", "bilinear"}:
+        raise ValueError("mode must be either 'nearest' or 'bilinear'")
+    if mode == "bilinear":
+        return _apply_affine_roi_mask_warp_bilinear(
+            roi_masks,
+            matrix_xy,
+            output_shape=output_shape,
+        )
 
     source_y, source_x, valid = _affine_output_sample_coordinates(
         matrix_xy,
@@ -192,6 +204,52 @@ def apply_affine_roi_mask_warp(
         )
         output[roi_index] = sampled.astype(output.dtype, copy=False)
     return output
+
+
+def _apply_affine_roi_mask_warp_bilinear(
+    roi_masks: np.ndarray,
+    matrix_xy: np.ndarray,
+    *,
+    output_shape: tuple[int, int],
+) -> np.ndarray:
+    """Splat ROI pixels with bilinear weights to preserve soft mask evidence."""
+
+    roi_masks = np.asarray(roi_masks)
+    matrix_xy = np.asarray(matrix_xy, dtype=float)
+    output = np.zeros(
+        (roi_masks.shape[0], int(output_shape[0]), int(output_shape[1])),
+        dtype=float,
+    )
+    linear = matrix_xy[:, :2]
+    offset = matrix_xy[:, 2]
+    for roi_index, mask in enumerate(roi_masks):
+        yy, xx = np.nonzero(mask)
+        if yy.size == 0:
+            continue
+        src_xy = np.column_stack((xx.astype(float), yy.astype(float)))
+        dst_xy = src_xy @ linear.T + offset[None, :]
+        values = np.asarray(mask[yy, xx], dtype=float)
+        _bilinear_splat(output[roi_index], dst_xy[:, 0], dst_xy[:, 1], values)
+    return output
+
+
+def _bilinear_splat(
+    image: np.ndarray, x: np.ndarray, y: np.ndarray, values: np.ndarray
+) -> None:
+    height, width = image.shape
+    x0 = np.floor(x).astype(int)
+    y0 = np.floor(y).astype(int)
+    for dx in (0, 1):
+        for dy in (0, 1):
+            xi = x0 + dx
+            yi = y0 + dy
+            valid = (xi >= 0) & (xi < width) & (yi >= 0) & (yi < height)
+            if not np.any(valid):
+                continue
+            wx = 1.0 - np.abs(x[valid] - xi[valid])
+            wy = 1.0 - np.abs(y[valid] - yi[valid])
+            weights = np.clip(wx, 0.0, 1.0) * np.clip(wy, 0.0, 1.0)
+            np.add.at(image, (yi[valid], xi[valid]), values[valid] * weights)
 
 
 def apply_affine_image_warp(
