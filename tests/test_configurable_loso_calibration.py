@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-# pylint: disable=protected-access,too-few-public-methods
-
 import numpy as np
 from bayescatrack.experiments import track2p_configurable_loso_calibration as loso
+
+# pylint: disable=protected-access,too-few-public-methods
+
 
 
 def test_configurable_loso_parser_builds_hard_negative_options_and_model_kwargs():

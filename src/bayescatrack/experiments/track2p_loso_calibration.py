@@ -295,7 +295,11 @@ def _feature_set_label(
         return "default+local-evidence"
     if tuple(feature_names) == calibration_feature_names("local-evidence"):
         return "local-evidence"
-    return "custom" if tuple(feature_names) != calibration_feature_names("default") else "default"
+    return (
+        "custom"
+        if tuple(feature_names) != calibration_feature_names("default")
+        else "default"
+    )
 
 
 def _pairwise_kwargs_request_local_evidence(
@@ -315,7 +319,9 @@ def _pairwise_kwargs_request_local_evidence(
 
 def _uses_local_evidence_features(feature_names: Sequence[str]) -> bool:
     local_evidence_features = set(LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
-    return any(feature_name in local_evidence_features for feature_name in feature_names)
+    return any(
+        feature_name in local_evidence_features for feature_name in feature_names
+    )
 
 
 def _config_with_pairwise_kwargs_for_features(

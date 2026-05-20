@@ -208,7 +208,9 @@ def run_track2p_configurable_loso_calibration(
     )
 
 
-def _load_subjects(config: Track2pBenchmarkConfig) -> tuple[SubjectCalibrationData, ...]:
+def _load_subjects(
+    config: Track2pBenchmarkConfig,
+) -> tuple[SubjectCalibrationData, ...]:
     subject_dirs = tuple(discover_subject_dirs(config.data))
     if len(subject_dirs) < 2:
         raise ValueError("LOSO calibration requires at least two subject directories")
@@ -438,7 +440,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=True,
     )
     parser.add_argument("--hard-negative-features", default="")
-    parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--progress", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     return parser

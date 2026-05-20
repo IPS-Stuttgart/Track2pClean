@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 
 

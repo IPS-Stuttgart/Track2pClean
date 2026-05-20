@@ -21,7 +21,11 @@ from pyrecest.utils.track_evaluation import (
     score_false_continuations,
     score_fragmentation,
     score_pairwise_tracks,
+)
+from pyrecest.utils.track_evaluation import (
     score_track_matrices as _pyrecest_score_track_matrices,
+)
+from pyrecest.utils.track_evaluation import (
     summarize_tracks,
     track_lengths,
 )
@@ -97,7 +101,9 @@ def _normalize_session_pairs(
 ) -> tuple[tuple[int, int], ...] | None:
     if session_pairs is None:
         return None
-    return tuple((int(session_a), int(session_b)) for session_a, session_b in session_pairs)
+    return tuple(
+        (int(session_a), int(session_b)) for session_a, session_b in session_pairs
+    )
 
 
 def _normalize_complete_session_indices(
@@ -228,7 +234,9 @@ def _session_pairs(
     pairs = (
         tuple((index, index + 1) for index in range(max(0, matrix.shape[1] - 1)))
         if session_pairs is None
-        else tuple((int(session_a), int(session_b)) for session_a, session_b in session_pairs)
+        else tuple(
+            (int(session_a), int(session_b)) for session_a, session_b in session_pairs
+        )
     )
     for session_a, session_b in pairs:
         _validate_session_index(matrix, session_a)
