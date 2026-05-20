@@ -7,23 +7,23 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
-from bayescatrack.association.adaptive_priors import (
-    AdaptiveEdgePriorConfig,
-    apply_adaptive_edge_priors,
-)
-from bayescatrack.association.candidate_pruning import (
-    CandidatePruningConfig,
-    prune_pairwise_cost_matrix,
-)
 from bayescatrack.association.activity_similarity import (
     add_activity_similarity_components,
 )
 from bayescatrack.association.activity_tie_breaker import (
     activity_tie_breaker_cost_matrix,
 )
+from bayescatrack.association.adaptive_priors import (
+    AdaptiveEdgePriorConfig,
+    apply_adaptive_edge_priors,
+)
 from bayescatrack.association.calibrated_costs import (
     CalibratedAssociationModel,
     calibrated_cost_matrix_from_bundle,
+)
+from bayescatrack.association.candidate_pruning import (
+    CandidatePruningConfig,
+    prune_pairwise_cost_matrix,
 )
 from bayescatrack.association.dynamic_edge_priors import (
     DynamicEdgePriorConfig,
@@ -49,6 +49,8 @@ from bayescatrack.core.bridge import (
 )
 from bayescatrack.soft_overlap_costs import (
     install_soft_overlap_costs,
+)
+from bayescatrack.soft_overlap_costs import (
     registered_soft_iou_cost_kwargs as _registered_soft_overlap_cost_kwargs,
 )
 from bayescatrack.track2p_registration import register_plane_pair
@@ -93,9 +95,7 @@ class GlobalAssignmentRun:
     session_edges: tuple[SessionEdge, ...]
 
 
-def registered_iou_cost_kwargs(
-    *, similarity_epsilon: float = 1.0e-6
-) -> dict[str, Any]:
+def registered_iou_cost_kwargs(*, similarity_epsilon: float = 1.0e-6) -> dict[str, Any]:
     """Return cost kwargs for a Track2p-style registered IoU ablation."""
 
     return {
@@ -339,12 +339,8 @@ def build_registered_pairwise_costs(
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
     activity_trace_source: str = "auto",
     activity_event_threshold: float = 0.0,
-    candidate_pruning_config: (
-        CandidatePruningConfig | Mapping[str, Any] | None
-    ) = None,
-    dynamic_edge_prior_config: (
-        DynamicEdgePriorConfig | Mapping[str, Any] | None
-    ) = None,
+    candidate_pruning_config: CandidatePruningConfig | Mapping[str, Any] | None = None,
+    dynamic_edge_prior_config: DynamicEdgePriorConfig | Mapping[str, Any] | None = None,
 ) -> dict[SessionEdge, np.ndarray]:
     """Build registered pairwise cost matrices for consecutive and skip-session edges."""
 
@@ -409,9 +405,11 @@ def build_registered_pairwise_costs(
                 )
             if cost == "calibrated":
                 assert calibrated_model is not None
-                probability_matrix = calibrated_model.pairwise_probability_matrix_from_bundle(
-                    bundle,
-                    session_gap=target_session - source_session,
+                probability_matrix = (
+                    calibrated_model.pairwise_probability_matrix_from_bundle(
+                        bundle,
+                        session_gap=target_session - source_session,
+                    )
                 )
                 cost_matrix = calibrated_cost_matrix_from_bundle(
                     bundle,
@@ -478,12 +476,8 @@ def solve_global_assignment_for_sessions(
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
     activity_trace_source: str = "auto",
     activity_event_threshold: float = 0.0,
-    candidate_pruning_config: (
-        CandidatePruningConfig | Mapping[str, Any] | None
-    ) = None,
-    dynamic_edge_prior_config: (
-        DynamicEdgePriorConfig | Mapping[str, Any] | None
-    ) = None,
+    candidate_pruning_config: CandidatePruningConfig | Mapping[str, Any] | None = None,
+    dynamic_edge_prior_config: DynamicEdgePriorConfig | Mapping[str, Any] | None = None,
     higher_order_consistency_config: (
         HigherOrderConsistencyConfig | Mapping[str, Any] | None
     ) = None,

@@ -50,7 +50,13 @@ def session_context_from_planes(
 
     image_shape = getattr(reference_plane, "image_shape", (1, 1))
     image_area = max(float(image_shape[0] * image_shape[1]), 1.0)
-    roi_density = float(getattr(reference_plane, "n_rois", 0) + getattr(measurement_plane, "n_rois", 0)) / image_area
+    roi_density = (
+        float(
+            getattr(reference_plane, "n_rois", 0)
+            + getattr(measurement_plane, "n_rois", 0)
+        )
+        / image_area
+    )
     probabilities = []
     for plane in (reference_plane, measurement_plane):
         cell_probs = getattr(plane, "cell_probabilities", None)
@@ -60,7 +66,8 @@ def session_context_from_planes(
                 probabilities.append(float(np.nanmean(arr)))
     mean_cell_probability = float(np.mean(probabilities)) if probabilities else 0.5
     trace_available = [
-        getattr(plane, "traces", None) is not None or getattr(plane, "spike_traces", None) is not None
+        getattr(plane, "traces", None) is not None
+        or getattr(plane, "spike_traces", None) is not None
         for plane in (reference_plane, measurement_plane)
     ]
     metadata = {} if registration_metadata is None else dict(registration_metadata)
@@ -68,8 +75,16 @@ def session_context_from_planes(
         session_gap=float(session_gap),
         roi_density=roi_density,
         mean_cell_probability=mean_cell_probability,
-        registration_fit_rmse=_first_scalar(metadata, ("fit_rmse", "fov_affine_fit_rmse", "nonrigid_registration_fit_rmse"), default=0.0),
-        registration_valid_fraction=_first_scalar(metadata, ("valid_fraction", "nonrigid_registration_inverse_warp_valid_fraction"), default=1.0),
+        registration_fit_rmse=_first_scalar(
+            metadata,
+            ("fit_rmse", "fov_affine_fit_rmse", "nonrigid_registration_fit_rmse"),
+            default=0.0,
+        ),
+        registration_valid_fraction=_first_scalar(
+            metadata,
+            ("valid_fraction", "nonrigid_registration_inverse_warp_valid_fraction"),
+            default=1.0,
+        ),
         trace_availability_fraction=float(np.mean(trace_available)),
         backend_bias=_backend_bias(metadata),
     )
@@ -112,7 +127,9 @@ def apply_context_intercept_to_probabilities(
     return _sigmoid(logits + context_intercept(context, config=config))
 
 
-def probability_cost_matrix(probabilities: Any, *, epsilon: float = 1.0e-9) -> np.ndarray:
+def probability_cost_matrix(
+    probabilities: Any, *, epsilon: float = 1.0e-9
+) -> np.ndarray:
     """Convert match probabilities into non-negative assignment costs."""
 
     if epsilon <= 0.0:
@@ -135,7 +152,9 @@ def apply_context_intercept_to_costs(
     return costs - float(temperature) * context_intercept(context, config=config)
 
 
-def _first_scalar(metadata: Mapping[str, Any], names: tuple[str, ...], *, default: float) -> float:
+def _first_scalar(
+    metadata: Mapping[str, Any], names: tuple[str, ...], *, default: float
+) -> float:
     for name in names:
         if name not in metadata:
             continue

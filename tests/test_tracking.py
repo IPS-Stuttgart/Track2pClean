@@ -4,10 +4,10 @@ import sys
 import types
 from pathlib import Path
 
+import bayescatrack.tracking as tracking
 import numpy as np
 import numpy.testing as npt
 import pytest
-import bayescatrack.tracking as tracking
 from bayescatrack.tracking import run_registered_subject_tracking
 
 
@@ -157,7 +157,6 @@ def _make_three_roi_masks(shift_x: int = 0) -> np.ndarray:
     masks[1, 2:4, roi_columns[1]] = True
     masks[2, 5:7, roi_columns[2]] = True
     return masks
-
 
 
 def _write_three_session_subject(subject_dir: Path) -> None:

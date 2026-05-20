@@ -106,9 +106,7 @@ def soft_iou_pairwise_cost_matrix(
         radius=soft_iou_radius,
     )
     effective_iou = np.maximum(exact_iou, soft_iou)
-    effective_iou_cost = -np.log(
-        np.clip(effective_iou, similarity_epsilon, 1.0)
-    )
+    effective_iou_cost = -np.log(np.clip(effective_iou, similarity_epsilon, 1.0))
 
     total_cost = np.asarray(base_cost, dtype=float).copy()
     if use_soft_iou_for_iou_cost and iou_weight > 0.0:
@@ -129,9 +127,7 @@ def soft_iou_pairwise_cost_matrix(
             "effective_iou": effective_iou,
             "iou_for_cost": effective_iou if use_soft_iou_for_iou_cost else exact_iou,
             "soft_iou_cost": effective_iou_cost,
-            "soft_iou_radius": np.full_like(
-                total_cost, soft_iou_radius, dtype=float
-            ),
+            "soft_iou_radius": np.full_like(total_cost, soft_iou_radius, dtype=float),
         }
     )
     if return_components:
@@ -204,7 +200,9 @@ def install_soft_iou_cost_patch() -> PairwiseCostMethod:
     return original_method
 
 
-def _ensure_finite_cost_matrix(cost_matrix: np.ndarray, *, large_cost: float) -> np.ndarray:
+def _ensure_finite_cost_matrix(
+    cost_matrix: np.ndarray, *, large_cost: float
+) -> np.ndarray:
     sanitized = np.asarray(cost_matrix, dtype=float).copy()
     invalid = ~np.isfinite(sanitized)
     if np.any(invalid):

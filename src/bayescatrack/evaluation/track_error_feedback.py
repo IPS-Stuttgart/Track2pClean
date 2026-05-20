@@ -44,11 +44,17 @@ def link_feedback_rows(
         fn = max(ref_count - pred_count, 0)
         duplicate = max(pred_count - 1, 0)
         if tp:
-            rows.append(_feedback_row(base, link, "true_positive", tp, pred_count, ref_count))
+            rows.append(
+                _feedback_row(base, link, "true_positive", tp, pred_count, ref_count)
+            )
         if fp:
-            rows.append(_feedback_row(base, link, "false_positive", fp, pred_count, ref_count))
+            rows.append(
+                _feedback_row(base, link, "false_positive", fp, pred_count, ref_count)
+            )
         if fn:
-            rows.append(_feedback_row(base, link, "false_negative", fn, pred_count, ref_count))
+            rows.append(
+                _feedback_row(base, link, "false_negative", fn, pred_count, ref_count)
+            )
         if duplicate:
             rows.append(
                 _feedback_row(

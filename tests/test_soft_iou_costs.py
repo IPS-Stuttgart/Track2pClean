@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.pyrecest_global_assignment import (
     _cost_kwargs_for_method,
     registered_soft_iou_cost_kwargs,

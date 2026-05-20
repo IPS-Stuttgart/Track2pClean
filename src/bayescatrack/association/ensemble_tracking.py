@@ -7,10 +7,8 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.evaluation.complete_track_scores import normalize_track_matrix
 from bayescatrack.matching import build_track_rows_from_matches
-
 
 TrackEdge = tuple[int, int, int, int]
 
@@ -46,8 +44,12 @@ def consensus_edge_counter(
         raise ValueError("min_votes must be positive")
     vote_counter: Counter[TrackEdge] = Counter()
     for matrix in track_matrices:
-        vote_counter.update(track_matrix_edge_counter(matrix, session_pairs=session_pairs).keys())
-    return Counter({edge: votes for edge, votes in vote_counter.items() if votes >= min_votes})
+        vote_counter.update(
+            track_matrix_edge_counter(matrix, session_pairs=session_pairs).keys()
+        )
+    return Counter(
+        {edge: votes for edge, votes in vote_counter.items() if votes >= min_votes}
+    )
 
 
 def consensus_track_rows(

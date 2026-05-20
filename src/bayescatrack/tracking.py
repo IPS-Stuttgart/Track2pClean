@@ -38,7 +38,6 @@ from .registration import (
     build_registered_consecutive_session_association_bundles,
 )
 
-
 TrackingMethod = Literal["global", "pairwise"]
 
 
@@ -480,7 +479,9 @@ def _global_assignment_edge_match_results(
     session_edges: Iterable[tuple[int, int]] | None = None,
 ) -> tuple[tuple[tuple[int, int], SessionMatchResult], ...]:
     sessions = tuple(sessions)
-    edges = tuple(global_assignment.session_edges if session_edges is None else session_edges)
+    edges = tuple(
+        global_assignment.session_edges if session_edges is None else session_edges
+    )
     roi_position_maps = [_roi_position_map_for_session(session) for session in sessions]
     track_rows = np.asarray(track_rows, dtype=int)
     match_results: list[tuple[tuple[int, int], SessionMatchResult]] = []
@@ -541,7 +542,9 @@ def _global_assignment_edge_match_results(
                     reference_positions=np.asarray(reference_positions, dtype=int),
                     measurement_positions=np.asarray(measurement_positions, dtype=int),
                     reference_roi_indices=np.asarray(reference_roi_indices, dtype=int),
-                    measurement_roi_indices=np.asarray(measurement_roi_indices, dtype=int),
+                    measurement_roi_indices=np.asarray(
+                        measurement_roi_indices, dtype=int
+                    ),
                     costs=np.asarray(costs, dtype=float),
                 ),
             )
@@ -650,7 +653,10 @@ def _build_global_link_cost_matrix(
             target_roi = int(row[target_index])
             if fill_value in (source_roi, target_roi):
                 continue
-            if source_roi not in source_position_by_roi or target_roi not in target_position_by_roi:
+            if (
+                source_roi not in source_position_by_roi
+                or target_roi not in target_position_by_roi
+            ):
                 continue
             link_costs[track_index, source_index] = float(
                 cost_matrix[

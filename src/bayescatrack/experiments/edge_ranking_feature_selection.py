@@ -38,7 +38,9 @@ def select_features_from_edge_ranking_summaries(
     for row in rows:
         grouped[str(row.get("score_name", ""))].append(row)
 
-    feature_rows = [_score_feature(name, group) for name, group in grouped.items() if name]
+    feature_rows = [
+        _score_feature(name, group) for name, group in grouped.items() if name
+    ]
     feature_rows = [row for row in feature_rows if _passes_rule(row, rule)]
     feature_rows.sort(
         key=lambda row: (
@@ -57,7 +59,9 @@ def selected_feature_names(rows: Sequence[Mapping[str, Any]]) -> tuple[str, ...]
     return tuple(str(row["score_name"]) for row in rows)
 
 
-def _score_feature(name: str, rows: Sequence[Mapping[str, Any]]) -> dict[str, float | int | str]:
+def _score_feature(
+    name: str, rows: Sequence[Mapping[str, Any]]
+) -> dict[str, float | int | str]:
     row_hit = _mean(rows, "row_hit_at_1_present")
     col_hit = _mean(rows, "column_hit_at_1_present")
     mutual = _mean(rows, "mutual_top1_rate_present")
@@ -90,7 +94,9 @@ def _passes_rule(row: Mapping[str, Any], rule: EdgeFeatureSelectionRule) -> bool
         ("mean_row_positive_margin_rate", rule.min_row_positive_margin_rate),
         ("mean_column_positive_margin_rate", rule.min_column_positive_margin_rate),
     )
-    return all(threshold is None or float(row[name]) >= threshold for name, threshold in checks)
+    return all(
+        threshold is None or float(row[name]) >= threshold for name, threshold in checks
+    )
 
 
 def _mean(rows: Sequence[Mapping[str, Any]], field: str) -> float:

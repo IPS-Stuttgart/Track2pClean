@@ -15,8 +15,8 @@ already transformed into earlier-session coordinates, pass them via
 from __future__ import annotations
 
 import argparse
-import inspect
 import importlib
+import inspect
 import json
 import sys
 from dataclasses import dataclass

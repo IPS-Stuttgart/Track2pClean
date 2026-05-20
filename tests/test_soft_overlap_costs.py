@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 from bayescatrack import CalciumPlaneData
-from bayescatrack.association import (
-    pyrecest_global_assignment as global_assignment,
-)
+from bayescatrack.association import pyrecest_global_assignment as global_assignment
 from bayescatrack.soft_overlap_costs import registered_soft_iou_cost_kwargs
 
 

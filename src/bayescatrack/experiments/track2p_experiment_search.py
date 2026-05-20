@@ -31,7 +31,9 @@ class SearchSetting:
     pairwise_cost_kwargs: dict[str, Any] | None
 
     def label(self) -> str:
-        threshold = "none" if self.cost_threshold is None else f"{self.cost_threshold:g}"
+        threshold = (
+            "none" if self.cost_threshold is None else f"{self.cost_threshold:g}"
+        )
         return (
             f"cost={self.cost};transform={self.transform_type};max_gap={self.max_gap};"
             f"start={self.start_cost:g};end={self.end_cost:g};gap={self.gap_penalty:g};"
@@ -52,11 +54,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
     )
     parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", default="auto", choices=("auto", "suite2p", "npy"))
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
+    parser.add_argument(
+        "--input-format", default="auto", choices=("auto", "suite2p", "npy")
+    )
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
     parser.add_argument("--curated-only", action="store_true")
     parser.add_argument("--seed-session", type=int, default=0)
-    parser.add_argument("--restrict-to-reference-seed-rois", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--restrict-to-reference-seed-rois",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument(
         "--costs",
         default="registered-iou,registered-soft-iou,roi-aware,roi-aware-shifted",
@@ -87,16 +97,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable shape, ambiguity-margin and top-k candidate-pruning components",
     )
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--include-non-cells", action="store_true")
     parser.add_argument("--cell-probability-threshold", type=float, default=0.5)
     parser.add_argument("--weighted-masks", action="store_true")
-    parser.add_argument("--exclude-overlapping-pixels", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--exclude-overlapping-pixels",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument("--order", default="xy", choices=("xy", "yx"))
     parser.add_argument("--weighted-centroids", action="store_true")
     parser.add_argument("--velocity-variance", type=float, default=25.0)
     parser.add_argument("--regularization", type=float, default=1.0e-6)
-    parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--progress", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--continue-on-error", action="store_true")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("json", "csv"), default="csv")
@@ -180,7 +198,9 @@ def run_search(args: argparse.Namespace) -> list[dict[str, Any]]:
     return rows
 
 
-def _iter_settings(args: argparse.Namespace, base_pairwise_kwargs: dict[str, Any] | None):
+def _iter_settings(
+    args: argparse.Namespace, base_pairwise_kwargs: dict[str, Any] | None
+):
     costs = _parse_str_list(args.costs)
     transforms = _parse_str_list(args.transform_types)
     max_gaps = _parse_int_list(args.max_gaps)
@@ -188,7 +208,15 @@ def _iter_settings(args: argparse.Namespace, base_pairwise_kwargs: dict[str, Any
     end_costs = _parse_float_list(args.end_costs)
     gap_penalties = _parse_float_list(args.gap_penalties)
     thresholds = _parse_thresholds(args.cost_thresholds)
-    for cost, transform_type, max_gap, start_cost, end_cost, gap_penalty, threshold in itertools.product(
+    for (
+        cost,
+        transform_type,
+        max_gap,
+        start_cost,
+        end_cost,
+        gap_penalty,
+        threshold,
+    ) in itertools.product(
         costs,
         transforms,
         max_gaps,
@@ -232,8 +260,12 @@ def _setting_row(setting: SearchSetting) -> dict[str, Any]:
         "search_start_cost": setting.start_cost,
         "search_end_cost": setting.end_cost,
         "search_gap_penalty": setting.gap_penalty,
-        "search_cost_threshold": "none" if setting.cost_threshold is None else setting.cost_threshold,
-        "search_pairwise_cost_kwargs": json.dumps(setting.pairwise_cost_kwargs or {}, sort_keys=True),
+        "search_cost_threshold": (
+            "none" if setting.cost_threshold is None else setting.cost_threshold
+        ),
+        "search_pairwise_cost_kwargs": json.dumps(
+            setting.pairwise_cost_kwargs or {}, sort_keys=True
+        ),
     }
 
 
@@ -271,7 +303,9 @@ def _parse_thresholds(raw: str) -> tuple[float | None, ...]:
     return tuple(values)
 
 
-def _write_rows(rows: list[dict[str, Any]], output_path: Path, output_format: str) -> None:
+def _write_rows(
+    rows: list[dict[str, Any]], output_path: Path, output_format: str
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
         output_path.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")

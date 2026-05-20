@@ -331,9 +331,7 @@ def _parse_run_spec(
 ) -> BenchmarkRunSpec:
     if not isinstance(raw_run, Mapping):
         raise ValueError("Each manifest run must be a JSON object")
-    _reject_unknown_keys(
-        raw_run, RUN_SPEC_FIELDS, location="runs[]"
-    )
+    _reject_unknown_keys(raw_run, RUN_SPEC_FIELDS, location="runs[]")
 
     run_data = {**defaults, **raw_run}
     runner = _runner_name(run_data.get("runner", DEFAULT_RUNNER))
@@ -393,8 +391,7 @@ def _runner_name(value: Any) -> BenchmarkRunner:
     runner = str(value)
     if runner not in RUNNER_ALIASES:
         raise ValueError(
-            "Manifest run runner must be one of: "
-            + ", ".join(sorted(RUNNER_CHOICES))
+            "Manifest run runner must be one of: " + ", ".join(sorted(RUNNER_CHOICES))
         )
     return cast(BenchmarkRunner, RUNNER_ALIASES[runner])
 

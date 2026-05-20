@@ -354,11 +354,11 @@ class CalciumPlaneData:
         if cell_probability_weight > 0.0 or return_components:
             cell_probability_cost, cell_probability_available = (
                 _pairwise_cell_probability_cost(
-                self.cell_probabilities,
-                other.cell_probabilities,
-                cost_shape=cost_shape,
-                similarity_epsilon=similarity_epsilon,
-            )
+                    self.cell_probabilities,
+                    other.cell_probabilities,
+                    cost_shape=cost_shape,
+                    similarity_epsilon=similarity_epsilon,
+                )
             )
             if cell_probability_weight > 0.0:
                 total_cost += cell_probability_weight * cell_probability_cost
@@ -1390,9 +1390,7 @@ def _nonnegative_mask_array(masks: np.ndarray) -> np.ndarray:
     mask_array = np.asarray(masks, dtype=float)
     if mask_array.ndim != 3:
         raise ValueError("masks must have shape (n_roi, height, width)")
-    return np.nan_to_num(
-        np.maximum(mask_array, 0.0), nan=0.0, posinf=1.0e6, neginf=0.0
-    )
+    return np.nan_to_num(np.maximum(mask_array, 0.0), nan=0.0, posinf=1.0e6, neginf=0.0)
 
 
 def _pairwise_sparse_mask_min_sum(
@@ -1438,7 +1436,9 @@ def _pairwise_sparse_mask_min_sum(
             reference_index = _advance_equal_values(reference_pixel, reference_index)
             continue
         if measurement_current_pixel < reference_current_pixel:
-            measurement_index = _advance_equal_values(measurement_pixel, measurement_index)
+            measurement_index = _advance_equal_values(
+                measurement_pixel, measurement_index
+            )
             continue
         reference_stop = _advance_equal_values(reference_pixel, reference_index)
         measurement_stop = _advance_equal_values(measurement_pixel, measurement_index)
@@ -1668,10 +1668,7 @@ def _pairwise_cell_probability_cost(
 
     clipped_self = np.clip(probabilities_self, similarity_epsilon, 1.0)
     clipped_other = np.clip(probabilities_other, similarity_epsilon, 1.0)
-    raw_cost = -0.5 * (
-        np.log(clipped_self[:, None])
-        + np.log(clipped_other[None, :])
-    )
+    raw_cost = -0.5 * (np.log(clipped_self[:, None]) + np.log(clipped_other[None, :]))
 
     cost = np.zeros(cost_shape, dtype=float)
     cost[available] = raw_cost[available]

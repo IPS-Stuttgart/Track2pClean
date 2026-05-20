@@ -9,6 +9,7 @@ import sys
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
+
 import numpy as np
 from bayescatrack.experiments.track2p_benchmark import (
     OutputFormat,
@@ -52,8 +53,12 @@ class MaskInputSetting:
             else f"iscell>={float(self.cell_probability_threshold):g}"
         )
         mask_mode = "lam-masks" if self.weighted_masks else "binary-masks"
-        centroid_mode = "weighted-centroids" if self.weighted_centroids else "binary-centroids"
-        overlap_mode = "drop-overlap" if self.exclude_overlapping_pixels else "keep-overlap"
+        centroid_mode = (
+            "weighted-centroids" if self.weighted_centroids else "binary-centroids"
+        )
+        overlap_mode = (
+            "drop-overlap" if self.exclude_overlapping_pixels else "keep-overlap"
+        )
         return "/".join((roi_filter, mask_mode, centroid_mode, overlap_mode))
 
     def to_score_fields(self) -> dict[str, float | int | str]:
@@ -63,7 +68,9 @@ class MaskInputSetting:
             "input_variant": self.label,
             "include_non_cells": _bool_label(self.include_non_cells),
             "cell_probability_threshold": (
-                "all" if self.cell_probability_threshold is None else float(self.cell_probability_threshold)
+                "all"
+                if self.cell_probability_threshold is None
+                else float(self.cell_probability_threshold)
             ),
             "weighted_masks": _bool_label(self.weighted_masks),
             "weighted_centroids": _bool_label(self.weighted_centroids),
@@ -71,13 +78,17 @@ class MaskInputSetting:
         }
 
 
-def run_track2p_mask_input_sweep(config: MaskInputSweepConfig) -> list[SubjectBenchmarkResult]:
+def run_track2p_mask_input_sweep(
+    config: MaskInputSweepConfig,
+) -> list[SubjectBenchmarkResult]:
     """Run Track2p benchmarks over input-mask and ROI-filtering variants."""
 
     return list(iter_track2p_mask_input_sweep(config))
 
 
-def iter_track2p_mask_input_sweep(config: MaskInputSweepConfig) -> Iterator[SubjectBenchmarkResult]:
+def iter_track2p_mask_input_sweep(
+    config: MaskInputSweepConfig,
+) -> Iterator[SubjectBenchmarkResult]:
     """Yield one benchmark row per subject and input-mask/filtering setting."""
 
     for setting in _mask_input_settings(config):
@@ -115,14 +126,18 @@ def _mask_input_settings(config: MaskInputSweepConfig) -> tuple[MaskInputSetting
     include_options = _normalise_bool_options(
         config.include_non_cells, name="include_non_cells"
     )
-    thresholds = _normalise_cell_probability_thresholds(config.cell_probability_thresholds)
+    thresholds = _normalise_cell_probability_thresholds(
+        config.cell_probability_thresholds
+    )
     weighted_mask_options = _normalise_bool_options(
         config.weighted_masks, name="weighted_masks"
     )
     weighted_centroid_options = (
         None
         if config.weighted_centroids is None
-        else _normalise_bool_options(config.weighted_centroids, name="weighted_centroids")
+        else _normalise_bool_options(
+            config.weighted_centroids, name="weighted_centroids"
+        )
     )
     overlap_options = _normalise_bool_options(
         config.exclude_overlapping_pixels, name="exclude_overlapping_pixels"
@@ -130,7 +145,9 @@ def _mask_input_settings(config: MaskInputSweepConfig) -> tuple[MaskInputSetting
 
     partial: list[tuple[bool, float | None, bool, bool, bool]] = []
     for include_non_cells in include_options:
-        threshold_options: tuple[float | None, ...] = (None,) if include_non_cells else thresholds
+        threshold_options: tuple[float | None, ...] = (
+            (None,) if include_non_cells else thresholds
+        )
         for threshold in threshold_options:
             for weighted_masks in weighted_mask_options:
                 centroid_options = (
@@ -176,7 +193,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         prog="bayescatrack benchmark track2p-mask-input-sweep",
         description="Sweep Suite2p ROI filtering, weighted masks, weighted centroids, and overlap-pixel handling.",
     )
-    parser.add_argument("--data", required=True, type=Path, help="Track2p dataset root or one subject directory")
+    parser.add_argument(
+        "--data",
+        required=True,
+        type=Path,
+        help="Track2p dataset root or one subject directory",
+    )
     parser.add_argument(
         "--method",
         default="global-assignment",
@@ -190,17 +212,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Evaluation split policy",
     )
     parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", default="auto", choices=("auto", "suite2p", "npy"))
+    parser.add_argument(
+        "--input-format", default="auto", choices=("auto", "suite2p", "npy")
+    )
     parser.add_argument("--reference", type=Path, default=None)
     parser.add_argument(
         "--reference-kind",
         default="auto",
         choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
     )
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
     parser.add_argument("--curated-only", action="store_true")
     parser.add_argument("--seed-session", type=int, default=0)
-    parser.add_argument("--restrict-to-reference-seed-rois", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--restrict-to-reference-seed-rois",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument(
         "--cost",
         default="registered-iou",
@@ -224,7 +254,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gap-penalty", type=float, default=1.0)
     parser.add_argument("--cost-threshold", type=float, default=6.0)
     parser.add_argument("--no-cost-threshold", action="store_true")
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument(
         "--include-non-cell-options",
         default="false,true",
@@ -254,7 +286,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--velocity-variance", type=float, default=25.0)
     parser.add_argument("--regularization", type=float, default=1.0e-6)
     parser.add_argument("--pairwise-cost-kwargs-json", default=None)
-    parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--progress", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     return parser
@@ -308,11 +342,21 @@ def _config_from_args(args: argparse.Namespace) -> MaskInputSweepConfig:
     )
     return MaskInputSweepConfig(
         benchmark=benchmark,
-        include_non_cells=_parse_bool_options(args.include_non_cell_options, name="--include-non-cell-options"),
-        cell_probability_thresholds=_parse_threshold_options(args.cell_probability_thresholds),
-        weighted_masks=_parse_bool_options(args.weighted_mask_options, name="--weighted-mask-options"),
-        weighted_centroids=_parse_weighted_centroid_options(args.weighted_centroid_options),
-        exclude_overlapping_pixels=_parse_bool_options(args.exclude_overlap_options, name="--exclude-overlap-options"),
+        include_non_cells=_parse_bool_options(
+            args.include_non_cell_options, name="--include-non-cell-options"
+        ),
+        cell_probability_thresholds=_parse_threshold_options(
+            args.cell_probability_thresholds
+        ),
+        weighted_masks=_parse_bool_options(
+            args.weighted_mask_options, name="--weighted-mask-options"
+        ),
+        weighted_centroids=_parse_weighted_centroid_options(
+            args.weighted_centroid_options
+        ),
+        exclude_overlapping_pixels=_parse_bool_options(
+            args.exclude_overlap_options, name="--exclude-overlap-options"
+        ),
     )
 
 
@@ -338,7 +382,10 @@ def _parse_threshold_options(raw: str) -> tuple[float, ...]:
 
 def _parse_bool_options(raw: str, *, name: str) -> tuple[bool, ...]:
     return _normalise_bool_options(
-        tuple(_parse_bool_token(token, name=name) for token in _split_tokens(raw, name=name)),
+        tuple(
+            _parse_bool_token(token, name=name)
+            for token in _split_tokens(raw, name=name)
+        ),
         name=name,
     )
 
@@ -366,21 +413,29 @@ def _normalise_bool_options(values: Sequence[bool], *, name: str) -> tuple[bool,
     return normalised
 
 
-def _normalise_cell_probability_thresholds(values: Sequence[float]) -> tuple[float, ...]:
+def _normalise_cell_probability_thresholds(
+    values: Sequence[float],
+) -> tuple[float, ...]:
     thresholds = tuple(dict.fromkeys(float(value) for value in values))
     if not thresholds:
         raise ValueError("At least one cell-probability threshold is required")
-    if any((not np.isfinite(value)) or value < 0.0 or value > 1.0 for value in thresholds):
+    if any(
+        (not np.isfinite(value)) or value < 0.0 or value > 1.0 for value in thresholds
+    ):
         raise ValueError("Cell-probability thresholds must be finite values in [0, 1]")
     return thresholds
 
 
 def write_mask_sweep_results(
-    rows: Sequence[dict[str, float | int | str]], output_path: Path, output_format: OutputFormat
+    rows: Sequence[dict[str, float | int | str]],
+    output_path: Path,
+    output_format: OutputFormat,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
-        output_path.write_text(json.dumps(list(rows), indent=2) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(list(rows), indent=2) + "\n", encoding="utf-8"
+        )
         return
     if output_format == "csv":
         with output_path.open("w", newline="", encoding="utf-8") as handle:
@@ -391,7 +446,9 @@ def write_mask_sweep_results(
     output_path.write_text(format_mask_sweep_table(rows) + "\n", encoding="utf-8")
 
 
-def _write_mask_sweep_stdout(rows: Sequence[dict[str, float | int | str]], output_format: OutputFormat) -> None:
+def _write_mask_sweep_stdout(
+    rows: Sequence[dict[str, float | int | str]], output_format: OutputFormat
+) -> None:
     if output_format == "json":
         print(json.dumps(list(rows), indent=2))
         return
@@ -421,7 +478,11 @@ def format_mask_sweep_table(rows: Sequence[dict[str, float | int | str]]) -> str
     separator = "| " + " | ".join(["---"] + ["---:"] * (len(columns) - 1)) + " |"
     body = [header, separator]
     for row in rows:
-        body.append("| " + " | ".join(_format_value(row.get(column, "")) for column in columns) + " |")
+        body.append(
+            "| "
+            + " | ".join(_format_value(row.get(column, "")) for column in columns)
+            + " |"
+        )
     return "\n".join(body)
 
 

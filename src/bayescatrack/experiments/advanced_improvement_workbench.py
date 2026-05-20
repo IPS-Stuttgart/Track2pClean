@@ -55,13 +55,17 @@ def select_active_label_candidates(
     return scored[: int(cfg.max_rows)]
 
 
-def active_label_score(row: Mapping[str, Any], *, config: ActiveLabelConfig | None = None) -> float:
+def active_label_score(
+    row: Mapping[str, Any], *, config: ActiveLabelConfig | None = None
+) -> float:
     """Return an active-label priority score from edge-ranking/teacher rows."""
 
     cfg = config or ActiveLabelConfig()
     row_margin = _safe_float(row.get("row_margin"), np.nan)
     column_margin = _safe_float(row.get("column_margin"), np.nan)
-    finite_margins = [value for value in (row_margin, column_margin) if np.isfinite(value)]
+    finite_margins = [
+        value for value in (row_margin, column_margin) if np.isfinite(value)
+    ]
     if finite_margins:
         low_margin_score = 1.0 / (1.0 + max(float(np.mean(finite_margins)), 0.0))
     else:
@@ -69,11 +73,17 @@ def active_label_score(row: Mapping[str, Any], *, config: ActiveLabelConfig | No
 
     disagreement = 0.0
     if "in_ground_truth" in row and "in_track2p" in row:
-        disagreement += float(bool(row.get("in_ground_truth")) != bool(row.get("in_track2p")))
+        disagreement += float(
+            bool(row.get("in_ground_truth")) != bool(row.get("in_track2p"))
+        )
     if "in_ground_truth" in row and "in_bayes" in row:
-        disagreement += float(bool(row.get("in_ground_truth")) != bool(row.get("in_bayes")))
+        disagreement += float(
+            bool(row.get("in_ground_truth")) != bool(row.get("in_bayes"))
+        )
     if "in_track2p" in row and "in_bayes" in row:
-        disagreement += 0.5 * float(bool(row.get("in_track2p")) != bool(row.get("in_bayes")))
+        disagreement += 0.5 * float(
+            bool(row.get("in_track2p")) != bool(row.get("in_bayes"))
+        )
 
     missing_edge = float(str(row.get("missing_reason", "")).strip() != "")
     true_score = _safe_float(row.get("true_score"), np.nan)
@@ -100,16 +110,31 @@ def stratified_metric_summary(
         groups[key].append(row)
 
     summaries: list[dict[str, Any]] = []
-    for key, group_rows in sorted(groups.items(), key=lambda item: tuple(map(str, item[0]))):
-        summary: dict[str, Any] = {field: value for field, value in zip(config.group_fields, key, strict=True)}
+    for key, group_rows in sorted(
+        groups.items(), key=lambda item: tuple(map(str, item[0]))
+    ):
+        summary: dict[str, Any] = {
+            field: value for field, value in zip(config.group_fields, key, strict=True)
+        }
         summary["rows"] = len(group_rows)
         for metric in config.metric_fields:
-            values = np.asarray([_safe_float(row.get(metric), np.nan) for row in group_rows], dtype=float)
+            values = np.asarray(
+                [_safe_float(row.get(metric), np.nan) for row in group_rows],
+                dtype=float,
+            )
             values = values[np.isfinite(values)]
-            summary[f"{metric}_mean"] = float(np.mean(values)) if values.size else float("nan")
-            summary[f"{metric}_median"] = float(np.median(values)) if values.size else float("nan")
-            summary[f"{metric}_min"] = float(np.min(values)) if values.size else float("nan")
-            summary[f"{metric}_max"] = float(np.max(values)) if values.size else float("nan")
+            summary[f"{metric}_mean"] = (
+                float(np.mean(values)) if values.size else float("nan")
+            )
+            summary[f"{metric}_median"] = (
+                float(np.median(values)) if values.size else float("nan")
+            )
+            summary[f"{metric}_min"] = (
+                float(np.min(values)) if values.size else float("nan")
+            )
+            summary[f"{metric}_max"] = (
+                float(np.max(values)) if values.size else float("nan")
+            )
         summaries.append(summary)
     return summaries
 
@@ -220,24 +245,32 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    active = subparsers.add_parser("active-labels", help="Rank edge rows for additional manual labeling")
+    active = subparsers.add_parser(
+        "active-labels", help="Rank edge rows for additional manual labeling"
+    )
     active.add_argument("--input", required=True, type=Path)
     active.add_argument("--output", required=True, type=Path)
     active.add_argument("--max-rows", type=int, default=500)
 
-    stratify = subparsers.add_parser("stratify", help="Aggregate benchmark metrics by metadata fields")
+    stratify = subparsers.add_parser(
+        "stratify", help="Aggregate benchmark metrics by metadata fields"
+    )
     stratify.add_argument("--input", required=True, type=Path)
     stratify.add_argument("--output", required=True, type=Path)
     stratify.add_argument("--group-field", action="append", required=True)
     stratify.add_argument("--metric", action="append", required=True)
 
-    stress = subparsers.add_parser("stress-manifest", help="Write a synthetic stress-test benchmark manifest")
+    stress = subparsers.add_parser(
+        "stress-manifest", help="Write a synthetic stress-test benchmark manifest"
+    )
     stress.add_argument("--data-root", required=True)
     stress.add_argument("--output-root", required=True)
     stress.add_argument("--reference-root", default=None)
     stress.add_argument("--output", required=True, type=Path)
 
-    pr = subparsers.add_parser("pr-table", help="Build a precision/recall table from probability-label CSV")
+    pr = subparsers.add_parser(
+        "pr-table", help="Build a precision/recall table from probability-label CSV"
+    )
     pr.add_argument("--input", required=True, type=Path)
     pr.add_argument("--output", required=True, type=Path)
     pr.add_argument("--probability-column", default="probability")
@@ -276,9 +309,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "pr-table":
         rows = read_csv_rows(args.input)
-        probabilities = [_safe_float(row.get(args.probability_column), np.nan) for row in rows]
+        probabilities = [
+            _safe_float(row.get(args.probability_column), np.nan) for row in rows
+        ]
         labels = [int(_safe_float(row.get(args.label_column), 0.0)) for row in rows]
-        write_csv_rows(precision_recall_threshold_table(probabilities, labels), args.output)
+        write_csv_rows(
+            precision_recall_threshold_table(probabilities, labels), args.output
+        )
         return 0
     raise ValueError(f"Unsupported command {args.command!r}")
 

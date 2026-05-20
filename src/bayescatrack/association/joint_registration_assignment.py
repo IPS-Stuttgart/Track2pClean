@@ -69,7 +69,8 @@ def high_confidence_anchor_edges(
         anchors.extend(
             (int(index // costs.shape[1]), int(index % costs.shape[1]))
             for index in order
-            if (int(index // costs.shape[1]), int(index % costs.shape[1])) not in anchors
+            if (int(index // costs.shape[1]), int(index % costs.shape[1]))
+            not in anchors
         )
     return tuple(anchors[: max(min_anchor_edges, len(anchors))])
 
@@ -114,14 +115,18 @@ def joint_registration_assignment_loop(
     previous_mean = np.inf
     for iteration in range(cfg.max_iterations):
         registered_plane = register_fn(reference_plane, moving_plane, anchors)
-        cost_matrix = np.asarray(cost_fn(reference_plane, registered_plane), dtype=float)
+        cost_matrix = np.asarray(
+            cost_fn(reference_plane, registered_plane), dtype=float
+        )
         anchors = high_confidence_anchor_edges(
             cost_matrix,
             quantile=cfg.high_confidence_quantile,
             min_anchor_edges=cfg.min_anchor_edges,
         )
         if anchors:
-            mean_anchor_cost = float(np.mean([cost_matrix[row, col] for row, col in anchors]))
+            mean_anchor_cost = float(
+                np.mean([cost_matrix[row, col] for row, col in anchors])
+            )
         else:
             mean_anchor_cost = float("nan")
         states.append(
@@ -133,13 +138,18 @@ def joint_registration_assignment_loop(
                 mean_anchor_cost=mean_anchor_cost,
             )
         )
-        if np.isfinite(mean_anchor_cost) and abs(previous_mean - mean_anchor_cost) <= cfg.convergence_tolerance:
+        if (
+            np.isfinite(mean_anchor_cost)
+            and abs(previous_mean - mean_anchor_cost) <= cfg.convergence_tolerance
+        ):
             break
         previous_mean = mean_anchor_cost
     return states
 
 
-def state_summary_rows(states: Sequence[JointRefinementState]) -> list[dict[str, int | float]]:
+def state_summary_rows(
+    states: Sequence[JointRefinementState],
+) -> list[dict[str, int | float]]:
     """Serialize joint-refinement iteration diagnostics."""
 
     return [

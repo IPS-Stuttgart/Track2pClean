@@ -92,9 +92,13 @@ def iter_track2p_activity_tie_breaker_sweep(
 
     benchmark = config.benchmark
     if benchmark.method != "global-assignment":
-        raise ValueError("Activity tie-breaker sweeps require method='global-assignment'")
+        raise ValueError(
+            "Activity tie-breaker sweeps require method='global-assignment'"
+        )
     if benchmark.split != "subject":
-        raise ValueError("Activity tie-breaker sweeps currently support split='subject' only")
+        raise ValueError(
+            "Activity tie-breaker sweeps currently support split='subject' only"
+        )
     if benchmark.cost == "calibrated":
         raise ValueError(
             "cost='calibrated' requires LOSO training and is not supported by this sweep"
@@ -125,9 +129,7 @@ def iter_track2p_activity_tie_breaker_sweep(
         session_sizes = tuple(int(session.plane_data.n_rois) for session in sessions)
 
         for run in runs:
-            progress.step(
-                f"running {subject_dir.name} activity_weight={run.weight:g}"
-            )
+            progress.step(f"running {subject_dir.name} activity_weight={run.weight:g}")
             pairwise_costs = _build_activity_pairwise_costs(
                 sessions,
                 benchmark,
@@ -144,9 +146,13 @@ def iter_track2p_activity_tie_breaker_sweep(
                 gap_penalty=benchmark.gap_penalty,
                 cost_threshold=benchmark.cost_threshold,
             )
-            predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
+            predicted = tracks_to_suite2p_index_matrix(
+                assignment.result.tracks, sessions
+            )
             scores: dict[str, float | int | str] = dict(
-                _score_prediction_against_reference(predicted, reference, config=benchmark)
+                _score_prediction_against_reference(
+                    predicted, reference, config=benchmark
+                )
             )
             scores = {
                 **scores,
@@ -331,8 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     rows = [
-        result.to_dict()
-        for result in run_track2p_activity_tie_breaker_sweep(config)
+        result.to_dict() for result in run_track2p_activity_tie_breaker_sweep(config)
     ]
     if args.output is not None:
         write_activity_sweep_results(rows, args.output, args.format)
@@ -378,7 +383,9 @@ def _config_from_args(args: argparse.Namespace) -> ActivityTieBreakerSweepConfig
         pairwise_cost_kwargs=pairwise_cost_kwargs,
         progress=args.progress,
     )
-    if args.activity_event_threshold < 0.0 or not np.isfinite(args.activity_event_threshold):
+    if args.activity_event_threshold < 0.0 or not np.isfinite(
+        args.activity_event_threshold
+    ):
         raise ValueError("--activity-event-threshold must be non-negative and finite")
     return ActivityTieBreakerSweepConfig(
         benchmark=benchmark,
@@ -479,7 +486,9 @@ def format_activity_sweep_table(rows: Sequence[dict[str, float | int | str]]) ->
     return "\n".join(body)
 
 
-def _activity_sweep_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
+def _activity_sweep_fieldnames(
+    rows: Sequence[dict[str, float | int | str]],
+) -> list[str]:
     preferred = [
         "subject",
         "variant",
@@ -530,7 +539,9 @@ def _normalise_activity_weights(values: Sequence[float]) -> tuple[float, ...]:
     if not weights:
         raise ValueError("At least one activity tie-breaker weight is required")
     if any((not np.isfinite(weight)) or weight < 0.0 for weight in weights):
-        raise ValueError("Activity tie-breaker weights must be non-negative finite numbers")
+        raise ValueError(
+            "Activity tie-breaker weights must be non-negative finite numbers"
+        )
     return weights
 
 

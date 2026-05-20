@@ -30,8 +30,13 @@ def aggregate_registration_metadata_by_edge(
 
     shifts_y = _finite_values(plane_metadata, ("fov_translation_shift_y", "shift_y"))
     shifts_x = _finite_values(plane_metadata, ("fov_translation_shift_x", "shift_x"))
-    peaks = _finite_values(plane_metadata, ("fov_translation_peak_correlation", "peak_correlation"))
-    rmses = _finite_values(plane_metadata, ("fov_affine_fit_rmse", "fit_rmse", "nonrigid_registration_fit_rmse"))
+    peaks = _finite_values(
+        plane_metadata, ("fov_translation_peak_correlation", "peak_correlation")
+    )
+    rmses = _finite_values(
+        plane_metadata,
+        ("fov_affine_fit_rmse", "fit_rmse", "nonrigid_registration_fit_rmse"),
+    )
     return {
         "plane_count": int(len(plane_metadata)),
         "median_shift_y": _median_or_nan(shifts_y),
@@ -54,7 +59,9 @@ def shared_registration_quality_penalty(
     plane_count = int(metadata_summary.get("plane_count", 0))
     if plane_count < cfg.min_plane_count:
         return 0.0
-    shift_mad = _safe_float(metadata_summary.get("shift_y_mad"), 0.0) + _safe_float(metadata_summary.get("shift_x_mad"), 0.0)
+    shift_mad = _safe_float(metadata_summary.get("shift_y_mad"), 0.0) + _safe_float(
+        metadata_summary.get("shift_x_mad"), 0.0
+    )
     rmse = _safe_float(metadata_summary.get("median_fit_rmse"), 0.0)
     peak = _safe_float(metadata_summary.get("median_peak_correlation"), 1.0)
     return float(
@@ -77,7 +84,9 @@ def adjust_plane_costs_by_shared_quality(
     return [np.asarray(costs, dtype=float) + penalty for costs in cost_matrices]
 
 
-def _finite_values(rows: Sequence[Mapping[str, Any]], names: tuple[str, ...]) -> np.ndarray:
+def _finite_values(
+    rows: Sequence[Mapping[str, Any]], names: tuple[str, ...]
+) -> np.ndarray:
     values: list[float] = []
     for row in rows:
         for name in names:

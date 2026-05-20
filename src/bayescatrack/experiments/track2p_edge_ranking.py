@@ -29,6 +29,11 @@ from bayescatrack.evaluation.edge_ranking import (
     score_matrices_from_feature_tensor,
     summarize_edge_ranking_rows,
 )
+from bayescatrack.experiments._cli_choices import (
+    ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.experiments.track2p_benchmark import (
     ProgressReporter,
     Track2pBenchmarkConfig,
@@ -37,11 +42,6 @@ from bayescatrack.experiments.track2p_benchmark import (
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
     discover_subject_dirs,
-)
-from bayescatrack.experiments._cli_choices import (
-    ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
-    REGISTRATION_TRANSFORM_CHOICES,
-    REGISTRATION_TRANSFORM_HELP,
 )
 from bayescatrack.soft_overlap_costs import registered_soft_iou_cost_kwargs
 

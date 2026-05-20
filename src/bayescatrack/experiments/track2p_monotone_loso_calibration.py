@@ -293,7 +293,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Comma-separated explicit calibrated feature names; overrides --calibration-feature-set",
     )
     parser.add_argument("--activity-tie-breaker-weight", type=float, default=0.0)
-    parser.add_argument("--activity-tie-breaker-component", default="activity_tiebreaker_cost")
+    parser.add_argument(
+        "--activity-tie-breaker-component", default="activity_tiebreaker_cost"
+    )
     parser.add_argument("--activity-trace-source", default="auto")
     parser.add_argument("--activity-event-threshold", type=float, default=0.0)
     parser.add_argument("--higher-order-consistency-json", default=None)

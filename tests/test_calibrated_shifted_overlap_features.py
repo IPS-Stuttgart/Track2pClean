@@ -2,7 +2,6 @@
 
 import numpy as np
 import numpy.testing as npt
-
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     DEFAULT_SHIFTED_OVERLAP_PAIRWISE_COST_KWARGS,

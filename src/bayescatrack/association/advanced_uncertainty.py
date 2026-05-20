@@ -134,13 +134,9 @@ def edge_reliability_matrix(
     if gated is not None:
         penalty += cfg.gated_edge_weight * (np.asarray(gated, dtype=float) > 0.0)
 
-    covariance_logdet = _optional_component(
-        components, "covariance_logdet_cost", shape
-    )
+    covariance_logdet = _optional_component(components, "covariance_logdet_cost", shape)
     if covariance_logdet is not None:
-        penalty += cfg.covariance_logdet_weight * _robust_unit_scale(
-            covariance_logdet
-        )
+        penalty += cfg.covariance_logdet_weight * _robust_unit_scale(covariance_logdet)
 
     centroid_rank = _optional_component(components, "centroid_rank_cost", shape)
     if centroid_rank is not None:

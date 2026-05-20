@@ -13,8 +13,8 @@ from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     DEFAULT_SHIFTED_OVERLAP_PAIRWISE_COST_KWARGS,
     LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
-    ReferenceTrainingOptions,
     SHIFTED_OVERLAP_ASSOCIATION_FEATURES,
+    ReferenceTrainingOptions,
     collect_reference_pairwise_example_blocks,
     collect_reference_training_examples,
     fit_logistic_association_model,
@@ -40,13 +40,13 @@ from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     _load_reference_for_subject,
     _load_subject_sessions,
+    _score_prediction_against_reference,
+    _validate_reference_for_benchmark,
+    _validate_reference_roi_indices,
     assignment_prior_assignment_runs,
     assignment_prior_score_metadata,
     assignment_prior_sweep_is_enabled,
     assignment_prior_variant_name,
-    _score_prediction_against_reference,
-    _validate_reference_for_benchmark,
-    _validate_reference_roi_indices,
     discover_subject_dirs,
     solve_configured_global_assignment,
 )
@@ -143,7 +143,9 @@ def calibration_feature_names(
 
 
 def _deduplicated_feature_names(*feature_groups: Sequence[str]) -> tuple[str, ...]:
-    return tuple(dict.fromkeys(feature for group in feature_groups for feature in group))
+    return tuple(
+        dict.fromkeys(feature for group in feature_groups for feature in group)
+    )
 
 
 def pairwise_cost_kwargs_for_calibration_features(
@@ -401,11 +403,9 @@ def _feature_set_label(
     configured = str(getattr(config, "calibration_feature_set", "default"))
     if configured != "default":
         return configured
-    if (
-        tuple(feature_names)
-        == calibration_feature_names("default+local-evidence+shifted-overlap")
-        and _uses_local_evidence_features(feature_names)
-    ):
+    if tuple(feature_names) == calibration_feature_names(
+        "default+local-evidence+shifted-overlap"
+    ) and _uses_local_evidence_features(feature_names):
         return "default+local-evidence+shifted-overlap"
     if tuple(feature_names) == calibration_feature_names("default+shifted-overlap"):
         return "default+shifted-overlap"
@@ -415,7 +415,11 @@ def _feature_set_label(
         return "default+local-evidence"
     if tuple(feature_names) == calibration_feature_names("local-evidence"):
         return "local-evidence"
-    return "custom" if tuple(feature_names) != calibration_feature_names("default") else "default"
+    return (
+        "custom"
+        if tuple(feature_names) != calibration_feature_names("default")
+        else "default"
+    )
 
 
 def _pairwise_kwargs_request_local_evidence(
@@ -435,7 +439,9 @@ def _pairwise_kwargs_request_local_evidence(
 
 def _uses_local_evidence_features(feature_names: Sequence[str]) -> bool:
     local_evidence_features = set(LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
-    return any(feature_name in local_evidence_features for feature_name in feature_names)
+    return any(
+        feature_name in local_evidence_features for feature_name in feature_names
+    )
 
 
 def _uses_shifted_overlap_features(feature_names: Sequence[str]) -> bool:

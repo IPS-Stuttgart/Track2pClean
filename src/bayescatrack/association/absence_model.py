@@ -42,7 +42,9 @@ def absence_cost_vector(
 
     cell_probabilities = getattr(plane, "cell_probabilities", None)
     if cell_probabilities is not None:
-        probs = np.clip(np.asarray(cell_probabilities, dtype=float).reshape(-1), 0.0, 1.0)
+        probs = np.clip(
+            np.asarray(cell_probabilities, dtype=float).reshape(-1), 0.0, 1.0
+        )
         if probs.shape == (n_rois,):
             costs -= cfg.low_cell_probability_discount * (1.0 - probs)
 
@@ -57,9 +59,14 @@ def absence_cost_vector(
             scale = float(np.nanpercentile(density, 90.0))
             if not np.isfinite(scale) or scale <= 1.0e-12:
                 scale = 1.0
-            costs -= cfg.high_local_density_discount * np.clip(density / scale, 0.0, 1.0)
+            costs -= cfg.high_local_density_discount * np.clip(
+                density / scale, 0.0, 1.0
+            )
 
-    if getattr(plane, "traces", None) is None and getattr(plane, "spike_traces", None) is None:
+    if (
+        getattr(plane, "traces", None) is None
+        and getattr(plane, "spike_traces", None) is None
+    ):
         costs -= cfg.trace_missing_discount
 
     return np.maximum(costs, float(cfg.min_cost))
@@ -93,7 +100,14 @@ def gap_penalty_matrix(
     return gap * 0.5 * (ref_cost[:, None] + meas_cost[None, :])
 
 
-def apply_absence_adjustment(cost_matrix: Any, reference_plane: Any, measurement_plane: Any, *, session_gap: int | float = 1.0, config: AbsenceModelConfig | None = None) -> np.ndarray:
+def apply_absence_adjustment(
+    cost_matrix: Any,
+    reference_plane: Any,
+    measurement_plane: Any,
+    *,
+    session_gap: int | float = 1.0,
+    config: AbsenceModelConfig | None = None,
+) -> np.ndarray:
     """Add absence-aware gap penalties to a cost matrix."""
 
     costs = np.asarray(cost_matrix, dtype=float)
@@ -114,8 +128,16 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
         cost_values = np.asarray(costs, dtype=float).reshape(-1)
     return {
         "n_rois": int(cost_values.size),
-        "mean_absence_cost": float(np.mean(cost_values)) if cost_values.size else float("nan"),
-        "median_absence_cost": float(np.median(cost_values)) if cost_values.size else float("nan"),
-        "min_absence_cost": float(np.min(cost_values)) if cost_values.size else float("nan"),
-        "max_absence_cost": float(np.max(cost_values)) if cost_values.size else float("nan"),
+        "mean_absence_cost": (
+            float(np.mean(cost_values)) if cost_values.size else float("nan")
+        ),
+        "median_absence_cost": (
+            float(np.median(cost_values)) if cost_values.size else float("nan")
+        ),
+        "min_absence_cost": (
+            float(np.min(cost_values)) if cost_values.size else float("nan")
+        ),
+        "max_absence_cost": (
+            float(np.max(cost_values)) if cost_values.size else float("nan")
+        ),
     }

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.experiments.track2p_failure_diagnosis import (
     _aggregate_edge_ranking_rows,
     classify_failure_mode,

@@ -634,7 +634,9 @@ def _label_vector_to_mapping(labels: Sequence[Any]) -> dict[int, int]:
     return mapping
 
 
-def _pair_counter(pairs: Sequence[Sequence[Any]] | np.ndarray) -> Counter[tuple[int, int]]:
+def _pair_counter(
+    pairs: Sequence[Sequence[Any]] | np.ndarray,
+) -> Counter[tuple[int, int]]:
     pair_array = np.asarray(pairs, dtype=object)
     if pair_array.size == 0:
         return Counter()

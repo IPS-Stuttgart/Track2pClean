@@ -35,8 +35,12 @@ def test_mask_input_settings_deduplicate_all_roi_thresholds():
     assert {setting.sweep_count for setting in settings} == {6}
     all_roi_settings = [setting for setting in settings if setting.include_non_cells]
     assert len(all_roi_settings) == 2
-    assert {setting.cell_probability_threshold for setting in all_roi_settings} == {None}
-    assert all(setting.weighted_centroids == setting.weighted_masks for setting in settings)
+    assert {setting.cell_probability_threshold for setting in all_roi_settings} == {
+        None
+    }
+    assert all(
+        setting.weighted_centroids == setting.weighted_masks for setting in settings
+    )
 
 
 def test_mask_input_sweep_augments_rows_and_forwards_config(monkeypatch):
@@ -80,6 +84,9 @@ def test_mask_input_sweep_augments_rows_and_forwards_config(monkeypatch):
     assert seen_configs[0].weighted_masks is True
     assert seen_configs[0].weighted_centroids is True
     assert seen_configs[0].exclude_overlapping_pixels is False
-    assert rows[0]["input_variant"] == "iscell>=0.25/lam-masks/weighted-centroids/keep-overlap"
+    assert (
+        rows[0]["input_variant"]
+        == "iscell>=0.25/lam-masks/weighted-centroids/keep-overlap"
+    )
     assert rows[0]["cell_probability_threshold"] == pytest.approx(0.25)
     assert rows[0]["weighted_masks"] == "true"

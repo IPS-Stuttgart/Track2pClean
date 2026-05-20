@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.registration_selection import select_registration_transform
 from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES

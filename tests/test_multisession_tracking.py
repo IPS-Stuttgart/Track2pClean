@@ -79,7 +79,14 @@ def test_call_multisession_solver_does_not_retry_internal_typeerror():
         gap_penalty,
         cost_threshold,
     ):
-        del pairwise_costs, session_sizes, start_cost, end_cost, gap_penalty, cost_threshold
+        del (
+            pairwise_costs,
+            session_sizes,
+            start_cost,
+            end_cost,
+            gap_penalty,
+            cost_threshold,
+        )
         nonlocal calls
         calls += 1
         raise TypeError("internal solver bug")

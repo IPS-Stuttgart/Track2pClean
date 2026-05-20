@@ -47,7 +47,9 @@ def roi_position_tables_from_sessions(
     tables: list[dict[int, np.ndarray]] = []
     for session in sessions:
         plane = session.plane_data
-        centroids = np.asarray(plane.centroids(order=order, weighted=weighted), dtype=float)
+        centroids = np.asarray(
+            plane.centroids(order=order, weighted=weighted), dtype=float
+        )
         if centroids.ndim != 2 or centroids.shape[0] != 2:
             raise ValueError("session centroids must have shape (2, n_roi)")
         roi_indices = (
@@ -56,7 +58,10 @@ def roi_position_tables_from_sessions(
             else np.arange(plane.n_rois, dtype=int)
         )
         tables.append(
-            {int(roi_index): centroids[:, local_index].astype(float) for local_index, roi_index in enumerate(roi_indices)}
+            {
+                int(roi_index): centroids[:, local_index].astype(float)
+                for local_index, roi_index in enumerate(roi_indices)
+            }
         )
     return tuple(tables)
 
@@ -78,7 +83,9 @@ def track_geometry_issues(
 
     issues: list[TrackGeometryIssue] = []
     for track_index, row in enumerate(rows):
-        session_indices, positions, roi_indices = _track_positions(row, position_tables, fill_value=cfg.fill_value)
+        session_indices, positions, roi_indices = _track_positions(
+            row, position_tables, fill_value=cfg.fill_value
+        )
         if positions.shape[0] < cfg.min_track_detections:
             continue
         fitted = _fit_linear_track(session_indices, positions)
@@ -86,7 +93,10 @@ def track_geometry_issues(
         z_scores = _robust_z_scores(residuals)
         for local_index, residual in enumerate(residuals):
             z_score = float(z_scores[local_index])
-            if residual >= cfg.min_edge_residual and z_score >= cfg.residual_z_threshold:
+            if (
+                residual >= cfg.min_edge_residual
+                and z_score >= cfg.residual_z_threshold
+            ):
                 issues.append(
                     TrackGeometryIssue(
                         track_index=int(track_index),
@@ -111,13 +121,17 @@ def smoothed_track_positions(
     rows = np.asarray(track_rows, dtype=int)
     output: dict[int, dict[int, np.ndarray]] = {}
     for track_index, row in enumerate(rows):
-        session_indices, positions, _roi_indices = _track_positions(row, position_tables, fill_value=fill_value)
+        session_indices, positions, _roi_indices = _track_positions(
+            row, position_tables, fill_value=fill_value
+        )
         if positions.shape[0] < 2:
             continue
         fitted = _fit_linear_track(session_indices, positions)
         output[int(track_index)] = {
             int(session_index): fitted_position.astype(float)
-            for session_index, fitted_position in zip(session_indices, fitted, strict=True)
+            for session_index, fitted_position in zip(
+                session_indices, fitted, strict=True
+            )
         }
     return output
 
@@ -140,11 +154,15 @@ def split_tracks_at_issues(
         raise ValueError("track_rows must be two-dimensional")
     issue_map: dict[int, list[int]] = {}
     for issue in issues:
-        issue_map.setdefault(int(issue.track_index), []).append(int(issue.session_index))
+        issue_map.setdefault(int(issue.track_index), []).append(
+            int(issue.session_index)
+        )
 
     output_rows: list[np.ndarray] = []
     for track_index, row in enumerate(rows):
-        cut_points = sorted({idx for idx in issue_map.get(track_index, []) if 0 < idx < rows.shape[1]})
+        cut_points = sorted(
+            {idx for idx in issue_map.get(track_index, []) if 0 < idx < rows.shape[1]}
+        )
         if not cut_points:
             output_rows.append(row.copy())
             continue
@@ -162,7 +180,9 @@ def split_tracks_at_issues(
     return np.vstack(output_rows) if output_rows else rows[:0]
 
 
-def geometry_issue_rows(issues: Sequence[TrackGeometryIssue]) -> list[dict[str, float | int | str]]:
+def geometry_issue_rows(
+    issues: Sequence[TrackGeometryIssue],
+) -> list[dict[str, float | int | str]]:
     """Serialize geometry issues for CSV/JSON reports."""
 
     return [
@@ -198,8 +218,16 @@ def _track_positions(
         roi_indices.append(roi_int)
         positions.append(np.asarray(position, dtype=float).reshape(2))
     if not positions:
-        return np.zeros((0,), dtype=int), np.zeros((0, 2), dtype=float), np.zeros((0,), dtype=int)
-    return np.asarray(session_indices, dtype=int), np.vstack(positions), np.asarray(roi_indices, dtype=int)
+        return (
+            np.zeros((0,), dtype=int),
+            np.zeros((0, 2), dtype=float),
+            np.zeros((0,), dtype=int),
+        )
+    return (
+        np.asarray(session_indices, dtype=int),
+        np.vstack(positions),
+        np.asarray(roi_indices, dtype=int),
+    )
 
 
 def _fit_linear_track(session_indices: np.ndarray, positions: np.ndarray) -> np.ndarray:

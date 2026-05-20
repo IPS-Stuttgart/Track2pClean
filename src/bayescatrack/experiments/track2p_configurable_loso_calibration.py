@@ -21,6 +21,10 @@ from bayescatrack.association.pyrecest_global_assignment import (
     session_edge_pairs,
     tracks_to_suite2p_index_matrix,
 )
+from bayescatrack.experiments._cli_choices import (
+    REGISTRATION_TRANSFORM_CHOICES,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.experiments.calibration_hard_negatives import (
     CandidateHardNegativeOptions,
     balanced_binary_sample_weights,
@@ -36,10 +40,6 @@ from bayescatrack.experiments.track2p_benchmark import (
     format_benchmark_table,
     solve_configured_global_assignment,
     write_results,
-)
-from bayescatrack.experiments._cli_choices import (
-    REGISTRATION_TRANSFORM_CHOICES,
-    REGISTRATION_TRANSFORM_HELP,
 )
 from bayescatrack.experiments.track2p_loso_calibration import (
     CALIBRATION_FEATURE_SET_CHOICES,
@@ -217,7 +217,9 @@ def run_track2p_configurable_loso_calibration(
     )
 
 
-def _load_subjects(config: Track2pBenchmarkConfig) -> tuple[SubjectCalibrationData, ...]:
+def _load_subjects(
+    config: Track2pBenchmarkConfig,
+) -> tuple[SubjectCalibrationData, ...]:
     subject_dirs = tuple(discover_subject_dirs(config.data))
     if len(subject_dirs) < 2:
         raise ValueError("LOSO calibration requires at least two subject directories")
@@ -402,9 +404,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--include-non-cells",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help=(
-            "Keep all Suite2p stat.npy rows and use iscell probability as evidence."
-        ),
+        help=("Keep all Suite2p stat.npy rows and use iscell probability as evidence."),
     )
     parser.add_argument(
         "--include-behavior", action=argparse.BooleanOptionalAction, default=True
@@ -471,7 +471,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--higher-order-consistency-json", default=None)
     parser.add_argument("--candidate-pruning-json", default=None)
     parser.add_argument("--dynamic-edge-prior-json", default=None)
-    parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--progress", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     return parser

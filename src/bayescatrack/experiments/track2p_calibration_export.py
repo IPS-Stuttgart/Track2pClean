@@ -16,13 +16,13 @@ from bayescatrack.association.calibrated_costs import (
     fit_logistic_association_model,
 )
 from bayescatrack.association.pyrecest_global_assignment import session_edge_pairs
-from bayescatrack.experiments.track2p_benchmark import (
-    Track2pBenchmarkConfig,
-    discover_subject_dirs,
-)
 from bayescatrack.experiments._cli_choices import (
     REGISTRATION_TRANSFORM_CHOICES,
     REGISTRATION_TRANSFORM_HELP,
+)
+from bayescatrack.experiments.track2p_benchmark import (
+    Track2pBenchmarkConfig,
+    discover_subject_dirs,
 )
 from bayescatrack.experiments.track2p_loso_calibration import (
     SubjectCalibrationData,
