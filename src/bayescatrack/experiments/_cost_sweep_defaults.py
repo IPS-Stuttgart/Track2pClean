@@ -18,6 +18,15 @@ def install_cost_sweep_suite2p_defaults() -> None:
     def _build_arg_parser_with_suite2p_defaults() -> argparse.ArgumentParser:
         parser = original_build_arg_parser()
         _set_parser_default(parser, "include_non_cells", True)
+        _add_store_false_alias_if_missing(
+            parser,
+            option="--no-include-non-cells",
+            dest="include_non_cells",
+            help_text=(
+                "Hard-filter Suite2p ROIs using iscell.npy. The cost-sweep default "
+                "keeps non-cells to preserve Suite2p stat.npy row-index compatibility."
+            ),
+        )
         return parser
 
     setattr(
@@ -43,3 +52,20 @@ def _set_parser_default(
         if action.dest == dest:
             action.default = value
             return
+
+
+def _add_store_false_alias_if_missing(
+    parser: argparse.ArgumentParser,
+    *,
+    option: str,
+    dest: str,
+    help_text: str,
+) -> None:
+    if any(option in action.option_strings for action in parser._actions):  # pylint: disable=protected-access
+        return
+    parser.add_argument(
+        option,
+        dest=dest,
+        action="store_false",
+        help=help_text,
+    )
