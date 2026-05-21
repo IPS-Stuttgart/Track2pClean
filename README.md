@@ -40,7 +40,7 @@ bayescatrack/
 
 BayesCaTrack owns calcium-imaging semantics such as Track2p/Suite2p ingestion, ROI representation, ROI-derived association costs, registration-aware ROI warping, and Track2p benchmark scoring. PyRecEst is the backend for generic recursive Bayesian estimation primitives such as distributions, filters, point-set registration, and multi-session assignment.
 
-See [docs/architecture.md](docs/architecture.md) for the detailed boundary and the Track2p outperformance workstream.
+See [docs/architecture.md](docs/architecture.md) for the detailed boundary and the Track2p outperformance workstream. See [docs/track2p-benchmark-ci.md](docs/track2p-benchmark-ci.md) for the guarded benchmark workflow, published artifacts, and optional regression gates.
 
 ## CLI examples
 
