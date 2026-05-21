@@ -94,6 +94,13 @@ def estimate_integer_fov_shift(
     measurement = np.asarray(measurement_fov, dtype=float)
     if reference.ndim != 2 or measurement.ndim != 2:
         raise ValueError("reference_fov and measurement_fov must both be 2-D arrays")
+    if not np.all(np.isfinite(reference)) or not np.all(np.isfinite(measurement)):
+        raise ValueError("reference_fov and measurement_fov must contain only finite values")
+    if np.ptp(reference) <= 0.0 or np.ptp(measurement) <= 0.0:
+        raise ValueError(
+            "reference_fov and measurement_fov must contain spatial variation "
+            "for phase-correlation registration"
+        )
     if reference.shape != measurement.shape:
         common_shape = (
             max(int(reference.shape[0]), int(measurement.shape[0])),
@@ -101,9 +108,20 @@ def estimate_integer_fov_shift(
         )
         reference = _pad_image_to_shape(reference, common_shape)
         measurement = _pad_image_to_shape(measurement, common_shape)
+    if not np.all(np.isfinite(reference)) or not np.all(np.isfinite(measurement)):
+        raise ValueError("reference_fov and measurement_fov must contain only finite values")
     if subtract_mean:
         reference = reference - float(np.mean(reference))
         measurement = measurement - float(np.mean(measurement))
+
+    if (
+        float(np.linalg.norm(reference.ravel())) <= np.finfo(float).eps
+        or float(np.linalg.norm(measurement.ravel())) <= np.finfo(float).eps
+    ):
+        raise ValueError(
+            "Cannot estimate FOV shift from constant or empty FOV images"
+        )
+
     cross_power = np.fft.fftn(reference) * np.conj(np.fft.fftn(measurement))
     magnitude = np.abs(cross_power)
     magnitude[magnitude == 0.0] = 1.0
@@ -201,11 +219,17 @@ def register_measurement_plane_by_fov_translation(
         raise ValueError(
             "Both planes must provide fov images for FOV-based registration"
         )
-    shift_yx, peak_correlation = estimate_integer_fov_shift(
-        reference_plane.fov,
-        measurement_plane.fov,
-        subtract_mean=subtract_mean,
-    )
+    try:
+        shift_yx, peak_correlation = estimate_integer_fov_shift(
+            reference_plane.fov,
+            measurement_plane.fov,
+            subtract_mean=subtract_mean,
+        )
+    except ValueError as exc:
+        if not _is_constant_fov_registration_error(exc):
+            raise
+        shift_yx = np.zeros(2, dtype=int)
+        peak_correlation = 0.0
     registered_masks = apply_integer_roi_mask_translation(
         measurement_plane.roi_masks,
         shift_yx,
@@ -243,6 +267,14 @@ def register_measurement_plane_by_fov_translation(
         measurement_to_reference_shift_yx=shift_yx.astype(int),
         reference_to_measurement_shift_yx=(-shift_yx).astype(int),
         peak_correlation=peak_correlation,
+    )
+
+
+def _is_constant_fov_registration_error(exc: ValueError) -> bool:
+    message = str(exc)
+    return (
+        "constant or empty FOV images" in message
+        or "spatial variation for phase-correlation registration" in message
     )
 
 

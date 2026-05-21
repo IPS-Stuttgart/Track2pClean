@@ -14,6 +14,7 @@ be done by passing ``track_rows`` to reference/benchmark code outside this runne
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Literal, Mapping, Sequence
@@ -40,6 +41,17 @@ from .registration import (
 
 TrackingMethod = Literal["global", "pairwise"]
 
+_GLOBAL_PAIRWISE_ONLY_REGISTRATION_DEFAULTS: dict[str, object] = {
+    "registration_max_cost": None,
+    "registration_max_iterations": 25,
+    "registration_tolerance": 1e-8,
+    "min_matches": None,
+    "allow_reflection": False,
+    "return_pairwise_components": True,
+    "binarize_registered_masks": False,
+    "registered_mask_threshold": 0.5,
+}
+
 
 @dataclass(frozen=True)
 class SubjectTrackingResult:
@@ -54,6 +66,9 @@ class SubjectTrackingResult:
     fill_value: int = -1
     tracking_method: TrackingMethod = "global"
     global_assignment: GlobalAssignmentRun | None = None
+    link_target_indices: np.ndarray | None = None
+    global_link_edges: tuple[tuple[int, int], ...] = ()
+    global_link_costs: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sessions", tuple(self.sessions))
@@ -77,6 +92,43 @@ class SubjectTrackingResult:
         if link_costs.shape != expected_link_shape:
             raise ValueError(f"link_costs must have shape {expected_link_shape}")
         object.__setattr__(self, "link_costs", link_costs)
+
+        link_target_indices = self.link_target_indices
+        if link_target_indices is None:
+            link_target_indices = np.tile(
+                np.arange(1, track_rows.shape[1], dtype=int),
+                (track_rows.shape[0], 1),
+            )
+            link_target_indices[~np.isfinite(link_costs)] = int(self.fill_value)
+        else:
+            link_target_indices = np.asarray(link_target_indices, dtype=int)
+            if link_target_indices.shape != expected_link_shape:
+                raise ValueError(
+                    "link_target_indices must have the same shape as link_costs"
+                )
+        object.__setattr__(
+            self, "link_target_indices", np.asarray(link_target_indices, dtype=int)
+        )
+
+        global_link_edges: list[tuple[int, int]] = []
+        for edge in self.global_link_edges:
+            if len(edge) != 2:
+                raise ValueError("global_link_edges must contain (source, target) pairs")
+            source_index, target_index = edge
+            global_link_edges.append((int(source_index), int(target_index)))
+        object.__setattr__(self, "global_link_edges", tuple(global_link_edges))
+
+        if self.global_link_costs is None:
+            global_link_costs = None
+        else:
+            global_link_costs = np.asarray(self.global_link_costs, dtype=float)
+            expected_global_link_shape = (track_rows.shape[0], len(global_link_edges))
+            if global_link_costs.shape != expected_global_link_shape:
+                raise ValueError(
+                    "global_link_costs must have shape "
+                    f"{expected_global_link_shape}"
+                )
+        object.__setattr__(self, "global_link_costs", global_link_costs)
 
     @property
     def n_tracks(self) -> int:
@@ -110,7 +162,12 @@ class SubjectTrackingResult:
 
         track_lengths = self.track_lengths()
         complete_mask = self.complete_track_mask()
-        finite_link_costs = self.link_costs[np.isfinite(self.link_costs)]
+        link_cost_source = (
+            self.global_link_costs
+            if self.global_link_costs is not None and self.global_link_costs.size
+            else self.link_costs
+        )
+        finite_link_costs = link_cost_source[np.isfinite(link_cost_source)]
         if self.match_results:
             pair_summaries = [
                 _match_result_summary(
@@ -151,6 +208,7 @@ class SubjectTrackingResult:
             "solver": self.solver,
             "n_sessions": self.n_sessions,
             "session_names": self.session_names,
+            "global_link_edges": self.global_link_edges,
             "global_session_edges": global_session_edges,
             "n_tracks_started": self.n_tracks,
             "n_complete_tracks": int(np.sum(complete_mask)),
@@ -173,17 +231,26 @@ class SubjectTrackingResult:
     def to_export_dict(self) -> dict[str, Any]:
         """Return arrays and summary metadata suitable for serialization."""
 
-        return {
-            "session_names": np.asarray(self.session_names, dtype=object),
+        export = {
+            "session_names": np.asarray(self.session_names, dtype=np.str_),
             "track_rows": self.track_rows,
             "link_costs": self.link_costs,
+            "link_target_indices": self.link_target_indices,
             "track_lengths": self.track_lengths(),
             "complete_track_mask": self.complete_track_mask(),
             "fill_value": np.asarray(self.fill_value, dtype=int),
-            "tracking_method": np.asarray(self.tracking_method, dtype=object),
-            "solver": np.asarray(self.solver, dtype=object),
-            "scores": self.score_summary(),
+            "tracking_method": np.asarray(self.tracking_method, dtype=np.str_),
+            "solver": np.asarray(self.solver, dtype=np.str_),
+            "scores_json": np.asarray(
+                json.dumps(self.score_summary(), sort_keys=True), dtype=np.str_
+            ),
+            "global_link_edges": np.asarray(self.global_link_edges, dtype=int).reshape(
+                -1, 2
+            ),
         }
+        if self.global_link_costs is not None:
+            export["global_link_costs"] = self.global_link_costs
+        return export
 
 
 # pylint: disable=too-many-arguments,too-many-locals
@@ -236,6 +303,18 @@ def run_registered_subject_tracking(
     """
 
     tracking_method = _validate_tracking_method(tracking_method)
+    if tracking_method == "global":
+        _raise_for_unsupported_global_registration_options(
+            registration_max_cost=registration_max_cost,
+            registration_max_iterations=registration_max_iterations,
+            registration_tolerance=registration_tolerance,
+            min_matches=min_matches,
+            allow_reflection=allow_reflection,
+            return_pairwise_components=return_pairwise_components,
+            binarize_registered_masks=binarize_registered_masks,
+            registered_mask_threshold=registered_mask_threshold,
+        )
+
     sessions = _load_subject_sessions(
         subject_dir,
         plane_name,
@@ -313,7 +392,12 @@ def run_registered_subject_tracking(
             track_rows,
             fill_value=fill_value,
         )
-        link_costs = _build_global_link_cost_matrix(
+        (
+            link_costs,
+            link_target_indices,
+            global_link_edges,
+            global_link_costs,
+        ) = _build_global_link_cost_matrices(
             global_assignment,
             sessions,
             track_rows,
@@ -332,9 +416,12 @@ def run_registered_subject_tracking(
             session_names=session_names,
             track_rows=track_rows,
             link_costs=link_costs,
+            link_target_indices=link_target_indices,
             fill_value=fill_value,
             tracking_method="global",
             global_assignment=global_assignment,
+            global_link_edges=global_link_edges,
+            global_link_costs=global_link_costs,
         )
 
     registered_bundles = build_registered_consecutive_session_association_bundles(
@@ -386,6 +473,30 @@ def _validate_tracking_method(value: str) -> TrackingMethod:
     if value not in {"global", "pairwise"}:
         raise ValueError("tracking_method must be either 'global' or 'pairwise'")
     return value  # type: ignore[return-value]
+
+
+def _raise_for_unsupported_global_registration_options(**options: object) -> None:
+    """Fail fast when pairwise point-set registration knobs are used globally.
+
+    Global tracking currently registers pairwise costs through the Track2p/FOV
+    registration adapter.  The options checked here are consumed only by the
+    pairwise PyRecEst point-set-registration path, so accepting non-default
+    values would silently misrepresent an experiment configuration.
+    """
+
+    non_default_names = tuple(
+        name
+        for name, value in options.items()
+        if value != _GLOBAL_PAIRWISE_ONLY_REGISTRATION_DEFAULTS[name]
+    )
+    if not non_default_names:
+        return
+    joined_names = ", ".join(non_default_names)
+    raise ValueError(
+        "tracking_method='global' does not support pairwise point-set registration "
+        f"option(s): {joined_names}. Use tracking_method='pairwise' or leave these "
+        "options at their defaults."
+    )
 
 
 def _global_transform_type_from_registration_model(
@@ -512,7 +623,7 @@ def _global_assignment_edge_match_results(
             measurement_roi = int(row[target_index])
             if fill_value in (reference_roi, measurement_roi):
                 continue
-            if target_index > source_index + 1 and np.all(
+            if target_index > source_index + 1 and np.any(
                 row[source_index + 1 : target_index] != fill_value
             ):
                 continue
@@ -626,20 +737,37 @@ def _build_link_cost_matrix(
     return link_costs
 
 
-def _build_global_link_cost_matrix(
+def _build_global_link_cost_matrices(
     global_assignment: GlobalAssignmentRun,
     sessions: Sequence[Track2pSession],
     track_rows: np.ndarray,
     *,
     fallback_match_results: Sequence[SessionMatchResult],
     fill_value: int,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray, tuple[tuple[int, int], ...], np.ndarray]:
     track_rows = np.asarray(track_rows, dtype=int)
-    link_costs = np.full((track_rows.shape[0], max(track_rows.shape[1] - 1, 0)), np.nan)
+    link_costs = np.full(
+        (track_rows.shape[0], max(track_rows.shape[1] - 1, 0)), np.nan
+    )
+    link_target_indices = np.full(link_costs.shape, int(fill_value), dtype=int)
+    global_link_edges = tuple(
+        (int(source_index), int(target_index))
+        for source_index, target_index in global_assignment.session_edges
+    )
+    global_link_costs = np.full(
+        (track_rows.shape[0], len(global_link_edges)), np.nan, dtype=float
+    )
     roi_position_maps = [_roi_position_map_for_session(session) for session in sessions]
-    for source_index, target_index in global_assignment.session_edges:
-        if source_index >= link_costs.shape[1]:
-            continue
+    ordered_edge_indices = sorted(
+        range(len(global_link_edges)),
+        key=lambda index: (
+            global_link_edges[index][1] - global_link_edges[index][0] > 1,
+            global_link_edges[index][0],
+            global_link_edges[index][1],
+        ),
+    )
+    for edge_index in ordered_edge_indices:
+        source_index, target_index = global_link_edges[edge_index]
         cost_matrix = global_assignment.pairwise_costs.get((source_index, target_index))
         if cost_matrix is None:
             continue
@@ -647,30 +775,61 @@ def _build_global_link_cost_matrix(
         source_position_by_roi = roi_position_maps[source_index]
         target_position_by_roi = roi_position_maps[target_index]
         for track_index, row in enumerate(track_rows):
-            if np.isfinite(link_costs[track_index, source_index]):
-                continue
             source_roi = int(row[source_index])
             target_roi = int(row[target_index])
             if fill_value in (source_roi, target_roi):
+                continue
+            if target_index > source_index + 1 and np.any(
+                row[source_index + 1 : target_index] != fill_value
+            ):
                 continue
             if (
                 source_roi not in source_position_by_roi
                 or target_roi not in target_position_by_roi
             ):
                 continue
-            link_costs[track_index, source_index] = float(
+            edge_cost = float(
                 cost_matrix[
                     int(source_position_by_roi[source_roi]),
                     int(target_position_by_roi[target_roi]),
                 ]
             )
-    if np.isfinite(link_costs).any():
-        return link_costs
-    return _build_link_cost_matrix(
+            global_link_costs[track_index, edge_index] = edge_cost
+            if source_index < link_costs.shape[1]:
+                link_costs[track_index, source_index] = edge_cost
+                link_target_indices[track_index, source_index] = int(target_index)
+
+    if np.isfinite(global_link_costs).any():
+        return link_costs, link_target_indices, global_link_edges, global_link_costs
+
+    fallback_link_costs = _build_link_cost_matrix(
         track_rows,
         fallback_match_results,
         fill_value=fill_value,
     )
+    fallback_edges = tuple(
+        (pair_index, pair_index + 1)
+        for pair_index in range(fallback_link_costs.shape[1])
+    )
+    return (
+        fallback_link_costs,
+        _default_link_target_indices(
+            fallback_link_costs,
+            fill_value=fill_value,
+        ),
+        fallback_edges,
+        fallback_link_costs,
+    )
+
+
+def _default_link_target_indices(link_costs: np.ndarray, *, fill_value: int) -> np.ndarray:
+    link_costs = np.asarray(link_costs, dtype=float)
+    link_target_indices = np.tile(
+        np.arange(1, link_costs.shape[1] + 1, dtype=int),
+        (link_costs.shape[0], 1),
+    )
+    link_target_indices[~np.isfinite(link_costs)] = int(fill_value)
+    return link_target_indices
 
 
 def _match_result_summary(

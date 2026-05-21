@@ -198,6 +198,52 @@ def test_load_suite2p_plane_rejects_all_empty_stats_without_ops(tmp_path):
         )
 
 
+def test_load_suite2p_plane_rejects_mismatched_iscell_rows(tmp_path):
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([0], dtype=int),
+                "xpix": np.asarray([0], dtype=int),
+                "lam": np.asarray([1.0], dtype=float),
+            },
+            {
+                "ypix": np.asarray([1], dtype=int),
+                "xpix": np.asarray([1], dtype=int),
+                "lam": np.asarray([1.0], dtype=float),
+            },
+        ],
+        dtype=object,
+    )
+    np.save(tmp_path / "stat.npy", stat)
+    np.save(tmp_path / "iscell.npy", np.ones((1, 2), dtype=float))
+
+    with pytest.raises(ValueError, match="iscell.npy first dimension"):
+        load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)
+
+
+def test_load_suite2p_plane_rejects_mismatched_trace_rows(tmp_path):
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([0], dtype=int),
+                "xpix": np.asarray([0], dtype=int),
+                "lam": np.asarray([1.0], dtype=float),
+            },
+            {
+                "ypix": np.asarray([1], dtype=int),
+                "xpix": np.asarray([1], dtype=int),
+                "lam": np.asarray([1.0], dtype=float),
+            },
+        ],
+        dtype=object,
+    )
+    np.save(tmp_path / "stat.npy", stat)
+    np.save(tmp_path / "F.npy", np.ones((1, 3), dtype=float))
+
+    with pytest.raises(ValueError, match="F.npy first dimension"):
+        load_suite2p_plane(tmp_path, load_spike_traces=False)
+
+
 def test_pairwise_feature_dimension_mismatch_raises_clear_error():
     masks = np.zeros((1, 4, 4), dtype=bool)
     masks[0, 1:3, 1:3] = True
