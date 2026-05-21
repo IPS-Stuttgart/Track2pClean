@@ -34,12 +34,16 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     assert "registration-qa" in run_names
 
     higher_order = next(
-        run for run in manifest["runs"] if run["name"] == "roi-aware-shifted-higher-order"
+        run
+        for run in manifest["runs"]
+        if run["name"] == "roi-aware-shifted-higher-order"
     )
     assert higher_order["higher_order_triplet_weight"] > 0.0
 
     configurable = next(
-        run for run in manifest["runs"] if run["name"] == "configurable-loso-local-evidence-hgb"
+        run
+        for run in manifest["runs"]
+        if run["name"] == "configurable-loso-local-evidence-hgb"
     )
     assert configurable["runner"] == "track2p-loso-calibration"
     assert "one_minus_weighted_dice" in configurable["feature_names"]
