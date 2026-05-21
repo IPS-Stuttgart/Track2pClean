@@ -95,8 +95,18 @@ def apply_dynamic_edge_priors(
     if cfg.registration_empty_roi_weight and empty_registered_rois is not None:
         empty = np.asarray(empty_registered_rois, dtype=bool).reshape(-1)
         if empty.shape != (costs.shape[1],):
-            raise ValueError("empty_registered_rois must have one entry per column")
-        costs[:, empty] += cfg.registration_empty_roi_weight
+            non_empty_count = int(empty.size - np.count_nonzero(empty))
+            if non_empty_count != costs.shape[1]:
+                raise ValueError(
+                    "empty_registered_rois must describe either the current cost "
+                    "matrix columns or the full registered-ROI column layout"
+                )
+            # The cost matrix is already compacted to non-empty registered ROI
+            # columns. Empty ROI columns will be reintroduced downstream by
+            # expand_registered_pairwise_cost_columns(..., fill_value=large_cost),
+            # so there is no compact column to penalize here.
+        else:
+            costs[:, empty] += cfg.registration_empty_roi_weight
 
     return np.nan_to_num(
         costs,
