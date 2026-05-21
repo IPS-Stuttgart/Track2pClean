@@ -5,6 +5,36 @@ from bayescatrack.experiments import track2p_activity_tie_breaker_sweep
 # pylint: disable=protected-access
 
 
+def test_activity_tie_breaker_sweep_cli_keeps_suite2p_non_cells_by_default():
+    parser = track2p_activity_tie_breaker_sweep.build_arg_parser()
+
+    default_args = parser.parse_args(
+        [
+            "--data",
+            "dataset",
+            "--activity-tie-breaker-weights",
+            "0,0.03",
+            "--no-progress",
+        ]
+    )
+    assert default_args.include_non_cells is True
+
+    hard_filter_args = parser.parse_args(
+        [
+            "--data",
+            "dataset",
+            "--activity-tie-breaker-weights",
+            "0,0.03",
+            "--no-include-non-cells",
+            "--no-progress",
+        ]
+    )
+    assert hard_filter_args.include_non_cells is False
+
+    config = track2p_activity_tie_breaker_sweep._config_from_args(default_args)
+    assert config.benchmark.include_non_cells is True
+
+
 def test_activity_tie_breaker_sweep_cli_builds_config():
     args = track2p_activity_tie_breaker_sweep.build_arg_parser().parse_args(
         [
