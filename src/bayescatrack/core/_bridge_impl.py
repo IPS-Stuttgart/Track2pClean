@@ -1260,11 +1260,26 @@ def _infer_image_shape(stat: np.ndarray, ops: dict[str, Any] | None) -> tuple[in
         raise ValueError(
             "Cannot infer image shape from an empty stat.npy without ops.npy"
         )
-    max_y = 0
-    max_x = 0
+    max_y: int | None = None
+    max_x: int | None = None
     for roi_stat in stat:
-        max_y = max(max_y, int(np.max(roi_stat["ypix"])))
-        max_x = max(max_x, int(np.max(roi_stat["xpix"])))
+        ypix = np.asarray(roi_stat.get("ypix", ()), dtype=int)
+        xpix = np.asarray(roi_stat.get("xpix", ()), dtype=int)
+        if ypix.shape != xpix.shape:
+            raise ValueError(
+                "Suite2p ROI ypix/xpix arrays must have matching shapes"
+            )
+        if ypix.size == 0:
+            continue
+        roi_max_y = int(np.max(ypix))
+        roi_max_x = int(np.max(xpix))
+        max_y = roi_max_y if max_y is None else max(max_y, roi_max_y)
+        max_x = roi_max_x if max_x is None else max(max_x, roi_max_x)
+    if max_y is None or max_x is None:
+        raise ValueError(
+            "Cannot infer image shape from stat.npy without ops.npy because "
+            "all ROI pixel arrays are empty"
+        )
     return max_y + 1, max_x + 1
 
 
@@ -1286,42 +1301,6 @@ def _ensure_finite_cost_matrix(
         sanitized[invalid] = large_cost
     sanitized[sanitized < 0.0] = 0.0
     return sanitized
-
-
-def _pairwise_cell_probability_cost(
-    reference_probabilities: np.ndarray | None,
-    measurement_probabilities: np.ndarray | None,
-    *,
-    cost_shape: tuple[int, int],
-    similarity_epsilon: float,
-) -> np.ndarray:
-    cost = np.zeros(cost_shape, dtype=float)
-    if reference_probabilities is None or measurement_probabilities is None:
-        return cost
-
-    reference_probabilities = np.asarray(reference_probabilities, dtype=float)
-    measurement_probabilities = np.asarray(measurement_probabilities, dtype=float)
-    if reference_probabilities.shape != (cost_shape[0],):
-        raise ValueError("reference cell probabilities must match reference ROIs")
-    if measurement_probabilities.shape != (cost_shape[1],):
-        raise ValueError("measurement cell probabilities must match measurement ROIs")
-
-    finite_reference = np.isfinite(reference_probabilities)
-    finite_measurement = np.isfinite(measurement_probabilities)
-    if not np.any(finite_reference) or not np.any(finite_measurement):
-        return cost
-
-    probabilities_reference = np.clip(
-        reference_probabilities[finite_reference], similarity_epsilon, 1.0
-    )
-    probabilities_measurement = np.clip(
-        measurement_probabilities[finite_measurement], similarity_epsilon, 1.0
-    )
-    cost[np.ix_(finite_reference, finite_measurement)] = -0.5 * (
-        np.log(probabilities_reference[:, None])
-        + np.log(probabilities_measurement[None, :])
-    )
-    return cost
 
 
 def _estimate_default_centroid_scale(
@@ -1718,6 +1697,14 @@ def _pairwise_roi_feature_distance(
 
         reference_feature = reference_feature.reshape(reference_plane.n_rois, -1)
         measurement_feature = measurement_feature.reshape(measurement_plane.n_rois, -1)
+        if reference_feature.shape[1] != measurement_feature.shape[1]:
+            raise ValueError(
+                f"ROI feature {feature_name!r} has incompatible trailing "
+                "dimensions between reference and measurement planes: "
+                f"{reference_feature.shape[1]} vs "
+                f"{measurement_feature.shape[1]}"
+            )
+
         pooled_feature = np.concatenate(
             [reference_feature.reshape(-1), measurement_feature.reshape(-1)]
         )
