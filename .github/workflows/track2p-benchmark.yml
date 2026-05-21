@@ -2,6 +2,23 @@ name: Track2p benchmark
 
 on:
   workflow_dispatch:
+    inputs:
+      min_best_pairwise_f1_macro:
+        description: Optional minimum best non-baseline macro pairwise F1.
+        required: false
+        type: string
+      min_best_complete_track_f1_macro:
+        description: Optional minimum best non-baseline macro complete-track F1.
+        required: false
+        type: string
+      min_pairwise_f1_macro_delta_over_baseline:
+        description: Optional minimum macro pairwise F1 delta over the Track2p baseline.
+        required: false
+        type: string
+      min_complete_track_f1_macro_delta_over_baseline:
+        description: Optional minimum macro complete-track F1 delta over the Track2p baseline.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -27,4 +44,25 @@ jobs:
           TRACK2P_DATA_PATH: ${{ vars.TRACK2P_DATA_PATH }}
           TRACK2P_REFERENCE_PATH: ${{ vars.TRACK2P_REFERENCE_PATH }}
           TRACK2P_TRANSFORM_TYPE: ${{ vars.TRACK2P_TRANSFORM_TYPE || 'affine' }}
+          TRACK2P_BASELINE_APPROACH: ${{ vars.TRACK2P_BASELINE_APPROACH || 'Track2p baseline' }}
+          TRACK2P_MIN_BEST_PAIRWISE_F1_MACRO: ${{ inputs.min_best_pairwise_f1_macro || vars.TRACK2P_MIN_BEST_PAIRWISE_F1_MACRO }}
+          TRACK2P_MIN_BEST_COMPLETE_TRACK_F1_MACRO: ${{ inputs.min_best_complete_track_f1_macro || vars.TRACK2P_MIN_BEST_COMPLETE_TRACK_F1_MACRO }}
+          TRACK2P_MIN_PAIRWISE_F1_MACRO_DELTA_OVER_BASELINE: ${{ inputs.min_pairwise_f1_macro_delta_over_baseline || vars.TRACK2P_MIN_PAIRWISE_F1_MACRO_DELTA_OVER_BASELINE }}
+          TRACK2P_MIN_COMPLETE_TRACK_F1_MACRO_DELTA_OVER_BASELINE: ${{ inputs.min_complete_track_f1_macro_delta_over_baseline || vars.TRACK2P_MIN_COMPLETE_TRACK_F1_MACRO_DELTA_OVER_BASELINE }}
         run: poetry run python .github/scripts/run_track2p_benchmark.py
+
+      - name: Publish benchmark summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f benchmark-results/workflow-summary.md ]; then
+            cat benchmark-results/workflow-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: track2p-benchmark-results
+          path: benchmark-results
+          if-no-files-found: error
