@@ -94,6 +94,13 @@ def estimate_integer_fov_shift(
     measurement = np.asarray(measurement_fov, dtype=float)
     if reference.ndim != 2 or measurement.ndim != 2:
         raise ValueError("reference_fov and measurement_fov must both be 2-D arrays")
+    if not np.all(np.isfinite(reference)) or not np.all(np.isfinite(measurement)):
+        raise ValueError("reference_fov and measurement_fov must contain only finite values")
+    if np.ptp(reference) <= 0.0 or np.ptp(measurement) <= 0.0:
+        raise ValueError(
+            "reference_fov and measurement_fov must contain spatial variation "
+            "for phase-correlation registration"
+        )
     if reference.shape != measurement.shape:
         common_shape = (
             max(int(reference.shape[0]), int(measurement.shape[0])),

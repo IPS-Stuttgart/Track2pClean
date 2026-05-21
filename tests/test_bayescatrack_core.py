@@ -3,7 +3,7 @@ import json
 import numpy as np
 import numpy.testing as npt
 import pytest
-from bayescatrack import CalciumPlaneData, load_track2p_subject
+from bayescatrack import CalciumPlaneData, load_suite2p_plane, load_track2p_subject
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
@@ -175,3 +175,31 @@ def test_cli_summary_and_export(tmp_path):
 
         assert exported["session_names"].tolist() == ["2024-05-01_a"]
         assert exported["session_dates"].tolist() == ["2024-05-01"]
+
+
+def test_load_suite2p_plane_validates_auxiliary_roi_row_counts(tmp_path):
+    plane_dir = tmp_path / "plane0"
+    plane_dir.mkdir()
+
+    stat = np.empty(2, dtype=object)
+    stat[0] = {"ypix": np.array([0]), "xpix": np.array([0]), "lam": np.array([1.0])}
+    stat[1] = {"ypix": np.array([1]), "xpix": np.array([1]), "lam": np.array([1.0])}
+    np.save(plane_dir / "stat.npy", stat)
+    np.save(plane_dir / "ops.npy", {"Ly": 2, "Lx": 2, "meanImg": np.ones((2, 2))})
+
+    np.save(plane_dir / "iscell.npy", np.array([[1.0, 0.9]], dtype=float))
+    with pytest.raises(ValueError, match="iscell.npy.*same number of ROIs"):
+        load_suite2p_plane(plane_dir)
+
+    np.save(plane_dir / "iscell.npy", np.array([[1.0, 0.9], [1.0, 0.8]], dtype=float))
+    np.save(plane_dir / "F.npy", np.ones((1, 3), dtype=float))
+    with pytest.raises(ValueError, match="F.npy.*same number of ROIs"):
+        load_suite2p_plane(plane_dir)
+
+    np.save(plane_dir / "F.npy", np.ones((2, 3), dtype=float))
+    np.save(plane_dir / "spks.npy", np.ones((1, 3), dtype=float))
+    with pytest.raises(ValueError, match="spks.npy.*same number of ROIs"):
+        load_suite2p_plane(plane_dir)
+
+    np.save(plane_dir / "spks.npy", np.ones((2, 3), dtype=float))
+    assert load_suite2p_plane(plane_dir).n_rois == 2
