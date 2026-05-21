@@ -16,6 +16,12 @@ import numpy as np
 from bayescatrack.association.higher_order_consistency import (
     HigherOrderConsistencyConfig,
 )
+from bayescatrack.association.track_refinement import (
+    TrackSmoothingConfig,
+    roi_position_tables_from_sessions,
+    split_tracks_at_issues,
+    track_geometry_issues,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,
@@ -121,12 +127,17 @@ class Track2pBenchmarkConfig:
     weighted_centroids: bool = False
     velocity_variance: float = 25.0
     regularization: float = 1.0e-6
+    registration_options: dict[str, Any] | None = None
     pairwise_cost_kwargs: dict[str, Any] | None = None
+    absence_model_config: dict[str, Any] | None = None
     higher_order_consistency_config: dict[str, Any] | None = None
     candidate_pruning_config: dict[str, Any] | None = None
     dynamic_edge_prior_config: dict[str, Any] | None = None
     edge_uncertainty_config: dict[str, Any] | None = None
     adaptive_edge_prior_config: dict[str, Any] | None = None
+    learned_gap_prior: bool = False
+    learned_gap_prior_smoothing: float = 1.0
+    track_refinement_config: dict[str, Any] | None = None
     activity_tie_breaker_weight: float = 0.0
     activity_tie_breaker_component: str = "activity_tiebreaker_cost"
     activity_trace_source: str = "auto"
@@ -604,6 +615,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="JSON object merged into pairwise cost kwargs",
     )
     parser.add_argument(
+        "--registration-options-json",
+        default=None,
+        help="JSON object passed to auto-registration selection, e.g. candidate_transforms and penalties",
+    )
+    parser.add_argument("--absence-model-json", default=None, help="JSON object for absence-aware skip-edge penalties")
+    parser.add_argument(
         "--higher-order-consistency-json",
         default=None,
         help=(
@@ -630,6 +647,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--adaptive-edge-prior-json",
         default=None,
         help="JSON object configuring ROI-conditioned adaptive edge priors",
+    )
+    parser.add_argument(
+        "--learned-gap-prior",
+        action="store_true",
+        help="For LOSO calibrated runs, estimate learned gap costs from training subjects and inject them via adaptive priors",
+    )
+    parser.add_argument("--learned-gap-prior-smoothing", type=float, default=1.0)
+    parser.add_argument(
+        "--track-refinement-json",
+        default=None,
+        help="JSON object for optional geometry-based post-solve track splitting",
     )
     parser.add_argument(
         "--activity-tie-breaker-weight",
@@ -803,7 +831,14 @@ def _predict_subject_tracks(
                 weighted_masks=config.weighted_masks,
                 exclude_overlapping_pixels=config.exclude_overlapping_pixels,
             )
-        return normalize_track_matrix(baseline.suite2p_indices), "Track2p default"
+        predicted = normalize_track_matrix(baseline.suite2p_indices)
+        if config.track_refinement_config is not None:
+            predicted = _maybe_refine_predicted_tracks(
+                predicted,
+                _load_subject_sessions(subject_dir, config),
+                config=config,
+            )
+        return predicted, "Track2p default"
 
     if config.method == "oracle-gt-links":
         if reference is None:
@@ -823,7 +858,51 @@ def _predict_subject_tracks(
     sessions = _load_subject_sessions(subject_dir, config)
     assignment = solve_configured_global_assignment(sessions, config)
     predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
+    predicted = _maybe_refine_predicted_tracks(predicted, sessions, config=config)
     return predicted, _variant_name(config.cost)
+
+
+def _maybe_refine_predicted_tracks(
+    predicted_matrix: np.ndarray,
+    sessions: Sequence[Track2pSession],
+    *,
+    config: Track2pBenchmarkConfig,
+) -> np.ndarray:
+    """Optionally split high-residual predicted tracks before scoring."""
+
+    if config.track_refinement_config is None:
+        return predicted_matrix
+    smoothing_config = TrackSmoothingConfig(**dict(config.track_refinement_config))
+    integer_matrix = _track_matrix_to_int_fill(
+        predicted_matrix,
+        fill_value=int(smoothing_config.fill_value),
+    )
+    position_tables = roi_position_tables_from_sessions(
+        sessions,
+        order=config.order,
+        weighted=config.weighted_centroids,
+    )
+    issues = track_geometry_issues(
+        integer_matrix,
+        position_tables,
+        config=smoothing_config,
+    )
+    if not issues or not smoothing_config.split_bad_edges:
+        return integer_matrix
+    return split_tracks_at_issues(
+        integer_matrix,
+        issues,
+        fill_value=int(smoothing_config.fill_value),
+    )
+
+
+def _track_matrix_to_int_fill(track_matrix: np.ndarray, *, fill_value: int) -> np.ndarray:
+    matrix = normalize_track_matrix(track_matrix)
+    output = np.full(matrix.shape, int(fill_value), dtype=int)
+    for index, value in np.ndenumerate(matrix):
+        if _is_valid_roi_index(value):
+            output[index] = int(cast(Any, value))
+    return output
 
 
 def oracle_ground_truth_link_tracks(
@@ -906,6 +985,8 @@ def solve_configured_global_assignment(
         weighted_centroids=config.weighted_centroids,
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
+        registration_options=config.registration_options,
+        absence_model_config=config.absence_model_config,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
         activity_tie_breaker_weight=config.activity_tie_breaker_weight,
         activity_tie_breaker_component=config.activity_tie_breaker_component,
@@ -1560,6 +1641,18 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         getattr(args, "edge_uncertainty_json", None),
         name="--edge-uncertainty-json",
     )
+    registration_options = _parse_json_object(
+        getattr(args, "registration_options_json", None),
+        name="--registration-options-json",
+    )
+    absence_model_config = _parse_json_object(
+        getattr(args, "absence_model_json", None),
+        name="--absence-model-json",
+    )
+    track_refinement_config = _parse_json_object(
+        getattr(args, "track_refinement_json", None),
+        name="--track-refinement-json",
+    )
     return Track2pBenchmarkConfig(
         data=args.data,
         method=args.method,
@@ -1618,12 +1711,17 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         weighted_centroids=args.weighted_centroids,
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
+        registration_options=registration_options,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
+        absence_model_config=absence_model_config,
         higher_order_consistency_config=higher_order_consistency_config,
         candidate_pruning_config=candidate_pruning_config,
         dynamic_edge_prior_config=dynamic_edge_prior_config,
         edge_uncertainty_config=edge_uncertainty_config,
         adaptive_edge_prior_config=adaptive_edge_prior_config,
+        learned_gap_prior=bool(args.learned_gap_prior),
+        learned_gap_prior_smoothing=float(args.learned_gap_prior_smoothing),
+        track_refinement_config=track_refinement_config,
         activity_tie_breaker_weight=args.activity_tie_breaker_weight,
         activity_tie_breaker_component=args.activity_tie_breaker_component,
         activity_trace_source=args.activity_trace_source,
