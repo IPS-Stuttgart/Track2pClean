@@ -333,6 +333,7 @@ def run_track2p_loso_calibration(
                 predicted_matrix,
                 held_out.sessions,
                 config=solve_config,
+                assignment=prior_assignment,
             )
             base_scores = _score_prediction_against_reference(
                 predicted_matrix, held_out.reference, config=config

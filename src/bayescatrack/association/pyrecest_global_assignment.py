@@ -26,6 +26,12 @@ from bayescatrack.association.adaptive_priors import (
     AdaptiveEdgePriorConfig,
     apply_adaptive_edge_priors,
 )
+from bayescatrack.association.consensus_priors import (
+    ConsensusPriorConfig,
+    apply_consensus_edge_priors,
+    consensus_prior_config_from_mapping,
+    edge_votes_from_tracks,
+)
 from bayescatrack.association.calibrated_costs import (
     CalibratedAssociationModel,
     calibrated_cost_matrix_from_bundle,
@@ -42,6 +48,10 @@ from bayescatrack.association.higher_order_consistency import (
     HigherOrderConsistencyConfig,
     apply_higher_order_consistency,
 )
+from bayescatrack.association.joint_registration_assignment import (
+    JointRefinementConfig,
+    apply_joint_anchor_relief_to_pairwise_costs,
+)
 from bayescatrack.association.registered_masks import (
     add_registered_roi_validity_components,
     drop_empty_registered_masks,
@@ -50,6 +60,10 @@ from bayescatrack.association.registered_masks import (
 from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
     pairwise_kwargs_use_shifted_overlap,
+)
+from bayescatrack.association.segmentation_events import (
+    SegmentationEventConfig,
+    event_soft_penalty_matrix,
 )
 from bayescatrack.core.bridge import (
     CalciumPlaneData,
@@ -355,6 +369,7 @@ def build_registered_pairwise_costs(
     candidate_pruning_config: CandidatePruningConfig | Mapping[str, Any] | None = None,
     dynamic_edge_prior_config: DynamicEdgePriorConfig | Mapping[str, Any] | None = None,
     edge_uncertainty_config: EdgeUncertaintyConfig | Mapping[str, Any] | None = None,
+    segmentation_event_config: SegmentationEventConfig | Mapping[str, Any] | None = None,
 ) -> dict[SessionEdge, np.ndarray]:
     """Build registered pairwise cost matrices for consecutive and skip-session edges."""
 
@@ -370,6 +385,7 @@ def build_registered_pairwise_costs(
         or activity_tie_breaker_weight > 0.0
         or dynamic_edge_prior_config is not None
         or edge_uncertainty_config is not None
+        or segmentation_event_config is not None
     )
 
     base_cost_kwargs = _cost_kwargs_for_method(cost)
@@ -444,7 +460,23 @@ def build_registered_pairwise_costs(
                     sessions[source_session].plane_data,
                     registered_measurement_plane,
                     session_gap=target_session - source_session,
+                    registered_empty_mask=empty_registered_rois,
+                    reference_local_density=_roi_local_density(
+                        sessions[source_session].plane_data,
+                        order=order,
+                        weighted=weighted_centroids,
+                    ),
+                    measurement_local_density=_roi_local_density(
+                        registered_measurement_plane,
+                        order=order,
+                        weighted=weighted_centroids,
+                    ),
                     config=absence_model_config,
+                )
+            if segmentation_event_config is not None:
+                cost_matrix = np.asarray(cost_matrix, dtype=float) + event_soft_penalty_matrix(
+                    bundle.pairwise_components,
+                    config=segmentation_event_config,
                 )
             if activity_tie_breaker_weight > 0.0:
                 cost_matrix = np.asarray(
@@ -527,6 +559,11 @@ def solve_global_assignment_for_sessions(
     adaptive_edge_prior_config: (
         AdaptiveEdgePriorConfig | Mapping[str, Any] | None
     ) = None,
+    segmentation_event_config: (
+        SegmentationEventConfig | Mapping[str, Any] | None
+    ) = None,
+    joint_refinement_config: JointRefinementConfig | Mapping[str, Any] | None = None,
+    consensus_prior_config: ConsensusPriorConfig | Mapping[str, Any] | None = None,
 ) -> GlobalAssignmentRun:
     """Run PyRecEst's global path-cover assignment on registered BayesCaTrack costs."""
 
@@ -553,6 +590,7 @@ def solve_global_assignment_for_sessions(
         candidate_pruning_config=candidate_pruning_config,
         dynamic_edge_prior_config=dynamic_edge_prior_config,
         edge_uncertainty_config=edge_uncertainty_config,
+        segmentation_event_config=segmentation_event_config,
     )
     session_sizes = tuple(int(session.plane_data.n_rois) for session in sessions)
     if adaptive_edge_prior_config is not None:
@@ -567,7 +605,39 @@ def solve_global_assignment_for_sessions(
             session_sizes=session_sizes,
             config=higher_order_consistency_config,
         )
+    if joint_refinement_config is not None:
+        pairwise_costs = apply_joint_anchor_relief_to_pairwise_costs(
+            pairwise_costs,
+            config=joint_refinement_config,
+        )
     session_edges = session_edge_pairs(len(sessions), max_gap=max_gap)
+    if consensus_prior_config is not None:
+        pairwise_costs = _apply_consensus_priors_from_variants(
+            pairwise_costs,
+            sessions,
+            session_sizes=session_sizes,
+            session_edges=session_edges,
+            config=consensus_prior_config,
+            max_gap=max_gap,
+            transform_type=transform_type,
+            auto_registration_candidates=auto_registration_candidates,
+            fov_affine_mask_warp_mode=fov_affine_mask_warp_mode,
+            order=order,
+            weighted_centroids=weighted_centroids,
+            velocity_variance=velocity_variance,
+            regularization=regularization,
+            registration_options=registration_options,
+            absence_model_config=absence_model_config,
+            pairwise_cost_kwargs=pairwise_cost_kwargs,
+            candidate_pruning_config=candidate_pruning_config,
+            dynamic_edge_prior_config=dynamic_edge_prior_config,
+            edge_uncertainty_config=edge_uncertainty_config,
+            segmentation_event_config=segmentation_event_config,
+            start_cost=start_cost,
+            end_cost=end_cost,
+            gap_penalty=gap_penalty,
+            cost_threshold=cost_threshold,
+        )
     return solve_global_assignment_from_pairwise_costs(
         pairwise_costs,
         session_sizes=session_sizes,
@@ -671,6 +741,101 @@ def _pairwise_kwargs_use_soft_overlap(pairwise_cost_kwargs: Mapping[str, Any]) -
     """Return whether pairwise kwargs need the soft-overlap cost extension."""
 
     return bool(SOFT_OVERLAP_COST_KWARG_NAMES.intersection(pairwise_cost_kwargs))
+
+
+def _apply_consensus_priors_from_variants(  # pylint: disable=too-many-arguments,too-many-locals
+    pairwise_costs: Mapping[SessionEdge, np.ndarray],
+    sessions: Sequence[Track2pSession],
+    *,
+    session_sizes: Sequence[int],
+    session_edges: Sequence[SessionEdge],
+    config: ConsensusPriorConfig | Mapping[str, Any],
+    max_gap: int,
+    transform_type: str,
+    auto_registration_candidates: Sequence[str] | None,
+    fov_affine_mask_warp_mode: str,
+    order: str,
+    weighted_centroids: bool,
+    velocity_variance: float,
+    regularization: float,
+    registration_options: Mapping[str, Any] | None,
+    absence_model_config: AbsenceModelConfig | Mapping[str, Any] | None,
+    pairwise_cost_kwargs: Mapping[str, Any] | None,
+    candidate_pruning_config: CandidatePruningConfig | Mapping[str, Any] | None,
+    dynamic_edge_prior_config: DynamicEdgePriorConfig | Mapping[str, Any] | None,
+    edge_uncertainty_config: EdgeUncertaintyConfig | Mapping[str, Any] | None,
+    segmentation_event_config: SegmentationEventConfig | Mapping[str, Any] | None,
+    start_cost: float,
+    end_cost: float,
+    gap_penalty: float,
+    cost_threshold: float | None,
+) -> dict[SessionEdge, np.ndarray]:
+    cfg = consensus_prior_config_from_mapping(config)
+    if cfg is None or not cfg.variant_costs:
+        return {edge: np.asarray(matrix, dtype=float).copy() for edge, matrix in pairwise_costs.items()}
+
+    track_sets: list[Sequence[Mapping[int, int]]] = []
+    for variant_cost in cfg.variant_costs:
+        try:
+            variant_pairwise_costs = build_registered_pairwise_costs(
+                sessions,
+                max_gap=max_gap,
+                cost=variant_cost,  # type: ignore[arg-type]
+                calibrated_model=None,
+                transform_type=transform_type,
+                auto_registration_candidates=auto_registration_candidates,
+                fov_affine_mask_warp_mode=fov_affine_mask_warp_mode,
+                order=order,
+                weighted_centroids=weighted_centroids,
+                velocity_variance=velocity_variance,
+                regularization=regularization,
+                registration_options=registration_options,
+                absence_model_config=absence_model_config,
+                pairwise_cost_kwargs=pairwise_cost_kwargs,
+                activity_tie_breaker_weight=0.0,
+                candidate_pruning_config=candidate_pruning_config,
+                dynamic_edge_prior_config=dynamic_edge_prior_config,
+                edge_uncertainty_config=edge_uncertainty_config,
+                segmentation_event_config=segmentation_event_config,
+            )
+            run = solve_global_assignment_from_pairwise_costs(
+                variant_pairwise_costs,
+                session_sizes=session_sizes,
+                session_edges=session_edges,
+                start_cost=start_cost,
+                end_cost=end_cost,
+                gap_penalty=gap_penalty,
+                cost_threshold=cost_threshold,
+            )
+            track_sets.append(run.result.tracks)
+        except Exception:  # pylint: disable=broad-exception-caught
+            if not cfg.ignore_variant_failures:
+                raise
+    votes = edge_votes_from_tracks(track_sets, session_edges=session_edges)
+    return apply_consensus_edge_priors(pairwise_costs, votes, config=cfg)
+
+
+def _roi_local_density(
+    plane: CalciumPlaneData,
+    *,
+    order: str,
+    weighted: bool,
+) -> np.ndarray:
+    n_rois = int(getattr(plane, "n_rois", 0))
+    if n_rois <= 1:
+        return np.zeros((n_rois,), dtype=float)
+    centroids = np.asarray(plane.centroids(order=order, weighted=weighted), dtype=float)
+    if centroids.shape != (2, n_rois):
+        return np.zeros((n_rois,), dtype=float)
+    positions = centroids.T
+    diffs = positions[:, None, :] - positions[None, :, :]
+    distances = np.linalg.norm(diffs, axis=2)
+    distances[~np.isfinite(distances)] = np.inf
+    np.fill_diagonal(distances, np.inf)
+    kth = min(5, n_rois - 1)
+    nearest = np.partition(distances, kth - 1, axis=1)[:, kth - 1]
+    density = 1.0 / np.maximum(nearest, 1.0e-6)
+    return np.nan_to_num(density, nan=0.0, posinf=0.0, neginf=0.0)
 
 
 def _roi_indices_for_session(session: Track2pSession) -> np.ndarray:

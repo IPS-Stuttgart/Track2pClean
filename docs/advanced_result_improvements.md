@@ -135,6 +135,29 @@ pruning, dynamic edge priors, fold-clean complete-track-F1 solver-prior tuning,
 local-evidence calibrated LOSO, configurable hard negatives, histogram-gradient
 calibration, monotone LOSO ranking, and registration QA.
 
+The benchmark CLI also exposes one-command hooks for the next result-quality
+round that were not part of the initial improvement patches:
+
+```bash
+bayescatrack benchmark track2p \
+  --data ../benchmark-raw-suite2p-subjects \
+  --reference ../benchmark-raw-suite2p-subjects \
+  --reference-kind manual-gt \
+  --method global-assignment \
+  --transform-type auto \
+  --auto-registration-candidates none,fov-translation,fov-affine,affine,rigid,local-affine-grid,tps,bspline,optical-flow \
+  --registration-options-json '{"min_nonrigid_inverse_warp_valid_fraction":0.92}' \
+  --segmentation-event-json '{"min_overlap_fraction":0.2,"min_weighted_dice":0.15}' \
+  --joint-refinement-json '{"high_confidence_quantile":0.05,"min_anchor_edges":12,"cost_relief":0.2}' \
+  --consensus-prior-json '{"variant_costs":["registered-iou","registered-shifted-iou","roi-aware-shifted"],"min_votes":2,"relief":0.2}' \
+  --track-refinement-json '{"residual_z_threshold":3.5,"split_bad_edges":true}' \
+  --postsolve-relink-json '{"max_edge_cost":6.0,"min_cost_improvement":0.25}'
+```
+
+Use `bayescatrack benchmark select-structured-objective --nested-held-out-field subject`
+on the resulting CSV files to select pipeline configurations by complete-track
+F1 without choosing hyperparameters on the held-out subject.
+
 For targeted command-line experiments, the Track2p benchmark now accepts
 `--seed-sessions all`, `--auto-registration-candidates`,
 `--fov-affine-mask-warp-mode`, and `--edge-uncertainty-json` alongside the
