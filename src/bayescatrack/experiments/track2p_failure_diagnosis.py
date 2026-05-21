@@ -26,6 +26,10 @@ from bayescatrack.evaluation.edge_ranking import (
     rank_labeled_edges,
     score_matrices_from_feature_tensor,
 )
+from bayescatrack.experiments._cli_choices import (
+    ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
+    REGISTRATION_TRANSFORM_HELP,
+)
 from bayescatrack.experiments.track2p_benchmark import (
     ProgressReporter,
     Track2pBenchmarkConfig,
@@ -42,6 +46,7 @@ from bayescatrack.experiments.track2p_edge_ranking import (
     DEFAULT_SIMILARITY_FEATURES,
     _pairwise_cost_kwargs_for_config,
 )
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 FailureMode = Literal[
     "row-assembly-or-scoring",
@@ -374,20 +379,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cost",
         default="registered-iou",
-        choices=(
-            "registered-iou",
-            "registered-soft-iou",
-            "registered-shifted-iou",
-            "roi-aware",
-            "roi-aware-shifted",
-        ),
+        choices=ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
         help="Raw global-assignment cost to diagnose",
     )
     parser.add_argument("--max-gap", type=int, default=2)
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_TYPES,
+        help=REGISTRATION_TRANSFORM_HELP,
     )
     parser.add_argument("--start-cost", type=float, default=5.0)
     parser.add_argument("--end-cost", type=float, default=5.0)

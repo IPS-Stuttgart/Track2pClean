@@ -27,6 +27,9 @@ from bayescatrack.association.pyrecest_global_assignment import (
 )
 from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.evaluation.track2p_metrics import normalize_track_matrix
+from bayescatrack.experiments._cli_choices import (
+    ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
+)
 
 # pylint: disable=protected-access,too-many-locals,too-many-arguments,too-many-branches
 from bayescatrack.experiments.track2p_benchmark import (
@@ -431,7 +434,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cost",
         default="registered-iou",
-        choices=("registered-iou", "roi-aware", "roi-aware-shifted"),
+        choices=ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
     )
     parser.add_argument("--max-gap", type=int, default=2)
     parser.add_argument(

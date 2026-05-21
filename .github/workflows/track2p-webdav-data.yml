@@ -61,20 +61,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[track2p]" "numpy<3"
 
-      - name: Select package module
-        id: package-module
-        run: |
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          from pathlib import Path
-
-          if Path("src/bayescatrack/__main__.py").exists():
-              module = "bayescatrack"
-          else:
-              module = "track2p_pyrecest_bridge"
-
-          print(f"module={module}")
-          PY
-
       - name: Extract a two-session real-data subset
         id: extract-subset
         run: |
@@ -154,10 +140,9 @@ jobs:
       - name: Run real-data summary smoke test
         env:
           PYTHONPATH: src
-          MODULE_NAME: ${{ steps.package-module.outputs.module }}
           SUBJECT_PATH: ${{ steps.extract-subset.outputs.subject_path }}
         run: |
-          python -m "$MODULE_NAME" \
+          python -m bayescatrack \
             summary "$SUBJECT_PATH" \
             --plane plane0 \
             --input-format suite2p \
@@ -168,10 +153,9 @@ jobs:
       - name: Run real-data export smoke test
         env:
           PYTHONPATH: src
-          MODULE_NAME: ${{ steps.package-module.outputs.module }}
           SUBJECT_PATH: ${{ steps.extract-subset.outputs.subject_path }}
         run: |
-          python -m "$MODULE_NAME" \
+          python -m bayescatrack \
             export "$SUBJECT_PATH" real-data-export.npz \
             --plane plane0 \
             --input-format suite2p \

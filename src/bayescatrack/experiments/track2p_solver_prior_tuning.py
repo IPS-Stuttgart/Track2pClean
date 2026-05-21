@@ -23,6 +23,7 @@ from bayescatrack.association.pyrecest_global_assignment import (
     solve_global_assignment_from_pairwise_costs,
     tracks_to_suite2p_index_matrix,
 )
+from bayescatrack.experiments._cli_choices import REGISTRATION_TRANSFORM_HELP
 from bayescatrack.experiments.solver_prior_tuning import (
     parse_nonnegative_list,
     parse_positive_list,
@@ -52,6 +53,7 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     calibration_feature_names,
     pairwise_cost_kwargs_for_calibration_features,
 )
+from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 SampleWeightStrategy = Literal["none", "balanced"]
 SolverPriorObjective = Literal["pairwise_f1", "complete_track_f1"]
@@ -554,7 +556,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type",
         default="affine",
-        choices=("affine", "rigid", "fov-translation", "none"),
+        choices=REGISTRATION_TRANSFORM_TYPES,
+        help=REGISTRATION_TRANSFORM_HELP,
     )
     parser.add_argument("--start-cost", type=float, default=5.0)
     parser.add_argument("--end-cost", type=float, default=5.0)

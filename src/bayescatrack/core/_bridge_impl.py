@@ -13,15 +13,15 @@ Typical usage
 -------------
 Inspect a subject directory::
 
-    python -m track2p_pyrecest_bridge summary /path/to/jm039 --plane plane0
+    python -m bayescatrack summary /path/to/jm039 --plane plane0
 
 Export per-session measurements and state moments::
 
-    python -m track2p_pyrecest_bridge export /path/to/jm039 /tmp/jm039_plane0.npz
+    python -m bayescatrack export /path/to/jm039 /tmp/jm039_plane0.npz
 
 Use from Python::
 
-    from track2p_pyrecest_bridge import load_track2p_subject
+    from bayescatrack import load_track2p_subject
 
     sessions = load_track2p_subject("/path/to/jm039", plane_name="plane0")
     filters = sessions[0].plane_data.to_pyrecest_kalman_filters()
