@@ -703,7 +703,7 @@ def load_suite2p_plane(
         iscell = np.asarray(iscell)
         if iscell.ndim == 0 or iscell.shape[0] != stat.shape[0]:
             raise ValueError(
-                "iscell.npy must contain the same number of ROIs as stat.npy"
+                "iscell.npy first dimension must contain the same number of ROIs as stat.npy"
             )
 
     ops_path = plane_dir / "ops.npy"
@@ -839,7 +839,9 @@ def _validate_suite2p_iscell_shape(iscell: np.ndarray, *, n_rois: int) -> None:
     if iscell.ndim not in {1, 2}:
         raise ValueError("iscell.npy must have shape (n_roi,) or (n_roi, n_columns)")
     if iscell.shape[0] != n_rois:
-        raise ValueError("iscell.npy must contain the same number of ROIs as stat.npy")
+        raise ValueError(
+            "iscell.npy first dimension must contain the same number of ROIs as stat.npy"
+        )
     if iscell.ndim == 2 and iscell.shape[1] < 1:
         raise ValueError("iscell.npy must contain at least one column")
 
@@ -858,7 +860,7 @@ def _load_optional_suite2p_trace_matrix(
         raise ValueError(f"{path.name} must have shape (n_roi, n_timepoints)")
     if traces.shape[0] != n_rois:
         raise ValueError(
-            f"{path.name} must contain the same number of ROIs as stat.npy"
+            f"{path.name} first dimension must contain the same number of ROIs as stat.npy"
         )
     return traces[np.asarray(selected_indices_array, dtype=int)]
 
