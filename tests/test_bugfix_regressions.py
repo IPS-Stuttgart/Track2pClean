@@ -7,6 +7,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from bayescatrack import CalciumPlaneData, load_suite2p_plane
+from bayescatrack.association.dynamic_edge_priors import (
+    DynamicEdgePriorConfig,
+    apply_dynamic_edge_priors,
+)
 from bayescatrack.fov_affine_registration import (
     apply_affine_image_warp,
     apply_affine_roi_mask_warp,
@@ -87,6 +91,35 @@ def test_linear_assignment_ignores_nonfinite_costs_when_ungated():
         result.as_pair_array(), np.asarray([[10, 21], [11, 20]])
     )
     np.testing.assert_allclose(result.costs, np.asarray([1.0, 2.0]))
+
+
+def test_dynamic_edge_priors_accept_compacted_registered_roi_columns():
+    full_empty_registered_rois = np.asarray([False, True, False])
+    config = DynamicEdgePriorConfig(registration_empty_roi_weight=8.0)
+
+    full_layout_costs = np.asarray([[1.0, 2.0, 3.0]], dtype=float)
+    adjusted_full_layout = apply_dynamic_edge_priors(
+        full_layout_costs,
+        {},
+        session_gap=1,
+        empty_registered_rois=full_empty_registered_rois,
+        config=config,
+    )
+    np.testing.assert_allclose(
+        adjusted_full_layout,
+        np.asarray([[1.0, 10.0, 3.0]], dtype=float),
+    )
+
+    compact_layout_costs = np.asarray([[1.0, 3.0]], dtype=float)
+    adjusted_compact_layout = apply_dynamic_edge_priors(
+        compact_layout_costs,
+        {},
+        session_gap=1,
+        empty_registered_rois=full_empty_registered_rois,
+        config=config,
+    )
+
+    np.testing.assert_allclose(adjusted_compact_layout, compact_layout_costs)
 
 
 def test_tracking_coverage_ratios_are_nan_when_denominator_is_zero():

@@ -408,7 +408,7 @@ def register_measurement_plane_to_reference(
     The estimated transform is based on PyRecEst point-set registration over ROI
     centroids. The returned plane contains measurement-session ROI masks resampled
     into the reference frame so the existing ROI-aware pairwise costs in
-    ``track2p_pyrecest_bridge`` can be applied directly.
+    ``bayescatrack.core.bridge`` can be applied directly.
     """
 
     order = _validate_order(order)
