@@ -709,6 +709,9 @@ def load_suite2p_plane(
         if mean_image is not None:
             fov = np.asarray(mean_image)
 
+    if iscell is not None:
+        _validate_suite2p_iscell_shape(iscell, n_rois=int(stat.shape[0]))
+
     image_shape = _infer_image_shape(stat, ops)
 
     selected_indices: list[int] = []
@@ -793,19 +796,22 @@ def load_suite2p_plane(
     }
 
     traces = None
-    if load_traces and (plane_dir / "F.npy").exists():
-        traces = np.load(plane_dir / "F.npy")
-        traces = traces[selected_indices_array]
+    if load_traces:
+        traces = _load_optional_suite2p_trace_matrix(
+            plane_dir / "F.npy", selected_indices_array=selected_indices_array, n_rois=int(stat.shape[0])
+        )
 
     spike_traces = None
-    if load_spike_traces and (plane_dir / "spks.npy").exists():
-        spike_traces = np.load(plane_dir / "spks.npy")
-        spike_traces = spike_traces[selected_indices_array]
+    if load_spike_traces:
+        spike_traces = _load_optional_suite2p_trace_matrix(
+            plane_dir / "spks.npy", selected_indices_array=selected_indices_array, n_rois=int(stat.shape[0])
+        )
 
     neuropil_traces = None
-    if load_neuropil_traces and (plane_dir / "Fneu.npy").exists():
-        neuropil_traces = np.load(plane_dir / "Fneu.npy")
-        neuropil_traces = neuropil_traces[selected_indices_array]
+    if load_neuropil_traces:
+        neuropil_traces = _load_optional_suite2p_trace_matrix(
+            plane_dir / "Fneu.npy", selected_indices_array=selected_indices_array, n_rois=int(stat.shape[0])
+        )
 
     return CalciumPlaneData(
         roi_masks=roi_mask_array,
@@ -820,6 +826,35 @@ def load_suite2p_plane(
         plane_name=plane_dir.name,
         ops=ops,
     )
+
+
+def _validate_suite2p_iscell_shape(iscell: np.ndarray, *, n_rois: int) -> None:
+    iscell = np.asarray(iscell)
+    if iscell.ndim not in {1, 2}:
+        raise ValueError("iscell.npy must have shape (n_roi,) or (n_roi, n_columns)")
+    if iscell.shape[0] != n_rois:
+        raise ValueError("iscell.npy must contain the same number of ROIs as stat.npy")
+    if iscell.ndim == 2 and iscell.shape[1] < 1:
+        raise ValueError("iscell.npy must contain at least one column")
+
+
+def _load_optional_suite2p_trace_matrix(
+    path: Path,
+    *,
+    selected_indices_array: np.ndarray,
+    n_rois: int,
+) -> np.ndarray | None:
+    if not path.exists():
+        return None
+
+    traces = np.load(path)
+    if traces.ndim != 2:
+        raise ValueError(f"{path.name} must have shape (n_roi, n_timepoints)")
+    if traces.shape[0] != n_rois:
+        raise ValueError(
+            f"{path.name} must contain the same number of ROIs as stat.npy"
+        )
+    return traces[np.asarray(selected_indices_array, dtype=int)]
 
 
 def load_raw_npy_plane(plane_dir: str | Path) -> CalciumPlaneData:
