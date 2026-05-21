@@ -96,6 +96,32 @@ python -m bayescatrack.experiments.advanced_improvement_workbench stress-manifes
   --output benchmarks/stress_suite.json
 ```
 
+Create the paper-facing Track2p result-improvement manifest recommended for the
+next round of benchmark runs:
+
+```bash
+bayescatrack advanced track2p-improvement-manifest \
+  --data-root ../benchmark-raw-suite2p-subjects \
+  --reference-root ../benchmark-raw-suite2p-subjects \
+  --output-root results/improvements \
+  --max-gap 2 \
+  --transform-type fov-affine \
+  --output benchmarks/track2p_result_improvements.json
+```
+
+Run the manifest after reviewing or editing the generated JSON:
+
+```bash
+bayescatrack benchmark suite benchmarks/track2p_result_improvements.json \
+  --output-dir . \
+  --progress
+```
+
+The generated suite compares Track2p, registered-IoU solver-prior sweeps,
+shifted/ROI-aware costs, higher-order consistency, activity tie-breaking,
+local-evidence calibrated LOSO, configurable hard negatives, histogram-gradient
+calibration, monotone LOSO ranking, and registration QA.
+
 Build a rejection-threshold precision/recall table:
 
 ```bash

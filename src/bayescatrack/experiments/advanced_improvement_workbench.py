@@ -186,6 +186,224 @@ def synthetic_stress_manifest(
     }
 
 
+def track2p_result_improvement_manifest(
+    *,
+    data_root: str,
+    output_root: str,
+    reference_root: str | None = None,
+    max_gap: int = 2,
+    transform_type: str = "fov-affine",
+) -> dict[str, Any]:
+    """Return a ready-to-run manifest for the highest-leverage result variants.
+
+    The generated suite wires together the result-improvement directions that
+    are already exposed elsewhere in the package: solver-prior sweeps,
+    residual-overlap costs, higher-order consistency, activity tie-breaking,
+    local-evidence calibrated features, configurable hard negatives, monotone
+    ranking costs, and registration QA.
+
+    It intentionally emits a manifest instead of running the benchmarks directly
+    so that long LOSO jobs can be reviewed, edited, or scheduled before launch.
+    """
+
+    from bayescatrack.experiments.track2p_loso_calibration import (
+        calibration_feature_names,
+    )
+
+    max_gap = int(max_gap)
+    if max_gap < 1:
+        raise ValueError("max_gap must be at least 1")
+
+    local_evidence_features = tuple(
+        calibration_feature_names("default+local-evidence")
+    )
+    activity_local_evidence_features = tuple(
+        calibration_feature_names("default+activity+local-evidence")
+    )
+
+    defaults: dict[str, Any] = {
+        "data": data_root,
+        "reference_kind": "manual-gt",
+        "input_format": "suite2p",
+        "include_non_cells": True,
+        "include_behavior": False,
+        "weighted_masks": True,
+        "weighted_centroids": True,
+        "transform_type": transform_type,
+        "max_gap": max_gap,
+        "format": "csv",
+        "progress": True,
+    }
+    if reference_root is not None:
+        defaults["reference"] = reference_root
+
+    shifted_kwargs = {
+        "shifted_iou_radius": 2,
+        "shifted_iou_shift_penalty_weight": 0.25,
+    }
+    tuned_solver_priors = {
+        "start_cost": 1.0,
+        "end_cost": 1.0,
+        "gap_penalty": 0.6,
+        "cost_threshold": 2.0,
+    }
+    hard_negative_options = {
+        "negative_to_positive_ratio": 8.0,
+        "candidate_top_k_per_anchor": 30,
+        "include_column_candidates": True,
+        "hardness_feature_names": (
+            "mahalanobis_centroid_distance",
+            "centroid_distance",
+            "one_minus_iou",
+            "one_minus_mask_cosine",
+            "activity_similarity_cost",
+        ),
+    }
+
+    runs: list[dict[str, Any]] = [
+        {
+            "name": "track2p-baseline",
+            "method": "track2p-baseline",
+            "weighted_masks": False,
+            "weighted_centroids": False,
+            "output": f"{output_root}/track2p_baseline.csv",
+        },
+        {
+            "name": "global-registered-iou-prior-sweep",
+            "method": "global-assignment",
+            "cost": "registered-iou",
+            "weighted_masks": False,
+            "weighted_centroids": False,
+            "sweep_start_costs": "0.5,1,2,5",
+            "sweep_end_costs": "0.5,1,2,5",
+            "sweep_gap_penalties": "0,0.6,1.2",
+            "sweep_cost_thresholds": "1.5,2,4,6,none",
+            "output": f"{output_root}/global_registered_iou_prior_sweep.csv",
+        },
+        {
+            "name": "registered-shifted-iou-tuned",
+            "method": "global-assignment",
+            "cost": "registered-shifted-iou",
+            "pairwise_cost_kwargs": shifted_kwargs,
+            **tuned_solver_priors,
+            "output": f"{output_root}/registered_shifted_iou_tuned.csv",
+        },
+        {
+            "name": "roi-aware-shifted-tuned",
+            "method": "global-assignment",
+            "cost": "roi-aware-shifted",
+            **tuned_solver_priors,
+            "output": f"{output_root}/roi_aware_shifted_tuned.csv",
+        },
+        {
+            "name": "roi-aware-shifted-higher-order",
+            "method": "global-assignment",
+            "cost": "roi-aware-shifted",
+            **tuned_solver_priors,
+            "higher_order_triplet_weight": 0.5,
+            "higher_order_support_top_k": 8,
+            "higher_order_support_cost_cap": 4.0,
+            "higher_order_max_penalty": 2.0,
+            "output": f"{output_root}/roi_aware_shifted_higher_order.csv",
+        },
+        {
+            "name": "roi-aware-shifted-activity-tiebreaker",
+            "method": "global-assignment",
+            "cost": "roi-aware-shifted",
+            **tuned_solver_priors,
+            "activity_tie_breaker_weight": 0.03,
+            "activity_tie_breaker_component": "activity_tiebreaker_cost",
+            "activity_trace_source": "auto",
+            "output": f"{output_root}/roi_aware_shifted_activity_tiebreaker.csv",
+        },
+        {
+            "name": "calibrated-loso-default",
+            "method": "global-assignment",
+            "cost": "calibrated",
+            "split": "leave-one-subject-out",
+            "calibration_feature_set": "default",
+            "output": f"{output_root}/calibrated_loso_default.csv",
+        },
+        {
+            "name": "calibrated-loso-local-evidence",
+            "method": "global-assignment",
+            "cost": "calibrated",
+            "split": "leave-one-subject-out",
+            "calibration_feature_set": "default+local-evidence",
+            "output": f"{output_root}/calibrated_loso_local_evidence.csv",
+        },
+        {
+            "name": "calibrated-loso-activity-local-evidence",
+            "method": "global-assignment",
+            "cost": "calibrated",
+            "split": "leave-one-subject-out",
+            "calibration_feature_set": "default+activity+local-evidence",
+            "activity_trace_source": "auto",
+            "output": f"{output_root}/calibrated_loso_activity_local_evidence.csv",
+        },
+        {
+            "name": "configurable-loso-local-evidence-hgb",
+            "runner": "track2p-loso-calibration",
+            "feature_names": local_evidence_features,
+            "calibration_model": "hist-gradient-boosting",
+            "calibration_model_kwargs": {"random_state": 0, "max_iter": 200},
+            "hard_negative_options": hard_negative_options,
+            "output": f"{output_root}/configurable_loso_local_evidence_hgb.csv",
+        },
+        {
+            "name": "configurable-loso-activity-local-evidence-logistic",
+            "runner": "track2p-loso-calibration",
+            "feature_names": activity_local_evidence_features,
+            "sample_weight_strategy": "none",
+            "calibration_model": "logistic",
+            "calibration_model_kwargs": {"class_weight": None},
+            "hard_negative_options": hard_negative_options,
+            "output": f"{output_root}/configurable_loso_activity_local_evidence_logistic.csv",
+        },
+        {
+            "name": "monotone-loso-local-evidence",
+            "runner": "track2p-monotone-loso",
+            "feature_names": local_evidence_features,
+            "monotone_options": {
+                "max_negatives_per_positive": 24,
+                "max_iter": 1000,
+                "binary_loss_weight": 0.05,
+            },
+            "output": f"{output_root}/monotone_loso_local_evidence.csv",
+        },
+        {
+            "name": "registration-qa",
+            "runner": "registration-qa",
+            "cost": "roi-aware-shifted",
+            "level": "summary",
+            "output": f"{output_root}/registration_qa.csv",
+        },
+    ]
+
+    comparable_runs = [
+        run for run in runs if run.get("runner", "track2p") != "registration-qa"
+    ]
+    comparison_inputs = {run["name"]: run["name"] for run in comparable_runs}
+    return {
+        "defaults": defaults,
+        "runs": runs,
+        "comparisons": [
+            {
+                "name": "result-improvement-comparison",
+                "inputs": comparison_inputs,
+                "output": f"{output_root}/result_improvement_comparison.md",
+                "highlight_best": True,
+            },
+            {
+                "name": "result-improvement-comparison-csv",
+                "inputs": comparison_inputs,
+                "output": f"{output_root}/result_improvement_comparison.csv",
+                "format": "csv",
+            },
+        ],
+    }
+
+
 def precision_recall_threshold_table(
     probabilities: Any,
     labels: Any,
@@ -268,6 +486,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     stress.add_argument("--reference-root", default=None)
     stress.add_argument("--output", required=True, type=Path)
 
+    improvement = subparsers.add_parser(
+        "track2p-improvement-manifest",
+        help="Write a Track2p result-improvement benchmark manifest",
+    )
+    improvement.add_argument("--data-root", required=True)
+    improvement.add_argument("--output-root", required=True)
+    improvement.add_argument("--reference-root", default=None)
+    improvement.add_argument("--max-gap", type=int, default=2)
+    improvement.add_argument("--transform-type", default="fov-affine")
+    improvement.add_argument("--output", required=True, type=Path)
+
     pr = subparsers.add_parser(
         "pr-table", help="Build a precision/recall table from probability-label CSV"
     )
@@ -303,6 +532,17 @@ def main(argv: list[str] | None = None) -> int:
             data_root=args.data_root,
             output_root=args.output_root,
             reference_root=args.reference_root,
+        )
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        return 0
+    if args.command == "track2p-improvement-manifest":
+        manifest = track2p_result_improvement_manifest(
+            data_root=args.data_root,
+            output_root=args.output_root,
+            reference_root=args.reference_root,
+            max_gap=args.max_gap,
+            transform_type=args.transform_type,
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
