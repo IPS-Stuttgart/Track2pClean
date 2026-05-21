@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import types
 from pathlib import Path
@@ -244,6 +245,10 @@ def test_run_registered_subject_tracking_default_solver_uses_global_assignment(
         result.link_costs,
         np.array([[0.1, 0.4], [0.2, 0.5], [0.3, 0.6]], dtype=float),
     )
+    npt.assert_array_equal(
+        result.link_target_indices,
+        np.array([[1, 2], [1, 2], [1, 2]], dtype=int),
+    )
     assert len(result.registered_bundles.bundles) == 0
     assert [match.n_matches for match in result.match_results] == [3, 3]
 
@@ -307,6 +312,11 @@ def test_run_registered_subject_tracking_pairwise_ablation_builds_full_track_row
     npt.assert_array_equal(export["track_rows"], result.track_rows)
     npt.assert_array_equal(export["track_lengths"], np.array([3, 3, 3], dtype=int))
     npt.assert_array_equal(export["complete_track_mask"], np.array([True, True, True]))
+    npt.assert_array_equal(export["link_target_indices"], np.array([[1, 2], [1, 2], [1, 2]], dtype=int))
+    assert export["session_names"].dtype.kind in {"U", "S"}
+    assert export["tracking_method"].dtype.kind in {"U", "S"}
+    assert "scores" not in export
+    assert json.loads(export["scores_json"].item())["solver"] == "pairwise"
 
 
 def test_run_registered_subject_tracking_uses_global_assignment_by_default(
@@ -356,6 +366,8 @@ def test_run_registered_subject_tracking_uses_global_assignment_by_default(
     assert result.link_costs.shape == (3, 2)
     assert np.isfinite(result.link_costs[0, 0])
     assert np.isfinite(result.link_costs[0, 1])
+    assert result.link_target_indices[1, 0] == 2
+    assert result.link_target_indices[1, 1] == -1
     assert np.isfinite(result.link_costs[1, 0])
 
     scores = result.score_summary()
@@ -365,6 +377,21 @@ def test_run_registered_subject_tracking_uses_global_assignment_by_default(
     assert scores["n_pairwise_matches"] == 5
     assert [pair["n_matches"] for pair in scores["pairs"]] == [2, 1, 2]
 
+
+def test_global_tracking_rejects_unsupported_point_set_registration_options(
+    tmp_path: Path,
+):
+    subject_dir = tmp_path / "jm271"
+    _write_three_session_subject(subject_dir)
+
+    with pytest.raises(ValueError, match="registration_max_iterations"):
+        run_registered_subject_tracking(
+            subject_dir,
+            plane_name="plane0",
+            input_format="auto",
+            include_behavior=False,
+            registration_max_iterations=100,
+        )
 
 def test_run_registered_subject_tracking_handles_single_session(tmp_path: Path):
     subject_dir = tmp_path / "jm271"

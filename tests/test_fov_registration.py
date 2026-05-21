@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack.fov_registration import (
     apply_integer_image_translation,
     build_fov_registered_consecutive_session_association_bundles,
@@ -37,6 +38,14 @@ def test_estimate_integer_fov_shift_pads_different_shapes():
 
     npt.assert_array_equal(shift_yx, np.array([-1, -2]))
     assert peak_correlation > 0.1
+
+
+def test_estimate_integer_fov_shift_rejects_degenerate_fovs():
+    reference_fov = np.ones((8, 9), dtype=float)
+    measurement_fov = np.ones((8, 9), dtype=float)
+
+    with pytest.raises(ValueError, match="constant or empty FOV"):
+        estimate_integer_fov_shift(reference_fov, measurement_fov)
 
 
 def test_apply_integer_image_translation_crops_to_smaller_output_shape():
