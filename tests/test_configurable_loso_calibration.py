@@ -6,7 +6,6 @@ from bayescatrack.experiments import track2p_configurable_loso_calibration as lo
 # pylint: disable=protected-access,too-few-public-methods
 
 
-
 def test_configurable_loso_parser_builds_hard_negative_options_and_model_kwargs():
     args = loso.build_arg_parser().parse_args(
         [
