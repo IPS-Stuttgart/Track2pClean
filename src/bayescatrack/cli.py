@@ -158,6 +158,10 @@ def _handle_benchmark(args: list[str]) -> int:
             "compare", help="Aggregate benchmark CSVs into a comparison table"
         )
         subparsers.add_parser("suite", help="Run a JSON benchmark manifest")
+        subparsers.add_parser(
+            "validate-suite",
+            help="Validate a JSON benchmark manifest without running benchmarks",
+        )
         parser.parse_args(args)
         return 0
 
@@ -311,6 +315,12 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_benchmark_manifest_main(args[1:]))
+    if args[0] == "validate-suite":
+        from bayescatrack.experiments.benchmark_manifest_plan import (
+            main as _benchmark_manifest_plan_main,
+        )
+
+        return int(_benchmark_manifest_plan_main(args[1:]))
 
     parser = argparse.ArgumentParser(prog="bayescatrack benchmark")
     parser.error(f"unknown benchmark {args[0]!r}")
