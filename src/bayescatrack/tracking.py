@@ -66,6 +66,7 @@ class SubjectTrackingResult:
     fill_value: int = -1
     tracking_method: TrackingMethod = "global"
     global_assignment: GlobalAssignmentRun | None = None
+    link_target_indices: np.ndarray | None = None
     global_link_edges: tuple[tuple[int, int], ...] = ()
     global_link_costs: np.ndarray | None = None
 
@@ -91,6 +92,23 @@ class SubjectTrackingResult:
         if link_costs.shape != expected_link_shape:
             raise ValueError(f"link_costs must have shape {expected_link_shape}")
         object.__setattr__(self, "link_costs", link_costs)
+
+        link_target_indices = self.link_target_indices
+        if link_target_indices is None:
+            link_target_indices = np.tile(
+                np.arange(1, track_rows.shape[1], dtype=int),
+                (track_rows.shape[0], 1),
+            )
+            link_target_indices[~np.isfinite(link_costs)] = int(self.fill_value)
+        else:
+            link_target_indices = np.asarray(link_target_indices, dtype=int)
+            if link_target_indices.shape != expected_link_shape:
+                raise ValueError(
+                    "link_target_indices must have the same shape as link_costs"
+                )
+        object.__setattr__(
+            self, "link_target_indices", np.asarray(link_target_indices, dtype=int)
+        )
 
         global_link_edges: list[tuple[int, int]] = []
         for edge in self.global_link_edges:
@@ -217,12 +235,15 @@ class SubjectTrackingResult:
             "session_names": np.asarray(self.session_names, dtype=np.str_),
             "track_rows": self.track_rows,
             "link_costs": self.link_costs,
+            "link_target_indices": self.link_target_indices,
             "track_lengths": self.track_lengths(),
             "complete_track_mask": self.complete_track_mask(),
             "fill_value": np.asarray(self.fill_value, dtype=int),
             "tracking_method": np.asarray(self.tracking_method, dtype=np.str_),
             "solver": np.asarray(self.solver, dtype=np.str_),
-            "scores_json": np.asarray(json.dumps(self.score_summary()), dtype=np.str_),
+            "scores_json": np.asarray(
+                json.dumps(self.score_summary(), sort_keys=True), dtype=np.str_
+            ),
             "global_link_edges": np.asarray(self.global_link_edges, dtype=int).reshape(
                 -1, 2
             ),
@@ -371,7 +392,12 @@ def run_registered_subject_tracking(
             track_rows,
             fill_value=fill_value,
         )
-        link_costs, global_link_edges, global_link_costs = _build_global_link_cost_matrices(
+        (
+            link_costs,
+            link_target_indices,
+            global_link_edges,
+            global_link_costs,
+        ) = _build_global_link_cost_matrices(
             global_assignment,
             sessions,
             track_rows,
@@ -390,6 +416,7 @@ def run_registered_subject_tracking(
             session_names=session_names,
             track_rows=track_rows,
             link_costs=link_costs,
+            link_target_indices=link_target_indices,
             fill_value=fill_value,
             tracking_method="global",
             global_assignment=global_assignment,
@@ -717,11 +744,12 @@ def _build_global_link_cost_matrices(
     *,
     fallback_match_results: Sequence[SessionMatchResult],
     fill_value: int,
-) -> tuple[np.ndarray, tuple[tuple[int, int], ...], np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, tuple[tuple[int, int], ...], np.ndarray]:
     track_rows = np.asarray(track_rows, dtype=int)
-    adjacent_link_costs = np.full(
+    link_costs = np.full(
         (track_rows.shape[0], max(track_rows.shape[1] - 1, 0)), np.nan
     )
+    link_target_indices = np.full(link_costs.shape, int(fill_value), dtype=int)
     global_link_edges = tuple(
         (int(source_index), int(target_index))
         for source_index, target_index in global_assignment.session_edges
@@ -730,7 +758,16 @@ def _build_global_link_cost_matrices(
         (track_rows.shape[0], len(global_link_edges)), np.nan, dtype=float
     )
     roi_position_maps = [_roi_position_map_for_session(session) for session in sessions]
-    for edge_index, (source_index, target_index) in enumerate(global_link_edges):
+    ordered_edge_indices = sorted(
+        range(len(global_link_edges)),
+        key=lambda index: (
+            global_link_edges[index][1] - global_link_edges[index][0] > 1,
+            global_link_edges[index][0],
+            global_link_edges[index][1],
+        ),
+    )
+    for edge_index in ordered_edge_indices:
+        source_index, target_index = global_link_edges[edge_index]
         cost_matrix = global_assignment.pairwise_costs.get((source_index, target_index))
         if cost_matrix is None:
             continue
@@ -758,11 +795,12 @@ def _build_global_link_cost_matrices(
                 ]
             )
             global_link_costs[track_index, edge_index] = edge_cost
-            if target_index == source_index + 1:
-                adjacent_link_costs[track_index, source_index] = edge_cost
+            if source_index < link_costs.shape[1]:
+                link_costs[track_index, source_index] = edge_cost
+                link_target_indices[track_index, source_index] = int(target_index)
 
     if np.isfinite(global_link_costs).any():
-        return adjacent_link_costs, global_link_edges, global_link_costs
+        return link_costs, link_target_indices, global_link_edges, global_link_costs
 
     fallback_link_costs = _build_link_cost_matrix(
         track_rows,
@@ -773,7 +811,25 @@ def _build_global_link_cost_matrices(
         (pair_index, pair_index + 1)
         for pair_index in range(fallback_link_costs.shape[1])
     )
-    return fallback_link_costs, fallback_edges, fallback_link_costs
+    return (
+        fallback_link_costs,
+        _default_link_target_indices(
+            fallback_link_costs,
+            fill_value=fill_value,
+        ),
+        fallback_edges,
+        fallback_link_costs,
+    )
+
+
+def _default_link_target_indices(link_costs: np.ndarray, *, fill_value: int) -> np.ndarray:
+    link_costs = np.asarray(link_costs, dtype=float)
+    link_target_indices = np.tile(
+        np.arange(1, link_costs.shape[1] + 1, dtype=int),
+        (link_costs.shape[0], 1),
+    )
+    link_target_indices[~np.isfinite(link_costs)] = int(fill_value)
+    return link_target_indices
 
 
 def _match_result_summary(
