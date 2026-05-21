@@ -162,6 +162,7 @@ def register_plane_pair(
     moving_plane: CalciumPlaneData,
     *,
     transform_type: RegistrationTransform | str = "affine",
+    auto_registration_candidates: Sequence[str] | None = None,
     registration_options: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
     if transform_type not in REGISTRATION_TRANSFORM_TYPES:
@@ -171,6 +172,8 @@ def register_plane_pair(
         from bayescatrack.registration_selection import select_registration_transform
 
         options = dict(registration_options or {})
+        if auto_registration_candidates is not None:
+            options["candidate_transforms"] = auto_registration_candidates
         return select_registration_transform(
             reference_plane,
             moving_plane,
@@ -268,6 +271,7 @@ def register_consecutive_session_measurement_planes(
     sessions: Sequence[Track2pSession],
     *,
     transform_type: RegistrationTransform | str = "affine",
+    auto_registration_candidates: Sequence[str] | None = None,
 ) -> list[CalciumPlaneData]:
     sessions = list(sessions)
     if len(sessions) < 2:
@@ -277,6 +281,7 @@ def register_consecutive_session_measurement_planes(
             sessions[i].plane_data,
             sessions[i + 1].plane_data,
             transform_type=transform_type,
+            auto_registration_candidates=auto_registration_candidates,
         )
         for i in range(len(sessions) - 1)
     ]
@@ -289,6 +294,7 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
     input_format: str = "auto",
     include_behavior: bool = True,
     transform_type: RegistrationTransform | str = "affine",
+    auto_registration_candidates: Sequence[str] | None = None,
     order: str = "xy",
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
@@ -305,7 +311,9 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
         suite2p_kwargs=suite2p_kwargs,
     )
     registered_measurement_planes = register_consecutive_session_measurement_planes(
-        sessions, transform_type=transform_type
+        sessions,
+        transform_type=transform_type,
+        auto_registration_candidates=auto_registration_candidates,
     )
 
     association_kwargs: dict[str, Any] = {"order": order}

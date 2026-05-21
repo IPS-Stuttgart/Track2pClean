@@ -60,6 +60,24 @@ class UncertaintyAwareEdgeResult:
     uncertainty_penalty_matrix: np.ndarray
 
 
+def edge_uncertainty_config_from_mapping(
+    value: EdgeUncertaintyConfig | Mapping[str, Any] | None,
+) -> EdgeUncertaintyConfig | None:
+    """Normalize optional uncertainty configuration values.
+
+    Benchmark manifests and CLI JSON arguments naturally pass dictionaries,
+    while programmatic callers may pass an already-instantiated config.  Keeping
+    the normalizer here avoids every benchmark/association entry point growing
+    its own slightly different coercion logic.
+    """
+
+    if value is None:
+        return None
+    if isinstance(value, EdgeUncertaintyConfig):
+        return value
+    return EdgeUncertaintyConfig(**dict(value))
+
+
 def uncertainty_aware_cost_matrix(
     cost_matrix: Any,
     pairwise_components: Mapping[str, Any] | None = None,
