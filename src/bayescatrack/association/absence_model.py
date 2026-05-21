@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -27,16 +28,28 @@ class AbsenceModelConfig:
             raise ValueError("min_cost must be non-negative")
 
 
+def absence_model_config_from_mapping(
+    value: AbsenceModelConfig | Mapping[str, Any] | None,
+) -> AbsenceModelConfig | None:
+    """Normalize optional absence-model config values."""
+
+    if value is None:
+        return None
+    if isinstance(value, AbsenceModelConfig):
+        return value
+    return AbsenceModelConfig(**dict(value))
+
+
 def absence_cost_vector(
     plane: Any,
     *,
     registered_empty_mask: Any | None = None,
     local_density: Any | None = None,
-    config: AbsenceModelConfig | None = None,
+    config: AbsenceModelConfig | Mapping[str, Any] | None = None,
 ) -> np.ndarray:
     """Return per-ROI costs for allowing an observation gap/absence."""
 
-    cfg = config or AbsenceModelConfig()
+    cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
     n_rois = int(getattr(plane, "n_rois", 0))
     costs = np.full((n_rois,), float(cfg.base_absence_cost), dtype=float)
 
@@ -79,11 +92,11 @@ def gap_penalty_matrix(
     session_gap: int | float = 1.0,
     reference_absence_costs: Any | None = None,
     measurement_absence_costs: Any | None = None,
-    config: AbsenceModelConfig | None = None,
+    config: AbsenceModelConfig | Mapping[str, Any] | None = None,
 ) -> np.ndarray:
     """Return pairwise gap penalties that account for observation absence cues."""
 
-    cfg = config or AbsenceModelConfig()
+    cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
     n_ref = int(getattr(reference_plane, "n_rois", 0))
     n_meas = int(getattr(measurement_plane, "n_rois", 0))
     if reference_absence_costs is None:
@@ -106,16 +119,17 @@ def apply_absence_adjustment(
     measurement_plane: Any,
     *,
     session_gap: int | float = 1.0,
-    config: AbsenceModelConfig | None = None,
+    config: AbsenceModelConfig | Mapping[str, Any] | None = None,
 ) -> np.ndarray:
     """Add absence-aware gap penalties to a cost matrix."""
 
     costs = np.asarray(cost_matrix, dtype=float)
+    cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
     return costs + gap_penalty_matrix(
         reference_plane,
         measurement_plane,
         session_gap=session_gap,
-        config=config,
+        config=cfg,
     )
 
 
@@ -141,3 +155,13 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
             float(np.max(cost_values)) if cost_values.size else float("nan")
         ),
     }
+
+
+__all__ = (
+    "AbsenceModelConfig",
+    "absence_model_config_from_mapping",
+    "absence_cost_vector",
+    "gap_penalty_matrix",
+    "apply_absence_adjustment",
+    "absence_summary",
+)

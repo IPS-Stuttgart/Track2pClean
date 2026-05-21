@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -23,6 +24,7 @@ from bayescatrack.association.pyrecest_global_assignment import (
     session_edge_pairs,
     tracks_to_suite2p_index_matrix,
 )
+from bayescatrack.association.adaptive_priors import fit_gap_costs_from_reference
 from bayescatrack.association.shifted_overlap import (
     pairwise_kwargs_use_shifted_overlap,
 )
@@ -40,6 +42,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     _load_reference_for_subject,
     _load_subject_sessions,
+    _maybe_refine_predicted_tracks,
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
@@ -307,10 +310,14 @@ def run_track2p_loso_calibration(
             config=config,
             feature_names=feature_names,
         )
+        solve_config = config_with_fold_learned_gap_priors(
+            config,
+            training_subjects,
+        )
         progress.step(f"solving {held_out.subject_name}")
         assignment = solve_configured_global_assignment(
             held_out.sessions,
-            config,
+            solve_config,
             cost="calibrated",
             calibrated_model=calibrated_model,
         )
@@ -321,6 +328,11 @@ def run_track2p_loso_calibration(
         ):
             predicted_matrix = tracks_to_suite2p_index_matrix(
                 prior_assignment.result.tracks, held_out.sessions
+            )
+            predicted_matrix = _maybe_refine_predicted_tracks(
+                predicted_matrix,
+                held_out.sessions,
+                config=solve_config,
             )
             base_scores = _score_prediction_against_reference(
                 predicted_matrix, held_out.reference, config=config
@@ -335,6 +347,8 @@ def run_track2p_loso_calibration(
                 "negative_examples": int(training_labels.shape[0] - positives),
                 "calibration_feature_set": _feature_set_label(config, feature_names),
                 "calibration_feature_count": int(len(feature_names)),
+                "learned_gap_prior": int(bool(getattr(config, "learned_gap_prior", False))),
+                "learned_gap_costs": _learned_gap_costs_label(solve_config),
                 "calibration_sample_weight_strategy": sample_weight_strategy,
                 "calibration_class_weight": _stringify_class_weight(
                     logistic_model_kwargs.get("class_weight")
@@ -618,3 +632,56 @@ def _reference_training_options(
             config.pairwise_cost_kwargs, feature_names
         ),
     )
+
+
+def config_with_fold_learned_gap_priors(
+    config: Track2pBenchmarkConfig,
+    training_subjects: Sequence[SubjectCalibrationData],
+) -> Track2pBenchmarkConfig:
+    """Inject fold-internal learned gap costs into adaptive priors when requested."""
+
+    if not bool(getattr(config, "learned_gap_prior", False)):
+        return config
+    learned_gap_costs = _mean_learned_gap_costs(
+        training_subjects,
+        max_gap=int(config.max_gap),
+        curated_only=bool(config.curated_only),
+        smoothing=float(getattr(config, "learned_gap_prior_smoothing", 1.0)),
+    )
+    adaptive_config = dict(config.adaptive_edge_prior_config or {})
+    adaptive_config.setdefault(
+        "learned_gap_costs",
+        {int(key): float(value) for key, value in learned_gap_costs.items()},
+    )
+    return replace(config, adaptive_edge_prior_config=adaptive_config)
+
+
+def _mean_learned_gap_costs(
+    training_subjects: Sequence[SubjectCalibrationData],
+    *,
+    max_gap: int,
+    curated_only: bool,
+    smoothing: float,
+) -> dict[int, float]:
+    blocks: dict[int, list[float]] = {gap: [] for gap in range(1, max_gap + 1)}
+    for subject in training_subjects:
+        subject_costs = fit_gap_costs_from_reference(
+            subject.reference,
+            max_gap=max_gap,
+            curated_only=curated_only,
+            smoothing=smoothing,
+        )
+        for gap, value in subject_costs.items():
+            blocks.setdefault(int(gap), []).append(float(value))
+    return {
+        int(gap): float(np.mean(values))
+        for gap, values in blocks.items()
+        if values
+    }
+
+
+def _learned_gap_costs_label(config: Track2pBenchmarkConfig) -> str:
+    learned = (config.adaptive_edge_prior_config or {}).get("learned_gap_costs")
+    if not learned:
+        return ""
+    return json.dumps(learned, sort_keys=True, separators=(",", ":"))

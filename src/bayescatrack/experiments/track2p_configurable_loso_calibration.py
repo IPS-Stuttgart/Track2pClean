@@ -35,6 +35,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     ProgressReporter,
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
+    _maybe_refine_predicted_tracks,
     _score_prediction_against_reference,
     discover_subject_dirs,
     format_benchmark_table,
@@ -51,6 +52,7 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     _reference_training_options,
     _score_holdout_calibration,
     calibration_feature_names,
+    config_with_fold_learned_gap_priors,
 )
 
 SampleWeightStrategy = Literal["none", "balanced"]
@@ -158,16 +160,25 @@ def run_track2p_configurable_loso_calibration(
             config=config,
             feature_names=feature_names,
         )
+        solve_config = config_with_fold_learned_gap_priors(
+            config,
+            training_subjects,
+        )
         progress.step(f"solving {held_out.subject_name}")
         assignment = solve_configured_global_assignment(
             held_out.sessions,
-            config,
+            solve_config,
             cost="calibrated",
             calibrated_model=model,
         )
         predicted = tracks_to_suite2p_index_matrix(
             assignment.result.tracks,
             held_out.sessions,
+        )
+        predicted = _maybe_refine_predicted_tracks(
+            predicted,
+            held_out.sessions,
+            config=solve_config,
         )
         positives = int(np.sum(labels))
         scores: dict[str, float | int | str] = {
@@ -453,6 +464,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=CALIBRATION_FEATURE_SET_CHOICES,
         help="Named calibrated-association feature preset.",
     )
+    parser.add_argument(
+        "--calibration-features",
+        default=None,
+        help="Comma-separated explicit calibrated feature names; overrides --calibration-feature-set",
+    )
+    parser.add_argument(
+        "--calibration-feature",
+        dest="calibration_feature",
+        action="append",
+        default=None,
+        help="Append one explicit calibrated feature name; repeatable and overrides --calibration-feature-set",
+    )
     parser.add_argument("--calibration-model-kwargs-json", default=None)
     parser.add_argument("--hard-negative-ratio", type=float, default=4.0)
     parser.add_argument("--hard-negative-top-k", type=_none_or_positive_int, default=20)
@@ -471,6 +494,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--higher-order-consistency-json", default=None)
     parser.add_argument("--candidate-pruning-json", default=None)
     parser.add_argument("--dynamic-edge-prior-json", default=None)
+    parser.add_argument("--adaptive-edge-prior-json", default=None)
+    parser.add_argument("--registration-options-json", default=None)
+    parser.add_argument("--absence-model-json", default=None)
+    parser.add_argument("--learned-gap-prior", action="store_true")
+    parser.add_argument("--learned-gap-prior-smoothing", type=float, default=1.0)
+    parser.add_argument("--track-refinement-json", default=None)
     parser.add_argument(
         "--progress", action=argparse.BooleanOptionalAction, default=True
     )
@@ -484,7 +513,7 @@ def main(argv: list[str] | None = None) -> int:
     config = _config_from_args(args)
     result = run_track2p_configurable_loso_calibration(
         config,
-        feature_names=calibration_feature_names(args.calibration_feature_set),
+        feature_names=_resolved_calibration_feature_names(args),
         sample_weight_strategy=args.sample_weight_strategy,
         model_kind=args.calibration_model,
         model_kwargs=_json_object(
@@ -530,10 +559,15 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         weighted_centroids=args.weighted_centroids,
         velocity_variance=args.velocity_variance,
         regularization=args.regularization,
+        registration_options=_json_object(
+            args.registration_options_json,
+            "--registration-options-json",
+        ),
         pairwise_cost_kwargs=_json_object(
             args.pairwise_cost_kwargs_json,
             "--pairwise-cost-kwargs-json",
         ),
+        absence_model_config=_json_object(args.absence_model_json, "--absence-model-json"),
         higher_order_consistency_config=_json_object(
             args.higher_order_consistency_json,
             "--higher-order-consistency-json",
@@ -546,9 +580,34 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
             args.dynamic_edge_prior_json,
             "--dynamic-edge-prior-json",
         ),
+        adaptive_edge_prior_config=_json_object(
+            args.adaptive_edge_prior_json,
+            "--adaptive-edge-prior-json",
+        ),
+        learned_gap_prior=bool(args.learned_gap_prior),
+        learned_gap_prior_smoothing=float(args.learned_gap_prior_smoothing),
+        track_refinement_config=_json_object(
+            args.track_refinement_json,
+            "--track-refinement-json",
+        ),
         calibration_feature_set=args.calibration_feature_set,
         progress=args.progress,
     )
+
+
+def _resolved_calibration_feature_names(args: argparse.Namespace) -> tuple[str, ...]:
+    names: list[str] = []
+    if args.calibration_features is not None:
+        names.extend(
+            token.strip()
+            for token in args.calibration_features.split(",")
+            if token.strip()
+        )
+    if args.calibration_feature is not None:
+        names.extend(str(token).strip() for token in args.calibration_feature if str(token).strip())
+    if names:
+        return tuple(dict.fromkeys(names))
+    return calibration_feature_names(args.calibration_feature_set)
 
 
 def _hard_negative_options(args: argparse.Namespace) -> CandidateHardNegativeOptions:
