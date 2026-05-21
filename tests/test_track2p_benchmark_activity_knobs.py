@@ -11,8 +11,6 @@ from bayescatrack.experiments.benchmark_manifest import load_benchmark_manifest
 # pylint: disable=protected-access
 
 
-
-
 def test_track2p_benchmark_cli_parses_activity_and_higher_order_knobs(tmp_path):
     args = benchmark.build_arg_parser().parse_args(
         [
