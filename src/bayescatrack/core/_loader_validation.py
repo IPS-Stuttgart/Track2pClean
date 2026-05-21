@@ -36,7 +36,14 @@ def install_loader_validation_patches(bridge_impl: ModuleType) -> None:
             *args: Any,
             **kwargs: Any,
         ) -> Any:
-            _validate_suite2p_stat_coordinates(Path(plane_dir), bridge_impl)
+            _validate_suite2p_stat_coordinates(
+                Path(plane_dir),
+                bridge_impl,
+                include_non_cells=bool(kwargs.get("include_non_cells", False)),
+                cell_probability_threshold=float(
+                    kwargs.get("cell_probability_threshold", 0.5)
+                ),
+            )
             return original_suite2p_loader(plane_dir, *args, **kwargs)
 
         setattr(
@@ -86,7 +93,13 @@ def install_loader_validation_patches(bridge_impl: ModuleType) -> None:
         bridge_impl.load_track2p_subject = _load_track2p_subject_with_auto_fallback
 
 
-def _validate_suite2p_stat_coordinates(plane_dir: Path, bridge_impl: ModuleType) -> None:
+def _validate_suite2p_stat_coordinates(
+    plane_dir: Path,
+    bridge_impl: ModuleType,
+    *,
+    include_non_cells: bool,
+    cell_probability_threshold: float,
+) -> None:
     stat_path = plane_dir / "stat.npy"
     if not stat_path.exists():
         return
@@ -101,8 +114,16 @@ def _validate_suite2p_stat_coordinates(plane_dir: Path, bridge_impl: ModuleType)
         ops = np.load(ops_path, allow_pickle=True).item()
     image_shape = bridge_impl._infer_image_shape(stat, ops)  # pylint: disable=protected-access
     height, width = int(image_shape[0]), int(image_shape[1])
+    keep_for_validation = _suite2p_validation_keep_mask(
+        plane_dir,
+        stat,
+        include_non_cells=include_non_cells,
+        cell_probability_threshold=cell_probability_threshold,
+    )
 
     for roi_index, roi_stat in enumerate(stat):
+        if not keep_for_validation[roi_index]:
+            continue
         ypix = np.asarray(roi_stat["ypix"], dtype=int)
         xpix = np.asarray(roi_stat["xpix"], dtype=int)
         lam = np.asarray(roi_stat.get("lam", np.ones_like(ypix)), dtype=float)
@@ -128,6 +149,38 @@ def _validate_suite2p_stat_coordinates(plane_dir: Path, bridge_impl: ModuleType)
                 f"y range [{int(np.min(bad_y))}, {int(np.max(bad_y))}], "
                 f"x range [{int(np.min(bad_x))}, {int(np.max(bad_x))}]"
             )
+
+
+def _suite2p_validation_keep_mask(
+    plane_dir: Path,
+    stat: np.ndarray,
+    *,
+    include_non_cells: bool,
+    cell_probability_threshold: float,
+) -> np.ndarray:
+    if include_non_cells:
+        return np.ones((int(stat.shape[0]),), dtype=bool)
+
+    iscell_path = plane_dir / "iscell.npy"
+    if not iscell_path.exists():
+        return np.ones((int(stat.shape[0]),), dtype=bool)
+
+    iscell = np.asarray(np.load(iscell_path, allow_pickle=True))
+    if iscell.ndim not in {1, 2} or iscell.shape[0] != stat.shape[0]:
+        return np.ones((int(stat.shape[0]),), dtype=bool)
+    if iscell.ndim == 2 and iscell.shape[1] < 1:
+        return np.ones((int(stat.shape[0]),), dtype=bool)
+
+    keep = np.zeros((int(stat.shape[0]),), dtype=bool)
+    for roi_index in range(int(stat.shape[0])):
+        probability = (
+            float(iscell[roi_index, 1])
+            if iscell.ndim == 2 and iscell.shape[1] > 1
+            else float(iscell[roi_index])
+        )
+        is_cell = bool(iscell[roi_index, 0]) if iscell.ndim == 2 else bool(iscell[roi_index])
+        keep[roi_index] = bool(is_cell and probability >= cell_probability_threshold)
+    return keep
 
 
 def _load_track2p_subject_with_auto_fallback_impl(
