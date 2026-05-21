@@ -92,6 +92,9 @@ def gap_penalty_matrix(
     session_gap: int | float = 1.0,
     reference_absence_costs: Any | None = None,
     measurement_absence_costs: Any | None = None,
+    registered_empty_mask: Any | None = None,
+    reference_local_density: Any | None = None,
+    measurement_local_density: Any | None = None,
     config: AbsenceModelConfig | Mapping[str, Any] | None = None,
 ) -> np.ndarray:
     """Return pairwise gap penalties that account for observation absence cues."""
@@ -100,11 +103,20 @@ def gap_penalty_matrix(
     n_ref = int(getattr(reference_plane, "n_rois", 0))
     n_meas = int(getattr(measurement_plane, "n_rois", 0))
     if reference_absence_costs is None:
-        ref_cost = absence_cost_vector(reference_plane, config=cfg)
+        ref_cost = absence_cost_vector(
+            reference_plane,
+            local_density=reference_local_density,
+            config=cfg,
+        )
     else:
         ref_cost = np.asarray(reference_absence_costs, dtype=float).reshape(-1)
     if measurement_absence_costs is None:
-        meas_cost = absence_cost_vector(measurement_plane, config=cfg)
+        meas_cost = absence_cost_vector(
+            measurement_plane,
+            registered_empty_mask=registered_empty_mask,
+            local_density=measurement_local_density,
+            config=cfg,
+        )
     else:
         meas_cost = np.asarray(measurement_absence_costs, dtype=float).reshape(-1)
     if ref_cost.shape != (n_ref,) or meas_cost.shape != (n_meas,):
@@ -119,6 +131,9 @@ def apply_absence_adjustment(
     measurement_plane: Any,
     *,
     session_gap: int | float = 1.0,
+    registered_empty_mask: Any | None = None,
+    reference_local_density: Any | None = None,
+    measurement_local_density: Any | None = None,
     config: AbsenceModelConfig | Mapping[str, Any] | None = None,
 ) -> np.ndarray:
     """Add absence-aware gap penalties to a cost matrix."""
@@ -129,6 +144,9 @@ def apply_absence_adjustment(
         reference_plane,
         measurement_plane,
         session_gap=session_gap,
+        registered_empty_mask=registered_empty_mask,
+        reference_local_density=reference_local_density,
+        measurement_local_density=measurement_local_density,
         config=cfg,
     )
 

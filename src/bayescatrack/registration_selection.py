@@ -15,11 +15,24 @@ import numpy as np
 from bayescatrack.core.bridge import CalciumPlaneData
 
 DEFAULT_AUTO_REGISTRATION_CANDIDATES: tuple[str, ...] = (
+    # Conservative, low-variance candidates first.
     "none",
     "fov-translation",
     "fov-affine",
     "affine",
     "rigid",
+    # Growth/deformation candidates are deliberately high-penalty and guarded by
+    # ROI-support / valid-warp diagnostics below.  This lets `transform_type=auto`
+    # rescue residual deformation cases without silently preferring over-warped
+    # solutions on easy session pairs.
+    "local-affine-grid",
+    "tps",
+    "bspline",
+    "optical-flow",
+)
+
+NONRIGID_AUTO_REGISTRATION_CANDIDATES = frozenset(
+    {"local-affine-grid", "tps", "thin-plate-spline", "landmark-tps", "bspline", "b-spline", "optical-flow"}
 )
 
 _DEFAULT_COMPLEXITY_PENALTY: Mapping[str, float] = {
@@ -28,6 +41,10 @@ _DEFAULT_COMPLEXITY_PENALTY: Mapping[str, float] = {
     "fov-affine": 0.025,
     "affine": 0.035,
     "rigid": 0.03,
+    "local-affine-grid": 0.075,
+    "tps": 0.095,
+    "bspline": 0.105,
+    "optical-flow": 0.125,
 }
 
 
@@ -43,6 +60,7 @@ class RegistrationCandidateDiagnostics:
     retained_mask_area_fraction: float
     effective_transform_type: str | None = None
     backend: str | None = None
+    inverse_warp_valid_fraction: float | None = None
     reason: str | None = None
     failure: str | None = None
 
@@ -73,8 +91,10 @@ def select_registration_transform(
     min_fov_correlation_gain: float = 0.02,
     max_empty_roi_fraction: float = 0.1,
     min_retained_mask_area_fraction: float = 0.5,
+    min_nonrigid_inverse_warp_valid_fraction: float = 0.90,
     empty_roi_penalty: float = 0.75,
     retained_area_penalty: float = 0.5,
+    nonrigid_valid_fraction_penalty: float = 0.75,
     complexity_penalty: Mapping[str, float] | None = None,
 ) -> RegistrationSelectionResult:
     """Select a registration transform for one session pair.
@@ -93,8 +113,14 @@ def select_registration_transform(
         raise ValueError("max_empty_roi_fraction must be between 0 and 1")
     if min_retained_mask_area_fraction < 0.0:
         raise ValueError("min_retained_mask_area_fraction must be non-negative")
+    if not 0.0 <= min_nonrigid_inverse_warp_valid_fraction <= 1.0:
+        raise ValueError(
+            "min_nonrigid_inverse_warp_valid_fraction must lie in [0, 1]"
+        )
     if empty_roi_penalty < 0.0 or retained_area_penalty < 0.0:
         raise ValueError("selection penalties must be non-negative")
+    if nonrigid_valid_fraction_penalty < 0.0:
+        raise ValueError("nonrigid_valid_fraction_penalty must be non-negative")
 
     penalties = dict(_DEFAULT_COMPLEXITY_PENALTY)
     if complexity_penalty is not None:
@@ -120,8 +146,10 @@ def select_registration_transform(
                 complexity_penalty=float(penalties.get(transform_type, 0.04)),
                 max_empty_roi_fraction=max_empty_roi_fraction,
                 min_retained_mask_area_fraction=min_retained_mask_area_fraction,
+                min_nonrigid_inverse_warp_valid_fraction=min_nonrigid_inverse_warp_valid_fraction,
                 empty_roi_penalty=empty_roi_penalty,
                 retained_area_penalty=retained_area_penalty,
+                nonrigid_valid_fraction_penalty=nonrigid_valid_fraction_penalty,
             )
         except Exception as exc:  # pylint: disable=broad-exception-caught
             diagnostics.append(
@@ -169,6 +197,7 @@ def select_registration_transform(
         min_fov_correlation_gain=float(min_fov_correlation_gain),
         max_empty_roi_fraction=float(max_empty_roi_fraction),
         min_retained_mask_area_fraction=float(min_retained_mask_area_fraction),
+        min_nonrigid_inverse_warp_valid_fraction=float(min_nonrigid_inverse_warp_valid_fraction),
     )
     return RegistrationSelectionResult(
         registered_plane=selected_plane,
@@ -245,8 +274,10 @@ def _diagnose_candidate(
     complexity_penalty: float,
     max_empty_roi_fraction: float,
     min_retained_mask_area_fraction: float,
+    min_nonrigid_inverse_warp_valid_fraction: float,
     empty_roi_penalty: float,
     retained_area_penalty: float,
+    nonrigid_valid_fraction_penalty: float,
 ) -> RegistrationCandidateDiagnostics:
     fov_correlation = _fov_correlation(reference_plane.fov, registered_plane.fov)
     empty_roi_fraction = _empty_roi_fraction(registered_plane.roi_masks)
@@ -258,24 +289,39 @@ def _diagnose_candidate(
         0.0,
         min_retained_mask_area_fraction - retained_area_fraction,
     )
+    ops = registered_plane.ops or {}
+    inverse_warp_valid_fraction = _maybe_float(
+        ops.get("nonrigid_registration_inverse_warp_valid_fraction")
+    )
+    is_nonrigid = requested_transform_type in NONRIGID_AUTO_REGISTRATION_CANDIDATES
+    nonrigid_valid_shortfall = 0.0
+    if is_nonrigid:
+        nonrigid_valid_shortfall = max(
+            0.0,
+            min_nonrigid_inverse_warp_valid_fraction
+            - (1.0 if inverse_warp_valid_fraction is None else inverse_warp_valid_fraction),
+        )
     score = (
         fov_correlation
         - complexity_penalty
         - empty_roi_penalty * empty_roi_fraction
         - retained_area_penalty * retained_shortfall
+        - nonrigid_valid_fraction_penalty * nonrigid_valid_shortfall
     )
     accepted = (
         np.isfinite(fov_correlation)
         and empty_roi_fraction <= max_empty_roi_fraction
         and retained_area_fraction >= min_retained_mask_area_fraction
+        and nonrigid_valid_shortfall <= 0.0
     )
-    ops = registered_plane.ops or {}
     reason = None
     if not accepted:
         reason = _rejection_reason(
             fov_correlation=fov_correlation,
             empty_roi_fraction=empty_roi_fraction,
             retained_area_fraction=retained_area_fraction,
+            inverse_warp_valid_fraction=inverse_warp_valid_fraction,
+            min_nonrigid_inverse_warp_valid_fraction=min_nonrigid_inverse_warp_valid_fraction,
             max_empty_roi_fraction=max_empty_roi_fraction,
             min_retained_mask_area_fraction=min_retained_mask_area_fraction,
         )
@@ -288,6 +334,7 @@ def _diagnose_candidate(
         retained_mask_area_fraction=float(retained_area_fraction),
         effective_transform_type=_maybe_str(ops.get("registration_transform_type")),
         backend=_maybe_str(ops.get("registration_backend")),
+        inverse_warp_valid_fraction=inverse_warp_valid_fraction,
         reason=reason,
     )
 
@@ -297,6 +344,8 @@ def _rejection_reason(
     fov_correlation: float,
     empty_roi_fraction: float,
     retained_area_fraction: float,
+    inverse_warp_valid_fraction: float | None,
+    min_nonrigid_inverse_warp_valid_fraction: float,
     max_empty_roi_fraction: float,
     min_retained_mask_area_fraction: float,
 ) -> str:
@@ -306,7 +355,22 @@ def _rejection_reason(
         return "too many registered ROIs became empty"
     if retained_area_fraction < min_retained_mask_area_fraction:
         return "too much registered ROI support was lost"
+    if (
+        inverse_warp_valid_fraction is not None
+        and inverse_warp_valid_fraction < min_nonrigid_inverse_warp_valid_fraction
+    ):
+        return "nonrigid inverse warp covers too little of the reference FOV"
     return "candidate rejected"
+
+
+def _maybe_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        converted = float(value)
+    except (TypeError, ValueError):
+        return None
+    return converted if np.isfinite(converted) else None
 
 
 def _fov_correlation(
@@ -374,6 +438,7 @@ def _with_auto_registration_metadata(
     min_fov_correlation_gain: float,
     max_empty_roi_fraction: float,
     min_retained_mask_area_fraction: float,
+    min_nonrigid_inverse_warp_valid_fraction: float,
 ) -> CalciumPlaneData:
     ops = {} if plane.ops is None else dict(plane.ops)
     ops.update(
@@ -396,6 +461,10 @@ def _with_auto_registration_metadata(
             "registration_auto_min_retained_mask_area_fraction": float(
                 min_retained_mask_area_fraction
             ),
+            "registration_auto_min_nonrigid_inverse_warp_valid_fraction": float(
+                min_nonrigid_inverse_warp_valid_fraction
+            ),
+            "registration_auto_inverse_warp_valid_fraction": selected.inverse_warp_valid_fraction,
             "registration_auto_candidate_diagnostics": [
                 asdict(candidate) for candidate in diagnostics
             ],

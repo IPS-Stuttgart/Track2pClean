@@ -172,7 +172,10 @@ def register_plane_pair(
         valid_types = ", ".join(repr(value) for value in REGISTRATION_TRANSFORM_TYPES)
         raise ValueError(f"transform_type must be one of {valid_types}")
     if transform_type == "auto":
-        from bayescatrack.registration_selection import select_registration_transform
+        from bayescatrack.registration_selection import (
+            DEFAULT_AUTO_REGISTRATION_CANDIDATES,
+            select_registration_transform,
+        )
 
         options = dict(registration_options or {})
         options.setdefault(
@@ -180,7 +183,7 @@ def register_plane_pair(
             (
                 auto_registration_candidates
                 if auto_registration_candidates is not None
-                else ("none", "fov-translation", "fov-affine", "affine", "rigid")
+                else DEFAULT_AUTO_REGISTRATION_CANDIDATES
             ),
         )
         options.setdefault("fov_affine_mask_warp_mode", fov_affine_mask_warp_mode)

@@ -22,6 +22,10 @@ from bayescatrack.association.track_refinement import (
     split_tracks_at_issues,
     track_geometry_issues,
 )
+from bayescatrack.association.postsolve_relinking import (
+    PostSolveRelinkingConfig,
+    relink_tracks_at_geometry_issues,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,
@@ -138,7 +142,11 @@ class Track2pBenchmarkConfig:
     adaptive_edge_prior_config: dict[str, Any] | None = None
     learned_gap_prior: bool = False
     learned_gap_prior_smoothing: float = 1.0
+    segmentation_event_config: dict[str, Any] | None = None
+    joint_refinement_config: dict[str, Any] | None = None
+    consensus_prior_config: dict[str, Any] | None = None
     track_refinement_config: dict[str, Any] | None = None
+    postsolve_relink_config: dict[str, Any] | None = None
     activity_tie_breaker_weight: float = 0.0
     activity_tie_breaker_component: str = "activity_tiebreaker_cost"
     activity_trace_source: str = "auto"
@@ -665,9 +673,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--learned-gap-prior-smoothing", type=float, default=1.0)
     parser.add_argument(
+        "--segmentation-event-json",
+        default=None,
+        help="JSON object enabling split/merge segmentation-event cost relief before pruning",
+    )
+    parser.add_argument(
+        "--joint-refinement-json",
+        default=None,
+        help="JSON object for assignment-anchor relief using joint registration/assignment diagnostics",
+    )
+    parser.add_argument(
+        "--consensus-prior-json",
+        default=None,
+        help="JSON object for ensemble consensus edge-prior relief across association variants",
+    )
+    parser.add_argument(
         "--track-refinement-json",
         default=None,
         help="JSON object for optional geometry-based post-solve track splitting",
+    )
+    parser.add_argument(
+        "--postsolve-relink-json",
+        default=None,
+        help="JSON object for conservative relinking of geometry-flagged detections before splitting",
     )
     parser.add_argument(
         "--activity-tie-breaker-weight",
@@ -810,6 +838,12 @@ def _predict_subject_track_variants(
         base_assignment, config
     ):
         predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
+        predicted = _maybe_refine_predicted_tracks(
+            predicted,
+            sessions,
+            config=config,
+            assignment=assignment,
+        )
         predictions.append(
             (
                 predicted,
@@ -868,7 +902,7 @@ def _predict_subject_tracks(
     sessions = _load_subject_sessions(subject_dir, config)
     assignment = solve_configured_global_assignment(sessions, config)
     predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
-    predicted = _maybe_refine_predicted_tracks(predicted, sessions, config=config)
+    predicted = _maybe_refine_predicted_tracks(predicted, sessions, config=config, assignment=assignment)
     return predicted, _variant_name(config.cost)
 
 
@@ -877,12 +911,13 @@ def _maybe_refine_predicted_tracks(
     sessions: Sequence[Track2pSession],
     *,
     config: Track2pBenchmarkConfig,
+    assignment: GlobalAssignmentRun | None = None,
 ) -> np.ndarray:
-    """Optionally split high-residual predicted tracks before scoring."""
+    """Optionally relink/split high-residual predicted tracks before scoring."""
 
-    if config.track_refinement_config is None:
+    if config.track_refinement_config is None and config.postsolve_relink_config is None:
         return predicted_matrix
-    smoothing_config = TrackSmoothingConfig(**dict(config.track_refinement_config))
+    smoothing_config = TrackSmoothingConfig(**dict(config.track_refinement_config or {}))
     integer_matrix = _track_matrix_to_int_fill(
         predicted_matrix,
         fill_value=int(smoothing_config.fill_value),
@@ -897,6 +932,17 @@ def _maybe_refine_predicted_tracks(
         position_tables,
         config=smoothing_config,
     )
+    if not issues:
+        return integer_matrix
+    if config.postsolve_relink_config is not None and assignment is not None:
+        integer_matrix = relink_tracks_at_geometry_issues(
+            integer_matrix,
+            issues,
+            assignment.pairwise_costs,
+            roi_indices_by_session=_roi_indices_by_session(sessions),
+            config=PostSolveRelinkingConfig(**dict(config.postsolve_relink_config)),
+        )
+        issues = track_geometry_issues(integer_matrix, position_tables, config=smoothing_config)
     if not issues or not smoothing_config.split_bad_edges:
         return integer_matrix
     return split_tracks_at_issues(
@@ -1008,7 +1054,21 @@ def solve_configured_global_assignment(
         dynamic_edge_prior_config=config.dynamic_edge_prior_config,
         edge_uncertainty_config=config.edge_uncertainty_config,
         adaptive_edge_prior_config=config.adaptive_edge_prior_config,
+        segmentation_event_config=config.segmentation_event_config,
+        joint_refinement_config=config.joint_refinement_config,
+        consensus_prior_config=config.consensus_prior_config,
     )
+
+
+def _roi_indices_by_session(sessions: Sequence[Track2pSession]) -> tuple[np.ndarray, ...]:
+    indices: list[np.ndarray] = []
+    for session in sessions:
+        plane = session.plane_data
+        if plane.roi_indices is None:
+            indices.append(np.arange(plane.n_rois, dtype=int))
+        else:
+            indices.append(np.asarray(plane.roi_indices, dtype=int).reshape(-1))
+    return tuple(indices)
 
 
 def _solver_higher_order_config(
@@ -1660,9 +1720,25 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         getattr(args, "absence_model_json", None),
         name="--absence-model-json",
     )
+    segmentation_event_config = _parse_json_object(
+        getattr(args, "segmentation_event_json", None),
+        name="--segmentation-event-json",
+    )
+    joint_refinement_config = _parse_json_object(
+        getattr(args, "joint_refinement_json", None),
+        name="--joint-refinement-json",
+    )
+    consensus_prior_config = _parse_json_object(
+        getattr(args, "consensus_prior_json", None),
+        name="--consensus-prior-json",
+    )
     track_refinement_config = _parse_json_object(
         getattr(args, "track_refinement_json", None),
         name="--track-refinement-json",
+    )
+    postsolve_relink_config = _parse_json_object(
+        getattr(args, "postsolve_relink_json", None),
+        name="--postsolve-relink-json",
     )
     return Track2pBenchmarkConfig(
         data=args.data,
@@ -1733,7 +1809,11 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         adaptive_edge_prior_config=adaptive_edge_prior_config,
         learned_gap_prior=bool(args.learned_gap_prior),
         learned_gap_prior_smoothing=float(args.learned_gap_prior_smoothing),
+        segmentation_event_config=segmentation_event_config,
+        joint_refinement_config=joint_refinement_config,
+        consensus_prior_config=consensus_prior_config,
         track_refinement_config=track_refinement_config,
+        postsolve_relink_config=postsolve_relink_config,
         activity_tie_breaker_weight=args.activity_tie_breaker_weight,
         activity_tie_breaker_component=args.activity_tie_breaker_component,
         activity_trace_source=args.activity_trace_source,

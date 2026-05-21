@@ -42,6 +42,66 @@ def select_best_variants_by_track_metric(
     return scored
 
 
+def nested_select_variants_by_track_metric(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    metric: str = "complete_track_f1",
+    held_out_field: str = "subject",
+    group_by: str = "variant",
+    tie_breakers: Sequence[str] = ("pairwise_f1", "pairwise_precision"),
+) -> list[dict[str, float | int | str]]:
+    """Evaluate fold-clean variant selection with an outer held-out group.
+
+    For every held-out subject/session group, this selector chooses the best
+    variant using only the remaining rows, then reports the selected variant's
+    held-out metric. It is a lightweight nested structured-objective check for
+    result-improvement manifests that sweep registration, priors, relinking, and
+    solver hyperparameters.
+    """
+
+    held_out_values = tuple(
+        dict.fromkeys(
+            str(row.get(held_out_field, ""))
+            for row in rows
+            if row.get(held_out_field, "")
+        )
+    )
+    output: list[dict[str, float | int | str]] = []
+    for held_out_value in held_out_values:
+        train_rows = [
+            row for row in rows if str(row.get(held_out_field, "")) != held_out_value
+        ]
+        test_rows = [
+            row for row in rows if str(row.get(held_out_field, "")) == held_out_value
+        ]
+        ranking = select_best_variants_by_track_metric(
+            train_rows,
+            metric=metric,
+            group_by=group_by,
+            tie_breakers=tie_breakers,
+        )
+        if not ranking:
+            continue
+        selected_variant = str(ranking[0][group_by])
+        selected_test_rows = [
+            row for row in test_rows if str(row.get(group_by, "")) == selected_variant
+        ]
+        output.append(
+            {
+                held_out_field: held_out_value,
+                group_by: selected_variant,
+                "selection_rank_rows": int(ranking[0].get("rows", 0)),
+                f"train_mean_{metric}": float(
+                    ranking[0].get(f"mean_{metric}", float("nan"))
+                ),
+                f"held_out_mean_{metric}": _mean(selected_test_rows, metric),
+                f"held_out_median_{metric}": _median(selected_test_rows, metric),
+                "held_out_rows": int(len(selected_test_rows)),
+            }
+        )
+    return output
+
+
 def _score_group(
     name: str,
     rows: Sequence[Mapping[str, Any]],
@@ -105,18 +165,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--metric", default="complete_track_f1")
     parser.add_argument("--group-by", default="variant")
     parser.add_argument("--tie-breaker", action="append", default=None)
+    parser.add_argument(
+        "--nested-held-out-field",
+        default=None,
+        help="Enable nested fold-clean selection using this held-out field, e.g. subject",
+    )
     parser.add_argument("--output", type=Path, default=None)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    rows = select_best_variants_by_track_metric(
-        _load_csv(args.csv),
-        metric=args.metric,
-        group_by=args.group_by,
-        tie_breakers=tuple(args.tie_breaker or ("pairwise_f1", "pairwise_precision")),
-    )
+    input_rows = _load_csv(args.csv)
+    tie_breakers = tuple(args.tie_breaker or ("pairwise_f1", "pairwise_precision"))
+    if args.nested_held_out_field is None:
+        rows = select_best_variants_by_track_metric(
+            input_rows,
+            metric=args.metric,
+            group_by=args.group_by,
+            tie_breakers=tie_breakers,
+        )
+    else:
+        rows = nested_select_variants_by_track_metric(
+            input_rows,
+            metric=args.metric,
+            held_out_field=args.nested_held_out_field,
+            group_by=args.group_by,
+            tie_breakers=tie_breakers,
+        )
     payload = json.dumps(rows, indent=2) + "\n"
     if args.output is None:
         print(payload, end="")

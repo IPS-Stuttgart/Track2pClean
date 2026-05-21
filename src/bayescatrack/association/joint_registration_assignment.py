@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -201,6 +201,33 @@ def joint_registration_assignment_loop(
             break
         previous_mean = mean_anchor_cost
     return states
+
+
+def apply_joint_anchor_relief_to_pairwise_costs(
+    pairwise_costs: Mapping[tuple[int, int], np.ndarray],
+    *,
+    config: JointRefinementConfig | Mapping[str, Any] | None = None,
+) -> dict[tuple[int, int], np.ndarray]:
+    """Apply one assignment-anchor refinement pass to every pairwise edge matrix.
+
+    This is the solver-side hook for joint registration/assignment experiments:
+    when registration backends do not yet consume anchors directly, we still make
+    high-confidence mutual anchors visible to the assignment objective as small,
+    bounded edge relief.  It is opt-in and leaves registration unchanged.
+    """
+
+    cfg = config if isinstance(config, JointRefinementConfig) else JointRefinementConfig(**dict(config or {}))
+    adjusted: dict[tuple[int, int], np.ndarray] = {}
+    for edge, matrix in pairwise_costs.items():
+        anchors = high_confidence_anchor_edges(
+            matrix,
+            quantile=cfg.high_confidence_quantile,
+            min_anchor_edges=cfg.min_anchor_edges,
+        )
+        adjusted[(int(edge[0]), int(edge[1]))] = anchor_relief_cost_matrix(
+            matrix, anchors, relief=cfg.cost_relief
+        )
+    return adjusted
 
 
 def state_summary_rows(
