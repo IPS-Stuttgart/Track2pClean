@@ -49,6 +49,8 @@ def test_track2p_parser_exposes_result_improvement_knobs() -> None:
             "auto",
             "--auto-registration-candidates",
             "none,fov-affine,local-affine-grid",
+            "--fov-affine-mask-warp-mode",
+            "bilinear",
             "--seed-sessions",
             "all",
             "--edge-uncertainty-json",
@@ -64,6 +66,7 @@ def test_track2p_parser_exposes_result_improvement_knobs() -> None:
         "fov-affine",
         "local-affine-grid",
     )
+    assert config.fov_affine_mask_warp_mode == "bilinear"
     assert config.edge_uncertainty_config == {"uncertainty_penalty_weight": 0.5}
 
 
@@ -84,17 +87,34 @@ def test_uncertainty_mapping_penalizes_unreliable_edges() -> None:
     assert result.reliability_matrix[0, 1] < result.reliability_matrix[0, 0]
 
 
+def test_uncertainty_penalizes_empty_registered_roi_columns() -> None:
+    result = uncertainty_aware_cost_matrix(
+        np.zeros((2, 2), dtype=float),
+        {},
+        empty_registered_rois=np.array([False, True]),
+        config=EdgeUncertaintyConfig(
+            uncertainty_penalty_weight=1.0,
+            empty_registered_roi_weight=3.0,
+        ),
+    )
+
+    assert np.all(result.adjusted_cost_matrix[:, 1] > result.adjusted_cost_matrix[:, 0])
+
+
 def test_improvement_manifest_includes_diagnostics_priors_and_uncertainty() -> None:
     manifest = track2p_result_improvement_manifest(
         data_root="data", reference_root="gt", output_root="results"
     )
 
     assert manifest["defaults"]["seed_sessions"] == "all"
+    assert manifest["defaults"]["fov_affine_mask_warp_mode"] == "bilinear"
     run_names = {run["name"] for run in manifest["runs"]}
     assert "oracle-gt-links" in run_names
     assert "roi-aware-shifted-auto-registration" in run_names
     assert "roi-aware-shifted-dynamic-priors" in run_names
     assert "roi-aware-shifted-uncertainty-pruned" in run_names
+    assert "roi-aware-shifted-learned-solver-priors" in run_names
     assert any("candidate_pruning_config" in run for run in manifest["runs"])
     assert any("dynamic_edge_prior_config" in run for run in manifest["runs"])
     assert any("edge_uncertainty_config" in run for run in manifest["runs"])
+    assert any(run.get("objective") == "complete_track_f1" for run in manifest["runs"])

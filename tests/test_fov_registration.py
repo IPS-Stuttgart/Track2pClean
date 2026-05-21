@@ -41,11 +41,11 @@ def test_estimate_integer_fov_shift_pads_different_shapes():
 
 
 def test_estimate_integer_fov_shift_rejects_degenerate_fovs():
-    reference_fov = np.ones((8, 9), dtype=float)
-    measurement_fov = np.ones((8, 9), dtype=float)
+    with pytest.raises(ValueError, match="spatial variation"):
+        estimate_integer_fov_shift(np.ones((8, 9)), np.ones((8, 9)))
 
-    with pytest.raises(ValueError, match="constant or empty FOV"):
-        estimate_integer_fov_shift(reference_fov, measurement_fov)
+    with pytest.raises(ValueError, match="finite values"):
+        estimate_integer_fov_shift(np.ones((8, 9)), np.full((8, 9), np.nan))
 
 
 def test_apply_integer_image_translation_crops_to_smaller_output_shape():

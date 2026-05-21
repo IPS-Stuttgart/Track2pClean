@@ -249,6 +249,18 @@ def test_run_registered_subject_tracking_default_solver_uses_global_assignment(
         result.link_target_indices,
         np.array([[1, 2], [1, 2], [1, 2]], dtype=int),
     )
+    assert result.global_link_edges == ((0, 1), (0, 2), (1, 2))
+    npt.assert_allclose(
+        result.global_link_costs,
+        np.array(
+            [
+                [0.1, np.nan, 0.4],
+                [0.2, np.nan, 0.5],
+                [0.3, np.nan, 0.6],
+            ],
+            dtype=float,
+        ),
+    )
     assert len(result.registered_bundles.bundles) == 0
     assert [match.n_matches for match in result.match_results] == [3, 3]
 
@@ -369,6 +381,14 @@ def test_run_registered_subject_tracking_uses_global_assignment_by_default(
     assert result.link_target_indices[1, 0] == 2
     assert result.link_target_indices[1, 1] == -1
     assert np.isfinite(result.link_costs[1, 0])
+    assert result.global_link_edges == ((0, 1), (0, 2), (1, 2))
+    assert result.global_link_costs is not None
+    assert np.isfinite(result.global_link_costs[0, 0])
+    assert not np.isfinite(result.global_link_costs[0, 1])
+    assert np.isfinite(result.global_link_costs[0, 2])
+    assert not np.isfinite(result.global_link_costs[1, 0])
+    assert np.isfinite(result.global_link_costs[1, 1])
+    assert not np.isfinite(result.global_link_costs[1, 2])
 
     scores = result.score_summary()
     assert scores["solver"] == "global-assignment"
@@ -378,9 +398,7 @@ def test_run_registered_subject_tracking_uses_global_assignment_by_default(
     assert [pair["n_matches"] for pair in scores["pairs"]] == [2, 1, 2]
 
 
-def test_global_tracking_rejects_unsupported_point_set_registration_options(
-    tmp_path: Path,
-):
+def test_global_tracking_rejects_pairwise_only_registration_options(tmp_path: Path):
     subject_dir = tmp_path / "jm271"
     _write_three_session_subject(subject_dir)
 
@@ -390,9 +408,19 @@ def test_global_tracking_rejects_unsupported_point_set_registration_options(
             plane_name="plane0",
             input_format="auto",
             include_behavior=False,
+            tracking_method="global",
             registration_max_iterations=100,
         )
 
+    with pytest.raises(ValueError, match="binarize_registered_masks"):
+        run_registered_subject_tracking(
+            subject_dir,
+            plane_name="plane0",
+            input_format="auto",
+            include_behavior=False,
+            tracking_method="global",
+            binarize_registered_masks=True,
+        )
 def test_run_registered_subject_tracking_handles_single_session(tmp_path: Path):
     subject_dir = tmp_path / "jm271"
     _write_raw_npy_session(

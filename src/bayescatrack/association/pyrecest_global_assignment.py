@@ -339,6 +339,7 @@ def build_registered_pairwise_costs(
     calibrated_model: CalibratedAssociationModel | None = None,
     transform_type: str = "affine",
     auto_registration_candidates: Sequence[str] | None = None,
+    fov_affine_mask_warp_mode: str = "nearest",
     order: str = "xy",
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
@@ -391,6 +392,7 @@ def build_registered_pairwise_costs(
                 sessions[target_session].plane_data,
                 transform_type=transform_type,
                 auto_registration_candidates=auto_registration_candidates,
+                fov_affine_mask_warp_mode=fov_affine_mask_warp_mode,
                 registration_options=registration_options,
             )
             registered_measurement_plane, empty_registered_rois = (
@@ -464,6 +466,7 @@ def build_registered_pairwise_costs(
                     cost_matrix,
                     bundle.pairwise_components,
                     registration_metadata=registered_measurement_plane.ops,
+                    empty_registered_rois=empty_registered_rois,
                     config=edge_uncertainty,
                 )
                 cost_matrix = uncertainty.adjusted_cost_matrix
@@ -499,6 +502,7 @@ def solve_global_assignment_for_sessions(
     calibrated_model: CalibratedAssociationModel | None = None,
     transform_type: str = "affine",
     auto_registration_candidates: Sequence[str] | None = None,
+    fov_affine_mask_warp_mode: str = "nearest",
     start_cost: float = 5.0,
     end_cost: float = 5.0,
     gap_penalty: float = 1.0,
@@ -534,6 +538,7 @@ def solve_global_assignment_for_sessions(
         calibrated_model=calibrated_model,
         transform_type=transform_type,
         auto_registration_candidates=auto_registration_candidates,
+        fov_affine_mask_warp_mode=fov_affine_mask_warp_mode,
         order=order,
         weighted_centroids=weighted_centroids,
         velocity_variance=velocity_variance,

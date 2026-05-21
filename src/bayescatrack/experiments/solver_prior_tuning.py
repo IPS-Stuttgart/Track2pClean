@@ -429,11 +429,16 @@ def _prepare_subject(
         cost=cost,
         calibrated_model=calibrated_model,
         transform_type=config.transform_type,
+        auto_registration_candidates=config.auto_registration_candidates or None,
+        fov_affine_mask_warp_mode=config.fov_affine_mask_warp_mode,
         order=config.order,
         weighted_centroids=config.weighted_centroids,
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         pairwise_cost_kwargs=config.pairwise_cost_kwargs,
+        candidate_pruning_config=config.candidate_pruning_config,
+        dynamic_edge_prior_config=config.dynamic_edge_prior_config,
+        edge_uncertainty_config=config.edge_uncertainty_config,
     )
     return _PreparedSubject(
         subject_name=subject.subject_name,
