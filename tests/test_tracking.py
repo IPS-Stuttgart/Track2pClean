@@ -324,7 +324,9 @@ def test_run_registered_subject_tracking_pairwise_ablation_builds_full_track_row
     npt.assert_array_equal(export["track_rows"], result.track_rows)
     npt.assert_array_equal(export["track_lengths"], np.array([3, 3, 3], dtype=int))
     npt.assert_array_equal(export["complete_track_mask"], np.array([True, True, True]))
-    npt.assert_array_equal(export["link_target_indices"], np.array([[1, 2], [1, 2], [1, 2]], dtype=int))
+    npt.assert_array_equal(
+        export["link_target_indices"], np.array([[1, 2], [1, 2], [1, 2]], dtype=int)
+    )
     assert export["session_names"].dtype.kind in {"U", "S"}
     assert export["tracking_method"].dtype.kind in {"U", "S"}
     assert "scores" not in export

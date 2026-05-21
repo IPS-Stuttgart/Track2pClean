@@ -241,7 +241,9 @@ class SubjectTrackingResult:
             "fill_value": np.asarray(self.fill_value, dtype=int),
             "tracking_method": np.asarray(self.tracking_method, dtype=np.str_),
             "solver": np.asarray(self.solver, dtype=np.str_),
-            "scores_json": np.asarray(json.dumps(self.score_summary(), sort_keys=True), dtype=np.str_),
+            "scores_json": np.asarray(
+                json.dumps(self.score_summary(), sort_keys=True), dtype=np.str_
+            ),
             "global_link_edges": np.asarray(self.global_link_edges, dtype=int).reshape(
                 -1, 2
             ),
