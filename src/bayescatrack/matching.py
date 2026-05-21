@@ -1,7 +1,7 @@
 """Utilities for solving Track2p/PyRecEst association bundles.
 
 This module complements the ROI-aware bundle construction in
-``track2p_pyrecest_bridge`` by providing the missing glue needed for benchmark
+``bayescatrack.core.bridge`` by providing the missing glue needed for benchmark
 workflows:
 
 * solve one bundle's pairwise cost matrix into ROI matches,
@@ -109,7 +109,7 @@ def solve_bundle_linear_assignment(
     ----------
     bundle
         Any object exposing the attributes used by
-        :class:`track2p_pyrecest_bridge.SessionAssociationBundle`.
+        :class:`bayescatrack.SessionAssociationBundle`.
     max_cost
         Assignment gate. Candidate pairs with assignment cost larger than this
         threshold are excluded from the linear-assignment objective and discarded

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import argparse
+
 import pytest
+from bayescatrack import cli as bayescatrack_cli
 from bayescatrack.experiments import (
     oracle_affine_registration_qa,
     registration_qa_report,
@@ -8,6 +11,10 @@ from bayescatrack.experiments import (
     track2p_benchmark,
     track2p_calibration_export,
     track2p_cost_sweep,
+    track2p_failure_diagnosis,
+    track2p_solver_prior_tuning,
+    track2p_teacher_audit,
+    track2p_teacher_debug,
 )
 from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
@@ -29,6 +36,13 @@ def _transform_choices(parser):
     raise AssertionError("parser does not expose --transform-type")
 
 
+def _cost_choices(parser):
+    for action in parser._actions:
+        if "--cost" in action.option_strings:
+            return tuple(action.choices or ())
+    raise AssertionError("parser does not expose --cost")
+
+
 @pytest.mark.parametrize(
     "parser",
     (
@@ -37,10 +51,38 @@ def _transform_choices(parser):
         solver_prior_tuning.build_arg_parser(),
         track2p_calibration_export.build_arg_parser(),
         registration_qa_report.build_arg_parser(),
+        track2p_failure_diagnosis.build_arg_parser(),
+        track2p_solver_prior_tuning.build_arg_parser(),
     ),
 )
 def test_core_track2p_clis_expose_registration_transform_types(parser):
     assert set(REGISTRATION_TRANSFORM_TYPES).issubset(_transform_choices(parser))
+
+
+@pytest.mark.parametrize(
+    "parser",
+    (
+        track2p_failure_diagnosis.build_arg_parser(),
+        track2p_teacher_audit.build_arg_parser(),
+        track2p_teacher_debug.build_arg_parser(),
+    ),
+)
+def test_debug_clis_expose_soft_overlap_cost_choices_without_argparse_patch(parser):
+    choices = set(_cost_choices(parser))
+
+    assert "registered-soft-iou" in choices
+    assert "registered-shifted-iou" in choices
+    assert "roi-aware-shifted" in choices
+
+
+def test_bayescatrack_cli_main_does_not_patch_argparse(capsys):
+    original_add_argument = argparse.ArgumentParser.add_argument
+
+    assert bayescatrack_cli.main(["--help"]) == 0
+
+    assert argparse.ArgumentParser.add_argument is original_add_argument
+    captured = capsys.readouterr()
+    assert "BayesCaTrack command line tools" in captured.out
 
 
 @pytest.mark.parametrize("transform_type", NONRIGID_BENCHMARK_TRANSFORMS)

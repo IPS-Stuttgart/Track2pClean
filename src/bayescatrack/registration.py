@@ -1,4 +1,4 @@
-"""Registration-aware tracking utilities for ``track2p_pyrecest_bridge``.
+"""Registration-aware tracking utilities for BayesCaTrack.
 
 The core bridge already knows how to:
 

@@ -14,6 +14,9 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 from bayescatrack.association.pyrecest_global_assignment import AssociationCost
+from bayescatrack.experiments._cli_choices import (
+    ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
+)
 from bayescatrack.track2p_registration import REGISTRATION_TRANSFORM_TYPES
 
 if TYPE_CHECKING:
@@ -274,7 +277,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--cost",
         default="registered-iou",
-        choices=("registered-iou", "roi-aware", "roi-aware-shifted"),
+        choices=ASSOCIATION_COST_CHOICES_WITHOUT_CALIBRATED,
     )
     p.add_argument("--max-gap", type=int, default=2)
     p.add_argument(
