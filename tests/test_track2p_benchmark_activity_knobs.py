@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-# pylint: disable=protected-access
-
 from pathlib import Path
 
 from bayescatrack.association.higher_order_consistency import (
@@ -9,6 +7,10 @@ from bayescatrack.association.higher_order_consistency import (
 )
 from bayescatrack.experiments import track2p_benchmark as benchmark
 from bayescatrack.experiments.benchmark_manifest import load_benchmark_manifest
+
+# pylint: disable=protected-access
+
+
 
 
 def test_track2p_benchmark_cli_parses_activity_and_higher_order_knobs(tmp_path):

@@ -63,13 +63,17 @@ def split_event_candidates(
         child_positions = np.flatnonzero(plausible)
         if child_positions.size < cfg.min_children:
             continue
-        child_positions = child_positions[np.argsort(matrices["score"][row_index, child_positions])[::-1]][: cfg.max_children]
+        child_positions = child_positions[
+            np.argsort(matrices["score"][row_index, child_positions])[::-1]
+        ][: cfg.max_children]
         score = float(np.mean(matrices["score"][row_index, child_positions]))
         candidates.append(
             SegmentationEventCandidate(
                 event_type="split",
                 source_roi_index=int(source_roi),
-                target_roi_indices=tuple(int(meas_indices[pos]) for pos in child_positions),
+                target_roi_indices=tuple(
+                    int(meas_indices[pos]) for pos in child_positions
+                ),
                 score=score,
                 support_size=int(child_positions.size),
             )
@@ -94,17 +98,23 @@ def merge_event_candidates(
 
     candidates: list[SegmentationEventCandidate] = []
     for col_index, target_roi in enumerate(meas_indices):
-        plausible = _plausible_child_mask(matrices, col_index, axis="column", config=cfg)
+        plausible = _plausible_child_mask(
+            matrices, col_index, axis="column", config=cfg
+        )
         parent_positions = np.flatnonzero(plausible)
         if parent_positions.size < cfg.min_children:
             continue
-        parent_positions = parent_positions[np.argsort(matrices["score"][parent_positions, col_index])[::-1]][: cfg.max_children]
+        parent_positions = parent_positions[
+            np.argsort(matrices["score"][parent_positions, col_index])[::-1]
+        ][: cfg.max_children]
         score = float(np.mean(matrices["score"][parent_positions, col_index]))
         candidates.append(
             SegmentationEventCandidate(
                 event_type="merge",
                 source_roi_index=int(target_roi),
-                target_roi_indices=tuple(int(ref_indices[pos]) for pos in parent_positions),
+                target_roi_indices=tuple(
+                    int(ref_indices[pos]) for pos in parent_positions
+                ),
                 score=score,
                 support_size=int(parent_positions.size),
             )
@@ -121,7 +131,9 @@ def segmentation_event_rows(
         {
             "event_type": candidate.event_type,
             "source_roi_index": candidate.source_roi_index,
-            "target_roi_indices": ",".join(str(idx) for idx in candidate.target_roi_indices),
+            "target_roi_indices": ",".join(
+                str(idx) for idx in candidate.target_roi_indices
+            ),
             "score": candidate.score,
             "support_size": candidate.support_size,
         }
@@ -157,7 +169,12 @@ def event_soft_penalty_matrix(
 def _event_matrices(pairwise_components: Mapping[str, Any]) -> dict[str, np.ndarray]:
     overlap = _first_available(
         pairwise_components,
-        ("overlap_min_fraction", "reference_containment", "measurement_containment", "iou"),
+        (
+            "overlap_min_fraction",
+            "reference_containment",
+            "measurement_containment",
+            "iou",
+        ),
     )
     dice = _first_available(pairwise_components, ("weighted_dice_similarity", "iou"))
     area = _first_available(pairwise_components, ("area_ratio_cost",))
@@ -168,7 +185,9 @@ def _event_matrices(pairwise_components: Mapping[str, Any]) -> dict[str, np.ndar
     return {"overlap": overlap, "dice": dice, "area": area, "score": score}
 
 
-def _first_available(components: Mapping[str, Any], names: tuple[str, ...]) -> np.ndarray:
+def _first_available(
+    components: Mapping[str, Any], names: tuple[str, ...]
+) -> np.ndarray:
     for name in names:
         if name in components:
             values = np.asarray(components[name], dtype=float)
@@ -177,13 +196,19 @@ def _first_available(components: Mapping[str, Any], names: tuple[str, ...]) -> n
     raise KeyError("None of the required components are available: " + ", ".join(names))
 
 
-def _validate_shape(matrix: np.ndarray, ref_indices: np.ndarray, meas_indices: np.ndarray) -> None:
+def _validate_shape(
+    matrix: np.ndarray, ref_indices: np.ndarray, meas_indices: np.ndarray
+) -> None:
     if matrix.shape != (ref_indices.size, meas_indices.size):
         raise ValueError("component shape does not match ROI index vectors")
 
 
 def _plausible_child_mask(
-    matrices: Mapping[str, np.ndarray], index: int, *, axis: str, config: SegmentationEventConfig
+    matrices: Mapping[str, np.ndarray],
+    index: int,
+    *,
+    axis: str,
+    config: SegmentationEventConfig,
 ) -> np.ndarray:
     if axis == "row":
         overlap = matrices["overlap"][index]
@@ -195,6 +220,6 @@ def _plausible_child_mask(
         area = matrices["area"][:, index]
     else:
         raise ValueError("axis must be 'row' or 'column'")
-    return ((overlap >= config.min_overlap_fraction) | (dice >= config.min_weighted_dice)) & (
-        area <= config.max_area_ratio_cost
-    )
+    return (
+        (overlap >= config.min_overlap_fraction) | (dice >= config.min_weighted_dice)
+    ) & (area <= config.max_area_ratio_cost)

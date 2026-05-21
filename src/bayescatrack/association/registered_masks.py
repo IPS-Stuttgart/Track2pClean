@@ -231,8 +231,7 @@ def mask_invalid_registered_roi_columns(
         and REGISTERED_ROI_VALID_COMPONENT not in pairwise_components
     ):
         return {
-            key: np.asarray(value).copy()
-            for key, value in pairwise_components.items()
+            key: np.asarray(value).copy() for key, value in pairwise_components.items()
         }
 
     components = _copy_pairwise_components(pairwise_components)

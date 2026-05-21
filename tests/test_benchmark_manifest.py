@@ -209,7 +209,6 @@ def test_benchmark_manifest_rejects_runner_options_for_default_track2p(tmp_path)
         load_benchmark_manifest(manifest_path)
 
 
-
 def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkeypatch):
     calls = {}
 

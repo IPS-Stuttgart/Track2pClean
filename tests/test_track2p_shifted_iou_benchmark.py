@@ -4,7 +4,6 @@ from argparse import Namespace
 from pathlib import Path
 
 import pytest
-
 from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
 from bayescatrack.experiments.track2p_shifted_iou_benchmark import (
     ShiftedIouSetting,

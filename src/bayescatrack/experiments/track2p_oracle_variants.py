@@ -31,8 +31,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
     )
     parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", default="auto", choices=("auto", "suite2p", "npy"))
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
+    parser.add_argument(
+        "--input-format", default="auto", choices=("auto", "suite2p", "npy")
+    )
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
     parser.add_argument("--curated-only", action="store_true")
     parser.add_argument(
         "--seed-sessions",
@@ -44,11 +48,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="1,2,3",
         help="Comma-separated max-gap values for gap-limited oracle variants",
     )
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--include-non-cells", action="store_true")
     parser.add_argument("--cell-probability-threshold", type=float, default=0.5)
     parser.add_argument("--weighted-masks", action="store_true")
-    parser.add_argument("--exclude-overlapping-pixels", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--exclude-overlapping-pixels",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("json", "csv", "table"), default="table")
     return parser
@@ -85,8 +95,12 @@ def run_oracle_variant_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
     seed_sessions = _parse_int_list(args.seed_sessions, name="--seed-sessions")
     max_gaps = _parse_int_list(args.max_gaps, name="--max-gaps")
     for subject_dir in discover_subject_dirs(args.data):
-        reference = _load_reference_for_subject(subject_dir, data_root=args.data, config=config)
-        _validate_reference_for_benchmark(reference, subject_dir=subject_dir, config=config)
+        reference = _load_reference_for_subject(
+            subject_dir, data_root=args.data, config=config
+        )
+        _validate_reference_for_benchmark(
+            reference, subject_dir=subject_dir, config=config
+        )
         for result in score_oracle_variants(
             reference,
             curated_only=args.curated_only,
@@ -111,7 +125,9 @@ def _parse_int_list(raw: str, *, name: str) -> tuple[int, ...]:
     return values
 
 
-def _write_rows(rows: list[dict[str, Any]], output_path: Path, output_format: str) -> None:
+def _write_rows(
+    rows: list[dict[str, Any]], output_path: Path, output_format: str
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
         output_path.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
@@ -153,12 +169,24 @@ def _fieldnames(rows: list[dict[str, Any]]) -> list[str]:
 
 
 def _format_table(rows: list[dict[str, Any]]) -> str:
-    columns = ["subject", "variant", "seed_session", "max_gap", "pairwise_f1", "complete_track_f1", "oracle_tracks"]
+    columns = [
+        "subject",
+        "variant",
+        "seed_session",
+        "max_gap",
+        "pairwise_f1",
+        "complete_track_f1",
+        "oracle_tracks",
+    ]
     header = "| " + " | ".join(columns) + " |"
     separator = "| " + " | ".join(["---"] * len(columns)) + " |"
     body = [header, separator]
     for row in rows:
-        body.append("| " + " | ".join(_format_value(row.get(column, "")) for column in columns) + " |")
+        body.append(
+            "| "
+            + " | ".join(_format_value(row.get(column, "")) for column in columns)
+            + " |"
+        )
     return "\n".join(body)
 
 

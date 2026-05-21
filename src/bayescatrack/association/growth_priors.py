@@ -26,13 +26,17 @@ class GrowthPriorConfig:
             raise ValueError("regularization must be non-negative")
 
 
-def fit_affine_growth_transform(source_points_xy: Any, target_points_xy: Any, *, regularization: float = 1.0e-6) -> np.ndarray:
+def fit_affine_growth_transform(
+    source_points_xy: Any, target_points_xy: Any, *, regularization: float = 1.0e-6
+) -> np.ndarray:
     """Fit an affine transform mapping source points to target points."""
 
     source = np.asarray(source_points_xy, dtype=float)
     target = np.asarray(target_points_xy, dtype=float)
     if source.shape != target.shape or source.ndim != 2 or source.shape[1] != 2:
-        raise ValueError("source_points_xy and target_points_xy must both have shape (n, 2)")
+        raise ValueError(
+            "source_points_xy and target_points_xy must both have shape (n, 2)"
+        )
     if source.shape[0] < 3:
         raise ValueError("At least three point pairs are required for affine growth")
     design = np.column_stack((source, np.ones(source.shape[0], dtype=float)))
@@ -42,7 +46,13 @@ def fit_affine_growth_transform(source_points_xy: Any, target_points_xy: Any, *,
     return np.asarray(coef.T, dtype=float)
 
 
-def affine_growth_penalty_matrix(reference_centroids_xy: Any, measurement_centroids_xy: Any, affine_xy: Any, *, scale: float) -> np.ndarray:
+def affine_growth_penalty_matrix(
+    reference_centroids_xy: Any,
+    measurement_centroids_xy: Any,
+    affine_xy: Any,
+    *,
+    scale: float,
+) -> np.ndarray:
     """Return normalized displacement residuals under an affine growth field."""
 
     ref = np.asarray(reference_centroids_xy, dtype=float)
@@ -55,7 +65,13 @@ def affine_growth_penalty_matrix(reference_centroids_xy: Any, measurement_centro
     return np.linalg.norm(diffs, axis=2) / max(float(scale), 1.0e-12)
 
 
-def radial_growth_penalty_matrix(reference_centroids_xy: Any, measurement_centroids_xy: Any, *, center_xy: Any | None = None, scale: float = 10.0) -> np.ndarray:
+def radial_growth_penalty_matrix(
+    reference_centroids_xy: Any,
+    measurement_centroids_xy: Any,
+    *,
+    center_xy: Any | None = None,
+    scale: float = 10.0,
+) -> np.ndarray:
     """Return penalty for radial displacement inconsistency."""
 
     ref = np.asarray(reference_centroids_xy, dtype=float)
@@ -70,7 +86,15 @@ def radial_growth_penalty_matrix(reference_centroids_xy: Any, measurement_centro
     return radial_diff / max(float(scale), 1.0e-12)
 
 
-def apply_growth_prior_to_costs(cost_matrix: Any, reference_centroids_xy: Any, measurement_centroids_xy: Any, *, affine_xy: Any | None = None, center_xy: Any | None = None, config: GrowthPriorConfig | None = None) -> np.ndarray:
+def apply_growth_prior_to_costs(
+    cost_matrix: Any,
+    reference_centroids_xy: Any,
+    measurement_centroids_xy: Any,
+    *,
+    affine_xy: Any | None = None,
+    center_xy: Any | None = None,
+    config: GrowthPriorConfig | None = None,
+) -> np.ndarray:
     """Add affine/radial growth penalties to a cost matrix."""
 
     cfg = config or GrowthPriorConfig()
@@ -92,7 +116,14 @@ def apply_growth_prior_to_costs(cost_matrix: Any, reference_centroids_xy: Any, m
     return np.nan_to_num(costs, nan=1.0e6, posinf=1.0e6, neginf=1.0e6)
 
 
-def estimate_growth_from_track_rows(track_rows: Any, position_tables: Sequence[Mapping[int, Any]], *, source_session: int = 0, target_session: int = -1, config: GrowthPriorConfig | None = None) -> np.ndarray:
+def estimate_growth_from_track_rows(
+    track_rows: Any,
+    position_tables: Sequence[Mapping[int, Any]],
+    *,
+    source_session: int = 0,
+    target_session: int = -1,
+    config: GrowthPriorConfig | None = None,
+) -> np.ndarray:
     """Estimate an affine growth transform from complete links in a track matrix."""
 
     cfg = config or GrowthPriorConfig()

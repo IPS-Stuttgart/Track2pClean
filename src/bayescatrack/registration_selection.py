@@ -12,7 +12,6 @@ from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Sequence
 
 import numpy as np
-
 from bayescatrack.core.bridge import CalciumPlaneData
 
 DEFAULT_AUTO_REGISTRATION_CANDIDATES: tuple[str, ...] = (

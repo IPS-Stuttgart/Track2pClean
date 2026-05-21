@@ -23,6 +23,11 @@ from bayescatrack.association.pyrecest_global_assignment import (
     solve_global_assignment_from_pairwise_costs,
     tracks_to_suite2p_index_matrix,
 )
+from bayescatrack.experiments.solver_prior_tuning import (
+    parse_nonnegative_list,
+    parse_positive_list,
+    parse_threshold_list,
+)
 from bayescatrack.experiments.track2p_benchmark import (
     OutputFormat,
     ProgressReporter,
@@ -38,19 +43,14 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     LosoCalibrationResult,
     SubjectCalibrationData,
     _collect_training_examples,
-    calibration_feature_names,
     _load_subject_calibration_data,
     _loso_logistic_model_kwargs,
     _score_holdout_calibration,
     _stringify_class_weight,
     _training_sample_weight,
     _validate_sample_weight_strategy,
+    calibration_feature_names,
     pairwise_cost_kwargs_for_calibration_features,
-)
-from bayescatrack.experiments.solver_prior_tuning import (
-    parse_nonnegative_list,
-    parse_positive_list,
-    parse_threshold_list,
 )
 
 SampleWeightStrategy = Literal["none", "balanced"]
@@ -614,7 +614,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "'none'. If omitted, the built-in grid plus --cost-threshold are used."
         ),
     )
-    parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--progress", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     return parser
@@ -686,7 +688,9 @@ def _config_from_args(
     )
 
 
-def _solver_prior_options_from_args(args: argparse.Namespace) -> SolverPriorTuningOptions:
+def _solver_prior_options_from_args(
+    args: argparse.Namespace,
+) -> SolverPriorTuningOptions:
     return SolverPriorTuningOptions(
         objective=cast(SolverPriorObjective, args.solver_prior_objective),
         start_costs=(

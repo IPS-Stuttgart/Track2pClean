@@ -193,7 +193,9 @@ def test_threshold_parser_accepts_none():
     assert tuning.parse_threshold_list("none,2") == (None, 2.0)
 
 
-def test_calibrated_solver_prior_cli_wires_training_fold_options(monkeypatch, tmp_path, capsys):
+def test_calibrated_solver_prior_cli_wires_training_fold_options(
+    monkeypatch, tmp_path, capsys
+):
     captured = {}
 
     class FakeResult:
@@ -208,7 +210,14 @@ def test_calibrated_solver_prior_cli_wires_training_fold_options(monkeypatch, tm
                 }
             ]
 
-    def fake_run(config, *, feature_names, sample_weight_strategy, model_kwargs, solver_prior_options):
+    def fake_run(
+        config,
+        *,
+        feature_names,
+        sample_weight_strategy,
+        model_kwargs,
+        solver_prior_options,
+    ):
         captured["config"] = config
         captured["feature_names"] = tuple(feature_names)
         captured["sample_weight_strategy"] = sample_weight_strategy
@@ -220,29 +229,32 @@ def test_calibrated_solver_prior_cli_wires_training_fold_options(monkeypatch, tm
         calibrated_tuning, "run_track2p_loso_solver_prior_tuning", fake_run
     )
 
-    assert calibrated_tuning.main(
-        [
-            "--data",
-            str(tmp_path),
-            "--sample-weight-strategy",
-            "balanced",
-            "--calibration-model-kwargs-json",
-            '{"class_weight":"balanced"}',
-            "--solver-start-costs",
-            "0.5,1.0",
-            "--solver-end-costs",
-            "1.5",
-            "--solver-gap-penalties",
-            "0,0.3",
-            "--solver-cost-thresholds",
-            "none,2",
-            "--solver-prior-objective",
-            "complete_track_f1",
-            "--format",
-            "json",
-            "--no-progress",
-        ]
-    ) == 0
+    assert (
+        calibrated_tuning.main(
+            [
+                "--data",
+                str(tmp_path),
+                "--sample-weight-strategy",
+                "balanced",
+                "--calibration-model-kwargs-json",
+                '{"class_weight":"balanced"}',
+                "--solver-start-costs",
+                "0.5,1.0",
+                "--solver-end-costs",
+                "1.5",
+                "--solver-gap-penalties",
+                "0,0.3",
+                "--solver-cost-thresholds",
+                "none,2",
+                "--solver-prior-objective",
+                "complete_track_f1",
+                "--format",
+                "json",
+                "--no-progress",
+            ]
+        )
+        == 0
+    )
 
     assert captured["config"].cost == "calibrated"
     assert captured["config"].split == "leave-one-subject-out"

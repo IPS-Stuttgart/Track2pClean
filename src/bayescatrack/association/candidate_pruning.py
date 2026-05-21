@@ -103,7 +103,9 @@ def candidate_mask_from_costs(
         any_rule = True
     if cfg.probability_threshold is not None and probability_matrix is not None:
         probabilities = _as_probability_matrix(probability_matrix, costs.shape)
-        keep |= np.isfinite(probabilities) & (probabilities >= cfg.probability_threshold)
+        keep |= np.isfinite(probabilities) & (
+            probabilities >= cfg.probability_threshold
+        )
         any_rule = True
     if cfg.max_cost is not None:
         keep |= finite_costs & (costs <= cfg.max_cost)
@@ -187,7 +189,9 @@ def _as_cost_matrix(cost_matrix: Any) -> np.ndarray:
     return np.nan_to_num(costs, nan=np.inf, posinf=np.inf, neginf=np.inf)
 
 
-def _as_probability_matrix(probability_matrix: Any, shape: tuple[int, int]) -> np.ndarray:
+def _as_probability_matrix(
+    probability_matrix: Any, shape: tuple[int, int]
+) -> np.ndarray:
     probabilities = np.asarray(probability_matrix, dtype=float)
     if probabilities.shape != shape:
         raise ValueError("probability_matrix must match cost_matrix shape")

@@ -13,30 +13,30 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+from bayescatrack.association.higher_order_consistency import (
+    HigherOrderConsistencyConfig,
+)
 from bayescatrack.association.pyrecest_global_assignment import (
     AssociationCost,
     GlobalAssignmentRun,
     TripletSupportConsistencyConfig,
-    solve_global_assignment_from_pairwise_costs,
     solve_global_assignment_for_sessions,
+    solve_global_assignment_from_pairwise_costs,
     tracks_to_suite2p_index_matrix,
-)
-from bayescatrack.association.higher_order_consistency import (
-    HigherOrderConsistencyConfig,
 )
 from bayescatrack.core.bridge import (
     Track2pSession,
     find_track2p_session_dirs,
     load_track2p_subject,
 )
+from bayescatrack.evaluation.track2p_metrics import (
+    normalize_track_matrix,
+    score_track_matrices,
+)
 from bayescatrack.experiments._cli_choices import (
     ASSOCIATION_COST_CHOICES,
     REGISTRATION_TRANSFORM_CHOICES,
     REGISTRATION_TRANSFORM_HELP,
-)
-from bayescatrack.evaluation.track2p_metrics import (
-    normalize_track_matrix,
-    score_track_matrices,
 )
 from bayescatrack.ground_truth_eval import load_track2p_ground_truth_csv
 from bayescatrack.matching import build_track_rows_from_matches
@@ -235,9 +235,7 @@ def run_track2p_benchmark(
             _validate_reference_roi_indices(
                 reference, _load_subject_sessions(subject_dir, config)
             )
-        seed_sessions = _resolved_seed_sessions(
-            config, n_sessions=reference.n_sessions
-        )
+        seed_sessions = _resolved_seed_sessions(config, n_sessions=reference.n_sessions)
         for seed_session in seed_sessions:
             seed_config = replace(config, seed_session=seed_session)
             prediction_variants = _predict_subject_track_variants(
@@ -742,9 +740,7 @@ def _predict_subject_track_variants(
         return ((predicted_matrix, variant, {}),)
 
     if config.method != "global-assignment":
-        raise ValueError(
-            "assignment-prior sweeps require method='global-assignment'"
-        )
+        raise ValueError("assignment-prior sweeps require method='global-assignment'")
 
     sessions = _load_subject_sessions(subject_dir, config)
     base_assignment = solve_configured_global_assignment(sessions, config)
@@ -1047,9 +1043,7 @@ def assignment_prior_score_metadata(
         "assignment_end_cost": float(setting.end_cost),
         "assignment_gap_penalty": float(setting.gap_penalty),
         "assignment_cost_threshold": (
-            "none"
-            if setting.cost_threshold is None
-            else float(setting.cost_threshold)
+            "none" if setting.cost_threshold is None else float(setting.cost_threshold)
         ),
     }
 
@@ -1651,12 +1645,13 @@ def _coerce_threshold_sweep_values(
     if isinstance(values, str):
         return _parse_threshold_sweep_values(values, option_name)
     return tuple(
-        None if value is None else _finite_float(value, option_name)
-        for value in values
+        None if value is None else _finite_float(value, option_name) for value in values
     )
 
 
-def _parse_float_sweep_values(raw_value: str | None, option_name: str) -> tuple[float, ...]:
+def _parse_float_sweep_values(
+    raw_value: str | None, option_name: str
+) -> tuple[float, ...]:
     if raw_value is None:
         return ()
     tokens = _split_sweep_values(raw_value, option_name)

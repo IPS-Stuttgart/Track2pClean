@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.testing as npt
-
 from bayescatrack.fov_registration import (
     apply_integer_image_translation,
     apply_integer_roi_mask_translation,

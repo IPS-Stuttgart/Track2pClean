@@ -360,8 +360,7 @@ def summarize_sweep_results(
             )
 
         summary: dict[str, float | int | str] = {
-            column: key[index]
-            for index, column in enumerate(SWEEP_PARAMETER_COLUMNS)
+            column: key[index] for index, column in enumerate(SWEEP_PARAMETER_COLUMNS)
         }
         summary.update(
             {
@@ -380,9 +379,7 @@ def summarize_sweep_results(
         for diagnostic_metric in DIAGNOSTIC_SELECTION_METRICS:
             diagnostic_values = _finite_metric_values(group_rows, diagnostic_metric)
             if diagnostic_values:
-                summary[f"{diagnostic_metric}_mean"] = float(
-                    np.mean(diagnostic_values)
-                )
+                summary[f"{diagnostic_metric}_mean"] = float(np.mean(diagnostic_values))
         summaries.append(summary)
 
     ranked = sorted(
@@ -816,9 +813,7 @@ def write_sweep_selection_results(
             writer.writeheader()
             writer.writerows(rows)
         return
-    output_path.write_text(
-        format_sweep_selection_table(rows) + "\n", encoding="utf-8"
-    )
+    output_path.write_text(format_sweep_selection_table(rows) + "\n", encoding="utf-8")
 
 
 def write_sweep_results_incrementally(
@@ -891,9 +886,7 @@ def format_sweep_table(rows: Sequence[dict[str, float | int | str]]) -> str:
     return "\n".join(body)
 
 
-def format_sweep_selection_table(
-    rows: Sequence[dict[str, float | int | str]]
-) -> str:
+def format_sweep_selection_table(rows: Sequence[dict[str, float | int | str]]) -> str:
     columns = [
         "selection_rank",
         "selection_metric",
@@ -958,7 +951,7 @@ def _sweep_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]
 
 
 def _selection_sweep_fieldnames(
-    rows: Sequence[dict[str, float | int | str]]
+    rows: Sequence[dict[str, float | int | str]],
 ) -> list[str]:
     preferred = [
         "selection_rank",

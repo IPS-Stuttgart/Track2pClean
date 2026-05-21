@@ -4,7 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-
 from bayescatrack.association.pyrecest_global_assignment import GlobalAssignmentRun
 from bayescatrack.experiments import track2p_benchmark
 from bayescatrack.experiments.track2p_benchmark import (

@@ -5,7 +5,6 @@ import importlib
 from types import SimpleNamespace
 
 import numpy as np
-
 from bayescatrack import CalciumPlaneData
 from bayescatrack.fov_affine_registration import (
     apply_affine_image_warp,
@@ -19,7 +18,9 @@ from bayescatrack.registration import RegisteredConsecutiveBundles
 from bayescatrack.tracking import SubjectTrackingResult
 
 
-def _spot_image(shape: tuple[int, int], centers: tuple[tuple[int, int], ...]) -> np.ndarray:
+def _spot_image(
+    shape: tuple[int, int], centers: tuple[tuple[int, int], ...]
+) -> np.ndarray:
     image = np.zeros(shape, dtype=float)
     for y, x in centers:
         image[y - 1 : y + 2, x - 1 : x + 2] = 1.0

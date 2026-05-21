@@ -124,9 +124,7 @@ def test_local_evidence_calibration_feature_preset_enables_components():
 
 def test_load_track2p_subject_auto_warns_before_skipping_missing_session(tmp_path):
     subject_dir = tmp_path / "jm123"
-    _write_minimal_raw_npy_plane(
-        subject_dir / "2024-05-01_a" / "data_npy" / "plane0"
-    )
+    _write_minimal_raw_npy_plane(subject_dir / "2024-05-01_a" / "data_npy" / "plane0")
     (subject_dir / "2024-05-02_missing").mkdir(parents=True)
 
     with pytest.warns(RuntimeWarning, match="2024-05-02_missing"):

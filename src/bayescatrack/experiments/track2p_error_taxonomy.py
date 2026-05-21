@@ -23,8 +23,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         prog="bayescatrack benchmark track2p-error-taxonomy",
         description="Classify false-positive and false-negative Track2p links in a prediction CSV.",
     )
-    parser.add_argument("--data", required=True, type=Path, help="One Track2p subject directory")
-    parser.add_argument("--prediction", required=True, type=Path, help="CSV with one predicted track per row")
+    parser.add_argument(
+        "--data", required=True, type=Path, help="One Track2p subject directory"
+    )
+    parser.add_argument(
+        "--prediction",
+        required=True,
+        type=Path,
+        help="CSV with one predicted track per row",
+    )
     parser.add_argument("--reference", type=Path, default=None)
     parser.add_argument(
         "--reference-kind",
@@ -32,8 +39,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
     )
     parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", default="auto", choices=("auto", "suite2p", "npy"))
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
+    parser.add_argument(
+        "--input-format", default="auto", choices=("auto", "suite2p", "npy")
+    )
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
     parser.add_argument("--curated-only", action="store_true")
     parser.add_argument("--cost-threshold", type=float, default=None)
     parser.add_argument("--ambiguity-rank-threshold", type=float, default=0.15)
@@ -54,7 +65,9 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def run_error_taxonomy(args: argparse.Namespace) -> list[dict[str, Any]] | dict[str, Any]:
+def run_error_taxonomy(
+    args: argparse.Namespace,
+) -> list[dict[str, Any]] | dict[str, Any]:
     config = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -65,9 +78,13 @@ def run_error_taxonomy(args: argparse.Namespace) -> list[dict[str, Any]] | dict[
         allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
         curated_only=args.curated_only,
     )
-    reference = _load_reference_for_subject(args.data, data_root=args.data, config=config)
+    reference = _load_reference_for_subject(
+        args.data, data_root=args.data, config=config
+    )
     _validate_reference_for_benchmark(reference, subject_dir=args.data, config=config)
-    predicted = _read_prediction_csv(args.prediction, session_names=reference.session_names)
+    predicted = _read_prediction_csv(
+        args.prediction, session_names=reference.session_names
+    )
     reference_matrix = reference.filtered_indices(curated_only=args.curated_only)
     report = classify_track_errors(
         predicted,
@@ -105,7 +122,9 @@ def _read_prediction_csv(path: Path, *, session_names: tuple[str, ...]) -> np.nd
             )
         rows: list[list[object]] = []
         for raw_row in reader:
-            rows.append([_parse_nullable_int(raw_row.get(name, "")) for name in session_names])
+            rows.append(
+                [_parse_nullable_int(raw_row.get(name, "")) for name in session_names]
+            )
     matrix = np.empty((len(rows), len(session_names)), dtype=object)
     matrix[:] = None
     for row_index, row in enumerate(rows):
@@ -123,7 +142,9 @@ def _parse_nullable_int(value: Any) -> int | None:
     return int(float(text))
 
 
-def _write_output(data: list[dict[str, Any]] | dict[str, Any], output_path: Path, output_format: str) -> None:
+def _write_output(
+    data: list[dict[str, Any]] | dict[str, Any], output_path: Path, output_format: str
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
         output_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -135,7 +156,9 @@ def _write_output(data: list[dict[str, Any]] | dict[str, Any], output_path: Path
         writer.writerows(rows)
 
 
-def _write_stdout(data: list[dict[str, Any]] | dict[str, Any], output_format: str) -> None:
+def _write_stdout(
+    data: list[dict[str, Any]] | dict[str, Any], output_format: str
+) -> None:
     if output_format == "json":
         print(json.dumps(data, indent=2))
         return
@@ -146,7 +169,16 @@ def _write_stdout(data: list[dict[str, Any]] | dict[str, Any], output_format: st
 
 
 def _fieldnames(rows: list[dict[str, Any]]) -> list[str]:
-    preferred = ["subject", "kind", "category", "session_a", "session_b", "roi_a", "roi_b", "cost"]
+    preferred = [
+        "subject",
+        "kind",
+        "category",
+        "session_a",
+        "session_b",
+        "roi_a",
+        "roi_b",
+        "cost",
+    ]
     remaining = sorted({key for row in rows for key in row} - set(preferred))
     return [key for key in preferred if any(key in row for row in rows)] + remaining
 

@@ -86,7 +86,9 @@ def classify_track_errors(
     predicted = normalize_track_matrix(predicted_track_matrix)
     reference = normalize_track_matrix(reference_track_matrix)
     if predicted.shape[1] != reference.shape[1]:
-        raise ValueError("Predicted and reference matrices must have the same number of sessions")
+        raise ValueError(
+            "Predicted and reference matrices must have the same number of sessions"
+        )
     pairs = _session_pairs(predicted.shape[1], session_pairs)
     predicted_links = _track_link_counter(predicted, pairs)
     reference_links = _track_link_counter(reference, pairs)
@@ -146,11 +148,18 @@ def _classify_false_positive(
         large_cost=large_cost,
     )
     category = "false_continuation"
-    if predicted_observations[(session_a, roi_a)] > 1 or predicted_observations[(session_b, roi_b)] > 1:
+    if (
+        predicted_observations[(session_a, roi_a)] > 1
+        or predicted_observations[(session_b, roi_b)] > 1
+    ):
         category = "duplicate_observation"
     elif _shares_endpoint_with_reference(link, reference_links):
         category = "split_merge_or_neighbor_swap"
-    elif cost_threshold is not None and cost_info["cost"] is not None and cost_info["cost"] > cost_threshold:
+    elif (
+        cost_threshold is not None
+        and cost_info["cost"] is not None
+        and cost_info["cost"] > cost_threshold
+    ):
         category = "threshold_too_loose"
     elif _is_ambiguous(cost_info, ambiguity_rank_threshold=ambiguity_rank_threshold):
         category = "ambiguous_candidate"
@@ -184,11 +193,21 @@ def _classify_false_negative(
         large_cost=large_cost,
     )
     category = "missed_link"
-    if predicted_observations[(session_a, roi_a)] == 0 or predicted_observations[(session_b, roi_b)] == 0:
+    if (
+        predicted_observations[(session_a, roi_a)] == 0
+        or predicted_observations[(session_b, roi_b)] == 0
+    ):
         category = "roi_missing_from_prediction"
-    elif reference_observations[(session_a, roi_a)] > 1 or reference_observations[(session_b, roi_b)] > 1:
+    elif (
+        reference_observations[(session_a, roi_a)] > 1
+        or reference_observations[(session_b, roi_b)] > 1
+    ):
         category = "reference_split_merge"
-    elif cost_threshold is not None and cost_info["cost"] is not None and cost_info["cost"] > cost_threshold:
+    elif (
+        cost_threshold is not None
+        and cost_info["cost"] is not None
+        and cost_info["cost"] > cost_threshold
+    ):
         category = "threshold_too_strict"
     elif _is_ambiguous(cost_info, ambiguity_rank_threshold=ambiguity_rank_threshold):
         category = "ambiguous_candidate"
@@ -237,7 +256,9 @@ def _is_ambiguous(
     return min(float(row_rank), float(column_rank)) <= float(ambiguity_rank_threshold)
 
 
-def _shares_endpoint_with_reference(link: TrackLink, reference_links: Counter[TrackLink]) -> bool:
+def _shares_endpoint_with_reference(
+    link: TrackLink, reference_links: Counter[TrackLink]
+) -> bool:
     session_a, session_b, roi_a, roi_b = link
     for ref_session_a, ref_session_b, ref_roi_a, ref_roi_b in reference_links:
         if ref_session_a != session_a or ref_session_b != session_b:
@@ -247,7 +268,9 @@ def _shares_endpoint_with_reference(link: TrackLink, reference_links: Counter[Tr
     return False
 
 
-def _track_link_counter(matrix: np.ndarray, session_pairs: Iterable[SessionEdge]) -> Counter[TrackLink]:
+def _track_link_counter(
+    matrix: np.ndarray, session_pairs: Iterable[SessionEdge]
+) -> Counter[TrackLink]:
     counter: Counter[TrackLink] = Counter()
     for session_a, session_b in session_pairs:
         for row in matrix:
@@ -267,7 +290,9 @@ def _observation_counter(matrix: np.ndarray) -> Counter[tuple[int, int]]:
     return counter
 
 
-def _session_pairs(n_sessions: int, session_pairs: Iterable[SessionEdge] | None) -> tuple[SessionEdge, ...]:
+def _session_pairs(
+    n_sessions: int, session_pairs: Iterable[SessionEdge] | None
+) -> tuple[SessionEdge, ...]:
     if session_pairs is None:
         return tuple((index, index + 1) for index in range(max(n_sessions - 1, 0)))
     pairs = tuple((int(source), int(target)) for source, target in session_pairs)

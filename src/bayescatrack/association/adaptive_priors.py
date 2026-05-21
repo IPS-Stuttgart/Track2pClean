@@ -49,7 +49,10 @@ class AdaptiveEdgePriorConfig:
             object.__setattr__(
                 self,
                 "learned_gap_costs",
-                {int(key): float(value) for key, value in self.learned_gap_costs.items()},
+                {
+                    int(key): float(value)
+                    for key, value in self.learned_gap_costs.items()
+                },
             )
 
     @property
@@ -151,7 +154,9 @@ def fit_gap_costs_from_reference(
             target_present = present[:, target]
             opportunities += int(np.count_nonzero(source_present))
             positives += int(np.count_nonzero(source_present & target_present))
-        probability = (positives + smoothing) / max(opportunities + 2.0 * smoothing, 1.0)
+        probability = (positives + smoothing) / max(
+            opportunities + 2.0 * smoothing, 1.0
+        )
         costs[gap] = float(-np.log(np.clip(probability, 1.0e-12, 1.0)))
     return costs
 
@@ -186,7 +191,9 @@ def _session_roi_quality(session: Track2pSession) -> dict[str, np.ndarray]:
     }
 
 
-def _pairwise_mean_quality(reference: np.ndarray, measurement: np.ndarray) -> np.ndarray:
+def _pairwise_mean_quality(
+    reference: np.ndarray, measurement: np.ndarray
+) -> np.ndarray:
     reference = np.asarray(reference, dtype=float).reshape(-1)
     measurement = np.asarray(measurement, dtype=float).reshape(-1)
     return 0.5 * (reference[:, None] + measurement[None, :])

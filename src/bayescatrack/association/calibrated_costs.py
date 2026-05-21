@@ -141,9 +141,7 @@ class CalibratedAssociationModel:
     ) -> np.ndarray:
         components = mask_invalid_registered_roi_columns(pairwise_components)
         return np.asarray(
-            self._pyrecest_model().pairwise_cost_matrix_from_components(
-                components
-            ),
+            self._pyrecest_model().pairwise_cost_matrix_from_components(components),
             dtype=float,
         )
 
@@ -568,8 +566,8 @@ def _build_training_bundle(
         sessions[session_b].plane_data,
         transform_type=options.transform_type,
     )
-    registered_measurement_plane, empty_registered_rois = replace_empty_registered_masks(
-        registered_measurement_plane
+    registered_measurement_plane, empty_registered_rois = (
+        replace_empty_registered_masks(registered_measurement_plane)
     )
     pairwise_cost_kwargs = _pairwise_cost_kwargs_for_training_features(
         options.pairwise_cost_kwargs,

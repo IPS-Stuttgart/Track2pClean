@@ -330,7 +330,9 @@ def _with_auto_registration_metadata(
         {
             "registration_transform_type": "auto",
             "auto_registration_selected_transform": selected_transform,
-            "auto_registration_candidate_scores": tuple(dict(attempt) for attempt in attempts),
+            "auto_registration_candidate_scores": tuple(
+                dict(attempt) for attempt in attempts
+            ),
         }
     )
     return plane.with_replaced_masks(

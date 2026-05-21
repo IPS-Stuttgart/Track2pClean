@@ -53,7 +53,11 @@ def roi_context_descriptors(
                 histogram_bins=cfg.histogram_bins,
             )
         )
-    return np.column_stack(parts).astype(float) if parts else np.zeros((centroids.shape[0], 0), dtype=float)
+    return (
+        np.column_stack(parts).astype(float)
+        if parts
+        else np.zeros((centroids.shape[0], 0), dtype=float)
+    )
 
 
 def pairwise_context_distance(
@@ -66,8 +70,18 @@ def pairwise_context_distance(
 ) -> np.ndarray:
     """Return robust-normalized pairwise descriptor distances."""
 
-    ref = roi_context_descriptors(reference_plane, order=order, weighted_centroids=weighted_centroids, config=config)
-    meas = roi_context_descriptors(measurement_plane, order=order, weighted_centroids=weighted_centroids, config=config)
+    ref = roi_context_descriptors(
+        reference_plane,
+        order=order,
+        weighted_centroids=weighted_centroids,
+        config=config,
+    )
+    meas = roi_context_descriptors(
+        measurement_plane,
+        order=order,
+        weighted_centroids=weighted_centroids,
+        config=config,
+    )
     if ref.shape[0] == 0 or meas.shape[0] == 0:
         return np.zeros((ref.shape[0], meas.shape[0]), dtype=float)
     pooled = np.vstack((ref, meas))
@@ -77,8 +91,12 @@ def pairwise_context_distance(
     fallback = np.nanstd(pooled, axis=0)
     scale = np.where(np.isfinite(scale) & (scale > 1.0e-12), scale, fallback)
     scale = np.where(np.isfinite(scale) & (scale > 1.0e-12), scale, 1.0)
-    ref_norm = np.nan_to_num((ref - center) / scale, nan=0.0, posinf=1.0e6, neginf=-1.0e6)
-    meas_norm = np.nan_to_num((meas - center) / scale, nan=0.0, posinf=1.0e6, neginf=-1.0e6)
+    ref_norm = np.nan_to_num(
+        (ref - center) / scale, nan=0.0, posinf=1.0e6, neginf=-1.0e6
+    )
+    meas_norm = np.nan_to_num(
+        (meas - center) / scale, nan=0.0, posinf=1.0e6, neginf=-1.0e6
+    )
     diffs = ref_norm[:, None, :] - meas_norm[None, :, :]
     return np.sqrt(np.mean(diffs * diffs, axis=2))
 
@@ -163,7 +181,11 @@ def fov_patch_moment_descriptors(
         descriptors[roi_index, 1] = float(np.std(values))
         descriptors[roi_index, 2] = float(np.percentile(values, 10.0))
         descriptors[roi_index, 3] = float(np.percentile(values, 90.0))
-        descriptors[roi_index, 4] = float(np.mean(grad_patch[np.isfinite(grad_patch)])) if np.any(np.isfinite(grad_patch)) else 0.0
+        descriptors[roi_index, 4] = (
+            float(np.mean(grad_patch[np.isfinite(grad_patch)]))
+            if np.any(np.isfinite(grad_patch))
+            else 0.0
+        )
         descriptors[roi_index, 5] = float(values.size)
         descriptors[roi_index, 6:] = hist
     return descriptors
@@ -181,7 +203,9 @@ def _pairwise_distances(points_xy: np.ndarray) -> np.ndarray:
     return np.linalg.norm(diffs, axis=2)
 
 
-def _crop_patch(image: np.ndarray, x_coord: float, y_coord: float, *, radius: int) -> np.ndarray:
+def _crop_patch(
+    image: np.ndarray, x_coord: float, y_coord: float, *, radius: int
+) -> np.ndarray:
     height, width = image.shape
     x = int(round(float(x_coord)))
     y = int(round(float(y_coord)))

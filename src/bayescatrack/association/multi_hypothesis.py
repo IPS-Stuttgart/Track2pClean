@@ -7,7 +7,6 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-
 Edge = tuple[int, int, int, int]
 
 
@@ -54,7 +53,9 @@ def candidate_edge_map(
         source_indices = np.asarray(roi_indices_by_session[source_session], dtype=int)
         target_indices = np.asarray(roi_indices_by_session[target_session], dtype=int)
         if matrix.shape != (source_indices.size, target_indices.size):
-            raise ValueError(f"Cost matrix shape for edge {edge} does not match ROI indices")
+            raise ValueError(
+                f"Cost matrix shape for edge {edge} does not match ROI indices"
+            )
         rows: list[tuple[int, int, float]] = []
         for row_index, source_roi in enumerate(source_indices):
             costs = matrix[row_index]
@@ -66,7 +67,13 @@ def candidate_edge_map(
                 continue
             ordered = candidates[np.argsort(costs[candidates])[: cfg.edge_top_k]]
             for col_index in ordered:
-                rows.append((int(source_roi), int(target_indices[col_index]), float(costs[col_index])))
+                rows.append(
+                    (
+                        int(source_roi),
+                        int(target_indices[col_index]),
+                        float(costs[col_index]),
+                    )
+                )
         output[edge] = rows
     return output
 
@@ -86,7 +93,9 @@ def enumerate_track_hypotheses(
     for edge, candidates in edge_candidates.items():
         source_lookup: dict[int, list[tuple[int, float]]] = {}
         for source_roi, target_roi, cost in candidates:
-            source_lookup.setdefault(int(source_roi), []).append((int(target_roi), float(cost)))
+            source_lookup.setdefault(int(source_roi), []).append(
+                (int(target_roi), float(cost))
+            )
         by_edge_source[edge] = source_lookup
 
     hypotheses = [
@@ -126,7 +135,9 @@ def enumerate_track_hypotheses(
     return hypotheses
 
 
-def consensus_edges(track_matrices: Sequence[Any], *, min_votes: int = 2, fill_value: int = -1) -> dict[Edge, int]:
+def consensus_edges(
+    track_matrices: Sequence[Any], *, min_votes: int = 2, fill_value: int = -1
+) -> dict[Edge, int]:
     """Return edges that appear in at least ``min_votes`` prediction matrices."""
 
     counts: dict[Edge, int] = {}
@@ -153,7 +164,9 @@ def hypotheses_to_matrix(hypotheses: Sequence[TrackHypothesis]) -> np.ndarray:
     if not hypotheses:
         return np.zeros((0, 0), dtype=int)
     width = len(hypotheses[0].row)
-    return np.asarray([hyp.row for hyp in hypotheses if len(hyp.row) == width], dtype=int)
+    return np.asarray(
+        [hyp.row for hyp in hypotheses if len(hyp.row) == width], dtype=int
+    )
 
 
 def edge_union_costs(edge_sets: Sequence[Mapping[Edge, int]]) -> dict[Edge, float]:

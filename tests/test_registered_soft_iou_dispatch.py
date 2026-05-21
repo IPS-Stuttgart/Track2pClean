@@ -26,9 +26,7 @@ def test_soft_overlap_detection_covers_preset_and_json_overrides():
         _cost_kwargs_for_method("registered-soft-iou")
     )
     assert _pairwise_kwargs_use_soft_overlap({"soft_iou_radius": 4})
-    assert _pairwise_kwargs_use_soft_overlap(
-        {"distance_transform_overlap_weight": 0.1}
-    )
+    assert _pairwise_kwargs_use_soft_overlap({"distance_transform_overlap_weight": 0.1})
     assert not _pairwise_kwargs_use_soft_overlap(
         {
             "iou_weight": 1.0,

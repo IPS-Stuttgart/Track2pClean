@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.core.bridge import CalciumPlaneData, load_suite2p_plane
 
 

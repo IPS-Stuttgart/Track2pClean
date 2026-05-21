@@ -133,25 +133,28 @@ def install_advanced_roi_components() -> None:
             shape_components = pairwise_shape_descriptor_components(self, other)
             components.update(shape_components)
             if weights["radial_profile_weight"] > 0.0:
-                total_cost += weights["radial_profile_weight"] * shape_components[
-                    "radial_profile_cost"
-                ]
+                total_cost += (
+                    weights["radial_profile_weight"]
+                    * shape_components["radial_profile_cost"]
+                )
             if weights["orientation_weight"] > 0.0:
-                total_cost += weights["orientation_weight"] * shape_components[
-                    "orientation_cost"
-                ]
+                total_cost += (
+                    weights["orientation_weight"] * shape_components["orientation_cost"]
+                )
             if weights["eccentricity_weight"] > 0.0:
-                total_cost += weights["eccentricity_weight"] * shape_components[
-                    "eccentricity_cost"
-                ]
+                total_cost += (
+                    weights["eccentricity_weight"]
+                    * shape_components["eccentricity_cost"]
+                )
             if weights["compactness_weight"] > 0.0:
-                total_cost += weights["compactness_weight"] * shape_components[
-                    "compactness_cost"
-                ]
+                total_cost += (
+                    weights["compactness_weight"] * shape_components["compactness_cost"]
+                )
             if weights["border_proximity_weight"] > 0.0:
-                total_cost += weights["border_proximity_weight"] * shape_components[
-                    "border_proximity_cost"
-                ]
+                total_cost += (
+                    weights["border_proximity_weight"]
+                    * shape_components["border_proximity_cost"]
+                )
 
         needs_margins = (
             ambiguity_margin_components
@@ -166,9 +169,10 @@ def install_advanced_roi_components() -> None:
             )
             components.update(margin_components)
             if weights["ambiguity_margin_weight"] > 0.0:
-                total_cost += weights["ambiguity_margin_weight"] * margin_components[
-                    "ambiguity_margin_cost"
-                ]
+                total_cost += (
+                    weights["ambiguity_margin_weight"]
+                    * margin_components["ambiguity_margin_cost"]
+                )
 
         if pruning.top_k_per_roi is not None or pruning.gate_margin is not None:
             admitted = candidate_mask_from_cost_matrix(
@@ -182,9 +186,11 @@ def install_advanced_roi_components() -> None:
             components["candidate_admitted"] = admitted.astype(float)
             components["candidate_pruned"] = (~admitted).astype(float)
 
-        total_cost = _bridge_impl._ensure_finite_cost_matrix(  # pylint: disable=protected-access
-            total_cost,
-            large_cost=large_cost,
+        total_cost = (
+            _bridge_impl._ensure_finite_cost_matrix(  # pylint: disable=protected-access
+                total_cost,
+                large_cost=large_cost,
+            )
         )
         components["pairwise_cost_matrix"] = total_cost
         if return_components:
@@ -214,7 +220,9 @@ def pairwise_shape_descriptor_components(
 ) -> dict[str, np.ndarray]:
     """Return pairwise mask-shape descriptor costs for two ROI planes."""
 
-    reference = mask_shape_descriptors(reference_plane.roi_masks, radial_bins=radial_bins)
+    reference = mask_shape_descriptors(
+        reference_plane.roi_masks, radial_bins=radial_bins
+    )
     measurement = mask_shape_descriptors(
         measurement_plane.roi_masks,
         radial_bins=radial_bins,
@@ -238,7 +246,9 @@ def pairwise_shape_descriptor_components(
         ),
         axis=2,
     )
-    angle_delta = reference["orientation"][:, None] - measurement["orientation"][None, :]
+    angle_delta = (
+        reference["orientation"][:, None] - measurement["orientation"][None, :]
+    )
     orientation_cost = np.abs(np.sin(angle_delta))
     eccentricity_cost = np.abs(
         reference["eccentricity"][:, None] - measurement["eccentricity"][None, :]
@@ -250,9 +260,7 @@ def pairwise_shape_descriptor_components(
         reference["border_proximity"][:, None]
         + measurement["border_proximity"][None, :]
     )
-    empty_pair = (
-        reference["empty_mask"][:, None] | measurement["empty_mask"][None, :]
-    )
+    empty_pair = reference["empty_mask"][:, None] | measurement["empty_mask"][None, :]
     return {
         "radial_profile_cost": _finite_nonnegative(radial_profile_cost),
         "orientation_cost": _finite_nonnegative(orientation_cost),
@@ -263,7 +271,9 @@ def pairwise_shape_descriptor_components(
     }
 
 
-def mask_shape_descriptors(masks: np.ndarray, *, radial_bins: int = 6) -> dict[str, np.ndarray]:
+def mask_shape_descriptors(
+    masks: np.ndarray, *, radial_bins: int = 6
+) -> dict[str, np.ndarray]:
     """Return per-ROI shape descriptors from a mask stack."""
 
     mask_array = np.asarray(masks, dtype=float)
@@ -316,7 +326,9 @@ def mask_shape_descriptors(masks: np.ndarray, *, radial_bins: int = 6) -> dict[s
         major_vector = eigvecs[:, int(np.argmax(eigvals))]
         orientation[roi_index] = float(np.arctan2(major_vector[1], major_vector[0]))
 
-        distances = np.sqrt((support_x - centroid_x) ** 2 + (support_y - centroid_y) ** 2)
+        distances = np.sqrt(
+            (support_x - centroid_x) ** 2 + (support_y - centroid_y) ** 2
+        )
         max_distance = float(np.max(distances)) if distances.size else 0.0
         if max_distance <= 0.0:
             radial_profile[roi_index, 0] = 1.0
@@ -330,7 +342,9 @@ def mask_shape_descriptors(masks: np.ndarray, *, radial_bins: int = 6) -> dict[s
                 weights=weights,
                 minlength=int(radial_bins),
             ).astype(float)
-            radial_profile[roi_index] = histogram / max(float(np.sum(histogram)), 1.0e-12)
+            radial_profile[roi_index] = histogram / max(
+                float(np.sum(histogram)), 1.0e-12
+            )
 
     return {
         "area": area,
@@ -377,7 +391,9 @@ def pairwise_cost_margin_components(
     row_margin = _best_second_margin(safe_costs, axis=1)
     column_margin = _best_second_margin(safe_costs, axis=0)
     row_margin_matrix = np.broadcast_to(row_margin[:, None], costs.shape).astype(float)
-    column_margin_matrix = np.broadcast_to(column_margin[None, :], costs.shape).astype(float)
+    column_margin_matrix = np.broadcast_to(column_margin[None, :], costs.shape).astype(
+        float
+    )
     combined_margin = np.minimum(row_margin_matrix, column_margin_matrix)
     ambiguity_margin_cost = 1.0 / (1.0 + np.maximum(combined_margin, 0.0))
     ambiguity_margin_cost = np.where(finite, ambiguity_margin_cost, 1.0)
@@ -385,7 +401,9 @@ def pairwise_cost_margin_components(
     return {
         "row_rank_cost": _finite_nonnegative(row_rank_cost),
         "column_rank_cost": _finite_nonnegative(column_rank_cost),
-        "mutual_rank_cost": _finite_nonnegative(0.5 * (row_rank_cost + column_rank_cost)),
+        "mutual_rank_cost": _finite_nonnegative(
+            0.5 * (row_rank_cost + column_rank_cost)
+        ),
         "row_assignment_margin": _finite_nonnegative(row_margin_matrix),
         "column_assignment_margin": _finite_nonnegative(column_margin_matrix),
         "ambiguity_margin_cost": _finite_nonnegative(ambiguity_margin_cost),
@@ -430,7 +448,9 @@ def candidate_mask_from_cost_matrix(
         safe = np.where(np.isfinite(costs), costs, large_cost)
         row_best = np.min(safe, axis=1, keepdims=True)
         col_best = np.min(safe, axis=0, keepdims=True)
-        margin_mask = (safe <= row_best + gate_margin) | (safe <= col_best + gate_margin)
+        margin_mask = (safe <= row_best + gate_margin) | (
+            safe <= col_best + gate_margin
+        )
         admitted &= margin_mask
     return admitted
 
@@ -440,9 +460,13 @@ def _rank_along_axis(values: np.ndarray, *, axis: int) -> np.ndarray:
     order = np.argsort(values, axis=axis, kind="stable")
     ranks = np.empty_like(order, dtype=float)
     if axis == 1:
-        ranks[np.arange(values.shape[0])[:, None], order] = np.arange(values.shape[1])[None, :]
+        ranks[np.arange(values.shape[0])[:, None], order] = np.arange(values.shape[1])[
+            None, :
+        ]
     elif axis == 0:
-        ranks[order, np.arange(values.shape[1])[None, :]] = np.arange(values.shape[0])[:, None]
+        ranks[order, np.arange(values.shape[1])[None, :]] = np.arange(values.shape[0])[
+            :, None
+        ]
     else:
         raise ValueError("axis must be 0 or 1")
     return ranks
@@ -465,7 +489,9 @@ def _best_second_margin(values: np.ndarray, *, axis: int) -> np.ndarray:
 
 def _finite_nonnegative(values: np.ndarray) -> np.ndarray:
     return np.maximum(
-        np.nan_to_num(np.asarray(values, dtype=float), nan=0.0, posinf=1.0e6, neginf=0.0),
+        np.nan_to_num(
+            np.asarray(values, dtype=float), nan=0.0, posinf=1.0e6, neginf=0.0
+        ),
         0.0,
     )
 

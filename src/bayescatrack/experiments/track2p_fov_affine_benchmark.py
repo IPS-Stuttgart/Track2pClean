@@ -52,9 +52,7 @@ def _enable_fov_affine_choice(parser: Any) -> None:
         if action.dest == "transform_type":
             action.choices = REGISTRATION_TRANSFORM_CHOICES
             action.default = "fov-affine"
-            action.help = (
-                f"{REGISTRATION_TRANSFORM_HELP} fov-affine is the default for this wrapper."
-            )
+            action.help = f"{REGISTRATION_TRANSFORM_HELP} fov-affine is the default for this wrapper."
             return
     raise RuntimeError("Could not find --transform-type action")
 

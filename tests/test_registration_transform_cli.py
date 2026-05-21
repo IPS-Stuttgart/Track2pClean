@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bayescatrack.experiments import (
     oracle_affine_registration_qa,
     registration_qa_report,

@@ -224,17 +224,29 @@ def main(argv: list[str] | None = None) -> int:
 def _validate_shifted_iou_options(args: Any) -> None:
     if args.shifted_iou_radius < 0:
         raise ValueError("--shifted-iou-radius must be non-negative")
-    if args.shifted_iou_additive_weight < 0.0 or not isfinite(args.shifted_iou_additive_weight):
-        raise ValueError("--shifted-iou-additive-weight must be non-negative and finite")
-    if args.shifted_mask_cosine_weight < 0.0 or not isfinite(args.shifted_mask_cosine_weight):
-        raise ValueError("--shifted-mask-cosine-weight must be non-negative and finite")
-    if args.shifted_iou_shift_penalty_weight < 0.0 or not isfinite(args.shifted_iou_shift_penalty_weight):
-        raise ValueError("--shifted-iou-shift-penalty-weight must be non-negative and finite")
-    if (
-        args.shifted_iou_shift_penalty_scale is not None
-        and (args.shifted_iou_shift_penalty_scale <= 0.0 or not isfinite(args.shifted_iou_shift_penalty_scale))
+    if args.shifted_iou_additive_weight < 0.0 or not isfinite(
+        args.shifted_iou_additive_weight
     ):
-        raise ValueError("--shifted-iou-shift-penalty-scale must be strictly positive and finite")
+        raise ValueError(
+            "--shifted-iou-additive-weight must be non-negative and finite"
+        )
+    if args.shifted_mask_cosine_weight < 0.0 or not isfinite(
+        args.shifted_mask_cosine_weight
+    ):
+        raise ValueError("--shifted-mask-cosine-weight must be non-negative and finite")
+    if args.shifted_iou_shift_penalty_weight < 0.0 or not isfinite(
+        args.shifted_iou_shift_penalty_weight
+    ):
+        raise ValueError(
+            "--shifted-iou-shift-penalty-weight must be non-negative and finite"
+        )
+    if args.shifted_iou_shift_penalty_scale is not None and (
+        args.shifted_iou_shift_penalty_scale <= 0.0
+        or not isfinite(args.shifted_iou_shift_penalty_scale)
+    ):
+        raise ValueError(
+            "--shifted-iou-shift-penalty-scale must be strictly positive and finite"
+        )
 
 
 def _uses_sweep_args(args: Any) -> bool:
@@ -253,7 +265,9 @@ def _uses_sweep_args(args: Any) -> bool:
     )
 
 
-def _run_shifted_iou_sweep(args: Any, base_config: Track2pBenchmarkConfig) -> list[dict[str, Any]]:
+def _run_shifted_iou_sweep(
+    args: Any, base_config: Track2pBenchmarkConfig
+) -> list[dict[str, Any]]:
     settings = _sweep_settings(args, base_config)
     rows: list[dict[str, Any]] = []
     for setting in settings:
@@ -311,7 +325,9 @@ def _shifted_pairwise_cost_kwargs(
     if shift_penalty_scale is None:
         pairwise_cost_kwargs.pop("shifted_iou_shift_penalty_scale", None)
     else:
-        pairwise_cost_kwargs["shifted_iou_shift_penalty_scale"] = float(shift_penalty_scale)
+        pairwise_cost_kwargs["shifted_iou_shift_penalty_scale"] = float(
+            shift_penalty_scale
+        )
     return pairwise_cost_kwargs
 
 
@@ -329,14 +345,18 @@ def _add_shifted_iou_metadata(
         row["shifted_mask_cosine_weight"] = float(setting.mask_cosine_weight)
         row["shifted_iou_shift_penalty_weight"] = float(setting.shift_penalty_weight)
         row["shifted_iou_shift_penalty_scale"] = (
-            "" if setting.shift_penalty_scale is None else float(setting.shift_penalty_scale)
+            ""
+            if setting.shift_penalty_scale is None
+            else float(setting.shift_penalty_scale)
         )
         if setting.sweep_count > 1:
             row["sweep_index"] = int(setting.sweep_index)
             row["sweep_count"] = int(setting.sweep_count)
 
 
-def _sweep_settings(args: Any, base_config: Track2pBenchmarkConfig) -> tuple[ShiftedIouSetting, ...]:
+def _sweep_settings(
+    args: Any, base_config: Track2pBenchmarkConfig
+) -> tuple[ShiftedIouSetting, ...]:
     costs = _parse_costs(args.costs, default=(base_config.cost,))
     radii = _parse_nonnegative_int_values(
         args.shifted_iou_radii,
@@ -413,7 +433,9 @@ def _sweep_settings(args: Any, base_config: Track2pBenchmarkConfig) -> tuple[Shi
     )
 
 
-def _parse_costs(raw: str | None, *, default: Sequence[str]) -> tuple[AssociationCost, ...]:
+def _parse_costs(
+    raw: str | None, *, default: Sequence[str]
+) -> tuple[AssociationCost, ...]:
     values = _parse_string_values(raw, default=default, name="--costs")
     invalid = sorted(set(values) - set(_SHIFTED_SWEEP_COSTS))
     if invalid:
@@ -426,9 +448,16 @@ def _parse_costs(raw: str | None, *, default: Sequence[str]) -> tuple[Associatio
     return tuple(cast(AssociationCost, value) for value in values)
 
 
-def _parse_nonnegative_int_values(raw: str | None, *, default: Sequence[int], name: str) -> tuple[int, ...]:
+def _parse_nonnegative_int_values(
+    raw: str | None, *, default: Sequence[int], name: str
+) -> tuple[int, ...]:
     try:
-        values = tuple(int(value) for value in _parse_string_values(raw, default=tuple(str(value) for value in default), name=name))
+        values = tuple(
+            int(value)
+            for value in _parse_string_values(
+                raw, default=tuple(str(value) for value in default), name=name
+            )
+        )
     except ValueError as exc:
         raise ValueError(f"{name} must contain comma-separated integers") from exc
     if any(value < 0 for value in values):
@@ -436,9 +465,16 @@ def _parse_nonnegative_int_values(raw: str | None, *, default: Sequence[int], na
     return values
 
 
-def _parse_nonnegative_float_values(raw: str | None, *, default: Sequence[float], name: str) -> tuple[float, ...]:
+def _parse_nonnegative_float_values(
+    raw: str | None, *, default: Sequence[float], name: str
+) -> tuple[float, ...]:
     try:
-        values = tuple(float(value) for value in _parse_string_values(raw, default=tuple(str(value) for value in default), name=name))
+        values = tuple(
+            float(value)
+            for value in _parse_string_values(
+                raw, default=tuple(str(value) for value in default), name=name
+            )
+        )
     except ValueError as exc:
         raise ValueError(f"{name} must contain comma-separated numbers") from exc
     if any(value < 0.0 or not isfinite(value) for value in values):
@@ -462,14 +498,20 @@ def _parse_positive_float_or_none_values(
         try:
             parsed = float(value)
         except ValueError as exc:
-            raise ValueError(f"{name} must contain comma-separated numbers or none") from exc
+            raise ValueError(
+                f"{name} must contain comma-separated numbers or none"
+            ) from exc
         if parsed <= 0.0 or not isfinite(parsed):
-            raise ValueError(f"{name} values must be strictly positive finite numbers or none")
+            raise ValueError(
+                f"{name} values must be strictly positive finite numbers or none"
+            )
         values.append(parsed)
     return tuple(values)
 
 
-def _parse_bool_values(raw: str | None, *, default: Sequence[bool], name: str) -> tuple[bool, ...]:
+def _parse_bool_values(
+    raw: str | None, *, default: Sequence[bool], name: str
+) -> tuple[bool, ...]:
     if raw is None:
         return tuple(bool(value) for value in default)
     values: list[bool] = []
@@ -489,7 +531,9 @@ def write_shifted_iou_results(
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
-        output_path.write_text(json.dumps(list(rows), indent=2) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(list(rows), indent=2) + "\n", encoding="utf-8"
+        )
         return
     if output_format == "csv":
         with output_path.open("w", newline="", encoding="utf-8") as handle:
@@ -563,7 +607,9 @@ def _shifted_iou_fieldnames(rows: Sequence[dict[str, Any]]) -> list[str]:
     return [key for key in preferred if any(key in row for row in rows)] + remaining
 
 
-def _parse_string_values(raw: str | None, *, default: Sequence[str], name: str) -> tuple[str, ...]:
+def _parse_string_values(
+    raw: str | None, *, default: Sequence[str], name: str
+) -> tuple[str, ...]:
     if raw is None:
         return tuple(str(value) for value in default)
     raw_values = tuple(value.strip() for value in raw.split(","))
