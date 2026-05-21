@@ -69,6 +69,7 @@ def select_registration_transform(
     moving_plane: CalciumPlaneData,
     *,
     candidate_transforms: Sequence[str] = DEFAULT_AUTO_REGISTRATION_CANDIDATES,
+    fov_affine_mask_warp_mode: str = "nearest",
     min_fov_correlation_gain: float = 0.02,
     max_empty_roi_fraction: float = 0.1,
     min_retained_mask_area_fraction: float = 0.5,
@@ -109,6 +110,7 @@ def select_registration_transform(
                 reference_plane,
                 moving_plane,
                 transform_type=transform_type,
+                fov_affine_mask_warp_mode=fov_affine_mask_warp_mode,
             )
             candidate_diagnostics = _diagnose_candidate(
                 reference_plane,
@@ -197,6 +199,7 @@ def _candidate_registered_plane(
     moving_plane: CalciumPlaneData,
     *,
     transform_type: str,
+    fov_affine_mask_warp_mode: str = "nearest",
 ) -> CalciumPlaneData:
     if transform_type == "none":
         if reference_plane.image_shape != moving_plane.image_shape:
@@ -209,6 +212,7 @@ def _candidate_registered_plane(
         reference_plane,
         moving_plane,
         transform_type=transform_type,
+        fov_affine_mask_warp_mode=fov_affine_mask_warp_mode,
     )
 
 

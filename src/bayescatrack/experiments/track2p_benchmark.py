@@ -105,6 +105,7 @@ class Track2pBenchmarkConfig:
     max_gap: int = 2
     transform_type: str = "affine"
     auto_registration_candidates: tuple[str, ...] = ()
+    fov_affine_mask_warp_mode: str = "nearest"
     start_cost: float = 5.0
     end_cost: float = 5.0
     gap_penalty: float = 1.0
@@ -479,6 +480,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=(
             "Comma-separated candidate transforms used only when --transform-type auto. "
             "Example: none,fov-translation,fov-affine,affine,rigid,local-affine-grid"
+        ),
+    )
+    parser.add_argument(
+        "--fov-affine-mask-warp-mode",
+        default="nearest",
+        choices=("nearest", "bilinear"),
+        help=(
+            "ROI-mask warp used by FOV-affine registration. Use bilinear with "
+            "--weighted-masks to preserve soft mask evidence."
         ),
     )
     parser.add_argument(
@@ -977,6 +987,7 @@ def solve_configured_global_assignment(
         calibrated_model=calibrated_model,
         transform_type=config.transform_type,
         auto_registration_candidates=config.auto_registration_candidates or None,
+        fov_affine_mask_warp_mode=config.fov_affine_mask_warp_mode,
         start_cost=config.start_cost,
         end_cost=config.end_cost,
         gap_penalty=config.gap_penalty,
@@ -1677,6 +1688,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
             getattr(args, "auto_registration_candidates", None),
             name="--auto-registration-candidates",
         ),
+        fov_affine_mask_warp_mode=args.fov_affine_mask_warp_mode,
         start_cost=args.start_cost,
         end_cost=args.end_cost,
         gap_penalty=args.gap_penalty,

@@ -251,6 +251,7 @@ def track2p_result_improvement_manifest(
             "affine",
             "rigid",
         ),
+        "fov_affine_mask_warp_mode": "bilinear",
         "seed_sessions": "all",
         "max_gap": max_gap,
         "format": "csv",
@@ -288,6 +289,13 @@ def track2p_result_improvement_manifest(
         "cell_probability_weight": 0.25,
         "area_ratio_weight": 0.10,
         "registration_empty_roi_weight": 8.0,
+    }
+    solver_prior_search = {
+        "start_costs": (0.5, 1.0, 1.5, 2.0),
+        "end_costs": (0.5, 1.0, 1.5, 2.0),
+        "gap_penalties": (0.0, 0.3, 0.6, 0.9, 1.2),
+        "cost_thresholds": (1.5, 2.0, 2.5, None),
+        "objective": "complete_track_f1",
     }
     hard_negative_options = {
         "negative_to_positive_ratio": 8.0,
@@ -383,6 +391,17 @@ def track2p_result_improvement_manifest(
             "edge_uncertainty_config": uncertainty_config,
             "candidate_pruning_config": candidate_pruning_config,
             "output": f"{output_root}/roi_aware_shifted_dynamic_priors.csv",
+        },
+        {
+            "name": "roi-aware-shifted-learned-solver-priors",
+            "runner": "track2p-solver-prior-loso",
+            "cost": "roi-aware-shifted",
+            "split": "leave-one-subject-out",
+            "candidate_pruning_config": candidate_pruning_config,
+            "dynamic_edge_prior_config": dynamic_edge_prior_config,
+            "edge_uncertainty_config": uncertainty_config,
+            **solver_prior_search,
+            "output": f"{output_root}/roi_aware_shifted_learned_solver_priors.csv",
         },
         {
             "name": "roi-aware-shifted-activity-tiebreaker",

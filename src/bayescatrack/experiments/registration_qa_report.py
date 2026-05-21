@@ -82,6 +82,7 @@ class RegistrationQAConfig:
     input_format: str = "auto"
     max_gap: int = 2
     transform_type: str = "affine"
+    fov_affine_mask_warp_mode: str = "nearest"
     cost: RegistrationQACost = "registered-iou"
     cost_threshold: float | None = 6.0
     include_behavior: bool = True
@@ -526,6 +527,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=f"{REGISTRATION_TRANSFORM_HELP} Also supports gt-affine-oracle for manual-GT registration QA.",
     )
     parser.add_argument(
+        "--fov-affine-mask-warp-mode",
+        default="nearest",
+        choices=("nearest", "bilinear"),
+        help=(
+            "ROI-mask warp used by FOV-affine registration. Use bilinear with "
+            "--weighted-masks to audit soft mask evidence."
+        ),
+    )
+    parser.add_argument(
         "--cost",
         default="registered-iou",
         choices=REGISTRATION_QA_COST_CHOICES,
@@ -906,6 +916,7 @@ def _register_plane_pair_for_registration_qa(
         reference_session.plane_data,
         target_session.plane_data,
         transform_type=config.transform_type,
+        fov_affine_mask_warp_mode=config.fov_affine_mask_warp_mode,
     )
 
 
@@ -1261,6 +1272,7 @@ def _benchmark_config(config: RegistrationQAConfig) -> Track2pBenchmarkConfig:
         cost=config.cost,
         max_gap=config.max_gap,
         transform_type=config.transform_type,
+        fov_affine_mask_warp_mode=config.fov_affine_mask_warp_mode,
         include_behavior=config.include_behavior,
         include_non_cells=config.include_non_cells,
         cell_probability_threshold=config.cell_probability_threshold,
@@ -1291,6 +1303,7 @@ def _config_from_args(args: argparse.Namespace) -> RegistrationQAConfig:
         input_format=args.input_format,
         max_gap=args.max_gap,
         transform_type=args.transform_type,
+        fov_affine_mask_warp_mode=args.fov_affine_mask_warp_mode,
         cost=args.cost,
         cost_threshold=None if args.no_cost_threshold else args.cost_threshold,
         include_behavior=args.include_behavior,

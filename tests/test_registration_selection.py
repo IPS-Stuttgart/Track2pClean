@@ -36,7 +36,9 @@ def test_auto_registration_selects_fov_translation_when_it_improves_fov(
         moving_plane: CalciumPlaneData,
         *,
         transform_type: str,
+        fov_affine_mask_warp_mode: str = "nearest",
     ) -> CalciumPlaneData:
+        del fov_affine_mask_warp_mode
         if transform_type == "none":
             return moving_plane.with_replaced_masks(
                 moving_plane.roi_masks,
@@ -90,7 +92,9 @@ def test_auto_registration_prefers_none_without_enough_gain(monkeypatch) -> None
         moving_plane: CalciumPlaneData,
         *,
         transform_type: str,
+        fov_affine_mask_warp_mode: str = "nearest",
     ) -> CalciumPlaneData:
+        del fov_affine_mask_warp_mode
         return moving_plane.with_replaced_masks(
             moving_plane.roi_masks,
             fov=reference_plane.fov,

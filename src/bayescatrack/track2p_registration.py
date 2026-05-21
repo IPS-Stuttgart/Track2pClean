@@ -123,6 +123,7 @@ def _fov_affine_registered_plane(
     moving_plane: CalciumPlaneData,
     *,
     transform_type: str = "fov-affine",
+    mask_warp_mode: Literal["nearest", "bilinear"] = "nearest",
     reason: str = "explicit transform_type='fov-affine'",
 ) -> CalciumPlaneData:
     from bayescatrack.fov_affine_registration import (
@@ -132,6 +133,7 @@ def _fov_affine_registered_plane(
     registered_plane = register_measurement_plane_by_fov_affine(
         reference_plane,
         moving_plane,
+        mask_warp_mode=mask_warp_mode,
     ).registered_measurement_plane
     registration_reason = str(
         (registered_plane.ops or {}).get("registration_backend_reason") or reason
@@ -163,6 +165,7 @@ def register_plane_pair(
     *,
     transform_type: RegistrationTransform | str = "affine",
     auto_registration_candidates: Sequence[str] | None = None,
+    fov_affine_mask_warp_mode: Literal["nearest", "bilinear"] = "nearest",
     registration_options: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
     if transform_type not in REGISTRATION_TRANSFORM_TYPES:
@@ -172,8 +175,15 @@ def register_plane_pair(
         from bayescatrack.registration_selection import select_registration_transform
 
         options = dict(registration_options or {})
-        if auto_registration_candidates is not None:
-            options["candidate_transforms"] = auto_registration_candidates
+        options.setdefault(
+            "candidate_transforms",
+            (
+                auto_registration_candidates
+                if auto_registration_candidates is not None
+                else ("none", "fov-translation", "fov-affine", "affine", "rigid")
+            ),
+        )
+        options.setdefault("fov_affine_mask_warp_mode", fov_affine_mask_warp_mode)
         return select_registration_transform(
             reference_plane,
             moving_plane,
@@ -188,7 +198,11 @@ def register_plane_pair(
     if transform_type == "fov-translation":
         return _fov_translation_registered_plane(reference_plane, moving_plane)
     if transform_type == "fov-affine":
-        return _fov_affine_registered_plane(reference_plane, moving_plane)
+        return _fov_affine_registered_plane(
+            reference_plane,
+            moving_plane,
+            mask_warp_mode=fov_affine_mask_warp_mode,
+        )
     if transform_type in NONRIGID_REGISTRATION_TRANSFORM_TYPES:
         return _nonrigid_registered_plane(
             reference_plane,
@@ -200,7 +214,11 @@ def register_plane_pair(
         reg_img_elastix, itk_reg_all_roi = _load_track2p_registration_backend()
     except ImportError:
         if transform_type == "affine":
-            return _fov_affine_registered_plane(reference_plane, moving_plane)
+            return _fov_affine_registered_plane(
+                reference_plane,
+                moving_plane,
+                mask_warp_mode=fov_affine_mask_warp_mode,
+            )
         raise
 
     registered_fov, reg_params = reg_img_elastix(
@@ -272,6 +290,7 @@ def register_consecutive_session_measurement_planes(
     *,
     transform_type: RegistrationTransform | str = "affine",
     auto_registration_candidates: Sequence[str] | None = None,
+    fov_affine_mask_warp_mode: Literal["nearest", "bilinear"] = "nearest",
 ) -> list[CalciumPlaneData]:
     sessions = list(sessions)
     if len(sessions) < 2:
@@ -282,6 +301,7 @@ def register_consecutive_session_measurement_planes(
             sessions[i + 1].plane_data,
             transform_type=transform_type,
             auto_registration_candidates=auto_registration_candidates,
+            fov_affine_mask_warp_mode=fov_affine_mask_warp_mode,
         )
         for i in range(len(sessions) - 1)
     ]
@@ -295,6 +315,7 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
     include_behavior: bool = True,
     transform_type: RegistrationTransform | str = "affine",
     auto_registration_candidates: Sequence[str] | None = None,
+    fov_affine_mask_warp_mode: Literal["nearest", "bilinear"] = "nearest",
     order: str = "xy",
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
@@ -314,6 +335,7 @@ def build_registered_subject_association_bundles(  # pylint: disable=too-many-ar
         sessions,
         transform_type=transform_type,
         auto_registration_candidates=auto_registration_candidates,
+        fov_affine_mask_warp_mode=fov_affine_mask_warp_mode,
     )
 
     association_kwargs: dict[str, Any] = {"order": order}

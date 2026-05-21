@@ -203,6 +203,7 @@ class ReferenceTrainingOptions:
     regularization: float = 1.0e-6
     feature_names: tuple[str, ...] = DEFAULT_ASSOCIATION_FEATURES
     auto_registration_candidates: tuple[str, ...] = ()
+    fov_affine_mask_warp_mode: str = "nearest"
     pairwise_cost_kwargs: Mapping[str, Any] | None = None
 
 
@@ -571,6 +572,7 @@ def _build_training_bundle(
             if options.auto_registration_candidates
             else None
         ),
+        fov_affine_mask_warp_mode=options.fov_affine_mask_warp_mode,
     )
     registered_measurement_plane, empty_registered_rois = (
         replace_empty_registered_masks(registered_measurement_plane)
