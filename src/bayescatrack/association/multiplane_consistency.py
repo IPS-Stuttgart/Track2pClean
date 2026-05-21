@@ -23,6 +23,42 @@ class MultiPlaneConsistencyConfig:
             raise ValueError("min_plane_count must be positive")
 
 
+@dataclass(frozen=True)
+class PlaneRegistrationQuality:
+    """Minimal registration-quality summary for one imaging plane."""
+
+    plane_name: str
+    registration_rmse: float
+    valid_fraction: float = 1.0
+
+
+def shared_registration_reliability(
+    qualities: Sequence[PlaneRegistrationQuality],
+) -> float:
+    """Return a bounded reliability score shared across plane registrations."""
+
+    if not qualities:
+        return 0.0
+    rmse = np.asarray([quality.registration_rmse for quality in qualities], dtype=float)
+    valid = np.asarray([quality.valid_fraction for quality in qualities], dtype=float)
+    rmse_score = 1.0 / (1.0 + max(float(np.nanmean(np.maximum(rmse, 0.0))), 0.0))
+    valid_score = float(np.nanmean(np.clip(valid, 0.0, 1.0)))
+    return float(np.clip(rmse_score * valid_score, 0.0, 1.0))
+
+
+def apply_multiplane_quality_penalty(
+    cost_matrix: Any,
+    qualities: Sequence[PlaneRegistrationQuality],
+    *,
+    penalty_weight: float = 1.0,
+) -> np.ndarray:
+    """Add a shared penalty when registration quality is unreliable."""
+
+    reliability = shared_registration_reliability(qualities)
+    penalty = max(1.0 - reliability, 0.0) * float(penalty_weight)
+    return np.asarray(cost_matrix, dtype=float) + penalty
+
+
 def aggregate_registration_metadata_by_edge(
     plane_metadata: Sequence[Mapping[str, Any]],
 ) -> dict[str, float | int]:

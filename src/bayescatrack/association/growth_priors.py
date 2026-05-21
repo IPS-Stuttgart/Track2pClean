@@ -46,6 +46,34 @@ def fit_affine_growth_transform(
     return np.asarray(coef.T, dtype=float)
 
 
+def estimate_affine_growth_field(
+    source_points_xy: Any, target_points_xy: Any, *, regularization: float = 0.0
+) -> np.ndarray:
+    """Estimate an affine source-to-target growth field."""
+
+    return fit_affine_growth_transform(
+        source_points_xy, target_points_xy, regularization=regularization
+    )
+
+
+def affine_growth_residuals(
+    source_points_xy: Any, target_points_xy: Any, *, affine: Any
+) -> np.ndarray:
+    """Return per-pair residual distances under an affine growth field."""
+
+    source = np.asarray(source_points_xy, dtype=float)
+    target = np.asarray(target_points_xy, dtype=float)
+    matrix = np.asarray(affine, dtype=float)
+    if source.shape != target.shape or source.ndim != 2 or source.shape[1] != 2:
+        raise ValueError(
+            "source_points_xy and target_points_xy must both have shape (n, 2)"
+        )
+    if matrix.shape != (2, 3):
+        raise ValueError("affine must have shape (2, 3)")
+    predicted = source @ matrix[:, :2].T + matrix[:, 2][None, :]
+    return np.linalg.norm(predicted - target, axis=1)
+
+
 def affine_growth_penalty_matrix(
     reference_centroids_xy: Any,
     measurement_centroids_xy: Any,
@@ -63,6 +91,28 @@ def affine_growth_penalty_matrix(
     predicted = ref @ matrix[:, :2].T + matrix[:, 2][None, :]
     diffs = predicted[:, None, :] - meas[None, :, :]
     return np.linalg.norm(diffs, axis=2) / max(float(scale), 1.0e-12)
+
+
+def growth_penalty_matrix(
+    reference_centroids_xy: Any,
+    measurement_centroids_xy: Any,
+    *,
+    affine: Any | None = None,
+    scale: float = 1.0,
+) -> np.ndarray:
+    """Return pairwise growth-consistency penalties."""
+
+    affine_xy = (
+        estimate_affine_growth_field(reference_centroids_xy, measurement_centroids_xy)
+        if affine is None
+        else affine
+    )
+    return affine_growth_penalty_matrix(
+        reference_centroids_xy,
+        measurement_centroids_xy,
+        affine_xy,
+        scale=scale,
+    )
 
 
 def radial_growth_penalty_matrix(
