@@ -5,7 +5,8 @@ import importlib
 from types import SimpleNamespace
 
 import numpy as np
-from bayescatrack import CalciumPlaneData
+import pytest
+from bayescatrack import CalciumPlaneData, load_suite2p_plane
 from bayescatrack.fov_affine_registration import (
     apply_affine_image_warp,
     apply_affine_roi_mask_warp,
@@ -113,3 +114,88 @@ def test_reference_scores_are_nan_when_no_metric_denominator_exists():
     assert np.isnan(pair_scores["recall"])
     assert np.isnan(pair_scores["f1"])
     assert complete_scores["ct"] == 1.0
+
+
+def test_load_suite2p_plane_infers_shape_after_empty_stat_entries(tmp_path):
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([], dtype=int),
+                "xpix": np.asarray([], dtype=int),
+                "lam": np.asarray([], dtype=float),
+            },
+            {
+                "ypix": np.asarray([2], dtype=int),
+                "xpix": np.asarray([3], dtype=int),
+                "lam": np.asarray([1.0], dtype=float),
+            },
+        ],
+        dtype=object,
+    )
+    np.save(tmp_path / "stat.npy", stat)
+
+    plane = load_suite2p_plane(
+        tmp_path,
+        load_traces=False,
+        load_spike_traces=False,
+    )
+
+    assert plane.roi_masks.shape == (1, 3, 4)
+    assert plane.roi_indices.tolist() == [1]
+
+
+def test_load_suite2p_plane_rejects_all_empty_stats_without_ops(tmp_path):
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([], dtype=int),
+                "xpix": np.asarray([], dtype=int),
+                "lam": np.asarray([], dtype=float),
+            }
+        ],
+        dtype=object,
+    )
+    np.save(tmp_path / "stat.npy", stat)
+
+    with pytest.raises(ValueError, match="all ROI pixel arrays are empty"):
+        load_suite2p_plane(
+            tmp_path,
+            load_traces=False,
+            load_spike_traces=False,
+        )
+
+
+def test_pairwise_feature_dimension_mismatch_raises_clear_error():
+    masks = np.zeros((1, 4, 4), dtype=bool)
+    masks[0, 1:3, 1:3] = True
+    reference = CalciumPlaneData(
+        masks,
+        roi_features={"embedding": np.zeros((1, 2), dtype=float)},
+    )
+    measurement = CalciumPlaneData(
+        masks,
+        roi_features={"embedding": np.zeros((1, 1), dtype=float)},
+    )
+
+    with pytest.raises(ValueError, match="incompatible trailing dimensions"):
+        reference.build_pairwise_cost_matrix(
+            measurement,
+            centroid_weight=0.0,
+            iou_weight=0.0,
+            mask_cosine_weight=0.0,
+            area_weight=0.0,
+            roi_feature_weight=1.0,
+            feature_names=("embedding",),
+        )
+
+
+def test_return_components_records_advanced_roi_components():
+    masks = np.zeros((1, 4, 4), dtype=bool)
+    masks[0, 1:3, 1:3] = True
+    plane = CalciumPlaneData(masks)
+
+    _, components = plane.build_pairwise_cost_matrix(plane, return_components=True)
+
+    assert "radial_profile_cost" in components
+    assert "orientation_cost" in components
+    assert "ambiguity_margin_cost" in components

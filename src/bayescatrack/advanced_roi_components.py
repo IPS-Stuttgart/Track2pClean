@@ -122,7 +122,8 @@ def install_advanced_roi_components() -> None:
         components = dict(components)
 
         needs_shape = (
-            shape_descriptor_components
+            return_components
+            or shape_descriptor_components
             or weights["radial_profile_weight"] > 0.0
             or weights["orientation_weight"] > 0.0
             or weights["eccentricity_weight"] > 0.0
@@ -157,7 +158,8 @@ def install_advanced_roi_components() -> None:
                 )
 
         needs_margins = (
-            ambiguity_margin_components
+            return_components
+            or ambiguity_margin_components
             or weights["ambiguity_margin_weight"] > 0.0
             or pruning.top_k_per_roi is not None
             or pruning.gate_margin is not None

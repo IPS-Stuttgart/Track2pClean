@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack.matching import (
     build_track_rows_from_bundles,
     build_track_rows_from_matches,
@@ -24,6 +25,14 @@ def test_build_track_rows_from_consecutive_matches():
     )
 
     npt.assert_array_equal(rows, np.array([[0, 1, 5], [2, 3, 6]]))
+
+
+def test_build_track_rows_from_matches_requires_explicit_start_roi_indices():
+    with pytest.raises(ValueError, match="start_roi_indices must be provided"):
+        build_track_rows_from_matches(
+            ("s1", "s2"),
+            [np.array([[0, 1]], dtype=int)],
+        )
 
 
 def test_build_track_rows_from_later_seed_session_stitches_both_directions():

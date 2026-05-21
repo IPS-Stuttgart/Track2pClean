@@ -222,8 +222,8 @@ def build_track_rows_from_matches(
         One match representation per consecutive session pair.
     start_roi_indices
         ROI indices from ``start_session_index`` from which tracks should be grown.
-        If omitted, indices are inferred from the adjacent match mapping where
-        possible.
+        Required, because match mappings contain no information about unmatched
+        ROIs and inferring start rows from them silently drops those ROIs.
     start_session_index
         Session column that contains ``start_roi_indices``.
     fill_value
@@ -246,13 +246,12 @@ def build_track_rows_from_matches(
     normalized_matches = [_normalize_match_mapping(match) for match in matches]
 
     if start_roi_indices is None:
-        start_roi_indices = _default_start_roi_indices(
-            normalized_matches,
-            start_session_index=start_session_index,
-            n_sessions=len(session_names),
+        raise ValueError(
+            "start_roi_indices must be provided; inferring them from matches would "
+            "omit unmatched ROIs. Use build_track_rows_from_bundles() when bundle "
+            "ROI indices are available."
         )
-    else:
-        start_roi_indices = [int(index) for index in start_roi_indices]
+    start_roi_indices = [int(index) for index in start_roi_indices]
 
     reverse_matches = [
         _invert_match_mapping(normalized_matches[match_index])
@@ -389,21 +388,6 @@ def _bundle_roi_indices_for_session(
     if session_index == n_sessions - 1:
         return np.asarray(bundles[-1].measurement_roi_indices, dtype=int)
     return np.asarray(bundles[session_index].reference_roi_indices, dtype=int)
-
-
-def _default_start_roi_indices(
-    normalized_matches: Sequence[Mapping[int, int]],
-    *,
-    start_session_index: int,
-    n_sessions: int,
-) -> list[int]:
-    if n_sessions == 1:
-        raise ValueError(
-            "start_roi_indices must be provided when there are no consecutive matches"
-        )
-    if start_session_index < len(normalized_matches):
-        return sorted(normalized_matches[start_session_index])
-    return sorted(_invert_match_mapping(normalized_matches[start_session_index - 1]))
 
 
 def _invert_match_mapping(mapping: Mapping[int, int]) -> dict[int, int]:
