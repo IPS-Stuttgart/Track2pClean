@@ -202,6 +202,7 @@ class ReferenceTrainingOptions:
     velocity_variance: float = 25.0
     regularization: float = 1.0e-6
     feature_names: tuple[str, ...] = DEFAULT_ASSOCIATION_FEATURES
+    auto_registration_candidates: tuple[str, ...] = ()
     pairwise_cost_kwargs: Mapping[str, Any] | None = None
 
 
@@ -565,6 +566,11 @@ def _build_training_bundle(
         sessions[session_a].plane_data,
         sessions[session_b].plane_data,
         transform_type=options.transform_type,
+        auto_registration_candidates=(
+            options.auto_registration_candidates
+            if options.auto_registration_candidates
+            else None
+        ),
     )
     registered_measurement_plane, empty_registered_rois = (
         replace_empty_registered_masks(registered_measurement_plane)

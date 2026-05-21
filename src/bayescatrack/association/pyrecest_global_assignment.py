@@ -10,6 +10,11 @@ import numpy as np
 from bayescatrack.association.activity_similarity import (
     add_activity_similarity_components,
 )
+from bayescatrack.association.advanced_uncertainty import (
+    EdgeUncertaintyConfig,
+    edge_uncertainty_config_from_mapping,
+    uncertainty_aware_cost_matrix,
+)
 from bayescatrack.association.activity_tie_breaker import (
     activity_tie_breaker_cost_matrix,
 )
@@ -329,6 +334,7 @@ def build_registered_pairwise_costs(
     cost: AssociationCost = "registered-iou",
     calibrated_model: CalibratedAssociationModel | None = None,
     transform_type: str = "affine",
+    auto_registration_candidates: Sequence[str] | None = None,
     order: str = "xy",
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
@@ -341,6 +347,7 @@ def build_registered_pairwise_costs(
     activity_event_threshold: float = 0.0,
     candidate_pruning_config: CandidatePruningConfig | Mapping[str, Any] | None = None,
     dynamic_edge_prior_config: DynamicEdgePriorConfig | Mapping[str, Any] | None = None,
+    edge_uncertainty_config: EdgeUncertaintyConfig | Mapping[str, Any] | None = None,
 ) -> dict[SessionEdge, np.ndarray]:
     """Build registered pairwise cost matrices for consecutive and skip-session edges."""
 
@@ -355,11 +362,13 @@ def build_registered_pairwise_costs(
         or cost == "calibrated"
         or activity_tie_breaker_weight > 0.0
         or dynamic_edge_prior_config is not None
+        or edge_uncertainty_config is not None
     )
 
     base_cost_kwargs = _cost_kwargs_for_method(cost)
     if pairwise_cost_kwargs is not None:
         base_cost_kwargs.update(dict(pairwise_cost_kwargs))
+    edge_uncertainty = edge_uncertainty_config_from_mapping(edge_uncertainty_config)
     if _pairwise_kwargs_use_soft_overlap(base_cost_kwargs):
         install_soft_overlap_costs()
 
@@ -375,6 +384,7 @@ def build_registered_pairwise_costs(
                 sessions[source_session].plane_data,
                 sessions[target_session].plane_data,
                 transform_type=transform_type,
+                auto_registration_candidates=auto_registration_candidates,
             )
             registered_measurement_plane, empty_registered_rois = (
                 drop_empty_registered_masks(registered_measurement_plane)
@@ -434,6 +444,16 @@ def build_registered_pairwise_costs(
                 empty_registered_rois=empty_registered_rois,
                 config=dynamic_edge_prior_config,
             )
+            if edge_uncertainty is not None:
+                uncertainty = uncertainty_aware_cost_matrix(
+                    cost_matrix,
+                    bundle.pairwise_components,
+                    registration_metadata=registered_measurement_plane.ops,
+                    config=edge_uncertainty,
+                )
+                cost_matrix = uncertainty.adjusted_cost_matrix
+                if probability_matrix is None:
+                    probability_matrix = uncertainty.posterior_probability_matrix
             cost_matrix = prune_pairwise_cost_matrix(
                 cost_matrix,
                 probability_matrix=probability_matrix,
@@ -463,6 +483,7 @@ def solve_global_assignment_for_sessions(
     cost: AssociationCost = "registered-iou",
     calibrated_model: CalibratedAssociationModel | None = None,
     transform_type: str = "affine",
+    auto_registration_candidates: Sequence[str] | None = None,
     start_cost: float = 5.0,
     end_cost: float = 5.0,
     gap_penalty: float = 1.0,
@@ -481,6 +502,7 @@ def solve_global_assignment_for_sessions(
     higher_order_consistency_config: (
         HigherOrderConsistencyConfig | Mapping[str, Any] | None
     ) = None,
+    edge_uncertainty_config: EdgeUncertaintyConfig | Mapping[str, Any] | None = None,
     adaptive_edge_prior_config: (
         AdaptiveEdgePriorConfig | Mapping[str, Any] | None
     ) = None,
@@ -494,6 +516,7 @@ def solve_global_assignment_for_sessions(
         cost=cost,
         calibrated_model=calibrated_model,
         transform_type=transform_type,
+        auto_registration_candidates=auto_registration_candidates,
         order=order,
         weighted_centroids=weighted_centroids,
         velocity_variance=velocity_variance,
@@ -505,6 +528,7 @@ def solve_global_assignment_for_sessions(
         activity_event_threshold=activity_event_threshold,
         candidate_pruning_config=candidate_pruning_config,
         dynamic_edge_prior_config=dynamic_edge_prior_config,
+        edge_uncertainty_config=edge_uncertainty_config,
     )
     session_sizes = tuple(int(session.plane_data.n_rois) for session in sessions)
     if adaptive_edge_prior_config is not None:

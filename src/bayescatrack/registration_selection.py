@@ -17,6 +17,7 @@ from bayescatrack.core.bridge import CalciumPlaneData
 DEFAULT_AUTO_REGISTRATION_CANDIDATES: tuple[str, ...] = (
     "none",
     "fov-translation",
+    "fov-affine",
     "affine",
     "rigid",
 )

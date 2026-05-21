@@ -244,6 +244,14 @@ def track2p_result_improvement_manifest(
         "weighted_masks": True,
         "weighted_centroids": True,
         "transform_type": transform_type,
+        "auto_registration_candidates": (
+            "none",
+            "fov-translation",
+            "fov-affine",
+            "affine",
+            "rigid",
+        ),
+        "seed_sessions": "all",
         "max_gap": max_gap,
         "format": "csv",
         "progress": True,
@@ -260,6 +268,26 @@ def track2p_result_improvement_manifest(
         "end_cost": 1.0,
         "gap_penalty": 0.6,
         "cost_threshold": 2.0,
+    }
+    uncertainty_config = {
+        "temperature": 2.0,
+        "uncertainty_penalty_weight": 0.5,
+        "registration_rmse_weight": 0.10,
+        "invalid_warp_fraction_weight": 1.0,
+        "empty_registered_roi_weight": 6.0,
+        "gated_edge_weight": 6.0,
+        "local_margin_weight": 0.5,
+    }
+    candidate_pruning_config = {
+        "row_top_k": 20,
+        "column_top_k": 20,
+        "probability_threshold": 0.02,
+    }
+    dynamic_edge_prior_config = {
+        "session_gap_weight": 0.25,
+        "cell_probability_weight": 0.25,
+        "area_ratio_weight": 0.10,
+        "registration_empty_roi_weight": 8.0,
     }
     hard_negative_options = {
         "negative_to_positive_ratio": 8.0,
@@ -281,6 +309,13 @@ def track2p_result_improvement_manifest(
             "weighted_masks": False,
             "weighted_centroids": False,
             "output": f"{output_root}/track2p_baseline.csv",
+        },
+        {
+            "name": "oracle-gt-links",
+            "method": "oracle-gt-links",
+            "weighted_masks": False,
+            "weighted_centroids": False,
+            "output": f"{output_root}/oracle_gt_links.csv",
         },
         {
             "name": "global-registered-iou-prior-sweep",
@@ -310,15 +345,44 @@ def track2p_result_improvement_manifest(
             "output": f"{output_root}/roi_aware_shifted_tuned.csv",
         },
         {
+            "name": "roi-aware-shifted-auto-registration",
+            "method": "global-assignment",
+            "cost": "roi-aware-shifted",
+            "transform_type": "auto",
+            **tuned_solver_priors,
+            "candidate_pruning_config": candidate_pruning_config,
+            "output": f"{output_root}/roi_aware_shifted_auto_registration.csv",
+        },
+        {
             "name": "roi-aware-shifted-higher-order",
             "method": "global-assignment",
             "cost": "roi-aware-shifted",
             **tuned_solver_priors,
             "higher_order_triplet_weight": 0.5,
+            "candidate_pruning_config": candidate_pruning_config,
             "higher_order_support_top_k": 8,
             "higher_order_support_cost_cap": 4.0,
             "higher_order_max_penalty": 2.0,
             "output": f"{output_root}/roi_aware_shifted_higher_order.csv",
+        },
+        {
+            "name": "roi-aware-shifted-uncertainty-pruned",
+            "method": "global-assignment",
+            "cost": "roi-aware-shifted",
+            **tuned_solver_priors,
+            "edge_uncertainty_config": uncertainty_config,
+            "candidate_pruning_config": candidate_pruning_config,
+            "output": f"{output_root}/roi_aware_shifted_uncertainty_pruned.csv",
+        },
+        {
+            "name": "roi-aware-shifted-dynamic-priors",
+            "method": "global-assignment",
+            "cost": "roi-aware-shifted",
+            **tuned_solver_priors,
+            "dynamic_edge_prior_config": dynamic_edge_prior_config,
+            "edge_uncertainty_config": uncertainty_config,
+            "candidate_pruning_config": candidate_pruning_config,
+            "output": f"{output_root}/roi_aware_shifted_dynamic_priors.csv",
         },
         {
             "name": "roi-aware-shifted-activity-tiebreaker",
