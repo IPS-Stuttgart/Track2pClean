@@ -15,6 +15,7 @@ from bayescatrack.experiments.track2p_cost_sweep import (
     _parse_nonnegative_values,
     _parse_positive_values,
     _parse_thresholds,
+    build_arg_parser,
     format_sweep_selection_table,
     format_sweep_table,
     run_track2p_cost_sweep,
@@ -60,6 +61,38 @@ def _write_subject(subject_dir, write_raw_npy_session, *, write_reference=True):
         np.array([[0, 0, 0], [1, 1, 1]], dtype=object),
         allow_pickle=True,
     )
+
+
+def test_cost_sweep_cli_keeps_suite2p_non_cells_by_default(tmp_path):
+    parser = build_arg_parser()
+
+    default_args = parser.parse_args(
+        [
+            "--data",
+            str(tmp_path),
+            "--cost-scales",
+            "1",
+            "--cost-thresholds",
+            "none",
+        ]
+    )
+    assert default_args.include_non_cells is True
+
+    hard_filter_args = parser.parse_args(
+        [
+            "--data",
+            str(tmp_path),
+            "--cost-scales",
+            "1",
+            "--cost-thresholds",
+            "none",
+            "--no-include-non-cells",
+        ]
+    )
+    assert hard_filter_args.include_non_cells is False
+
+    config = sweep_module._config_from_args(default_args)
+    assert config.benchmark.include_non_cells is True
 
 
 def test_track2p_cost_sweep_reuses_costs_and_varies_solver_knobs(
