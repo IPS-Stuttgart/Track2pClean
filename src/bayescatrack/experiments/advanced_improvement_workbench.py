@@ -214,11 +214,25 @@ def track2p_result_improvement_manifest(
     if max_gap < 1:
         raise ValueError("max_gap must be at least 1")
 
+    local_evidence_similarity_features = (
+        "one_minus_weighted_dice",
+        "one_minus_overlap_min_fraction",
+    )
     local_evidence_features = tuple(
-        calibration_feature_names("default+local-evidence")
+        dict.fromkeys(
+            (
+                *calibration_feature_names("default+local-evidence"),
+                *local_evidence_similarity_features,
+            )
+        )
     )
     activity_local_evidence_features = tuple(
-        calibration_feature_names("default+activity+local-evidence")
+        dict.fromkeys(
+            (
+                *calibration_feature_names("default+activity+local-evidence"),
+                *local_evidence_similarity_features,
+            )
+        )
     )
 
     defaults: dict[str, Any] = {
