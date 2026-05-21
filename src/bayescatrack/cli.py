@@ -10,15 +10,16 @@ from bayescatrack._argparse_compat import (
 )
 from bayescatrack.core.bridge import main as _core_main
 
-_TOP_LEVEL_HELP = """usage: bayescatrack {summary,export,benchmark,growth} ...
+_TOP_LEVEL_HELP = """usage: bayescatrack {summary,export,benchmark,growth,advanced} ...
 
 BayesCaTrack command line tools.
 
 commands:
-  summary      Print a JSON summary for one Track2p-style subject directory.
-  export       Export a PyRecEst-ready NPZ bundle for one subject.
-  benchmark    Run reproducible benchmark harnesses.
-  growth       Analyze global growth/displacement patterns from track tables.
+  summary       Print a JSON summary for one Track2p-style subject directory.
+  export        Export a PyRecEst-ready NPZ bundle for one subject.
+  benchmark     Run reproducible benchmark harnesses.
+  growth        Analyze global growth/displacement patterns from track tables.
+  advanced      Advanced diagnostics and result-improvement workbench helpers.
 
 Run 'bayescatrack <command> --help' for command-specific options.
 """
@@ -37,6 +38,13 @@ def main(argv: list[str] | None = None) -> int:
         from bayescatrack.analysis.growth import main as _growth_main
 
         return int(_growth_main(args[1:]))
+
+    if args[0] == "advanced":
+        from bayescatrack.experiments.advanced_improvement_workbench import (
+            main as _advanced_main,
+        )
+
+        return int(_advanced_main(args[1:]))
 
     if args[0] != "benchmark":
         return int(_core_main(args))
