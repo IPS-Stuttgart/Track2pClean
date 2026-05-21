@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess  # nosec B404
 
 import pytest
 from bayescatrack.experiments.benchmark_manifest import load_benchmark_manifest
@@ -166,7 +167,7 @@ def test_validate_suite_cli_can_check_input_paths(tmp_path):
         },
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(subprocess.CalledProcessError) as exc_info:
         run_module(
             "-m",
             "bayescatrack",
@@ -175,3 +176,5 @@ def test_validate_suite_cli_can_check_input_paths(tmp_path):
             str(manifest_path),
             "--check-input-paths",
         )
+
+    assert "track2p-default.data" in exc_info.value.stderr
