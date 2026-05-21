@@ -10,6 +10,10 @@ import numpy as np
 from bayescatrack.association.activity_similarity import (
     add_activity_similarity_components,
 )
+from bayescatrack.association.absence_model import (
+    AbsenceModelConfig,
+    apply_absence_adjustment,
+)
 from bayescatrack.association.activity_tie_breaker import (
     activity_tie_breaker_cost_matrix,
 )
@@ -333,6 +337,8 @@ def build_registered_pairwise_costs(
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
     regularization: float = 1.0e-6,
+    registration_options: Mapping[str, Any] | None = None,
+    absence_model_config: AbsenceModelConfig | Mapping[str, Any] | None = None,
     pairwise_cost_kwargs: Mapping[str, Any] | None = None,
     return_pairwise_components: bool = False,
     activity_tie_breaker_weight: float = 0.0,
@@ -375,6 +381,7 @@ def build_registered_pairwise_costs(
                 sessions[source_session].plane_data,
                 sessions[target_session].plane_data,
                 transform_type=transform_type,
+                registration_options=registration_options,
             )
             registered_measurement_plane, empty_registered_rois = (
                 drop_empty_registered_masks(registered_measurement_plane)
@@ -419,6 +426,14 @@ def build_registered_pairwise_costs(
             else:
                 probability_matrix = None
                 cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
+            if absence_model_config is not None:
+                cost_matrix = apply_absence_adjustment(
+                    cost_matrix,
+                    sessions[source_session].plane_data,
+                    registered_measurement_plane,
+                    session_gap=target_session - source_session,
+                    config=absence_model_config,
+                )
             if activity_tie_breaker_weight > 0.0:
                 cost_matrix = np.asarray(
                     cost_matrix, dtype=float
@@ -471,6 +486,8 @@ def solve_global_assignment_for_sessions(
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
     regularization: float = 1.0e-6,
+    registration_options: Mapping[str, Any] | None = None,
+    absence_model_config: AbsenceModelConfig | Mapping[str, Any] | None = None,
     pairwise_cost_kwargs: Mapping[str, Any] | None = None,
     activity_tie_breaker_weight: float = 0.0,
     activity_tie_breaker_component: str = "activity_tiebreaker_cost",
@@ -498,6 +515,8 @@ def solve_global_assignment_for_sessions(
         weighted_centroids=weighted_centroids,
         velocity_variance=velocity_variance,
         regularization=regularization,
+        registration_options=registration_options,
+        absence_model_config=absence_model_config,
         pairwise_cost_kwargs=pairwise_cost_kwargs,
         activity_tie_breaker_weight=activity_tie_breaker_weight,
         activity_tie_breaker_component=activity_tie_breaker_component,

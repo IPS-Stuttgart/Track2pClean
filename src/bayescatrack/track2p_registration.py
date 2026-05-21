@@ -162,6 +162,7 @@ def register_plane_pair(
     moving_plane: CalciumPlaneData,
     *,
     transform_type: RegistrationTransform | str = "affine",
+    registration_options: Mapping[str, Any] | None = None,
 ) -> CalciumPlaneData:
     if transform_type not in REGISTRATION_TRANSFORM_TYPES:
         valid_types = ", ".join(repr(value) for value in REGISTRATION_TRANSFORM_TYPES)
@@ -169,9 +170,11 @@ def register_plane_pair(
     if transform_type == "auto":
         from bayescatrack.registration_selection import select_registration_transform
 
+        options = dict(registration_options or {})
         return select_registration_transform(
             reference_plane,
             moving_plane,
+            **options,
         ).registered_plane
     if transform_type == "none":
         if reference_plane.image_shape != moving_plane.image_shape:
