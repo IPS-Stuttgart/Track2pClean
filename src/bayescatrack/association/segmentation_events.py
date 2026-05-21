@@ -42,6 +42,62 @@ class SegmentationEventCandidate:
     support_size: int
 
 
+@dataclass(frozen=True)
+class SegmentationEvent:
+    """Compact split/merge event using matrix positions."""
+
+    event_type: str
+    reference_positions: tuple[int, ...]
+    measurement_positions: tuple[int, ...]
+    score: float
+
+
+def detect_segmentation_events(
+    pairwise_components: Mapping[str, Any],
+    *,
+    config: Mapping[str, Any] | SegmentationEventConfig | None = None,
+) -> list[SegmentationEvent]:
+    """Detect simple split and merge candidates from pairwise similarity matrices."""
+
+    similarity = _first_available(pairwise_components, ("weighted_dice_similarity", "iou"))
+    if isinstance(config, SegmentationEventConfig):
+        min_similarity = config.min_weighted_dice
+        min_children = config.min_children
+        max_children = config.max_children
+    else:
+        options = {} if config is None else dict(config)
+        min_similarity = float(options.get("min_similarity", 0.20))
+        min_children = int(options.get("min_children", 2))
+        max_children = int(options.get("max_children", 4))
+    events: list[SegmentationEvent] = []
+    for row_index, row in enumerate(similarity):
+        positions = np.flatnonzero(row >= min_similarity)
+        if positions.size >= min_children:
+            positions = positions[np.argsort(row[positions])[::-1]][:max_children]
+            events.append(
+                SegmentationEvent(
+                    event_type="split",
+                    reference_positions=(int(row_index),),
+                    measurement_positions=tuple(int(pos) for pos in positions),
+                    score=float(np.mean(row[positions])),
+                )
+            )
+    for col_index in range(similarity.shape[1]):
+        column = similarity[:, col_index]
+        positions = np.flatnonzero(column >= min_similarity)
+        if positions.size >= min_children:
+            positions = positions[np.argsort(column[positions])[::-1]][:max_children]
+            events.append(
+                SegmentationEvent(
+                    event_type="merge",
+                    reference_positions=tuple(int(pos) for pos in positions),
+                    measurement_positions=(int(col_index),),
+                    score=float(np.mean(column[positions])),
+                )
+            )
+    return events
+
+
 def split_event_candidates(
     pairwise_components: Mapping[str, Any],
     *,

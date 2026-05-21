@@ -30,6 +30,23 @@ class JointRefinementConfig:
 
 
 @dataclass(frozen=True)
+class JointRegistrationAssignmentConfig:
+    """Controls for selecting high-confidence assignment anchors."""
+
+    min_anchor_probability: float = 0.90
+    min_anchor_margin: float = 0.20
+    min_anchors: int = 8
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.min_anchor_probability <= 1.0:
+            raise ValueError("min_anchor_probability must lie in [0, 1]")
+        if self.min_anchor_margin < 0.0:
+            raise ValueError("min_anchor_margin must be non-negative")
+        if self.min_anchors < 1:
+            raise ValueError("min_anchors must be positive")
+
+
+@dataclass(frozen=True)
 class JointRefinementState:
     """One iteration of joint refinement."""
 
@@ -38,6 +55,45 @@ class JointRefinementState:
     cost_matrix: np.ndarray
     anchor_edges: tuple[tuple[int, int], ...]
     mean_anchor_cost: float
+
+
+def high_confidence_anchor_pairs(
+    probabilities: Any,
+    *,
+    config: JointRegistrationAssignmentConfig | None = None,
+) -> np.ndarray:
+    """Return row-best probability anchors with enough confidence and margin."""
+
+    cfg = config or JointRegistrationAssignmentConfig()
+    probs = np.asarray(probabilities, dtype=float)
+    if probs.ndim != 2:
+        raise ValueError("probabilities must be two-dimensional")
+    if probs.shape[1] == 0:
+        return np.zeros((0, 2), dtype=int)
+    anchors: list[tuple[int, int]] = []
+    for row_index, row in enumerate(probs):
+        finite_row = np.where(np.isfinite(row), row, -np.inf)
+        col_index = int(np.argmax(finite_row))
+        best = float(finite_row[col_index])
+        if probs.shape[1] > 1:
+            runner_up = float(np.max(np.delete(finite_row, col_index)))
+        else:
+            runner_up = 0.0
+        if (
+            best >= cfg.min_anchor_probability
+            and best - runner_up >= cfg.min_anchor_margin
+        ):
+            anchors.append((int(row_index), col_index))
+    if len(anchors) < cfg.min_anchors:
+        flat = np.flatnonzero(np.isfinite(probs.reshape(-1)))
+        order = flat[np.argsort(probs.reshape(-1)[flat])[::-1]]
+        for index in order:
+            candidate = (int(index // probs.shape[1]), int(index % probs.shape[1]))
+            if candidate not in anchors:
+                anchors.append(candidate)
+            if len(anchors) >= cfg.min_anchors:
+                break
+    return np.asarray(anchors, dtype=int).reshape(-1, 2)
 
 
 def high_confidence_anchor_edges(

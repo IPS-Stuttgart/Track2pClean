@@ -37,6 +37,37 @@ class TrackHypothesis:
     cost: float
 
 
+def top_k_edge_candidates(
+    cost_matrix: Any,
+    *,
+    edge: tuple[int, int],
+    row_top_k: int = 3,
+    max_cost: float | None = None,
+) -> tuple[Edge, ...]:
+    """Return top-k target candidates for each source row on one session edge."""
+
+    if row_top_k <= 0:
+        raise ValueError("row_top_k must be positive")
+    costs = np.asarray(cost_matrix, dtype=float)
+    if costs.ndim != 2:
+        raise ValueError("cost_matrix must be two-dimensional")
+    source_session, target_session = edge
+    candidates: list[Edge] = []
+    for row_index, row in enumerate(costs):
+        finite = np.isfinite(row)
+        if max_cost is not None:
+            finite &= row <= float(max_cost)
+        cols = np.flatnonzero(finite)
+        if cols.size == 0:
+            continue
+        ordered = cols[np.argsort(row[cols])[:row_top_k]]
+        candidates.extend(
+            (int(source_session), int(target_session), int(row_index), int(col_index))
+            for col_index in ordered
+        )
+    return tuple(candidates)
+
+
 def candidate_edge_map(
     pairwise_costs: Mapping[tuple[int, int], Any],
     roi_indices_by_session: Sequence[Sequence[int]],
@@ -136,26 +167,42 @@ def enumerate_track_hypotheses(
 
 
 def consensus_edges(
-    track_matrices: Sequence[Any], *, min_votes: int = 2, fill_value: int = -1
+    track_matrices: Sequence[Any],
+    *,
+    min_votes: int | None = 2,
+    min_support_fraction: float | None = None,
+    fill_value: int = -1,
 ) -> dict[Edge, int]:
-    """Return edges that appear in at least ``min_votes`` prediction matrices."""
+    """Return edges that appear in enough prediction matrices or edge sets."""
 
+    inputs = tuple(track_matrices)
+    threshold = (
+        int(np.ceil(float(min_support_fraction) * len(inputs)))
+        if min_support_fraction is not None
+        else int(min_votes or 1)
+    )
     counts: dict[Edge, int] = {}
-    for matrix_values in track_matrices:
+    for matrix_values in inputs:
         matrix = np.asarray(matrix_values, dtype=int)
         if matrix.ndim != 2:
-            raise ValueError("track matrices must be two-dimensional")
+            raise ValueError("track matrices or edge sets must be two-dimensional")
         seen_this_model: set[Edge] = set()
-        for row in matrix:
-            for session_index in range(matrix.shape[1] - 1):
-                a = int(row[session_index])
-                b = int(row[session_index + 1])
-                if a == fill_value or b == fill_value:
-                    continue
-                seen_this_model.add((session_index, session_index + 1, a, b))
+        if min_support_fraction is not None and matrix.shape[1] == 4:
+            seen_this_model.update(
+                (int(row[0]), int(row[1]), int(row[2]), int(row[3]))
+                for row in matrix
+            )
+        else:
+            for row in matrix:
+                for session_index in range(matrix.shape[1] - 1):
+                    a = int(row[session_index])
+                    b = int(row[session_index + 1])
+                    if a == fill_value or b == fill_value:
+                        continue
+                    seen_this_model.add((session_index, session_index + 1, a, b))
         for edge in seen_this_model:
             counts[edge] = counts.get(edge, 0) + 1
-    return {edge: votes for edge, votes in counts.items() if votes >= int(min_votes)}
+    return {edge: votes for edge, votes in counts.items() if votes >= threshold}
 
 
 def hypotheses_to_matrix(hypotheses: Sequence[TrackHypothesis]) -> np.ndarray:

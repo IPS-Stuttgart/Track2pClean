@@ -39,6 +39,25 @@ class AdaptiveCalibrationConfig:
             raise ValueError("max_abs_intercept must be positive")
 
 
+@dataclass(frozen=True)
+class SessionAdaptiveCalibrationConfig:
+    """Positive cost-offset weights for observable session context."""
+
+    session_gap_weight: float = 0.15
+    registration_rmse_weight: float = 0.05
+    invalid_fraction_weight: float = 1.00
+    low_cell_probability_weight: float = 0.50
+
+    def __post_init__(self) -> None:
+        if (
+            self.session_gap_weight < 0.0
+            or self.registration_rmse_weight < 0.0
+            or self.invalid_fraction_weight < 0.0
+            or self.low_cell_probability_weight < 0.0
+        ):
+            raise ValueError("session adaptive calibration weights must be non-negative")
+
+
 def session_context_from_planes(
     reference_plane: Any,
     measurement_plane: Any,
@@ -150,6 +169,40 @@ def apply_context_intercept_to_costs(
         raise ValueError("temperature must be positive")
     costs = np.asarray(cost_matrix, dtype=float)
     return costs - float(temperature) * context_intercept(context, config=config)
+
+
+def session_context_cost_offset(
+    reference_plane: Any,
+    measurement_plane: Any,
+    *,
+    session_gap: int | float = 1.0,
+    registration_metadata: Mapping[str, Any] | None = None,
+    config: SessionAdaptiveCalibrationConfig | None = None,
+) -> float:
+    """Return a non-negative cost offset from observable session context."""
+
+    cfg = config or SessionAdaptiveCalibrationConfig()
+    context = session_context_from_planes(
+        reference_plane,
+        measurement_plane,
+        session_gap=session_gap,
+        registration_metadata=registration_metadata,
+    )
+    invalid_fraction = max(1.0 - float(context.registration_valid_fraction), 0.0)
+    low_cell_probability = max(1.0 - float(context.mean_cell_probability), 0.0)
+    offset = (
+        cfg.session_gap_weight * max(float(context.session_gap) - 1.0, 0.0)
+        + cfg.registration_rmse_weight * max(float(context.registration_fit_rmse), 0.0)
+        + cfg.invalid_fraction_weight * invalid_fraction
+        + cfg.low_cell_probability_weight * low_cell_probability
+    )
+    return float(max(offset, 0.0))
+
+
+def apply_session_context_offset(cost_matrix: Any, offset: float) -> np.ndarray:
+    """Add a scalar session-context offset to a cost matrix."""
+
+    return np.asarray(cost_matrix, dtype=float) + float(offset)
 
 
 def _first_scalar(

@@ -101,6 +101,38 @@ def pairwise_context_distance(
     return np.sqrt(np.mean(diffs * diffs, axis=2))
 
 
+def local_density_descriptor(centroids_xy: Any, *, radius: float) -> np.ndarray:
+    """Return the number of neighboring ROIs within ``radius`` for each centroid."""
+
+    return local_density_features(centroids_xy, radius=radius)[:, 0]
+
+
+def pairwise_context_components(
+    reference_centroids_xy: Any,
+    measurement_centroids_xy: Any,
+    *,
+    config: dict[str, Any] | ContextDescriptorConfig | None = None,
+) -> dict[str, np.ndarray]:
+    """Return pairwise local-context cost components for centroid arrays."""
+
+    density_radius = (
+        config.density_radius
+        if isinstance(config, ContextDescriptorConfig)
+        else float((config or {}).get("density_radius", ContextDescriptorConfig().density_radius))
+    )
+    reference_density = local_density_descriptor(
+        reference_centroids_xy, radius=density_radius
+    )
+    measurement_density = local_density_descriptor(
+        measurement_centroids_xy, radius=density_radius
+    )
+    return {
+        "local_density_cost": np.abs(
+            reference_density[:, None] - measurement_density[None, :]
+        )
+    }
+
+
 def local_density_features(centroids_xy: Any, *, radius: float) -> np.ndarray:
     """Return local ROI-density and nearest-neighbor summary features."""
 
@@ -143,6 +175,25 @@ def neighbor_graph_signature(centroids_xy: Any, *, neighbor_k: int) -> np.ndarra
             if used < neighbor_k:
                 signature[roi_index, used:] = signature[roi_index, used - 1]
     return signature
+
+
+def fov_patch_moments(
+    image: Any, centroids_xy: Any, *, patch_radius: int
+) -> np.ndarray:
+    """Return mean and standard-deviation moments for local FOV patches."""
+
+    img = np.asarray(image, dtype=float)
+    centroids = np.asarray(centroids_xy, dtype=float)
+    moments = np.zeros((centroids.shape[0], 2), dtype=float)
+    if img.ndim != 2:
+        return moments
+    for roi_index, (x_coord, y_coord) in enumerate(centroids):
+        patch = _crop_patch(img, x_coord, y_coord, radius=patch_radius)
+        values = patch[np.isfinite(patch)]
+        if values.size:
+            moments[roi_index, 0] = float(np.mean(values))
+            moments[roi_index, 1] = float(np.std(values))
+    return moments
 
 
 def fov_patch_moment_descriptors(
