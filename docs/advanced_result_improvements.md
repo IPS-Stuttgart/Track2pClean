@@ -109,6 +109,17 @@ bayescatrack advanced track2p-improvement-manifest \
   --output benchmarks/track2p_result_improvements.json
 ```
 
+The generated manifest now also enables all-seed benchmark scoring, exposes the
+auto-registration candidate list used when `--transform-type auto` is selected,
+uses bilinear FOV-affine mask warping for weighted-mask experiments, and includes
+reliability-aware/pruned ROI-aware shifted-cost rows. These rows wire
+`bayescatrack.association.advanced_uncertainty` into the normal global assignment
+path, so questionable edges from weak registration diagnostics, gated components,
+empty warped ROIs, or poor local margins can be penalized before candidate
+pruning and path-cover assignment. The suite also includes a LOSO solver-prior
+run whose search objective is `complete_track_f1`, keeping the main optimization
+target aligned with paper-facing complete-track quality.
+
 Run the manifest after reviewing or editing the generated JSON:
 
 ```bash
@@ -119,8 +130,16 @@ bayescatrack benchmark suite benchmarks/track2p_result_improvements.json \
 
 The generated suite compares Track2p, registered-IoU solver-prior sweeps,
 shifted/ROI-aware costs, higher-order consistency, activity tie-breaking,
+oracle GT-link diagnostics, auto-registration selection, uncertainty-aware
+pruning, dynamic edge priors, fold-clean complete-track-F1 solver-prior tuning,
 local-evidence calibrated LOSO, configurable hard negatives, histogram-gradient
 calibration, monotone LOSO ranking, and registration QA.
+
+For targeted command-line experiments, the Track2p benchmark now accepts
+`--seed-sessions all`, `--auto-registration-candidates`,
+`--fov-affine-mask-warp-mode`, and `--edge-uncertainty-json` alongside the
+existing candidate-pruning, dynamic-prior, solver-prior, and
+higher-order-consistency options.
 
 Build a rejection-threshold precision/recall table:
 

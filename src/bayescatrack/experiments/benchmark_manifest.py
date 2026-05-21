@@ -71,6 +71,7 @@ REGISTRATION_QA_CONFIG_FIELDS = {
     "input_format",
     "max_gap",
     "transform_type",
+    "fov_affine_mask_warp_mode",
     "cost",
     "cost_threshold",
     "include_behavior",

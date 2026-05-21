@@ -628,6 +628,8 @@ def _reference_training_options(
         velocity_variance=config.velocity_variance,
         regularization=config.regularization,
         feature_names=tuple(feature_names),
+        auto_registration_candidates=tuple(config.auto_registration_candidates),
+        fov_affine_mask_warp_mode=config.fov_affine_mask_warp_mode,
         pairwise_cost_kwargs=pairwise_cost_kwargs_for_calibration_features(
             config.pairwise_cost_kwargs, feature_names
         ),

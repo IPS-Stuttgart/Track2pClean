@@ -93,20 +93,8 @@ def apply_dynamic_edge_priors(
         missing = _activity_missing_component(pairwise_components, costs.shape)
         costs += cfg.activity_missing_weight * missing
     if cfg.registration_empty_roi_weight and empty_registered_rois is not None:
-        empty = np.asarray(empty_registered_rois, dtype=bool).reshape(-1)
-        if empty.shape != (costs.shape[1],):
-            non_empty_count = int(empty.size - np.count_nonzero(empty))
-            if non_empty_count != costs.shape[1]:
-                raise ValueError(
-                    "empty_registered_rois must describe either the current cost "
-                    "matrix columns or the full registered-ROI column layout"
-                )
-            # The cost matrix is already compacted to non-empty registered ROI
-            # columns. Empty ROI columns will be reintroduced downstream by
-            # expand_registered_pairwise_cost_columns(..., fill_value=large_cost),
-            # so there is no compact column to penalize here.
-        else:
-            costs[:, empty] += cfg.registration_empty_roi_weight
+        empty = _column_mask_for_cost_shape(empty_registered_rois, costs.shape)
+        costs[:, empty] += cfg.registration_empty_roi_weight
 
     return np.nan_to_num(
         costs,
@@ -145,6 +133,25 @@ def _activity_missing_component(
             return 1.0 - np.clip(np.nan_to_num(values, nan=0.0), 0.0, 1.0)
         return np.clip(np.nan_to_num(values, nan=0.0), 0.0, 1.0)
     return np.zeros(shape, dtype=float)
+
+
+def _column_mask_for_cost_shape(mask: Any, shape: tuple[int, int]) -> np.ndarray:
+    """Return a column mask aligned to a compact or full cost matrix.
+
+    Registered ROI masks are often computed in the original measurement-ROI
+    layout, while costs are built on a compact non-empty subset and expanded only
+    after pruning.  If the supplied mask is already compact, use it directly. If
+    it is full-size and the compact matrix has one column per non-empty ROI,
+    there are no empty columns left to penalize at this stage.
+    """
+
+    column_mask = np.asarray(mask, dtype=bool).reshape(-1)
+    if column_mask.shape == (shape[1],):
+        return column_mask
+    compact_column_count = int(column_mask.size - np.count_nonzero(column_mask))
+    if compact_column_count == shape[1]:
+        return np.zeros((shape[1],), dtype=bool)
+    raise ValueError("empty_registered_rois must align with compact or full columns")
 
 
 __all__ = (

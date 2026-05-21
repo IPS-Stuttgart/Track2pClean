@@ -60,6 +60,24 @@ class UncertaintyAwareEdgeResult:
     uncertainty_penalty_matrix: np.ndarray
 
 
+def edge_uncertainty_config_from_mapping(
+    value: EdgeUncertaintyConfig | Mapping[str, Any] | None,
+) -> EdgeUncertaintyConfig | None:
+    """Normalize optional uncertainty configuration values.
+
+    Benchmark manifests and CLI JSON arguments naturally pass dictionaries,
+    while programmatic callers may pass an already-instantiated config. Keeping
+    the normalizer here avoids every benchmark/association entry point growing
+    its own slightly different coercion logic.
+    """
+
+    if value is None:
+        return None
+    if isinstance(value, EdgeUncertaintyConfig):
+        return value
+    return EdgeUncertaintyConfig(**dict(value))
+
+
 def uncertainty_aware_cost_matrix(
     cost_matrix: Any,
     pairwise_components: Mapping[str, Any] | None = None,
@@ -160,11 +178,7 @@ def edge_reliability_matrix(
             break
 
     if empty_registered_rois is not None:
-        empty = np.asarray(empty_registered_rois, dtype=bool).reshape(-1)
-        if empty.shape != (n_measurement,):
-            raise ValueError(
-                "empty_registered_rois must have one entry per measurement ROI"
-            )
+        empty = _column_mask_for_cost_shape(empty_registered_rois, shape)
         penalty[:, empty] += cfg.empty_registered_roi_weight
 
     metadata = {} if registration_metadata is None else dict(registration_metadata)
@@ -318,6 +332,21 @@ def _robust_unit_scale(values: Any) -> np.ndarray:
     q90 = float(np.percentile(finite, 90.0))
     scale = q90 if np.isfinite(q90) and q90 > 1.0e-12 else 1.0
     return np.clip(array / scale, 0.0, 10.0)
+
+
+def _column_mask_for_cost_shape(mask: Any, shape: tuple[int, int]) -> np.ndarray:
+    """Return a registered-ROI column mask aligned to compact/full costs."""
+
+    column_mask = np.asarray(mask, dtype=bool).reshape(-1)
+    if column_mask.shape == (shape[1],):
+        return column_mask
+    compact_column_count = int(column_mask.size - np.count_nonzero(column_mask))
+    if compact_column_count == shape[1]:
+        return np.zeros((shape[1],), dtype=bool)
+    raise ValueError(
+        "empty_registered_rois must have one entry per compact column or one "
+        "entry per original measurement ROI"
+    )
 
 
 def _first_finite_scalar(

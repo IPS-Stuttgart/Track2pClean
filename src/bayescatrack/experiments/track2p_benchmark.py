@@ -98,12 +98,14 @@ class Track2pBenchmarkConfig:
     allow_track2p_as_reference_for_smoke_test: bool = False
     curated_only: bool = False
     seed_session: int = 0
-    seed_sessions: tuple[int, ...] = ()
+    seed_sessions: tuple[int, ...] | str = ()
     restrict_to_reference_seed_rois: bool = True
     cost: AssociationCost = "registered-iou"
     calibration_feature_set: str = "default"
     max_gap: int = 2
     transform_type: str = "affine"
+    auto_registration_candidates: tuple[str, ...] = ()
+    fov_affine_mask_warp_mode: str = "nearest"
     start_cost: float = 5.0
     end_cost: float = 5.0
     gap_penalty: float = 1.0
@@ -132,6 +134,7 @@ class Track2pBenchmarkConfig:
     higher_order_consistency_config: dict[str, Any] | None = None
     candidate_pruning_config: dict[str, Any] | None = None
     dynamic_edge_prior_config: dict[str, Any] | None = None
+    edge_uncertainty_config: dict[str, Any] | None = None
     adaptive_edge_prior_config: dict[str, Any] | None = None
     learned_gap_prior: bool = False
     learned_gap_prior_smoothing: float = 1.0
@@ -297,7 +300,13 @@ def _resolved_seed_sessions(
     *,
     n_sessions: int,
 ) -> tuple[int, ...]:
-    seed_sessions = tuple(config.seed_sessions or (config.seed_session,))
+    configured_seed_sessions = config.seed_sessions
+    if isinstance(configured_seed_sessions, str):
+        if configured_seed_sessions.casefold() != "all":
+            raise ValueError("seed_sessions string value must be 'all'")
+        return tuple(range(int(n_sessions)))
+
+    seed_sessions = tuple(configured_seed_sessions or (config.seed_session,))
     if not seed_sessions:
         return (int(config.seed_session),)
     normalized = tuple(int(seed_session) for seed_session in seed_sessions)
@@ -417,7 +426,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--seed-sessions",
         default=None,
         help=(
-            "Optional comma-separated seed sessions to score; overrides --seed-session for subject-level benchmarks"
+            "Optional comma-separated seed sessions, or 'all', to score; overrides --seed-session for subject-level benchmarks"
         ),
     )
     parser.add_argument(
@@ -464,6 +473,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="affine",
         choices=REGISTRATION_TRANSFORM_CHOICES,
         help=REGISTRATION_TRANSFORM_HELP,
+    )
+    parser.add_argument(
+        "--auto-registration-candidates",
+        default=None,
+        help=(
+            "Comma-separated candidate transforms used only when --transform-type auto. "
+            "Example: none,fov-translation,fov-affine,affine,rigid,local-affine-grid"
+        ),
+    )
+    parser.add_argument(
+        "--fov-affine-mask-warp-mode",
+        default="nearest",
+        choices=("nearest", "bilinear"),
+        help=(
+            "ROI-mask warp used by FOV-affine registration. Use bilinear with "
+            "--weighted-masks to preserve soft mask evidence."
+        ),
     )
     parser.add_argument(
         "--start-cost", type=float, default=5.0, help="PyRecEst track start cost"
@@ -621,6 +647,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--dynamic-edge-prior-json",
         default=None,
         help="JSON object for additive ROI-, gap-, activity-, and registration-quality edge priors",
+    )
+    parser.add_argument(
+        "--edge-uncertainty-json",
+        default=None,
+        help="JSON object for reliability-aware edge-cost penalties before pruning/assignment",
     )
     parser.add_argument(
         "--adaptive-edge-prior-json",
@@ -955,6 +986,8 @@ def solve_configured_global_assignment(
         cost=config.cost if cost is None else cost,
         calibrated_model=calibrated_model,
         transform_type=config.transform_type,
+        auto_registration_candidates=config.auto_registration_candidates or None,
+        fov_affine_mask_warp_mode=config.fov_affine_mask_warp_mode,
         start_cost=config.start_cost,
         end_cost=config.end_cost,
         gap_penalty=config.gap_penalty,
@@ -973,6 +1006,7 @@ def solve_configured_global_assignment(
         higher_order_consistency_config=_solver_higher_order_config(config),
         candidate_pruning_config=config.candidate_pruning_config,
         dynamic_edge_prior_config=config.dynamic_edge_prior_config,
+        edge_uncertainty_config=config.edge_uncertainty_config,
         adaptive_edge_prior_config=config.adaptive_edge_prior_config,
     )
 
@@ -1563,13 +1597,24 @@ def _parse_json_object(raw: str | None, *, name: str) -> dict[str, Any] | None:
     return parsed
 
 
-def _parse_int_list(raw: str | None, *, name: str) -> tuple[int, ...]:
+def _parse_int_list_or_all(raw: str | None, *, name: str) -> tuple[int, ...] | str:
     if raw is None:
         return ()
+    if raw.strip().casefold() == "all":
+        return "all"
     tokens = tuple(token.strip() for token in raw.split(","))
     if not tokens or any(not token for token in tokens):
         raise ValueError(f"{name} must be a comma-separated list of integers")
     return tuple(int(token) for token in tokens)
+
+
+def _parse_string_list(raw: str | None, *, name: str) -> tuple[str, ...]:
+    if raw is None:
+        return ()
+    tokens = tuple(token.strip() for token in raw.split(",") if token.strip())
+    if not tokens:
+        raise ValueError(f"{name} must contain at least one value")
+    return tokens
 
 
 def _optional_positive_int(value: int | None) -> int | None:
@@ -1603,6 +1648,10 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         getattr(args, "adaptive_edge_prior_json", None),
         name="--adaptive-edge-prior-json",
     )
+    edge_uncertainty_config = _parse_json_object(
+        getattr(args, "edge_uncertainty_json", None),
+        name="--edge-uncertainty-json",
+    )
     registration_options = _parse_json_object(
         getattr(args, "registration_options_json", None),
         name="--registration-options-json",
@@ -1626,7 +1675,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
         curated_only=args.curated_only,
         seed_session=args.seed_session,
-        seed_sessions=_parse_int_list(
+        seed_sessions=_parse_int_list_or_all(
             getattr(args, "seed_sessions", None),
             name="--seed-sessions",
         ),
@@ -1635,6 +1684,11 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         calibration_feature_set=args.calibration_feature_set,
         max_gap=args.max_gap,
         transform_type=args.transform_type,
+        auto_registration_candidates=_parse_string_list(
+            getattr(args, "auto_registration_candidates", None),
+            name="--auto-registration-candidates",
+        ),
+        fov_affine_mask_warp_mode=args.fov_affine_mask_warp_mode,
         start_cost=args.start_cost,
         end_cost=args.end_cost,
         gap_penalty=args.gap_penalty,
@@ -1675,6 +1729,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         higher_order_consistency_config=higher_order_consistency_config,
         candidate_pruning_config=candidate_pruning_config,
         dynamic_edge_prior_config=dynamic_edge_prior_config,
+        edge_uncertainty_config=edge_uncertainty_config,
         adaptive_edge_prior_config=adaptive_edge_prior_config,
         learned_gap_prior=bool(args.learned_gap_prior),
         learned_gap_prior_smoothing=float(args.learned_gap_prior_smoothing),
