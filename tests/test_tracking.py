@@ -245,6 +245,10 @@ def test_run_registered_subject_tracking_default_solver_uses_global_assignment(
         result.link_costs,
         np.array([[0.1, 0.4], [0.2, 0.5], [0.3, 0.6]], dtype=float),
     )
+    npt.assert_array_equal(
+        result.link_target_indices,
+        np.array([[1, 2], [1, 2], [1, 2]], dtype=int),
+    )
     assert result.global_link_edges == ((0, 1), (0, 2), (1, 2))
     npt.assert_allclose(
         result.global_link_costs,
@@ -320,10 +324,11 @@ def test_run_registered_subject_tracking_pairwise_ablation_builds_full_track_row
     npt.assert_array_equal(export["track_rows"], result.track_rows)
     npt.assert_array_equal(export["track_lengths"], np.array([3, 3, 3], dtype=int))
     npt.assert_array_equal(export["complete_track_mask"], np.array([True, True, True]))
+    npt.assert_array_equal(export["link_target_indices"], np.array([[1, 2], [1, 2], [1, 2]], dtype=int))
+    assert export["session_names"].dtype.kind in {"U", "S"}
+    assert export["tracking_method"].dtype.kind in {"U", "S"}
     assert "scores" not in export
-    scores = json.loads(str(export["scores_json"]))
-    assert scores["solver"] == "pairwise"
-    assert np.asarray(export["session_names"]).dtype.kind == "U"
+    assert json.loads(export["scores_json"].item())["solver"] == "pairwise"
 
 
 def test_run_registered_subject_tracking_uses_global_assignment_by_default(
@@ -373,7 +378,9 @@ def test_run_registered_subject_tracking_uses_global_assignment_by_default(
     assert result.link_costs.shape == (3, 2)
     assert np.isfinite(result.link_costs[0, 0])
     assert np.isfinite(result.link_costs[0, 1])
-    assert not np.isfinite(result.link_costs[1]).any()
+    assert result.link_target_indices[1, 0] == 2
+    assert result.link_target_indices[1, 1] == -1
+    assert np.isfinite(result.link_costs[1, 0])
     assert result.global_link_edges == ((0, 1), (0, 2), (1, 2))
     assert result.global_link_costs is not None
     assert np.isfinite(result.global_link_costs[0, 0])
@@ -414,8 +421,6 @@ def test_global_tracking_rejects_pairwise_only_registration_options(tmp_path: Pa
             tracking_method="global",
             binarize_registered_masks=True,
         )
-
-
 def test_run_registered_subject_tracking_handles_single_session(tmp_path: Path):
     subject_dir = tmp_path / "jm271"
     _write_raw_npy_session(
