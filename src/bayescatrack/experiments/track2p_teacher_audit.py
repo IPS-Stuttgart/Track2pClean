@@ -59,7 +59,7 @@ class Track2pTeacherAuditConfig:
     gap_penalty: float = 1.0
     cost_threshold: float | None = 6.0
     include_behavior: bool = True
-    include_non_cells: bool = False
+    include_non_cells: bool = True
     cell_probability_threshold: float = 0.5
     weighted_masks: bool = False
     exclude_overlapping_pixels: bool = True
@@ -293,7 +293,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--include-behavior", action=argparse.BooleanOptionalAction, default=True
     )
-    p.add_argument("--include-non-cells", action="store_true")
+    p.add_argument(
+        "--include-non-cells",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Keep Suite2p ROIs that fail iscell filtering",
+    )
     p.add_argument("--cell-probability-threshold", type=float, default=0.5)
     p.add_argument("--weighted-masks", action="store_true")
     p.add_argument(
