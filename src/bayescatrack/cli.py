@@ -59,6 +59,14 @@ def _handle_benchmark(args: list[str]) -> int:
             "track2p", help="Track2p baseline and global-assignment ablations"
         )
         subparsers.add_parser(
+            "track2p-policy",
+            help="Run the first-class Track2p-policy benchmark method",
+        )
+        subparsers.add_parser(
+            "track2p-policy-dp",
+            help="Run the DP-rescued Track2p-policy benchmark method",
+        )
+        subparsers.add_parser(
             "track2p-shifted-iou",
             help="Track2p global-assignment ablation with residual shifted-IoU costs",
         )
@@ -175,6 +183,18 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_benchmark_main(args[1:]))
+    if args[0] == "track2p-policy":
+        from bayescatrack.experiments.track2p_policy_benchmark import (
+            main as _track2p_policy_main,
+        )
+
+        return int(_track2p_policy_main(args[1:]))
+    if args[0] == "track2p-policy-dp":
+        from bayescatrack.experiments.track2p_policy_dp_benchmark import (
+            main as _track2p_policy_dp_main,
+        )
+
+        return int(_track2p_policy_dp_main(args[1:]))
     if args[0] == "track2p-shifted-iou":
         from bayescatrack.experiments.track2p_shifted_iou_benchmark import (
             main as _track2p_shifted_iou_benchmark_main,
