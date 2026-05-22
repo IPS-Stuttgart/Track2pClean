@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.candidate_prefilter import (
     CentroidCandidatePrefilterConfig,
     apply_candidate_mask,

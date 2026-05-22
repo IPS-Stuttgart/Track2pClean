@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.association.absence_model import apply_absence_adjustment
 from bayescatrack.association.consensus_priors import (
     apply_consensus_edge_priors,
@@ -10,7 +9,9 @@ from bayescatrack.association.consensus_priors import (
 from bayescatrack.association.joint_registration_assignment import (
     apply_joint_anchor_relief_to_pairwise_costs,
 )
-from bayescatrack.association.postsolve_relinking import relink_tracks_at_geometry_issues
+from bayescatrack.association.postsolve_relinking import (
+    relink_tracks_at_geometry_issues,
+)
 from bayescatrack.association.track_refinement import TrackGeometryIssue
 
 
@@ -45,7 +46,11 @@ def test_joint_anchor_relief_reduces_mutual_low_cost_edges():
 
     adjusted = apply_joint_anchor_relief_to_pairwise_costs(
         pairwise,
-        config={"min_anchor_edges": 1, "high_confidence_quantile": 0.5, "cost_relief": 0.05},
+        config={
+            "min_anchor_edges": 1,
+            "high_confidence_quantile": 0.5,
+            "cost_relief": 0.05,
+        },
     )
 
     assert adjusted[(0, 1)][0, 0] < pairwise[(0, 1)][0, 0]

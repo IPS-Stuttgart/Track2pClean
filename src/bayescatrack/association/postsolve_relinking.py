@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.association.track_refinement import TrackGeometryIssue
 
 SessionEdge = tuple[int, int]
@@ -55,16 +54,24 @@ def relink_tracks_at_geometry_issues(
     if not issues:
         return rows
 
-    roi_indices = tuple(np.asarray(values, dtype=int).reshape(-1) for values in roi_indices_by_session)
+    roi_indices = tuple(
+        np.asarray(values, dtype=int).reshape(-1) for values in roi_indices_by_session
+    )
     local_index_by_session = tuple(_local_index_map(values) for values in roi_indices)
     occupied = _occupied_rois_by_session(rows, fill_value=cfg.fill_value)
 
-    for issue in sorted(issues, key=lambda item: (item.track_index, item.session_index)):
+    for issue in sorted(
+        issues, key=lambda item: (item.track_index, item.session_index)
+    ):
         track_index = int(issue.track_index)
         session_index = int(issue.session_index)
-        if not (0 <= track_index < rows.shape[0] and 0 <= session_index < rows.shape[1]):
+        if not (
+            0 <= track_index < rows.shape[0] and 0 <= session_index < rows.shape[1]
+        ):
             continue
-        previous_session = _previous_present_session(rows[track_index], session_index, fill_value=cfg.fill_value)
+        previous_session = _previous_present_session(
+            rows[track_index], session_index, fill_value=cfg.fill_value
+        )
         if previous_session is None:
             continue
         edge = (previous_session, session_index)
@@ -112,14 +119,23 @@ def _coerce_config(
 
 
 def _local_index_map(roi_indices: np.ndarray) -> dict[int, int]:
-    return {int(roi_index): int(local_index) for local_index, roi_index in enumerate(roi_indices)}
+    return {
+        int(roi_index): int(local_index)
+        for local_index, roi_index in enumerate(roi_indices)
+    }
 
 
-def _occupied_rois_by_session(rows: np.ndarray, *, fill_value: int) -> tuple[set[int], ...]:
+def _occupied_rois_by_session(
+    rows: np.ndarray, *, fill_value: int
+) -> tuple[set[int], ...]:
     occupied: list[set[int]] = []
     for session_index in range(rows.shape[1]):
         occupied.append(
-            {int(value) for value in rows[:, session_index] if int(value) != int(fill_value)}
+            {
+                int(value)
+                for value in rows[:, session_index]
+                if int(value) != int(fill_value)
+            }
         )
     return tuple(occupied)
 
@@ -163,7 +179,10 @@ def _best_relink_candidate(
         return None
     best_local = int(candidates[np.argmin(costs[candidates])])
     best_cost = float(costs[best_local])
-    if np.isfinite(current_cost) and current_cost - best_cost < config.min_cost_improvement:
+    if (
+        np.isfinite(current_cost)
+        and current_cost - best_cost < config.min_cost_improvement
+    ):
         return None
     return best_local
 

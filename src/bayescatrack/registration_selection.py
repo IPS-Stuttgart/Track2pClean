@@ -32,7 +32,15 @@ DEFAULT_AUTO_REGISTRATION_CANDIDATES: tuple[str, ...] = (
 )
 
 NONRIGID_AUTO_REGISTRATION_CANDIDATES = frozenset(
-    {"local-affine-grid", "tps", "thin-plate-spline", "landmark-tps", "bspline", "b-spline", "optical-flow"}
+    {
+        "local-affine-grid",
+        "tps",
+        "thin-plate-spline",
+        "landmark-tps",
+        "bspline",
+        "b-spline",
+        "optical-flow",
+    }
 )
 
 _DEFAULT_COMPLEXITY_PENALTY: Mapping[str, float] = {
@@ -114,9 +122,7 @@ def select_registration_transform(
     if min_retained_mask_area_fraction < 0.0:
         raise ValueError("min_retained_mask_area_fraction must be non-negative")
     if not 0.0 <= min_nonrigid_inverse_warp_valid_fraction <= 1.0:
-        raise ValueError(
-            "min_nonrigid_inverse_warp_valid_fraction must lie in [0, 1]"
-        )
+        raise ValueError("min_nonrigid_inverse_warp_valid_fraction must lie in [0, 1]")
     if empty_roi_penalty < 0.0 or retained_area_penalty < 0.0:
         raise ValueError("selection penalties must be non-negative")
     if nonrigid_valid_fraction_penalty < 0.0:
@@ -197,7 +203,9 @@ def select_registration_transform(
         min_fov_correlation_gain=float(min_fov_correlation_gain),
         max_empty_roi_fraction=float(max_empty_roi_fraction),
         min_retained_mask_area_fraction=float(min_retained_mask_area_fraction),
-        min_nonrigid_inverse_warp_valid_fraction=float(min_nonrigid_inverse_warp_valid_fraction),
+        min_nonrigid_inverse_warp_valid_fraction=float(
+            min_nonrigid_inverse_warp_valid_fraction
+        ),
     )
     return RegistrationSelectionResult(
         registered_plane=selected_plane,
@@ -299,7 +307,11 @@ def _diagnose_candidate(
         nonrigid_valid_shortfall = max(
             0.0,
             min_nonrigid_inverse_warp_valid_fraction
-            - (1.0 if inverse_warp_valid_fraction is None else inverse_warp_valid_fraction),
+            - (
+                1.0
+                if inverse_warp_valid_fraction is None
+                else inverse_warp_valid_fraction
+            ),
         )
     score = (
         fov_correlation

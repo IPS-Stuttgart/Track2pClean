@@ -189,8 +189,7 @@ def consensus_edges(
         seen_this_model: set[Edge] = set()
         if min_support_fraction is not None and matrix.shape[1] == 4:
             seen_this_model.update(
-                (int(row[0]), int(row[1]), int(row[2]), int(row[3]))
-                for row in matrix
+                (int(row[0]), int(row[1]), int(row[2]), int(row[3])) for row in matrix
             )
         else:
             for row in matrix:

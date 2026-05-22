@@ -7,17 +7,12 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import numpy as np
-from bayescatrack.association.activity_similarity import (
-    add_activity_similarity_components,
-)
 from bayescatrack.association.absence_model import (
     AbsenceModelConfig,
     apply_absence_adjustment,
 )
-from bayescatrack.association.advanced_uncertainty import (
-    EdgeUncertaintyConfig,
-    edge_uncertainty_config_from_mapping,
-    uncertainty_aware_cost_matrix,
+from bayescatrack.association.activity_similarity import (
+    add_activity_similarity_components,
 )
 from bayescatrack.association.activity_tie_breaker import (
     activity_tie_breaker_cost_matrix,
@@ -26,11 +21,10 @@ from bayescatrack.association.adaptive_priors import (
     AdaptiveEdgePriorConfig,
     apply_adaptive_edge_priors,
 )
-from bayescatrack.association.consensus_priors import (
-    ConsensusPriorConfig,
-    apply_consensus_edge_priors,
-    consensus_prior_config_from_mapping,
-    edge_votes_from_tracks,
+from bayescatrack.association.advanced_uncertainty import (
+    EdgeUncertaintyConfig,
+    edge_uncertainty_config_from_mapping,
+    uncertainty_aware_cost_matrix,
 )
 from bayescatrack.association.calibrated_costs import (
     CalibratedAssociationModel,
@@ -39,6 +33,12 @@ from bayescatrack.association.calibrated_costs import (
 from bayescatrack.association.candidate_pruning import (
     CandidatePruningConfig,
     prune_pairwise_cost_matrix,
+)
+from bayescatrack.association.consensus_priors import (
+    ConsensusPriorConfig,
+    apply_consensus_edge_priors,
+    consensus_prior_config_from_mapping,
+    edge_votes_from_tracks,
 )
 from bayescatrack.association.dynamic_edge_priors import (
     DynamicEdgePriorConfig,
@@ -57,13 +57,13 @@ from bayescatrack.association.registered_masks import (
     drop_empty_registered_masks,
     expand_registered_pairwise_cost_columns,
 )
-from bayescatrack.association.shifted_overlap import (
-    install_shifted_overlap_cost_patch,
-    pairwise_kwargs_use_shifted_overlap,
-)
 from bayescatrack.association.segmentation_events import (
     SegmentationEventConfig,
     event_soft_penalty_matrix,
+)
+from bayescatrack.association.shifted_overlap import (
+    install_shifted_overlap_cost_patch,
+    pairwise_kwargs_use_shifted_overlap,
 )
 from bayescatrack.core.bridge import (
     CalciumPlaneData,
@@ -369,7 +369,9 @@ def build_registered_pairwise_costs(
     candidate_pruning_config: CandidatePruningConfig | Mapping[str, Any] | None = None,
     dynamic_edge_prior_config: DynamicEdgePriorConfig | Mapping[str, Any] | None = None,
     edge_uncertainty_config: EdgeUncertaintyConfig | Mapping[str, Any] | None = None,
-    segmentation_event_config: SegmentationEventConfig | Mapping[str, Any] | None = None,
+    segmentation_event_config: (
+        SegmentationEventConfig | Mapping[str, Any] | None
+    ) = None,
 ) -> dict[SessionEdge, np.ndarray]:
     """Build registered pairwise cost matrices for consecutive and skip-session edges."""
 
@@ -474,7 +476,9 @@ def build_registered_pairwise_costs(
                     config=absence_model_config,
                 )
             if segmentation_event_config is not None:
-                cost_matrix = np.asarray(cost_matrix, dtype=float) + event_soft_penalty_matrix(
+                cost_matrix = np.asarray(
+                    cost_matrix, dtype=float
+                ) + event_soft_penalty_matrix(
                     bundle.pairwise_components,
                     config=segmentation_event_config,
                 )
@@ -772,7 +776,10 @@ def _apply_consensus_priors_from_variants(  # pylint: disable=too-many-arguments
 ) -> dict[SessionEdge, np.ndarray]:
     cfg = consensus_prior_config_from_mapping(config)
     if cfg is None or not cfg.variant_costs:
-        return {edge: np.asarray(matrix, dtype=float).copy() for edge, matrix in pairwise_costs.items()}
+        return {
+            edge: np.asarray(matrix, dtype=float).copy()
+            for edge, matrix in pairwise_costs.items()
+        }
 
     track_sets: list[Sequence[Mapping[int, int]]] = []
     for variant_cost in cfg.variant_costs:
