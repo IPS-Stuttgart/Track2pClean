@@ -103,6 +103,10 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Run LOSO calibrated global assignment with monotone ranking costs",
         )
         subparsers.add_parser(
+            "track2p-result-improvement",
+            help="Run the Track2p improvement suite and select by complete-track objective",
+        )
+        subparsers.add_parser(
             "track2p-teacher-audit",
             help="Cross-tab manual GT, Track2p output, and BayesCaTrack edges",
         )
@@ -237,6 +241,12 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_monotone_loso_main(args[1:]))
+    if args[0] == "track2p-result-improvement":
+        from bayescatrack.experiments.track2p_result_improvement_selection import (
+            main as _track2p_result_improvement_main,
+        )
+
+        return int(_track2p_result_improvement_main(args[1:]))
     if args[0] == "track2p-teacher-audit":
         from bayescatrack.experiments.track2p_teacher_audit import (
             main as _track2p_teacher_audit_main,

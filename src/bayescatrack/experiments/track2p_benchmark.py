@@ -99,6 +99,7 @@ class Track2pBenchmarkConfig:
     input_format: str = "auto"
     reference: Path | None = None
     reference_kind: ReferenceKind = "auto"
+    track2p_teacher_reference: Path | None = None
     allow_track2p_as_reference_for_smoke_test: bool = False
     curated_only: bool = False
     seed_session: int = 0
@@ -146,6 +147,7 @@ class Track2pBenchmarkConfig:
     joint_refinement_config: dict[str, Any] | None = None
     consensus_prior_config: dict[str, Any] | None = None
     track_refinement_config: dict[str, Any] | None = None
+    track2p_teacher_prior_config: dict[str, Any] | None = None
     postsolve_relink_config: dict[str, Any] | None = None
     activity_tie_breaker_weight: float = 0.0
     activity_tie_breaker_component: str = "activity_tiebreaker_cost"
@@ -407,6 +409,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Optional ground_truth.csv file, ground-truth root, subject directory, or track2p folder",
+    )
+    parser.add_argument(
+        "--track2p-teacher-reference",
+        type=Path,
+        default=None,
+        help="Optional Track2p output root used only by --track2p-teacher-prior-json ablations",
     )
     parser.add_argument(
         "--reference-kind",
@@ -692,6 +700,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="JSON object for ensemble consensus edge-prior relief across association variants",
     )
     parser.add_argument(
+        "--track2p-teacher-prior-json",
+        default=None,
+        help="JSON object enabling Track2p-assisted edge-prior ablations; diagnostic use only",
+    )
+    parser.add_argument(
         "--track-refinement-json",
         default=None,
         help="JSON object for optional geometry-based post-solve track splitting",
@@ -834,8 +847,15 @@ def _predict_subject_track_variants(
         raise ValueError("assignment-prior sweeps require method='global-assignment'")
 
     sessions = _load_subject_sessions(subject_dir, config)
-    base_assignment = solve_configured_global_assignment(sessions, config)
+    teacher_track_matrix = _load_track2p_teacher_matrix_for_subject(
+        subject_dir, sessions, config=config
+    )
+    base_assignment = solve_configured_global_assignment(
+        sessions, config, teacher_track_matrix=teacher_track_matrix
+    )
     base_variant = _variant_name(config.cost)
+    if config.track2p_teacher_prior_config is not None:
+        base_variant = f"{base_variant} + Track2p teacher prior"
 
     predictions: list[tuple[np.ndarray, str, Mapping[str, float | str]]] = []
     for prior_setting, assignment in assignment_prior_assignment_runs(
@@ -904,12 +924,20 @@ def _predict_subject_tracks(
         raise ValueError(f"Unsupported benchmark method: {config.method!r}")
 
     sessions = _load_subject_sessions(subject_dir, config)
-    assignment = solve_configured_global_assignment(sessions, config)
+    teacher_track_matrix = _load_track2p_teacher_matrix_for_subject(
+        subject_dir, sessions, config=config
+    )
+    assignment = solve_configured_global_assignment(
+        sessions, config, teacher_track_matrix=teacher_track_matrix
+    )
     predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
     predicted = _maybe_refine_predicted_tracks(
         predicted, sessions, config=config, assignment=assignment
     )
-    return predicted, _variant_name(config.cost)
+    variant = _variant_name(config.cost)
+    if config.track2p_teacher_prior_config is not None:
+        variant = f"{variant} + Track2p teacher prior"
+    return predicted, variant
 
 
 def _maybe_refine_predicted_tracks(
@@ -1038,6 +1066,7 @@ def solve_configured_global_assignment(
     *,
     cost: AssociationCost | None = None,
     calibrated_model: Any | None = None,
+    teacher_track_matrix: Any | None = None,
 ) -> GlobalAssignmentRun:
     """Run global assignment using the benchmark configuration knobs."""
 
@@ -1072,7 +1101,54 @@ def solve_configured_global_assignment(
         segmentation_event_config=config.segmentation_event_config,
         joint_refinement_config=config.joint_refinement_config,
         consensus_prior_config=config.consensus_prior_config,
+        teacher_edge_prior_config=config.track2p_teacher_prior_config,
+        teacher_track_matrix=teacher_track_matrix,
     )
+
+
+def _load_track2p_teacher_matrix_for_subject(
+    subject_dir: Path,
+    sessions: Sequence[Track2pSession],
+    *,
+    config: Track2pBenchmarkConfig,
+) -> np.ndarray | None:
+    """Load Track2p output rows for optional teacher-prior ablations."""
+
+    if config.track2p_teacher_prior_config is None:
+        return None
+    if config.method != "global-assignment":
+        raise ValueError(
+            "Track2p teacher priors are only supported for global-assignment runs"
+        )
+
+    if config.track2p_teacher_reference is None:
+        teacher_path = subject_dir / "track2p"
+        if not teacher_path.exists():
+            raise ValueError(
+                "Track2p teacher prior was requested, but no subject-local "
+                f"track2p output directory exists at {teacher_path} and "
+                "--track2p-teacher-reference was not provided"
+            )
+    else:
+        teacher_path = _resolve_track2p_reference_path(
+            subject_dir,
+            data_root=config.data,
+            reference_root=Path(config.track2p_teacher_reference),
+        )
+        if teacher_path is None:
+            raise ValueError(
+                "Track2p teacher prior was requested, but no Track2p output "
+                f"could be resolved for subject {subject_dir.name!r} under "
+                f"{config.track2p_teacher_reference}"
+            )
+    teacher = load_track2p_reference(teacher_path, plane_name=config.plane_name)
+    session_names = tuple(session.session_name for session in sessions)
+    if teacher.session_names != session_names:
+        raise ValueError(
+            "Track2p teacher session order does not match loaded subject sessions: "
+            f"teacher={teacher.session_names!r}, loaded={session_names!r}"
+        )
+    return normalize_track_matrix(teacher.suite2p_indices)
 
 
 def _roi_indices_by_session(
@@ -1749,6 +1825,10 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         getattr(args, "consensus_prior_json", None),
         name="--consensus-prior-json",
     )
+    track2p_teacher_prior_config = _parse_json_object(
+        getattr(args, "track2p_teacher_prior_json", None),
+        name="--track2p-teacher-prior-json",
+    )
     track_refinement_config = _parse_json_object(
         getattr(args, "track_refinement_json", None),
         name="--track-refinement-json",
@@ -1765,6 +1845,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         input_format=args.input_format,
         reference=args.reference,
         reference_kind=args.reference_kind,
+        track2p_teacher_reference=args.track2p_teacher_reference,
         allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
         curated_only=args.curated_only,
         seed_session=args.seed_session,
@@ -1830,6 +1911,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         joint_refinement_config=joint_refinement_config,
         consensus_prior_config=consensus_prior_config,
         track_refinement_config=track_refinement_config,
+        track2p_teacher_prior_config=track2p_teacher_prior_config,
         postsolve_relink_config=postsolve_relink_config,
         activity_tie_breaker_weight=args.activity_tie_breaker_weight,
         activity_tie_breaker_component=args.activity_tie_breaker_component,

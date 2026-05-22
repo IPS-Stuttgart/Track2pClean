@@ -17,6 +17,7 @@ from bayescatrack.experiments.benchmark_manifest import (
 _PLAN_CONFIG_FIELDS = (
     "data",
     "reference",
+    "track2p_teacher_reference",
     "method",
     "split",
     "cost",
@@ -44,7 +45,7 @@ def validate_manifest_input_paths(manifest: BenchmarkManifest) -> None:
 
     missing: list[str] = []
     for run in manifest.runs:
-        for attribute_name in ("data", "reference"):
+        for attribute_name in ("data", "reference", "track2p_teacher_reference"):
             value = getattr(run.config, attribute_name, None)
             if value is None:
                 continue

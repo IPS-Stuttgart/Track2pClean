@@ -74,15 +74,15 @@ def active_label_score(
     disagreement = 0.0
     if "in_ground_truth" in row and "in_track2p" in row:
         disagreement += float(
-            bool(row.get("in_ground_truth")) != bool(row.get("in_track2p"))
+            _safe_bool(row.get("in_ground_truth")) != _safe_bool(row.get("in_track2p"))
         )
     if "in_ground_truth" in row and "in_bayes" in row:
         disagreement += float(
-            bool(row.get("in_ground_truth")) != bool(row.get("in_bayes"))
+            _safe_bool(row.get("in_ground_truth")) != _safe_bool(row.get("in_bayes"))
         )
     if "in_track2p" in row and "in_bayes" in row:
         disagreement += 0.5 * float(
-            bool(row.get("in_track2p")) != bool(row.get("in_bayes"))
+            _safe_bool(row.get("in_track2p")) != _safe_bool(row.get("in_bayes"))
         )
 
     missing_edge = float(str(row.get("missing_reason", "")).strip() != "")
@@ -290,6 +290,12 @@ def track2p_result_improvement_manifest(
         "area_ratio_weight": 0.10,
         "registration_empty_roi_weight": 8.0,
     }
+    teacher_prior_config = {
+        "relief": 0.75,
+        "teacher_cost_cap": 0.5,
+        "non_teacher_penalty": 0.0,
+        "min_cost": -1.0,
+    }
     solver_prior_search = {
         "start_costs": (0.5, 1.0, 1.5, 2.0),
         "end_costs": (0.5, 1.0, 1.5, 2.0),
@@ -391,6 +397,17 @@ def track2p_result_improvement_manifest(
             "edge_uncertainty_config": uncertainty_config,
             "candidate_pruning_config": candidate_pruning_config,
             "output": f"{output_root}/roi_aware_shifted_dynamic_priors.csv",
+        },
+        {
+            "name": "roi-aware-shifted-track2p-teacher-prior",
+            "method": "global-assignment",
+            "cost": "roi-aware-shifted",
+            **tuned_solver_priors,
+            "dynamic_edge_prior_config": dynamic_edge_prior_config,
+            "edge_uncertainty_config": uncertainty_config,
+            "candidate_pruning_config": candidate_pruning_config,
+            "track2p_teacher_prior_config": teacher_prior_config,
+            "output": f"{output_root}/roi_aware_shifted_track2p_teacher_prior.csv",
         },
         {
             "name": "roi-aware-shifted-learned-solver-priors",
@@ -667,6 +684,16 @@ def _safe_float(value: Any, default: float) -> float:
 
 def _ratio(numerator: float, denominator: float) -> float:
     return 0.0 if denominator == 0 else float(numerator) / float(denominator)
+
+
+def _safe_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        text = value.strip().casefold()
+        if text in {"", "0", "false", "f", "no", "n", "none", "null", "nan"}:
+            return False
+        if text in {"1", "true", "t", "yes", "y"}:
+            return True
+    return bool(value)
 
 
 if __name__ == "__main__":  # pragma: no cover

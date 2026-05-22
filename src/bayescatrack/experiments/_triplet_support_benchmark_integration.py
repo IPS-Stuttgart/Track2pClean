@@ -32,12 +32,14 @@ def install_track2p_benchmark_triplet_support_integration() -> None:
         *,
         cost: Any | None = None,
         calibrated_model: Any | None = None,
+        **kwargs: Any,
     ) -> Any:
         assignment = original(
             sessions,
             config,
             cost=cost,
             calibrated_model=calibrated_model,
+            **kwargs,
         )
         triplet_config = benchmark._triplet_support_consistency_config(
             config
