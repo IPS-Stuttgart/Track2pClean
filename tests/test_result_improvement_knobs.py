@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -8,6 +9,10 @@ from bayescatrack.association.advanced_uncertainty import (
     EdgeUncertaintyConfig,
     edge_uncertainty_config_from_mapping,
     uncertainty_aware_cost_matrix,
+)
+from bayescatrack.association.teacher_priors import (
+    TeacherEdgePriorConfig,
+    apply_teacher_edge_priors,
 )
 from bayescatrack.experiments.advanced_improvement_workbench import (
     track2p_result_improvement_manifest,
@@ -54,6 +59,8 @@ def test_track2p_parser_exposes_result_improvement_knobs() -> None:
             "all",
             "--edge-uncertainty-json",
             '{"uncertainty_penalty_weight": 0.5}',
+            "--track2p-teacher-prior-json",
+            '{"relief": 0.75, "teacher_cost_cap": 0.5}',
         ]
     )
 
@@ -67,6 +74,10 @@ def test_track2p_parser_exposes_result_improvement_knobs() -> None:
     )
     assert config.fov_affine_mask_warp_mode == "bilinear"
     assert config.edge_uncertainty_config == {"uncertainty_penalty_weight": 0.5}
+    assert config.track2p_teacher_prior_config == {
+        "relief": 0.75,
+        "teacher_cost_cap": 0.5,
+    }
 
 
 def test_uncertainty_mapping_penalizes_unreliable_edges() -> None:
@@ -100,6 +111,31 @@ def test_uncertainty_penalizes_empty_registered_roi_columns() -> None:
     assert np.all(result.adjusted_cost_matrix[:, 1] > result.adjusted_cost_matrix[:, 0])
 
 
+def test_track2p_teacher_prior_reliefs_suite2p_edges() -> None:
+    sessions = (
+        _fake_session([10, 11]),
+        _fake_session([20, 21]),
+    )
+    adjusted = apply_teacher_edge_priors(
+        {(0, 1): np.full((2, 2), 5.0, dtype=float)},
+        sessions,
+        teacher_track_matrix=np.array([[10, 21], [11, 20]], dtype=int),
+        config=TeacherEdgePriorConfig(relief=1.0, teacher_cost_cap=2.0, min_cost=0.0),
+    )
+
+    assert adjusted[(0, 1)][0, 1] == pytest.approx(1.0)
+    assert adjusted[(0, 1)][1, 0] == pytest.approx(1.0)
+    assert adjusted[(0, 1)][0, 0] == pytest.approx(5.0)
+
+
+def _fake_session(roi_indices: list[int]) -> SimpleNamespace:
+    return SimpleNamespace(
+        plane_data=SimpleNamespace(
+            n_rois=len(roi_indices), roi_indices=np.asarray(roi_indices, dtype=int)
+        )
+    )
+
+
 def test_improvement_manifest_includes_diagnostics_priors_and_uncertainty() -> None:
     manifest = track2p_result_improvement_manifest(
         data_root="data", reference_root="gt", output_root="results"
@@ -113,7 +149,9 @@ def test_improvement_manifest_includes_diagnostics_priors_and_uncertainty() -> N
     assert "roi-aware-shifted-dynamic-priors" in run_names
     assert "roi-aware-shifted-uncertainty-pruned" in run_names
     assert "roi-aware-shifted-learned-solver-priors" in run_names
+    assert "roi-aware-shifted-track2p-teacher-prior" in run_names
     assert any("candidate_pruning_config" in run for run in manifest["runs"])
     assert any("dynamic_edge_prior_config" in run for run in manifest["runs"])
     assert any("edge_uncertainty_config" in run for run in manifest["runs"])
+    assert any("track2p_teacher_prior_config" in run for run in manifest["runs"])
     assert any(run.get("objective") == "complete_track_f1" for run in manifest["runs"])

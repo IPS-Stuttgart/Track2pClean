@@ -579,7 +579,7 @@ def _track2p_config_kwargs(
             "Manifest run is missing required Track2p config keys: "
             + ", ".join(missing_required)
         )
-    for key in ("data", "reference"):
+    for key in ("data", "reference", "track2p_teacher_reference"):
         if key in config_kwargs and config_kwargs[key] is not None:
             config_kwargs[key] = _resolve_input_path(
                 config_kwargs[key], base_dir=base_dir

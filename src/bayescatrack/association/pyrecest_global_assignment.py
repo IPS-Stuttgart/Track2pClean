@@ -57,6 +57,10 @@ from bayescatrack.association.segmentation_events import (
     SegmentationEventConfig,
     event_soft_penalty_matrix,
 )
+from bayescatrack.association.teacher_priors import (
+    TeacherEdgePriorConfig,
+    apply_teacher_edge_priors,
+)
 from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
     pairwise_kwargs_use_shifted_overlap,
@@ -568,6 +572,8 @@ def solve_global_assignment_for_sessions(
     ) = None,
     joint_refinement_config: JointRefinementConfig | Mapping[str, Any] | None = None,
     consensus_prior_config: ConsensusPriorConfig | Mapping[str, Any] | None = None,
+    teacher_edge_prior_config: TeacherEdgePriorConfig | Mapping[str, Any] | None = None,
+    teacher_track_matrix: Any | None = None,
 ) -> GlobalAssignmentRun:
     """Run PyRecEst's global path-cover assignment on registered BayesCaTrack costs."""
 
@@ -597,6 +603,15 @@ def solve_global_assignment_for_sessions(
         segmentation_event_config=segmentation_event_config,
     )
     session_sizes = tuple(int(session.plane_data.n_rois) for session in sessions)
+    session_edges = session_edge_pairs(len(sessions), max_gap=max_gap)
+    if teacher_edge_prior_config is not None:
+        pairwise_costs = apply_teacher_edge_priors(
+            pairwise_costs,
+            sessions,
+            teacher_track_matrix=teacher_track_matrix,
+            session_edges=session_edges,
+            config=teacher_edge_prior_config,
+        )
     if adaptive_edge_prior_config is not None:
         pairwise_costs = apply_adaptive_edge_priors(
             pairwise_costs,
@@ -614,7 +629,6 @@ def solve_global_assignment_for_sessions(
             pairwise_costs,
             config=joint_refinement_config,
         )
-    session_edges = session_edge_pairs(len(sessions), max_gap=max_gap)
     if consensus_prior_config is not None:
         pairwise_costs = _apply_consensus_priors_from_variants(
             pairwise_costs,
