@@ -177,7 +177,9 @@ def track2p_policy_dp_tracks(
     if not selected_paths:
         return np.zeros((0, len(session_list)), dtype=int)
     local_tracks = np.asarray([path.row for path in selected_paths], dtype=int)
-    return _local_tracks_to_suite2p(local_tracks, session_list, fill_value=cfg.fill_value)
+    return _local_tracks_to_suite2p(
+        local_tracks, session_list, fill_value=cfg.fill_value
+    )
 
 
 def build_policy_candidate_edges(
@@ -231,7 +233,9 @@ def _policy_candidates_for_pair(
     row_ind, col_ind = linear_sum_assignment(1.0 - iou)
     assigned_iou = iou[row_ind, col_ind]
     threshold = _threshold_assigned_iou(assigned_iou, method=config.threshold_method)
-    selected_pairs = {(int(row), int(col)) for row, col in zip(row_ind, col_ind, strict=True)}
+    selected_pairs = {
+        (int(row), int(col)) for row, col in zip(row_ind, col_ind, strict=True)
+    }
     accepted_pairs = {
         (int(row), int(col))
         for row, col, value in zip(row_ind, col_ind, assigned_iou, strict=True)
@@ -334,7 +338,9 @@ def _candidate_score(
 ) -> float:
     clipped = float(np.clip(iou, config.logit_epsilon, 1.0 - config.logit_epsilon))
     logit = float(np.log(clipped / (1.0 - clipped)))
-    score = logit + float(config.threshold_margin_weight) * (float(iou) - float(threshold))
+    score = logit + float(config.threshold_margin_weight) * (
+        float(iou) - float(threshold)
+    )
     if accepted_by_threshold:
         score += float(config.accepted_bonus)
     else:
@@ -373,7 +379,9 @@ def _best_track_path(
     row = [int(config.fill_value)] * int(n_sessions)
     row[0] = int(start_roi)
     active = [
-        _BeamState(row=tuple(row), current_session=0, current_roi=int(start_roi), score=0.0)
+        _BeamState(
+            row=tuple(row), current_session=0, current_roi=int(start_roi), score=0.0
+        )
     ]
     complete: list[_BeamState] = []
 
@@ -426,7 +434,9 @@ def select_non_conflicting_paths(
 
     occupied: set[tuple[int, int]] = set()
     selected: list[TrackPath] = []
-    for path in sorted(paths, key=lambda item: (-item.score, -_path_length(item.row), item.row)):
+    for path in sorted(
+        paths, key=lambda item: (-item.score, -_path_length(item.row), item.row)
+    ):
         observations = {
             (session_index, int(roi))
             for session_index, roi in enumerate(path.row)
@@ -547,7 +557,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--input-format", choices=("auto", "suite2p", "npy"), default="suite2p"
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument(
         "--threshold-method",
         choices=("otsu", "min"),
