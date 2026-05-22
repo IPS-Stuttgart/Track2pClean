@@ -57,13 +57,13 @@ from bayescatrack.association.segmentation_events import (
     SegmentationEventConfig,
     event_soft_penalty_matrix,
 )
-from bayescatrack.association.teacher_priors import (
-    TeacherEdgePriorConfig,
-    apply_teacher_edge_priors,
-)
 from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,
     pairwise_kwargs_use_shifted_overlap,
+)
+from bayescatrack.association.teacher_priors import (
+    TeacherEdgePriorConfig,
+    apply_teacher_edge_priors,
 )
 from bayescatrack.core.bridge import (
     CalciumPlaneData,
