@@ -32,7 +32,7 @@ Repository = "https://github.com/IPS-Stuttgart/BayesCaTrack"
 package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
-bayescatrack = ["configs/*.yaml"]
+bayescatrack = ["configs/*.yaml", "py.typed"]
 
 [tool.poetry]
 requires-poetry = ">=2.1"
