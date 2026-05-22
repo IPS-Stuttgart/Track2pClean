@@ -36,10 +36,6 @@ from bayescatrack.association.calibrated_costs import (
     CalibratedAssociationModel,
     calibrated_cost_matrix_from_bundle,
 )
-from bayescatrack.association.candidate_pruning import (
-    CandidatePruningConfig,
-    prune_pairwise_cost_matrix,
-)
 from bayescatrack.association.dynamic_edge_priors import (
     DynamicEdgePriorConfig,
     apply_dynamic_edge_priors,
@@ -77,6 +73,10 @@ from bayescatrack.soft_overlap_costs import (
     registered_soft_iou_cost_kwargs as _registered_soft_overlap_cost_kwargs,
 )
 from bayescatrack.track2p_registration import register_plane_pair
+from pyrecest.utils import (
+    CandidatePruningConfig,
+    prune_pairwise_cost_matrix,
+)
 
 AssociationCost = Literal[
     "registered-iou",
