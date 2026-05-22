@@ -1,3 +1,4 @@
+import importlib.resources
 import importlib.util
 
 import bayescatrack
@@ -23,6 +24,12 @@ def test_subpackages_expose_expected_package_native_modules():
 
 def test_legacy_bridge_package_is_not_part_of_source_layout():
     assert importlib.util.find_spec("track2p_pyrecest_bridge") is None
+
+
+def test_bayescatrack_is_marked_as_typed_package():
+    marker = importlib.resources.files("bayescatrack") / "py.typed"
+
+    assert marker.is_file()
 
 
 def test_bayescatrack_module_entry_point_help():
