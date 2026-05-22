@@ -592,6 +592,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--include-behavior", action=argparse.BooleanOptionalAction, default=False
     )
+    parser.add_argument(
+        "--include-non-cells", action=argparse.BooleanOptionalAction, default=False
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     return parser
@@ -625,7 +628,7 @@ def main(argv: list[str] | None = None) -> int:
         transform_type=args.transform_type,
         max_gap=dp_config.max_gap,
         include_behavior=args.include_behavior,
-        include_non_cells=False,
+        include_non_cells=args.include_non_cells,
         cell_probability_threshold=args.cell_probability_threshold,
         weighted_masks=False,
         weighted_centroids=False,
