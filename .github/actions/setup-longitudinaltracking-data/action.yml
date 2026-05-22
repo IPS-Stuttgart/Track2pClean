@@ -68,6 +68,7 @@ runs:
       id: restore-data
       if: ${{ runner.environment != 'self-hosted' && steps.resolve.outputs.local-cache-hit != 'true' }}
       uses: actions/cache/restore@v5
+      continue-on-error: true
       with:
         path: ${{ steps.resolve.outputs.cache-data-path }}
         key: ${{ inputs.cache_key }}

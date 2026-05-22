@@ -118,7 +118,11 @@ def pairwise_context_components(
     density_radius = (
         config.density_radius
         if isinstance(config, ContextDescriptorConfig)
-        else float((config or {}).get("density_radius", ContextDescriptorConfig().density_radius))
+        else float(
+            (config or {}).get(
+                "density_radius", ContextDescriptorConfig().density_radius
+            )
+        )
     )
     reference_density = local_density_descriptor(
         reference_centroids_xy, radius=density_radius

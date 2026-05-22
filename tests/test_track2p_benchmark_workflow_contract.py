@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "track2p-benchmark.yml"
 SCRIPT_PATH = PROJECT_ROOT / ".github" / "scripts" / "run_track2p_benchmark.py"

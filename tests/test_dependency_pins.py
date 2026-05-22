@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from bayescatrack.dependency_pins import PYRECEST_COMMIT, PYRECEST_DIRECT_URL, PYRECEST_REPOSITORY
+from bayescatrack.dependency_pins import (
+    PYRECEST_COMMIT,
+    PYRECEST_DIRECT_URL,
+    PYRECEST_REPOSITORY,
+)
 
 
 def test_pyrecest_dependency_pin_matches_project_metadata():

@@ -39,7 +39,9 @@ def install_track2p_benchmark_triplet_support_integration() -> None:
             cost=cost,
             calibrated_model=calibrated_model,
         )
-        triplet_config = benchmark._triplet_support_consistency_config(config)  # pylint: disable=protected-access
+        triplet_config = benchmark._triplet_support_consistency_config(
+            config
+        )  # pylint: disable=protected-access
         if triplet_config is None:
             return assignment
         adjusted_pairwise_costs = apply_triplet_support_consistency(

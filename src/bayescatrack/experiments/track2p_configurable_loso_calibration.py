@@ -567,7 +567,9 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
             args.pairwise_cost_kwargs_json,
             "--pairwise-cost-kwargs-json",
         ),
-        absence_model_config=_json_object(args.absence_model_json, "--absence-model-json"),
+        absence_model_config=_json_object(
+            args.absence_model_json, "--absence-model-json"
+        ),
         higher_order_consistency_config=_json_object(
             args.higher_order_consistency_json,
             "--higher-order-consistency-json",
@@ -604,7 +606,11 @@ def _resolved_calibration_feature_names(args: argparse.Namespace) -> tuple[str, 
             if token.strip()
         )
     if args.calibration_feature is not None:
-        names.extend(str(token).strip() for token in args.calibration_feature if str(token).strip())
+        names.extend(
+            str(token).strip()
+            for token in args.calibration_feature
+            if str(token).strip()
+        )
     if names:
         return tuple(dict.fromkeys(names))
     return calibration_feature_names(args.calibration_feature_set)

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+from bayescatrack.association.adaptive_priors import fit_gap_costs_from_reference
 from bayescatrack.association.calibrated_costs import (
     ACTIVITY_ASSOCIATION_FEATURES,
     DEFAULT_ASSOCIATION_FEATURES,
@@ -24,7 +25,6 @@ from bayescatrack.association.pyrecest_global_assignment import (
     session_edge_pairs,
     tracks_to_suite2p_index_matrix,
 )
-from bayescatrack.association.adaptive_priors import fit_gap_costs_from_reference
 from bayescatrack.association.shifted_overlap import (
     pairwise_kwargs_use_shifted_overlap,
 )
@@ -348,7 +348,9 @@ def run_track2p_loso_calibration(
                 "negative_examples": int(training_labels.shape[0] - positives),
                 "calibration_feature_set": _feature_set_label(config, feature_names),
                 "calibration_feature_count": int(len(feature_names)),
-                "learned_gap_prior": int(bool(getattr(config, "learned_gap_prior", False))),
+                "learned_gap_prior": int(
+                    bool(getattr(config, "learned_gap_prior", False))
+                ),
                 "learned_gap_costs": _learned_gap_costs_label(solve_config),
                 "calibration_sample_weight_strategy": sample_weight_strategy,
                 "calibration_class_weight": _stringify_class_weight(
@@ -677,9 +679,7 @@ def _mean_learned_gap_costs(
         for gap, value in subject_costs.items():
             blocks.setdefault(int(gap), []).append(float(value))
     return {
-        int(gap): float(np.mean(values))
-        for gap, values in blocks.items()
-        if values
+        int(gap): float(np.mean(values)) for gap, values in blocks.items() if values
     }
 
 

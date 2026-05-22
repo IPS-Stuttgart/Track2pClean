@@ -5,9 +5,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import numpy.testing as npt
-
 from bayescatrack.association.pyrecest_global_assignment import GlobalAssignmentRun
-from bayescatrack.experiments import _triplet_support_benchmark_integration as integration
+from bayescatrack.experiments import (
+    _triplet_support_benchmark_integration as integration,
+)
 from bayescatrack.experiments import track2p_benchmark as benchmark_module
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
@@ -49,7 +50,9 @@ def test_legacy_triplet_support_knobs_adjust_skip_edges_before_final_solve(monke
         "solve_global_assignment_for_sessions",
         fake_initial_solve,
     )
-    monkeypatch.setattr(integration, "solve_global_assignment_from_pairwise_costs", fake_final_solve)
+    monkeypatch.setattr(
+        integration, "solve_global_assignment_from_pairwise_costs", fake_final_solve
+    )
     config = Track2pBenchmarkConfig(
         data=Path("."),
         method="global-assignment",
@@ -105,7 +108,9 @@ def test_triplet_support_integration_is_noop_when_weight_is_zero(monkeypatch):
         "solve_global_assignment_for_sessions",
         fake_initial_solve,
     )
-    monkeypatch.setattr(integration, "solve_global_assignment_from_pairwise_costs", fail_final_solve)
+    monkeypatch.setattr(
+        integration, "solve_global_assignment_from_pairwise_costs", fail_final_solve
+    )
 
     assignment = solve_configured_global_assignment(
         [object(), object()],

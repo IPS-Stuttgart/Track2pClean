@@ -216,7 +216,11 @@ def apply_joint_anchor_relief_to_pairwise_costs(
     bounded edge relief.  It is opt-in and leaves registration unchanged.
     """
 
-    cfg = config if isinstance(config, JointRefinementConfig) else JointRefinementConfig(**dict(config or {}))
+    cfg = (
+        config
+        if isinstance(config, JointRefinementConfig)
+        else JointRefinementConfig(**dict(config or {}))
+    )
     adjusted: dict[tuple[int, int], np.ndarray] = {}
     for edge, matrix in pairwise_costs.items():
         anchors = high_confidence_anchor_edges(

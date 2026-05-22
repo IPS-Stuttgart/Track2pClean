@@ -423,6 +423,8 @@ def test_global_tracking_rejects_pairwise_only_registration_options(tmp_path: Pa
             tracking_method="global",
             binarize_registered_masks=True,
         )
+
+
 def test_run_registered_subject_tracking_handles_single_session(tmp_path: Path):
     subject_dir = tmp_path / "jm271"
     _write_raw_npy_session(

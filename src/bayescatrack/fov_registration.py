@@ -95,7 +95,9 @@ def estimate_integer_fov_shift(
     if reference.ndim != 2 or measurement.ndim != 2:
         raise ValueError("reference_fov and measurement_fov must both be 2-D arrays")
     if not np.all(np.isfinite(reference)) or not np.all(np.isfinite(measurement)):
-        raise ValueError("reference_fov and measurement_fov must contain only finite values")
+        raise ValueError(
+            "reference_fov and measurement_fov must contain only finite values"
+        )
     if np.ptp(reference) <= 0.0 or np.ptp(measurement) <= 0.0:
         raise ValueError(
             "reference_fov and measurement_fov must contain spatial variation "
@@ -109,7 +111,9 @@ def estimate_integer_fov_shift(
         reference = _pad_image_to_shape(reference, common_shape)
         measurement = _pad_image_to_shape(measurement, common_shape)
     if not np.all(np.isfinite(reference)) or not np.all(np.isfinite(measurement)):
-        raise ValueError("reference_fov and measurement_fov must contain only finite values")
+        raise ValueError(
+            "reference_fov and measurement_fov must contain only finite values"
+        )
     if subtract_mean:
         reference = reference - float(np.mean(reference))
         measurement = measurement - float(np.mean(measurement))
@@ -118,9 +122,7 @@ def estimate_integer_fov_shift(
         float(np.linalg.norm(reference.ravel())) <= np.finfo(float).eps
         or float(np.linalg.norm(measurement.ravel())) <= np.finfo(float).eps
     ):
-        raise ValueError(
-            "Cannot estimate FOV shift from constant or empty FOV images"
-        )
+        raise ValueError("Cannot estimate FOV shift from constant or empty FOV images")
 
     cross_power = np.fft.fftn(reference) * np.conj(np.fft.fftn(measurement))
     magnitude = np.abs(cross_power)
