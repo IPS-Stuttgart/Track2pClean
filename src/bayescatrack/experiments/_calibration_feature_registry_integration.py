@@ -17,8 +17,7 @@ def install_calibration_feature_registry_integration() -> None:
     large benchmark modules in place.
     """
 
-    from bayescatrack.experiments import track2p_benchmark
-    from bayescatrack.experiments import track2p_loso_calibration
+    from bayescatrack.experiments import track2p_benchmark, track2p_loso_calibration
 
     _patch_loso_module(track2p_loso_calibration)
     _patch_track2p_benchmark_parser(track2p_benchmark)
@@ -35,8 +34,12 @@ def _patch_loso_module(module: Any) -> None:
     module._pairwise_kwargs_request_local_evidence = (  # pylint: disable=protected-access
         registry.pairwise_kwargs_request_local_evidence
     )
-    module._uses_local_evidence_features = registry.uses_local_evidence_features  # pylint: disable=protected-access
-    module._uses_shifted_overlap_features = registry.uses_shifted_overlap_features  # pylint: disable=protected-access
+    module._uses_local_evidence_features = (
+        registry.uses_local_evidence_features
+    )  # pylint: disable=protected-access
+    module._uses_shifted_overlap_features = (
+        registry.uses_shifted_overlap_features
+    )  # pylint: disable=protected-access
     module._bayescatrack_shared_feature_registry = True
 
 

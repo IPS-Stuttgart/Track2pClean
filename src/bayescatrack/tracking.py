@@ -113,7 +113,9 @@ class SubjectTrackingResult:
         global_link_edges: list[tuple[int, int]] = []
         for edge in self.global_link_edges:
             if len(edge) != 2:
-                raise ValueError("global_link_edges must contain (source, target) pairs")
+                raise ValueError(
+                    "global_link_edges must contain (source, target) pairs"
+                )
             source_index, target_index = edge
             global_link_edges.append((int(source_index), int(target_index)))
         object.__setattr__(self, "global_link_edges", tuple(global_link_edges))
@@ -125,8 +127,7 @@ class SubjectTrackingResult:
             expected_global_link_shape = (track_rows.shape[0], len(global_link_edges))
             if global_link_costs.shape != expected_global_link_shape:
                 raise ValueError(
-                    "global_link_costs must have shape "
-                    f"{expected_global_link_shape}"
+                    "global_link_costs must have shape " f"{expected_global_link_shape}"
                 )
         object.__setattr__(self, "global_link_costs", global_link_costs)
 
@@ -746,9 +747,7 @@ def _build_global_link_cost_matrices(
     fill_value: int,
 ) -> tuple[np.ndarray, np.ndarray, tuple[tuple[int, int], ...], np.ndarray]:
     track_rows = np.asarray(track_rows, dtype=int)
-    link_costs = np.full(
-        (track_rows.shape[0], max(track_rows.shape[1] - 1, 0)), np.nan
-    )
+    link_costs = np.full((track_rows.shape[0], max(track_rows.shape[1] - 1, 0)), np.nan)
     link_target_indices = np.full(link_costs.shape, int(fill_value), dtype=int)
     global_link_edges = tuple(
         (int(source_index), int(target_index))
@@ -822,7 +821,9 @@ def _build_global_link_cost_matrices(
     )
 
 
-def _default_link_target_indices(link_costs: np.ndarray, *, fill_value: int) -> np.ndarray:
+def _default_link_target_indices(
+    link_costs: np.ndarray, *, fill_value: int
+) -> np.ndarray:
     link_costs = np.asarray(link_costs, dtype=float)
     link_target_indices = np.tile(
         np.arange(1, link_costs.shape[1] + 1, dtype=int),

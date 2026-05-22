@@ -4,7 +4,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.advanced_uncertainty import (
     EdgeUncertaintyConfig,
     edge_uncertainty_config_from_mapping,

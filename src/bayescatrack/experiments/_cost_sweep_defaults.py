@@ -61,7 +61,9 @@ def _add_store_false_alias_if_missing(
     dest: str,
     help_text: str,
 ) -> None:
-    if any(option in action.option_strings for action in parser._actions):  # pylint: disable=protected-access
+    if any(
+        option in action.option_strings for action in parser._actions
+    ):  # pylint: disable=protected-access
         return
     parser.add_argument(
         option,

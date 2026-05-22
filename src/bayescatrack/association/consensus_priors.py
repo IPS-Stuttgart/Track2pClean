@@ -34,7 +34,9 @@ class ConsensusPriorConfig:
             raise ValueError("consensus relief values must be non-negative")
         if self.large_cost <= 0.0 or not np.isfinite(self.large_cost):
             raise ValueError("large_cost must be a positive finite value")
-        object.__setattr__(self, "variant_costs", tuple(str(value) for value in self.variant_costs))
+        object.__setattr__(
+            self, "variant_costs", tuple(str(value) for value in self.variant_costs)
+        )
 
 
 def consensus_prior_config_from_mapping(
@@ -50,7 +52,9 @@ def consensus_prior_config_from_mapping(
     if "variant_costs" in payload:
         raw = payload["variant_costs"]
         if isinstance(raw, str):
-            payload["variant_costs"] = tuple(token.strip() for token in raw.split(",") if token.strip())
+            payload["variant_costs"] = tuple(
+                token.strip() for token in raw.split(",") if token.strip()
+            )
         else:
             payload["variant_costs"] = tuple(raw)
     return ConsensusPriorConfig(**payload)
@@ -104,7 +108,9 @@ def apply_consensus_edge_priors(
             continue
         source_roi = int(source_roi)
         target_roi = int(target_roi)
-        if not (0 <= source_roi < matrix.shape[0] and 0 <= target_roi < matrix.shape[1]):
+        if not (
+            0 <= source_roi < matrix.shape[0] and 0 <= target_roi < matrix.shape[1]
+        ):
             continue
         old_value = float(matrix[source_roi, target_roi])
         if not np.isfinite(old_value) or old_value >= cfg.large_cost:

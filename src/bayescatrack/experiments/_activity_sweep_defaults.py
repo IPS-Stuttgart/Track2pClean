@@ -9,10 +9,14 @@ from typing import Any
 def install_activity_sweep_suite2p_defaults() -> None:
     """Patch activity-sweep parser/config defaults idempotently."""
 
-    from bayescatrack.experiments import track2p_activity_tie_breaker_sweep as activity_sweep
+    from bayescatrack.experiments import (
+        track2p_activity_tie_breaker_sweep as activity_sweep,
+    )
 
     original_build_arg_parser = activity_sweep.build_arg_parser
-    if getattr(original_build_arg_parser, "_bayescatrack_activity_sweep_defaults", False):
+    if getattr(
+        original_build_arg_parser, "_bayescatrack_activity_sweep_defaults", False
+    ):
         return
 
     def _build_arg_parser_with_suite2p_defaults() -> argparse.ArgumentParser:
@@ -61,7 +65,9 @@ def _add_store_false_alias_if_missing(
     dest: str,
     help_text: str,
 ) -> None:
-    if any(option in action.option_strings for action in parser._actions):  # pylint: disable=protected-access
+    if any(
+        option in action.option_strings for action in parser._actions
+    ):  # pylint: disable=protected-access
         return
     parser.add_argument(
         option,

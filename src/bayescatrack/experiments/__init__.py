@@ -3,8 +3,12 @@
 from . import _activity_sweep_defaults as _activity_sweep_defaults
 from . import _cost_sweep_defaults as _cost_sweep_defaults
 from . import _diag_defaults as _diag_defaults
-from . import _triplet_support_benchmark_integration as _triplet_support_benchmark_integration
-from ._calibration_feature_registry_integration import install_calibration_feature_registry_integration
+from . import (
+    _triplet_support_benchmark_integration as _triplet_support_benchmark_integration,
+)
+from ._calibration_feature_registry_integration import (
+    install_calibration_feature_registry_integration,
+)
 
 _triplet_support_benchmark_integration.install_track2p_benchmark_triplet_support_integration()
 install_calibration_feature_registry_integration()

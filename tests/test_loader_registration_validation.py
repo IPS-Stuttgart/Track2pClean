@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import CalciumPlaneData, load_suite2p_plane, load_track2p_subject
 from bayescatrack.track2p_registration import register_plane_pair
 
@@ -59,7 +58,9 @@ def test_auto_input_format_falls_back_from_broken_suite2p_to_raw_npy(tmp_path):
     (session_dir / "suite2p" / "plane0").mkdir(parents=True)
     _write_raw_npy_plane(session_dir / "data_npy" / "plane0")
 
-    sessions = load_track2p_subject(subject_dir, input_format="auto", plane_name="plane0")
+    sessions = load_track2p_subject(
+        subject_dir, input_format="auto", plane_name="plane0"
+    )
 
     assert len(sessions) == 1
     assert sessions[0].plane_data.source == "raw_npy"

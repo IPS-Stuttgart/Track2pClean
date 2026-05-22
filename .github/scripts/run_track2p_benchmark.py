@@ -73,7 +73,12 @@ def _should_run_loso(policy: str, *, n_subjects: int) -> bool:
 
 
 def _summary_table(rows: list[dict[str, int | str]]) -> str:
-    body = ["## Track2p benchmark artifacts", "", "| kind | name | rows | output |", "| --- | --- | ---: | --- |"]
+    body = [
+        "## Track2p benchmark artifacts",
+        "",
+        "| kind | name | rows | output |",
+        "| --- | --- | ---: | --- |",
+    ]
     for row in rows:
         body.append(
             f"| {row['kind']} | {row['name']} | {row['rows']} | {row['output']} |"
@@ -190,9 +195,7 @@ def _evaluate_regression_gates(comparison_csv: Path) -> list[BenchmarkGateResult
             False,
         ),
         (
-            configured_thresholds[
-                "TRACK2P_MIN_PAIRWISE_F1_MACRO_DELTA_OVER_BASELINE"
-            ],
+            configured_thresholds["TRACK2P_MIN_PAIRWISE_F1_MACRO_DELTA_OVER_BASELINE"],
             "pairwise_f1_macro",
             "best non-baseline macro pairwise F1 delta over baseline >= threshold",
             True,
@@ -253,8 +256,13 @@ def _write_workflow_summary(
     artifact_rows: list[dict[str, int | str]],
     gates: list[BenchmarkGateResult],
 ) -> str:
-    sections = [_summary_table(artifact_rows).strip(), _format_gate_summary(gates).strip()]
-    _append_file_section(sections, title="Comparison", path=results_dir / "comparison.md")
+    sections = [
+        _summary_table(artifact_rows).strip(),
+        _format_gate_summary(gates).strip(),
+    ]
+    _append_file_section(
+        sections, title="Comparison", path=results_dir / "comparison.md"
+    )
     summary = "\n\n".join(sections).strip() + "\n"
     (results_dir / "workflow-summary.md").write_text(summary, encoding="utf-8")
     return summary
