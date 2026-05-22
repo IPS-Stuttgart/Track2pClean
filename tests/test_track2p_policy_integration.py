@@ -91,9 +91,11 @@ def test_manifest_accepts_track2p_policy_runners(tmp_path: Path) -> None:
 
 
 def test_guarded_benchmark_script_includes_policy_runs() -> None:
-    script = Path(".github/scripts/run_track2p_benchmark.py").read_text(encoding="utf-8")
+    script = Path(".github/scripts/run_track2p_benchmark.py").read_text(
+        encoding="utf-8"
+    )
 
-    assert '\"runner\": \"track2p-policy\"' in script
-    assert '\"runner\": \"track2p-policy-dp\"' in script
-    assert '\"Track2p policy\": \"track2p-policy\"' in script
-    assert '\"Track2p policy DP\": \"track2p-policy-dp\"' in script
+    assert '"runner": "track2p-policy"' in script
+    assert '"runner": "track2p-policy-dp"' in script
+    assert '"Track2p policy": "track2p-policy"' in script
+    assert '"Track2p policy DP": "track2p-policy-dp"' in script
