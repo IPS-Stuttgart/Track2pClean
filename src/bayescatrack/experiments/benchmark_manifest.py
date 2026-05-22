@@ -467,9 +467,7 @@ def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
         return {key: run_data[key] for key in TRACK2P_POLICY_FIELDS if key in run_data}
     if runner == TRACK2P_POLICY_DP_RUNNER:
         return {
-            key: run_data[key]
-            for key in TRACK2P_POLICY_DP_FIELDS
-            if key in run_data
+            key: run_data[key] for key in TRACK2P_POLICY_DP_FIELDS if key in run_data
         }
     if runner == "track2p-loso-calibration":
         return _configurable_loso_runner_kwargs(run_data)
