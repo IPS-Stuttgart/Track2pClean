@@ -59,7 +59,9 @@ def detect_segmentation_events(
 ) -> list[SegmentationEvent]:
     """Detect simple split and merge candidates from pairwise similarity matrices."""
 
-    similarity = _first_available(pairwise_components, ("weighted_dice_similarity", "iou"))
+    similarity = _first_available(
+        pairwise_components, ("weighted_dice_similarity", "iou")
+    )
     if isinstance(config, SegmentationEventConfig):
         min_similarity = config.min_weighted_dice
         min_children = config.min_children

@@ -94,11 +94,15 @@ def apply_candidate_mask(
     return np.where(mask, costs, float(large_cost))
 
 
-def candidate_edges_from_mask(candidate_mask: np.ndarray) -> tuple[tuple[int, int], ...]:
+def candidate_edges_from_mask(
+    candidate_mask: np.ndarray,
+) -> tuple[tuple[int, int], ...]:
     """Return sparse candidate edge coordinates from a pairwise mask."""
 
     rows, columns = np.nonzero(np.asarray(candidate_mask, dtype=bool))
-    return tuple((int(row), int(column)) for row, column in zip(rows, columns, strict=True))
+    return tuple(
+        (int(row), int(column)) for row, column in zip(rows, columns, strict=True)
+    )
 
 
 def _as_point_matrix(values: np.ndarray, *, name: str) -> np.ndarray:

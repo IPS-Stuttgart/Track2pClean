@@ -804,19 +804,25 @@ def load_suite2p_plane(
     traces = None
     if load_traces:
         traces = _load_optional_suite2p_trace_matrix(
-            plane_dir / "F.npy", selected_indices_array=selected_indices_array, n_rois=int(stat.shape[0])
+            plane_dir / "F.npy",
+            selected_indices_array=selected_indices_array,
+            n_rois=int(stat.shape[0]),
         )
 
     spike_traces = None
     if load_spike_traces:
         spike_traces = _load_optional_suite2p_trace_matrix(
-            plane_dir / "spks.npy", selected_indices_array=selected_indices_array, n_rois=int(stat.shape[0])
+            plane_dir / "spks.npy",
+            selected_indices_array=selected_indices_array,
+            n_rois=int(stat.shape[0]),
         )
 
     neuropil_traces = None
     if load_neuropil_traces:
         neuropil_traces = _load_optional_suite2p_trace_matrix(
-            plane_dir / "Fneu.npy", selected_indices_array=selected_indices_array, n_rois=int(stat.shape[0])
+            plane_dir / "Fneu.npy",
+            selected_indices_array=selected_indices_array,
+            n_rois=int(stat.shape[0]),
         )
 
     return CalciumPlaneData(
@@ -1323,9 +1329,7 @@ def _infer_image_shape(stat: np.ndarray, ops: dict[str, Any] | None) -> tuple[in
         ypix = np.asarray(roi_stat.get("ypix", ()), dtype=int)
         xpix = np.asarray(roi_stat.get("xpix", ()), dtype=int)
         if ypix.shape != xpix.shape:
-            raise ValueError(
-                "Suite2p ROI ypix/xpix arrays must have matching shapes"
-            )
+            raise ValueError("Suite2p ROI ypix/xpix arrays must have matching shapes")
         if ypix.size == 0:
             continue
         roi_max_y = int(np.max(ypix))

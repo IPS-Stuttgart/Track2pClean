@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-
 from bayescatrack.association.context_descriptors import (
     fov_patch_moments,
     local_density_descriptor,
@@ -58,7 +57,11 @@ def test_segmentation_events_detect_split_and_merge() -> None:
     event_types = {event.event_type for event in events}
     assert "split" in event_types
     assert "merge" in event_types
-    assert any(event.measurement_positions == (0, 1) for event in events if event.event_type == "split")
+    assert any(
+        event.measurement_positions == (0, 1)
+        for event in events
+        if event.event_type == "split"
+    )
 
 
 def test_context_descriptors_return_pairwise_planes_and_patch_moments() -> None:
@@ -66,8 +69,12 @@ def test_context_descriptors_return_pairwise_planes_and_patch_moments() -> None:
     measurement = np.asarray([[0.0, 0.0], [20.0, 21.0]])
 
     density = local_density_descriptor(reference, radius=2.0)
-    components = pairwise_context_components(reference, measurement, config={"density_radius": 2.0})
-    moments = fov_patch_moments(np.arange(25, dtype=float).reshape(5, 5), [[2.0, 2.0]], patch_radius=1)
+    components = pairwise_context_components(
+        reference, measurement, config={"density_radius": 2.0}
+    )
+    moments = fov_patch_moments(
+        np.arange(25, dtype=float).reshape(5, 5), [[2.0, 2.0]], patch_radius=1
+    )
 
     assert density.tolist() == [1.0, 1.0, 0.0]
     assert components["local_density_cost"].shape == (3, 2)
@@ -122,7 +129,9 @@ def test_multiplane_quality_penalty_and_session_offset() -> None:
         PlaneRegistrationQuality("plane1", registration_rmse=1.0, valid_fraction=0.5),
     )
     reliability = shared_registration_reliability(qualities)
-    penalized = apply_multiplane_quality_penalty(np.zeros((2, 2)), qualities, penalty_weight=2.0)
+    penalized = apply_multiplane_quality_penalty(
+        np.zeros((2, 2)), qualities, penalty_weight=2.0
+    )
 
     offset = session_context_cost_offset(
         DummyPlane(10, cell_probabilities=np.asarray([0.5, 1.0])),

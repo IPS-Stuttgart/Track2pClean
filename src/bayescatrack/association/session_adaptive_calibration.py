@@ -55,7 +55,9 @@ class SessionAdaptiveCalibrationConfig:
             or self.invalid_fraction_weight < 0.0
             or self.low_cell_probability_weight < 0.0
         ):
-            raise ValueError("session adaptive calibration weights must be non-negative")
+            raise ValueError(
+                "session adaptive calibration weights must be non-negative"
+            )
 
 
 def session_context_from_planes(

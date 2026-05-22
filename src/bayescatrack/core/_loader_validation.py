@@ -14,7 +14,6 @@ from typing import Any
 
 import numpy as np
 
-
 _TRANSIENT_LOAD_EXCEPTIONS = (
     FileNotFoundError,
     OSError,
@@ -29,7 +28,9 @@ def install_loader_validation_patches(bridge_impl: ModuleType) -> None:
     """Install idempotent validation wrappers on the bridge implementation."""
 
     original_suite2p_loader = bridge_impl.load_suite2p_plane
-    if not getattr(original_suite2p_loader, "_bayescatrack_loader_validation_patch", False):
+    if not getattr(
+        original_suite2p_loader, "_bayescatrack_loader_validation_patch", False
+    ):
 
         def _load_suite2p_plane_with_validation(
             plane_dir: str | Path,
@@ -112,7 +113,9 @@ def _validate_suite2p_stat_coordinates(
     ops_path = plane_dir / "ops.npy"
     if ops_path.exists():
         ops = np.load(ops_path, allow_pickle=True).item()
-    image_shape = bridge_impl._infer_image_shape(stat, ops)  # pylint: disable=protected-access
+    image_shape = bridge_impl._infer_image_shape(
+        stat, ops
+    )  # pylint: disable=protected-access
     height, width = int(image_shape[0]), int(image_shape[1])
     keep_for_validation = _suite2p_validation_keep_mask(
         plane_dir,
@@ -178,7 +181,9 @@ def _suite2p_validation_keep_mask(
             if iscell.ndim == 2 and iscell.shape[1] > 1
             else float(iscell[roi_index])
         )
-        is_cell = bool(iscell[roi_index, 0]) if iscell.ndim == 2 else bool(iscell[roi_index])
+        is_cell = (
+            bool(iscell[roi_index, 0]) if iscell.ndim == 2 else bool(iscell[roi_index])
+        )
         keep[roi_index] = bool(is_cell and probability >= cell_probability_threshold)
     return keep
 
@@ -239,7 +244,9 @@ def _load_track2p_subject_with_auto_fallback_impl(
             if motion_energy_path.exists():
                 motion_energy = np.load(motion_energy_path)
 
-        match = bridge_impl._SESSION_NAME_PATTERN.match(session_dir.name)  # pylint: disable=protected-access
+        match = bridge_impl._SESSION_NAME_PATTERN.match(
+            session_dir.name
+        )  # pylint: disable=protected-access
         session_date = (
             date.fromisoformat(match.group("session_date"))
             if match is not None
@@ -283,8 +290,7 @@ def _load_auto_plane_with_fallback(
 
     if errors:
         detail = "; ".join(
-            f"{format_name}: {type(exc).__name__}: {exc}"
-            for format_name, exc in errors
+            f"{format_name}: {type(exc).__name__}: {exc}" for format_name, exc in errors
         )
         raise RuntimeError(
             "Could not load any auto input format for recognized Track2p session "

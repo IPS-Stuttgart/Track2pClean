@@ -20,10 +20,6 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
-from scipy.optimize import linear_sum_assignment
-from scipy.spatial.distance import cdist
-from skimage.filters import threshold_minimum, threshold_otsu
-
 from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.experiments.benchmark_comparison import (
     aggregate_rows,
@@ -42,6 +38,9 @@ from bayescatrack.experiments.track2p_benchmark import (
     write_results,
 )
 from bayescatrack.track2p_registration import register_plane_pair
+from scipy.optimize import linear_sum_assignment
+from scipy.spatial.distance import cdist
+from skimage.filters import threshold_minimum, threshold_otsu
 
 ThresholdMethod = Literal["otsu", "min"]
 
@@ -268,9 +267,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--input-format", choices=("auto", "suite2p", "npy"), default="suite2p"
     )
     parser.add_argument("--transform-type", default="affine")
-    parser.add_argument(
-        "--threshold-method", choices=("otsu", "min"), default="otsu"
-    )
+    parser.add_argument("--threshold-method", choices=("otsu", "min"), default="otsu")
     parser.add_argument("--iou-distance-threshold", type=float, default=16.0)
     parser.add_argument("--cell-probability-threshold", type=float, default=0.5)
     parser.add_argument("--output", type=Path, required=True)

@@ -16,12 +16,6 @@ import numpy as np
 from bayescatrack.association.higher_order_consistency import (
     HigherOrderConsistencyConfig,
 )
-from bayescatrack.association.track_refinement import (
-    TrackSmoothingConfig,
-    roi_position_tables_from_sessions,
-    split_tracks_at_issues,
-    track_geometry_issues,
-)
 from bayescatrack.association.postsolve_relinking import (
     PostSolveRelinkingConfig,
     relink_tracks_at_geometry_issues,
@@ -33,6 +27,12 @@ from bayescatrack.association.pyrecest_global_assignment import (
     solve_global_assignment_for_sessions,
     solve_global_assignment_from_pairwise_costs,
     tracks_to_suite2p_index_matrix,
+)
+from bayescatrack.association.track_refinement import (
+    TrackSmoothingConfig,
+    roi_position_tables_from_sessions,
+    split_tracks_at_issues,
+    track_geometry_issues,
 )
 from bayescatrack.core.bridge import (
     Track2pSession,
@@ -637,7 +637,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="JSON object passed to auto-registration selection, e.g. candidate_transforms and penalties",
     )
-    parser.add_argument("--absence-model-json", default=None, help="JSON object for absence-aware skip-edge penalties")
+    parser.add_argument(
+        "--absence-model-json",
+        default=None,
+        help="JSON object for absence-aware skip-edge penalties",
+    )
     parser.add_argument(
         "--higher-order-consistency-json",
         default=None,
@@ -902,7 +906,9 @@ def _predict_subject_tracks(
     sessions = _load_subject_sessions(subject_dir, config)
     assignment = solve_configured_global_assignment(sessions, config)
     predicted = tracks_to_suite2p_index_matrix(assignment.result.tracks, sessions)
-    predicted = _maybe_refine_predicted_tracks(predicted, sessions, config=config, assignment=assignment)
+    predicted = _maybe_refine_predicted_tracks(
+        predicted, sessions, config=config, assignment=assignment
+    )
     return predicted, _variant_name(config.cost)
 
 
@@ -915,9 +921,14 @@ def _maybe_refine_predicted_tracks(
 ) -> np.ndarray:
     """Optionally relink/split high-residual predicted tracks before scoring."""
 
-    if config.track_refinement_config is None and config.postsolve_relink_config is None:
+    if (
+        config.track_refinement_config is None
+        and config.postsolve_relink_config is None
+    ):
         return predicted_matrix
-    smoothing_config = TrackSmoothingConfig(**dict(config.track_refinement_config or {}))
+    smoothing_config = TrackSmoothingConfig(
+        **dict(config.track_refinement_config or {})
+    )
     integer_matrix = _track_matrix_to_int_fill(
         predicted_matrix,
         fill_value=int(smoothing_config.fill_value),
@@ -942,7 +953,9 @@ def _maybe_refine_predicted_tracks(
             roi_indices_by_session=_roi_indices_by_session(sessions),
             config=PostSolveRelinkingConfig(**dict(config.postsolve_relink_config)),
         )
-        issues = track_geometry_issues(integer_matrix, position_tables, config=smoothing_config)
+        issues = track_geometry_issues(
+            integer_matrix, position_tables, config=smoothing_config
+        )
     if not issues or not smoothing_config.split_bad_edges:
         return integer_matrix
     return split_tracks_at_issues(
@@ -952,7 +965,9 @@ def _maybe_refine_predicted_tracks(
     )
 
 
-def _track_matrix_to_int_fill(track_matrix: np.ndarray, *, fill_value: int) -> np.ndarray:
+def _track_matrix_to_int_fill(
+    track_matrix: np.ndarray, *, fill_value: int
+) -> np.ndarray:
     matrix = normalize_track_matrix(track_matrix)
     output = np.full(matrix.shape, int(fill_value), dtype=int)
     for index, value in np.ndenumerate(matrix):
@@ -1060,7 +1075,9 @@ def solve_configured_global_assignment(
     )
 
 
-def _roi_indices_by_session(sessions: Sequence[Track2pSession]) -> tuple[np.ndarray, ...]:
+def _roi_indices_by_session(
+    sessions: Sequence[Track2pSession],
+) -> tuple[np.ndarray, ...]:
     indices: list[np.ndarray] = []
     for session in sessions:
         plane = session.plane_data
