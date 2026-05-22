@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -56,7 +56,9 @@ def run_result_improvement_selection(
     manifest = track2p_result_improvement_manifest(
         data_root=str(config.data_root.resolve()),
         reference_root=(
-            None if config.reference_root is None else str(config.reference_root.resolve())
+            None
+            if config.reference_root is None
+            else str(config.reference_root.resolve())
         ),
         output_root=str(config.output_root.resolve()),
         max_gap=int(config.max_gap),
@@ -71,7 +73,8 @@ def run_result_improvement_selection(
         summary.output
         for summary in suite_result.runs
         if summary.output.suffix.casefold() == ".csv"
-        and summary.name not in {"registration-qa", "track2p-baseline", "oracle-gt-links"}
+        and summary.name
+        not in {"registration-qa", "track2p-baseline", "oracle-gt-links"}
         and "teacher-prior" not in summary.name
     )
     selection_rows = select_structured_objective_rows(
@@ -188,7 +191,9 @@ def main(argv: list[str] | None = None) -> int:
             metric=args.metric,
             group_by=args.group_by,
             nested_held_out_field=nested,
-            tie_breakers=tuple(args.tie_breaker or ("pairwise_f1", "pairwise_precision")),
+            tie_breakers=tuple(
+                args.tie_breaker or ("pairwise_f1", "pairwise_precision")
+            ),
             progress=args.progress,
             active_label_input=args.active_label_input,
             active_label_output=args.active_label_output,

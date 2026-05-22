@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.core.bridge import Track2pSession
 
 SessionEdge = tuple[int, int]
@@ -54,13 +53,9 @@ class TeacherEdgePriorConfig:
     def __post_init__(self) -> None:
         if self.relief < 0.0 or not np.isfinite(self.relief):
             raise ValueError("relief must be a finite non-negative value")
-        if self.non_teacher_penalty < 0.0 or not np.isfinite(
-            self.non_teacher_penalty
-        ):
+        if self.non_teacher_penalty < 0.0 or not np.isfinite(self.non_teacher_penalty):
             raise ValueError("non_teacher_penalty must be a finite non-negative value")
-        if self.teacher_cost_cap is not None and not np.isfinite(
-            self.teacher_cost_cap
-        ):
+        if self.teacher_cost_cap is not None and not np.isfinite(self.teacher_cost_cap):
             raise ValueError("teacher_cost_cap must be finite when provided")
         if not np.isfinite(self.min_cost):
             raise ValueError("min_cost must be finite")
@@ -140,7 +135,9 @@ def teacher_edge_masks_from_track_matrix(
             "teacher_track_matrix must have one column per loaded session: "
             f"got {tracks.shape[1]} columns for {len(sessions)} sessions"
         )
-    roi_position_by_session = tuple(_suite2p_to_loaded_position(session) for session in sessions)
+    roi_position_by_session = tuple(
+        _suite2p_to_loaded_position(session) for session in sessions
+    )
     masks: dict[SessionEdge, np.ndarray] = {}
     for edge in session_edges:
         source, target = (int(edge[0]), int(edge[1]))
@@ -178,7 +175,10 @@ def _suite2p_to_loaded_position(session: Track2pSession) -> dict[int, int]:
         roi_indices = np.arange(int(plane.n_rois), dtype=int)
     else:
         roi_indices = np.asarray(plane.roi_indices, dtype=int).reshape(-1)
-    return {int(suite2p_index): int(position) for position, suite2p_index in enumerate(roi_indices)}
+    return {
+        int(suite2p_index): int(position)
+        for position, suite2p_index in enumerate(roi_indices)
+    }
 
 
 def _normalize_track_matrix(track_matrix: Any) -> np.ndarray:
@@ -223,4 +223,3 @@ def _parse_roi_index(value: Any) -> int | None:
 
 def _is_valid_roi_index(value: Any) -> bool:
     return _parse_roi_index(value) is not None
-
