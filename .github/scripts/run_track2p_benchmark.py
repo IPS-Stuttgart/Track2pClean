@@ -317,6 +317,22 @@ def main() -> int:
             "output": "track2p_baseline.csv",
         },
         {
+            "name": "track2p-policy",
+            "runner": "track2p-policy",
+            "format": "csv",
+            "output": "track2p_policy.csv",
+        },
+        {
+            "name": "track2p-policy-dp",
+            "runner": "track2p-policy-dp",
+            "format": "csv",
+            "output": "track2p_policy_dp.csv",
+            "row_top_k": 2,
+            "rescue_min_iou": 0.10,
+            "threshold_rescue_margin": 0.15,
+            "beam_width": 8,
+        },
+        {
             "name": "global-registered-iou",
             "method": "global-assignment",
             "cost": "registered-iou",
@@ -333,6 +349,8 @@ def main() -> int:
     ]
     comparison_inputs = {
         "Track2p baseline": "track2p-baseline",
+        "Track2p policy": "track2p-policy",
+        "Track2p policy DP": "track2p-policy-dp",
         "Global registered IoU": "global-registered-iou",
         "Global ROI-aware": "global-roi-aware",
     }
