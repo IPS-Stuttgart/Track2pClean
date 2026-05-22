@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +15,18 @@ from bayescatrack.experiments.benchmark_manifest import (
     run_benchmark_manifest,
 )
 from bayescatrack.experiments.track2p_benchmark import discover_subject_dirs
+
+
+@dataclass(frozen=True)
+class BenchmarkGateResult:
+    """One optional regression gate evaluated from the comparison CSV."""
+
+    metric: str
+    condition: str
+    approach: str
+    observed: float
+    threshold: float
+    passed: bool
 
 
 def _bool_env(name: str, *, default: bool = False) -> bool:
@@ -27,6 +41,16 @@ def _int_env(name: str, *, default: int) -> int:
     if value is None or not value.strip():
         return default
     return int(value)
+
+
+def _optional_float_env(name: str) -> float | None:
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return None
+    try:
+        return float(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a floating-point threshold") from exc
 
 
 def _json_object_env(name: str) -> dict[str, Any]:
@@ -49,12 +73,191 @@ def _should_run_loso(policy: str, *, n_subjects: int) -> bool:
 
 
 def _summary_table(rows: list[dict[str, int | str]]) -> str:
-    body = ["| kind | name | rows | output |", "| --- | --- | ---: | --- |"]
+    body = ["## Track2p benchmark artifacts", "", "| kind | name | rows | output |", "| --- | --- | ---: | --- |"]
     for row in rows:
         body.append(
             f"| {row['kind']} | {row['name']} | {row['rows']} | {row['output']} |"
         )
     return "\n".join(body) + "\n"
+
+
+def _load_comparison_rows(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _float_cell(row: dict[str, str], column: str) -> float:
+    try:
+        return float(row[column])
+    except KeyError as exc:
+        raise KeyError(f"Comparison CSV is missing required column {column!r}") from exc
+    except ValueError as exc:
+        approach = row.get("approach", "<unknown>")
+        raise ValueError(
+            f"Comparison CSV value for {column!r} in approach {approach!r} is not numeric"
+        ) from exc
+
+
+def _find_row(rows: list[dict[str, str]], approach: str) -> dict[str, str]:
+    for row in rows:
+        if row.get("approach") == approach:
+            return row
+    available = ", ".join(row.get("approach", "<unknown>") for row in rows)
+    raise ValueError(
+        f"Reference approach {approach!r} was not found in comparison.csv. "
+        f"Available approaches: {available}"
+    )
+
+
+def _best_non_reference_row(
+    rows: list[dict[str, str]], *, metric_column: str, reference_approach: str
+) -> dict[str, str]:
+    candidates = [row for row in rows if row.get("approach") != reference_approach]
+    if not candidates:
+        raise ValueError("At least one non-reference benchmark approach is required")
+    return max(candidates, key=lambda row: _float_cell(row, metric_column))
+
+
+def _gate_result(
+    *,
+    rows: list[dict[str, str]],
+    metric_column: str,
+    threshold: float,
+    condition: str,
+    reference_approach: str,
+    delta_over_reference: bool,
+) -> BenchmarkGateResult:
+    best = _best_non_reference_row(
+        rows, metric_column=metric_column, reference_approach=reference_approach
+    )
+    best_value = _float_cell(best, metric_column)
+    observed = best_value
+    if delta_over_reference:
+        reference = _find_row(rows, reference_approach)
+        observed = best_value - _float_cell(reference, metric_column)
+    return BenchmarkGateResult(
+        metric=metric_column,
+        condition=condition,
+        approach=str(best.get("approach", "<unknown>")),
+        observed=observed,
+        threshold=threshold,
+        passed=observed >= threshold,
+    )
+
+
+def _evaluate_regression_gates(comparison_csv: Path) -> list[BenchmarkGateResult]:
+    rows = _load_comparison_rows(comparison_csv)
+    configured_thresholds = {
+        "TRACK2P_MIN_BEST_PAIRWISE_F1_MACRO": _optional_float_env(
+            "TRACK2P_MIN_BEST_PAIRWISE_F1_MACRO"
+        ),
+        "TRACK2P_MIN_BEST_COMPLETE_TRACK_F1_MACRO": _optional_float_env(
+            "TRACK2P_MIN_BEST_COMPLETE_TRACK_F1_MACRO"
+        ),
+        "TRACK2P_MIN_PAIRWISE_F1_MACRO_DELTA_OVER_BASELINE": _optional_float_env(
+            "TRACK2P_MIN_PAIRWISE_F1_MACRO_DELTA_OVER_BASELINE"
+        ),
+        "TRACK2P_MIN_COMPLETE_TRACK_F1_MACRO_DELTA_OVER_BASELINE": _optional_float_env(
+            "TRACK2P_MIN_COMPLETE_TRACK_F1_MACRO_DELTA_OVER_BASELINE"
+        ),
+    }
+    if all(threshold is None for threshold in configured_thresholds.values()):
+        return []
+    if not rows:
+        raise ValueError(
+            f"Regression gates were requested, but no comparison CSV exists at {comparison_csv}"
+        )
+
+    reference_approach = os.environ.get(
+        "TRACK2P_BASELINE_APPROACH", "Track2p baseline"
+    ).strip()
+    if not reference_approach:
+        raise ValueError("TRACK2P_BASELINE_APPROACH must not be empty")
+
+    gate_specs = (
+        (
+            configured_thresholds["TRACK2P_MIN_BEST_PAIRWISE_F1_MACRO"],
+            "pairwise_f1_macro",
+            "best non-baseline macro pairwise F1 >= threshold",
+            False,
+        ),
+        (
+            configured_thresholds["TRACK2P_MIN_BEST_COMPLETE_TRACK_F1_MACRO"],
+            "complete_track_f1_macro",
+            "best non-baseline macro complete-track F1 >= threshold",
+            False,
+        ),
+        (
+            configured_thresholds[
+                "TRACK2P_MIN_PAIRWISE_F1_MACRO_DELTA_OVER_BASELINE"
+            ],
+            "pairwise_f1_macro",
+            "best non-baseline macro pairwise F1 delta over baseline >= threshold",
+            True,
+        ),
+        (
+            configured_thresholds[
+                "TRACK2P_MIN_COMPLETE_TRACK_F1_MACRO_DELTA_OVER_BASELINE"
+            ],
+            "complete_track_f1_macro",
+            "best non-baseline macro complete-track F1 delta over baseline >= threshold",
+            True,
+        ),
+    )
+    return [
+        _gate_result(
+            rows=rows,
+            metric_column=metric_column,
+            threshold=float(threshold),
+            condition=condition,
+            reference_approach=reference_approach,
+            delta_over_reference=delta_over_reference,
+        )
+        for threshold, metric_column, condition, delta_over_reference in gate_specs
+        if threshold is not None
+    ]
+
+
+def _format_gate_summary(gates: list[BenchmarkGateResult]) -> str:
+    if not gates:
+        return "## Regression gates\n\nNo regression thresholds were configured.\n"
+    body = [
+        "## Regression gates",
+        "",
+        "| status | metric | condition | approach | observed | threshold |",
+        "| --- | --- | --- | --- | ---: | ---: |",
+    ]
+    for gate in gates:
+        status = "PASS" if gate.passed else "FAIL"
+        body.append(
+            f"| {status} | {gate.metric} | {gate.condition} | {gate.approach} | "
+            f"{gate.observed:.6f} | {gate.threshold:.6f} |"
+        )
+    return "\n".join(body) + "\n"
+
+
+def _append_file_section(sections: list[str], *, title: str, path: Path) -> None:
+    if not path.exists():
+        return
+    content = path.read_text(encoding="utf-8").strip()
+    if not content:
+        return
+    sections.append(f"## {title}\n\n{content}\n")
+
+
+def _write_workflow_summary(
+    *,
+    results_dir: Path,
+    artifact_rows: list[dict[str, int | str]],
+    gates: list[BenchmarkGateResult],
+) -> str:
+    sections = [_summary_table(artifact_rows).strip(), _format_gate_summary(gates).strip()]
+    _append_file_section(sections, title="Comparison", path=results_dir / "comparison.md")
+    summary = "\n\n".join(sections).strip() + "\n"
+    (results_dir / "workflow-summary.md").write_text(summary, encoding="utf-8")
+    return summary
 
 
 def main() -> int:
@@ -177,16 +380,25 @@ def main() -> int:
         manifest_path, output_dir=results_dir, progress=False
     )
     result = run_benchmark_manifest(manifest)
-    rows = [
+    artifact_rows = [
         {"kind": "run", **row} for row in (summary.to_dict() for summary in result.runs)
     ]
-    rows.extend(
+    artifact_rows.extend(
         {"kind": "comparison", **row}
         for row in (summary.to_dict() for summary in result.comparisons)
     )
-    summary = _summary_table(rows)
-    (results_dir / "workflow-summary.md").write_text(summary, encoding="utf-8")
+    gates = _evaluate_regression_gates(results_dir / "comparison.csv")
+    summary = _write_workflow_summary(
+        results_dir=results_dir,
+        artifact_rows=artifact_rows,
+        gates=gates,
+    )
     print(summary)
+    failed_gates = [gate for gate in gates if not gate.passed]
+    if failed_gates:
+        raise SystemExit(
+            f"{len(failed_gates)} Track2p benchmark regression gate(s) failed"
+        )
     return 0
 
 
