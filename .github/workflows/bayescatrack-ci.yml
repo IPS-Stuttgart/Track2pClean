@@ -60,6 +60,7 @@ jobs:
       - name: Install dependencies
         run: |
           poetry env use "$(which python)"
+          poetry lock --no-interaction
           poetry install --extras track2p
 
       - name: Run test suite
