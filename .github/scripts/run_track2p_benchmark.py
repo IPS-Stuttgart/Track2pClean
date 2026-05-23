@@ -291,6 +291,9 @@ def main() -> int:
     include_policy_dp_experiment = _bool_env(
         "TRACK2P_INCLUDE_POLICY_DP_EXPERIMENT", default=False
     )
+    include_policy_pruned_experiment = _bool_env(
+        "TRACK2P_INCLUDE_POLICY_PRUNED_EXPERIMENT", default=False
+    )
 
     defaults: dict[str, Any] = {
         "data": str(data_path),
@@ -372,6 +375,22 @@ def main() -> int:
         comparison_inputs["Track2p policy DP (experimental)"] = (
             "track2p-policy-dp-experimental"
         )
+    if include_policy_pruned_experiment:
+        runs.append(
+            {
+                "name": "track2p-policy-pruned",
+                "runner": "track2p-policy-pruned",
+                "format": "csv",
+                "output": "track2p_policy_pruned.csv",
+                "threshold_method": "min",
+                "iou_distance_threshold": 12.0,
+                "prune_threshold_margin": 0.02,
+                "prune_competition_margin": 0.02,
+                "prune_min_area_ratio": 0.45,
+                "prune_centroid_distance": 10.0,
+            }
+        )
+        comparison_inputs["Track2p policy pruned"] = "track2p-policy-pruned"
     if run_calibrated_loso:
         runs.append(
             {
@@ -409,6 +428,7 @@ def main() -> int:
         "n_subjects": len(subject_dirs),
         "run_calibrated_loso": run_calibrated_loso,
         "include_policy_dp_experiment": include_policy_dp_experiment,
+        "include_policy_pruned_experiment": include_policy_pruned_experiment,
         "pyrecest_repository": PYRECEST_REPOSITORY,
         "pyrecest_commit": PYRECEST_COMMIT,
     }

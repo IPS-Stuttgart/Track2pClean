@@ -15,6 +15,7 @@ The workflow expects repository variables that point to data available on the ru
 | `TRACK2P_MAX_GAP` | Maximum forward session gap; defaults to `2`. |
 | `TRACK2P_RUN_CALIBRATED_LOSO` | `auto`, `true`, or `false`; `auto` runs LOSO only when at least two subjects are found. |
 | `TRACK2P_PAIRWISE_COST_KWARGS_JSON` | Optional JSON object forwarded to pairwise-cost construction. |
+| `TRACK2P_INCLUDE_POLICY_PRUNED_EXPERIMENT` | Optional `true`/`false` flag to add the conservative prune-only Track2p-policy row to the comparison. |
 
 The workflow writes these files under `benchmark-results/`:
 
@@ -23,12 +24,17 @@ The workflow writes these files under `benchmark-results/`:
 | `track2p_benchmark_manifest.json` | Exact manifest generated for the run. |
 | `run_metadata.json` | Subjects, calibrated-LOSO policy, and the pinned PyRecEst revision. |
 | `track2p_baseline.csv` | Track2p baseline subject-level rows. |
+| `track2p_policy_pruned.csv` | Optional conservative prune-only Track2p-policy rows when `TRACK2P_INCLUDE_POLICY_PRUNED_EXPERIMENT=true`. |
 | `global_registered_iou.csv` | Global-assignment registered-IoU subject-level rows. |
 | `global_roi_aware.csv` | Global-assignment ROI-aware subject-level rows. |
 | `global_calibrated_loso.csv` | Optional calibrated LOSO subject-level rows. |
 | `comparison.md` | Human-readable aggregate comparison table. |
 | `comparison.csv` | Machine-readable aggregate comparison table. |
 | `workflow-summary.md` | Concise GitHub Actions summary assembled from the artifacts and regression gates. |
+
+The prune-only policy row is intentionally opt-in.  It never adds rescue edges;
+it only removes threshold-accepted policy edges with weak threshold margin,
+weak row/column competition margin, and weak area or centroid evidence.
 
 ## Optional regression gates
 
