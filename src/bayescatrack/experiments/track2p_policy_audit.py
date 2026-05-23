@@ -221,7 +221,8 @@ def policy_edge_ledger_rows(
         raise ValueError("Predicted and reference matrices must have matching sessions")
     names = _session_names(session_names, n_sessions=predicted.shape[1])
     meta = {
-        key: _format_metadata_value(value) for key, value in dict(metadata or {}).items()
+        key: _format_metadata_value(value)
+        for key, value in dict(metadata or {}).items()
     }
 
     predicted_counter = track_edge_counter(predicted)
