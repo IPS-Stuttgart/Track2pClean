@@ -176,7 +176,9 @@ def run_track2p_policy_pruned_benchmark_with_diagnostics(
         scores = _score_prediction_against_reference(
             prediction.tracks, reference, config=policy_config
         )
-        pruned_edges = int(sum(diagnostic.pruned for diagnostic in prediction.diagnostics))
+        pruned_edges = int(
+            sum(diagnostic.pruned for diagnostic in prediction.diagnostics)
+        )
         candidate_edges = int(len(prediction.diagnostics))
         scores = {
             **scores,
@@ -192,9 +194,7 @@ def run_track2p_policy_pruned_benchmark_with_diagnostics(
             "track2p_policy_prune_competition_margin": float(
                 prune_config.competition_margin
             ),
-            "track2p_policy_prune_min_area_ratio": float(
-                prune_config.min_area_ratio
-            ),
+            "track2p_policy_prune_min_area_ratio": float(prune_config.min_area_ratio),
             "track2p_policy_prune_centroid_distance": float(
                 prune_config.centroid_distance
             ),
@@ -225,13 +225,9 @@ def run_track2p_policy_pruned_benchmark_with_diagnostics(
                     ),
                     "transform_type": str(policy_config.transform_type),
                     "prune_threshold_margin": float(prune_config.threshold_margin),
-                    "prune_competition_margin": float(
-                        prune_config.competition_margin
-                    ),
+                    "prune_competition_margin": float(prune_config.competition_margin),
                     "prune_min_area_ratio": float(prune_config.min_area_ratio),
-                    "prune_centroid_distance": float(
-                        prune_config.centroid_distance
-                    ),
+                    "prune_centroid_distance": float(prune_config.centroid_distance),
                 },
             )
         )
@@ -384,7 +380,10 @@ def diagnostic_rows_for_subject(
     sessions = tuple(sessions)
     roi_indices_by_session = [_roi_indices(session) for session in sessions]
     session_names = [session.session_name for session in sessions]
-    meta = {key: _format_metadata_value(value) for key, value in dict(metadata or {}).items()}
+    meta = {
+        key: _format_metadata_value(value)
+        for key, value in dict(metadata or {}).items()
+    }
     rows: list[dict[str, float | int | str]] = []
     for diagnostic in diagnostics:
         session_index = int(diagnostic.session_index)
@@ -516,9 +515,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     parser.add_argument("--diagnostics-output", type=Path, default=None)
-    parser.add_argument(
-        "--diagnostics-format", choices=("csv", "json"), default="csv"
-    )
+    parser.add_argument("--diagnostics-format", choices=("csv", "json"), default="csv")
     return parser
 
 
@@ -724,7 +721,8 @@ def _tracks_from_pair_links(
 
 
 def _threshold_assigned_iou(
-    assigned_iou: np.ndarray, *, method: ThresholdMethod) -> float:
+    assigned_iou: np.ndarray, *, method: ThresholdMethod
+) -> float:
     values = np.asarray(assigned_iou, dtype=float)
     if values.size == 0:
         return float("inf")
@@ -751,13 +749,19 @@ def _mask_centroids(masks: np.ndarray) -> np.ndarray:
     return np.asarray(centroids, dtype=float)
 
 
-def _area_ratio_matrix(reference_masks: np.ndarray, moving_masks: np.ndarray) -> np.ndarray:
-    reference_areas = np.asarray(reference_masks, dtype=bool).reshape(
-        reference_masks.shape[0], -1
-    ).sum(axis=1)
-    moving_areas = np.asarray(moving_masks, dtype=bool).reshape(
-        moving_masks.shape[0], -1
-    ).sum(axis=1)
+def _area_ratio_matrix(
+    reference_masks: np.ndarray, moving_masks: np.ndarray
+) -> np.ndarray:
+    reference_areas = (
+        np.asarray(reference_masks, dtype=bool)
+        .reshape(reference_masks.shape[0], -1)
+        .sum(axis=1)
+    )
+    moving_areas = (
+        np.asarray(moving_masks, dtype=bool)
+        .reshape(moving_masks.shape[0], -1)
+        .sum(axis=1)
+    )
     ratios = np.ones((reference_masks.shape[0], moving_masks.shape[0]), dtype=float)
     for row_index, reference_area in enumerate(reference_areas):
         for column_index, moving_area in enumerate(moving_areas):
@@ -765,9 +769,9 @@ def _area_ratio_matrix(reference_masks: np.ndarray, moving_masks: np.ndarray) ->
             if largest == 0.0:
                 ratios[row_index, column_index] = 1.0
             else:
-                ratios[row_index, column_index] = min(
-                    float(reference_area), float(moving_area)
-                ) / largest
+                ratios[row_index, column_index] = (
+                    min(float(reference_area), float(moving_area)) / largest
+                )
     return ratios
 
 

@@ -510,7 +510,9 @@ def select_non_conflicting_paths(
         )
 
     return tuple(
-        sorted(selected, key=lambda item: (-item.score, -_path_length(item.row), item.row))
+        sorted(
+            selected, key=lambda item: (-item.score, -_path_length(item.row), item.row)
+        )
     )
 
 
@@ -532,8 +534,7 @@ def _prepare_candidate_paths(
 
     ordered_paths = tuple(sorted(best_by_row.values(), key=_track_path_sort_key))
     observation_sets = tuple(
-        _path_observations(path.row, fill_value=fill_value)
-        for path in ordered_paths
+        _path_observations(path.row, fill_value=fill_value) for path in ordered_paths
     )
     return ordered_paths, observation_sets
 
@@ -603,7 +604,9 @@ def _select_non_conflicting_component_exact(
     paths: Sequence[TrackPath],
     observation_sets: Sequence[frozenset[tuple[int, int]]],
 ) -> tuple[TrackPath, ...]:
-    best_index = min(range(len(paths)), key=lambda index: _track_path_sort_key(paths[index]))
+    best_index = min(
+        range(len(paths)), key=lambda index: _track_path_sort_key(paths[index])
+    )
     best_indices: tuple[int, ...] = (best_index,)
     best_score = float(paths[best_index].score)
     positive_suffix = [0.0] * (len(paths) + 1)
