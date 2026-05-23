@@ -75,6 +75,14 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Run conservative prune-only Track2p-policy benchmark method",
         )
         subparsers.add_parser(
+            "track2p-policy-component-audit",
+            help="Audit Track2p-policy components and split weak bridges",
+        )
+        subparsers.add_parser(
+            "track2p-component-cleanup",
+            help="Alias for track2p-policy-component-audit",
+        )
+        subparsers.add_parser(
             "track2p-shifted-iou",
             help="Track2p global-assignment ablation with residual shifted-IoU costs",
         )
@@ -215,6 +223,12 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_policy_pruned_main(args[1:]))
+    if args[0] in {"track2p-policy-component-audit", "track2p-component-cleanup"}:
+        from bayescatrack.experiments.track2p_policy_component_audit import (
+            main as _track2p_policy_component_audit_main,
+        )
+
+        return int(_track2p_policy_component_audit_main(args[1:]))
     if args[0] == "track2p-shifted-iou":
         from bayescatrack.experiments.track2p_shifted_iou_benchmark import (
             main as _track2p_shifted_iou_benchmark_main,
