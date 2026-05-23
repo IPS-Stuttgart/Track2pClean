@@ -129,11 +129,16 @@ bayescatrack benchmark suite benchmarks/track2p_result_improvements.json \
 ```
 
 The generated suite compares Track2p, registered-IoU solver-prior sweeps,
-shifted/ROI-aware costs, higher-order consistency, activity tie-breaking,
-oracle GT-link diagnostics, auto-registration selection, uncertainty-aware
-pruning, dynamic edge priors, fold-clean complete-track-F1 solver-prior tuning,
-local-evidence calibrated LOSO, configurable hard negatives, histogram-gradient
-calibration, monotone LOSO ranking, and registration QA.
+Track2p-policy reproduction, DP-rescued and prune-only Track2p-policy variants,
+shifted/ROI-aware costs, higher-order consistency, activity tie-breaking, oracle
+GT-link diagnostics, auto-registration selection, uncertainty-aware pruning,
+dynamic edge priors, fold-clean complete-track-F1 solver-prior tuning,
+local-evidence calibrated LOSO, configurable hard negatives,
+histogram-gradient calibration, monotone LOSO ranking, and registration QA.
+
+Pass `--include-experimental-policy-dp` when generating the manifest to add the
+wider, more aggressive DP-rescue row in addition to the default conservative DP
+row.
 
 The benchmark CLI also exposes one-command hooks for the next result-quality
 round that were not part of the initial improvement patches:

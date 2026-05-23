@@ -24,8 +24,13 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     assert manifest["defaults"]["transform_type"] == "fov-affine"
     assert manifest["defaults"]["include_non_cells"] is True
 
-    run_names = {run["name"] for run in manifest["runs"]}
-    assert "global-registered-iou-prior-sweep" in run_names
+    run_names = [run["name"] for run in manifest["runs"]]
+    assert len(run_names) == len(set(run_names))
+    run_name_set = set(run_names)
+    assert "track2p-policy" in run_name_set
+    assert "track2p-policy-dp" in run_name_set
+    assert "track2p-policy-pruned" in run_name_set
+    assert "global-registered-iou-prior-sweep" in run_name_set
     assert "roi-aware-shifted-higher-order" in run_names
     assert "roi-aware-shifted-activity-tiebreaker" in run_names
     assert "calibrated-loso-local-evidence" in run_names
@@ -47,3 +52,25 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     )
     assert configurable["runner"] == "track2p-loso-calibration"
     assert "one_minus_weighted_dice" in configurable["feature_names"]
+
+
+def test_track2p_result_improvement_manifest_adds_experimental_policy_dp_once():
+    manifest = track2p_result_improvement_manifest(
+        data_root="data",
+        reference_root="reference",
+        output_root="results",
+        include_experimental_policy_dp=True,
+    )
+
+    run_names = [run["name"] for run in manifest["runs"]]
+    assert len(run_names) == len(set(run_names))
+    assert "track2p-policy-dp" in run_names
+    assert "track2p-policy-dp-experimental" in run_names
+
+    experimental = next(
+        run
+        for run in manifest["runs"]
+        if run["name"] == "track2p-policy-dp-experimental"
+    )
+    assert experimental["row_top_k"] == 3
+    assert experimental["path_selection_beam_width"] == 512
