@@ -344,7 +344,7 @@ def main() -> int:
     ]
     comparison_inputs = {
         "Track2p baseline": "track2p-baseline",
-        "Track2p policy min": "track2p-policy",
+        "Track2p policy": "track2p-policy",
         "Global registered IoU": "global-registered-iou",
         "Global ROI-aware": "global-roi-aware",
     }
@@ -363,9 +363,7 @@ def main() -> int:
                 "beam_width": 8,
             }
         )
-        comparison_inputs[
-            "Track2p policy DP (experimental)"
-        ] = "track2p-policy-dp-experimental"
+        comparison_inputs["Track2p policy DP"] = "track2p-policy-dp-experimental"
     if run_calibrated_loso:
         runs.append(
             {
