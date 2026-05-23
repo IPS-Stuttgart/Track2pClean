@@ -351,7 +351,7 @@ def main() -> int:
     if include_policy_dp_experiment:
         runs.append(
             {
-                "name": "track2p-policy-dp-experimental",
+                "name": "track2p-policy-dp",
                 "runner": "track2p-policy-dp",
                 "format": "csv",
                 "output": "track2p_policy_dp_experimental.csv",
@@ -363,7 +363,7 @@ def main() -> int:
                 "beam_width": 8,
             }
         )
-        comparison_inputs["Track2p policy DP"] = "track2p-policy-dp-experimental"
+        comparison_inputs.update({"Track2p policy DP": "track2p-policy-dp"})
     if run_calibrated_loso:
         runs.append(
             {
