@@ -48,10 +48,6 @@ from bayescatrack.association.joint_registration_assignment import (
     JointRefinementConfig,
     apply_joint_anchor_relief_to_pairwise_costs,
 )
-from bayescatrack.association.track2p_policy_priors import (
-    Track2pPolicyPriorConfig,
-    apply_track2p_policy_edge_prior,
-)
 from bayescatrack.association.registered_masks import (
     add_registered_roi_validity_components,
     drop_empty_registered_masks,
@@ -68,6 +64,10 @@ from bayescatrack.association.shifted_overlap import (
 from bayescatrack.association.teacher_priors import (
     TeacherEdgePriorConfig,
     apply_teacher_edge_priors,
+)
+from bayescatrack.association.track2p_policy_priors import (
+    Track2pPolicyPriorConfig,
+    apply_track2p_policy_edge_prior,
 )
 from bayescatrack.core.bridge import (
     CalciumPlaneData,
