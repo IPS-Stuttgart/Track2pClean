@@ -196,11 +196,12 @@ def track2p_result_improvement_manifest(
 ) -> dict[str, Any]:
     """Return a ready-to-run manifest for the highest-leverage result variants.
 
-    The generated suite wires together the result-improvement directions that
-    are already exposed elsewhere in the package: solver-prior sweeps,
-    residual-overlap costs, higher-order consistency, activity tie-breaking,
-    local-evidence calibrated features, configurable hard negatives, monotone
-    ranking costs, and registration QA.
+    The generated suite promotes the validated Track2p-policy minimum-threshold
+    row as the current high-quality BayesCaTrack result and wires together the
+    remaining result-improvement directions that are already exposed elsewhere
+    in the package: solver-prior sweeps, residual-overlap costs, higher-order
+    consistency, activity tie-breaking, local-evidence calibrated features,
+    configurable hard negatives, monotone ranking costs, and registration QA.
 
     It intentionally emits a manifest instead of running the benchmarks directly
     so that long LOSO jobs can be reviewed, edited, or scheduled before launch.
@@ -338,7 +339,7 @@ def track2p_result_improvement_manifest(
             "output": f"{output_root}/track2p_policy.csv",
         },
         {
-            "name": "track2p-policy-dp",
+            "name": "track2p-policy-dp-experimental",
             "runner": "track2p-policy-dp",
             "transform_type": "affine",
             "threshold_method": "min",
@@ -356,7 +357,7 @@ def track2p_result_improvement_manifest(
             "weighted_masks": False,
             "weighted_centroids": False,
             "exclude_overlapping_pixels": False,
-            "output": f"{output_root}/track2p_policy_dp.csv",
+            "output": f"{output_root}/track2p_policy_dp_experimental.csv",
         },
         {
             "name": "oracle-gt-links",

@@ -40,6 +40,20 @@ BenchmarkRunner = Literal[
     "registration-qa",
 ]
 RUN_METADATA_FIELDS = {"name", "runner", "output", "format"}
+TRACK2P_POLICY_FIELDS = {
+    "threshold_method",
+    "iou_distance_threshold",
+}
+TRACK2P_POLICY_DP_FIELDS = TRACK2P_POLICY_FIELDS | {
+    "row_top_k",
+    "rescue_min_iou",
+    "threshold_rescue_margin",
+    "accepted_bonus",
+    "rescue_penalty",
+    "gap_penalty",
+    "threshold_margin_weight",
+    "beam_width",
+}
 CONFIGURABLE_LOSO_FIELDS = {
     "feature_names",
     "sample_weight_strategy",
@@ -64,19 +78,6 @@ SOLVER_PRIOR_FIELDS = {
     "gap_penalties",
     "cost_thresholds",
     "objective",
-}
-TRACK2P_POLICY_FIELDS = {
-    "threshold_method",
-    "iou_distance_threshold",
-}
-TRACK2P_POLICY_DP_FIELDS = TRACK2P_POLICY_FIELDS | {
-    "row_top_k",
-    "rescue_min_iou",
-    "threshold_rescue_margin",
-    "accepted_bonus",
-    "rescue_penalty",
-    "threshold_margin_weight",
-    "beam_width",
 }
 REGISTRATION_QA_CONFIG_FIELDS = {
     "data",
@@ -584,6 +585,10 @@ def _run_config(
     if runner in {TRACK2P_POLICY_RUNNER, TRACK2P_POLICY_DP_RUNNER}:
         config_defaults = {
             "method": "global-assignment",
+            "include_non_cells": False,
+            "weighted_masks": False,
+            "weighted_centroids": False,
+            "exclude_overlapping_pixels": False,
         }
         required = ("data",)
     elif runner in {"track2p-loso-calibration", "track2p-monotone-loso"}:
