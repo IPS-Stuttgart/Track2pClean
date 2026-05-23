@@ -357,7 +357,7 @@ def main() -> int:
     if include_policy_dp_experiment:
         runs.append(
             {
-                "name": "track2p-policy-dp-experimental",
+                "name": "track2p-policy-dp",
                 "runner": "track2p-policy-dp",
                 "format": "csv",
                 "transform_type": "affine",
@@ -372,9 +372,7 @@ def main() -> int:
                 "output": "track2p_policy_dp_experimental.csv",
             }
         )
-        comparison_inputs["Track2p policy DP (experimental)"] = (
-            "track2p-policy-dp-experimental"
-        )
+        comparison_inputs.update({"Track2p policy DP": "track2p-policy-dp"})
     if include_policy_pruned_experiment:
         runs.append(
             {
