@@ -147,7 +147,10 @@ def policy_edge_ledger_rows(
     if predicted.shape[1] != reference.shape[1]:
         raise ValueError("Predicted and reference matrices must have matching sessions")
     names = _session_names(session_names, n_sessions=predicted.shape[1])
-    meta = {key: _format_metadata_value(value) for key, value in dict(metadata or {}).items()}
+    meta = {
+        key: _format_metadata_value(value)
+        for key, value in dict(metadata or {}).items()
+    }
 
     predicted_counter = track_edge_counter(predicted)
     reference_counter = track_edge_counter(reference)
@@ -393,7 +396,9 @@ def _summary_row(
     }
 
 
-def _session_names(session_names: Sequence[str] | None, *, n_sessions: int) -> tuple[str, ...]:
+def _session_names(
+    session_names: Sequence[str] | None, *, n_sessions: int
+) -> tuple[str, ...]:
     if session_names is None:
         return tuple(str(index) for index in range(n_sessions))
     names = tuple(str(name) for name in session_names)

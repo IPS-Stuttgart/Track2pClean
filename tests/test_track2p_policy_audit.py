@@ -1,7 +1,6 @@
 from collections import Counter
 
 import numpy as np
-
 from bayescatrack.experiments.track2p_policy_audit import (
     policy_edge_ledger_rows,
     track_edge_counter,
