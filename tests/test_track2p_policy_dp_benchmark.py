@@ -2,8 +2,8 @@ from bayescatrack.experiments.track2p_policy_dp_benchmark import (
     PolicyCandidate,
     Track2pPolicyDPConfig,
     TrackPath,
-    _best_track_paths,
     _best_track_path,
+    _best_track_paths,
     select_non_conflicting_paths,
 )
 

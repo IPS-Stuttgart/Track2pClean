@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     Track2pPolicyPruneConfig,
     policy_link_diagnostics_from_iou_matrix,

@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
-
 from bayescatrack.evaluation.track2p_metrics import normalize_track_matrix
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
@@ -344,7 +343,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,
