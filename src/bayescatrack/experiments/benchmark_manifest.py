@@ -1033,7 +1033,9 @@ def _write_registration_qa_run_rows(
         write_registration_qa_results,
     )
 
-    level = _registration_qa_level((run_spec.options or {}).get("level", "summary"))
+    level = _registration_qa_level(
+        (run_spec.runner_kwargs or {}).get("level", "summary")
+    )
     if level == "backend-audit":
         write_registration_backend_audit_results(
             rows, run_spec.output, run_spec.output_format

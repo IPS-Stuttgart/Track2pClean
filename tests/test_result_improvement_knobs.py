@@ -143,13 +143,17 @@ def test_improvement_manifest_includes_diagnostics_priors_and_uncertainty() -> N
 
     assert manifest["defaults"]["seed_sessions"] == "all"
     assert manifest["defaults"]["fov_affine_mask_warp_mode"] == "bilinear"
-    run_names = {run["name"] for run in manifest["runs"]}
-    assert "oracle-gt-links" in run_names
-    assert "roi-aware-shifted-auto-registration" in run_names
-    assert "roi-aware-shifted-dynamic-priors" in run_names
-    assert "roi-aware-shifted-uncertainty-pruned" in run_names
-    assert "roi-aware-shifted-learned-solver-priors" in run_names
-    assert "roi-aware-shifted-track2p-teacher-prior" in run_names
+    run_names = [run["name"] for run in manifest["runs"]]
+    assert len(run_names) == len(set(run_names))
+    run_name_set = set(run_names)
+    assert "track2p-policy-dp" in run_name_set
+    assert "track2p-policy-pruned" in run_name_set
+    assert "oracle-gt-links" in run_name_set
+    assert "roi-aware-shifted-auto-registration" in run_name_set
+    assert "roi-aware-shifted-dynamic-priors" in run_name_set
+    assert "roi-aware-shifted-uncertainty-pruned" in run_name_set
+    assert "roi-aware-shifted-learned-solver-priors" in run_name_set
+    assert "roi-aware-shifted-track2p-teacher-prior" in run_name_set
     assert any("candidate_pruning_config" in run for run in manifest["runs"])
     assert any("dynamic_edge_prior_config" in run for run in manifest["runs"])
     assert any("edge_uncertainty_config" in run for run in manifest["runs"])

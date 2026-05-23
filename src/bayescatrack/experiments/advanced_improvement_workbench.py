@@ -199,10 +199,11 @@ def track2p_result_improvement_manifest(
 
     The generated suite promotes the validated Track2p-policy minimum-threshold
     row as the current high-quality BayesCaTrack result and wires together the
-    remaining result-improvement directions that are already exposed elsewhere
-    in the package: solver-prior sweeps, residual-overlap costs, higher-order
-    consistency, activity tie-breaking, local-evidence calibrated features,
-    configurable hard negatives, monotone ranking costs, and registration QA.
+    highest-leverage policy variants and remaining result-improvement directions
+    that are already exposed elsewhere in the package: DP-rescued and prune-only
+    Track2p-policy variants, solver-prior sweeps, residual-overlap costs,
+    higher-order consistency, activity tie-breaking, local-evidence calibrated
+    features, configurable hard negatives, monotone ranking costs, and registration QA.
 
     It intentionally emits a manifest instead of running the benchmarks directly
     so that long LOSO jobs can be reviewed, edited, or scheduled before launch.
@@ -303,6 +304,12 @@ def track2p_result_improvement_manifest(
         "rescue_min_iou": 0.10,
         "rescue_margin": 0.15,
     }
+    track2p_policy_prune_config = {
+        "prune_threshold_margin": 0.02,
+        "prune_competition_margin": 0.02,
+        "prune_min_area_ratio": 0.45,
+        "prune_centroid_distance": 10.0,
+    }
     teacher_prior_config = {
         "relief": 0.75,
         "teacher_cost_cap": 0.5,
@@ -351,7 +358,7 @@ def track2p_result_improvement_manifest(
             "output": f"{output_root}/track2p_policy.csv",
         },
         {
-            "name": "track2p-policy-dp-experimental",
+            "name": "track2p-policy-dp",
             "runner": "track2p-policy-dp",
             "transform_type": "affine",
             "threshold_method": "min",
@@ -369,7 +376,21 @@ def track2p_result_improvement_manifest(
             "weighted_masks": False,
             "weighted_centroids": False,
             "exclude_overlapping_pixels": False,
-            "output": f"{output_root}/track2p_policy_dp_experimental.csv",
+            "output": f"{output_root}/track2p_policy_dp.csv",
+        },
+        {
+            "name": "track2p-policy-pruned",
+            "runner": "track2p-policy-pruned",
+            "transform_type": "affine",
+            "threshold_method": "min",
+            "iou_distance_threshold": 12.0,
+            "cell_probability_threshold": 0.5,
+            "max_gap": 1,
+            "weighted_masks": False,
+            "weighted_centroids": False,
+            "exclude_overlapping_pixels": False,
+            **track2p_policy_prune_config,
+            "output": f"{output_root}/track2p_policy_pruned.csv",
         },
         {
             "name": "oracle-gt-links",
@@ -554,7 +575,7 @@ def track2p_result_improvement_manifest(
 
     if include_experimental_policy_dp:
         runs.insert(
-            2,
+            3,
             {
                 "name": "track2p-policy-dp-experimental",
                 "runner": "track2p-policy-dp",
@@ -562,15 +583,17 @@ def track2p_result_improvement_manifest(
                 "threshold_method": "min",
                 "iou_distance_threshold": 12.0,
                 "cell_probability_threshold": 0.5,
-                "row_top_k": 2,
-                "rescue_min_iou": 0.10,
-                "threshold_rescue_margin": 0.15,
+                "row_top_k": 3,
+                "rescue_min_iou": 0.05,
+                "threshold_rescue_margin": 0.25,
                 "accepted_bonus": 0.25,
                 "rescue_penalty": 0.25,
                 "gap_penalty": 1.0,
                 "threshold_margin_weight": 0.5,
-                "beam_width": 8,
+                "beam_width": 16,
                 "max_gap": 2,
+                "path_candidates_per_seed": 8,
+                "path_selection_beam_width": 512,
                 "weighted_masks": False,
                 "weighted_centroids": False,
                 "exclude_overlapping_pixels": False,
