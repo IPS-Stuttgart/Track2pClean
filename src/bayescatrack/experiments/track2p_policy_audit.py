@@ -2,7 +2,7 @@
 
 The benchmark results show that the minimum-threshold Track2p policy is the
 right default direction, while DP rescue variants add false positives and lose
-policy-supported ground-truth edges.  This module therefore focuses on a
+policy-supported ground-truth edges. This module therefore focuses on a
 prune-only diagnostic: it reruns the policy prediction and emits an edge ledger
 that identifies exactly which policy edges are true positives, false positives,
 or false negatives against manual ground truth.
@@ -14,12 +14,13 @@ import argparse
 import csv
 import json
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+
 from bayescatrack.evaluation.track2p_metrics import normalize_track_matrix
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
@@ -130,6 +131,78 @@ def run_track2p_policy_audit(
             )
         )
     return PolicyAuditResult(tuple(edge_rows), tuple(summary_rows))
+
+
+def pairwise_edge_counter(
+    track_matrix: Any,
+    *,
+    session_pairs: Iterable[tuple[int, int]] | None = None,
+) -> Counter[TrackEdge]:
+    """Return duplicate-aware pairwise edge counts from a track matrix."""
+
+    matrix = normalize_track_matrix(track_matrix)
+    pairs = _session_pairs(matrix, session_pairs=session_pairs)
+    counter: Counter[TrackEdge] = Counter()
+    for session_a, session_b in pairs:
+        for row in matrix:
+            roi_a = row[session_a]
+            roi_b = row[session_b]
+            if _valid_roi_index(roi_a) and _valid_roi_index(roi_b):
+                counter[(session_a, session_b, int(roi_a), int(roi_b))] += 1
+    return counter
+
+
+def pairwise_edge_ledger_rows(
+    predicted_track_matrix: Any,
+    reference_track_matrix: Any,
+    *,
+    subject: str = "",
+    session_names: Sequence[str] | None = None,
+    session_pairs: Iterable[tuple[int, int]] | None = None,
+) -> list[dict[str, int | str]]:
+    """Return duplicate-aware TP/FP/FN count rows for predicted-vs-reference edges."""
+
+    predicted = normalize_track_matrix(predicted_track_matrix)
+    reference = normalize_track_matrix(reference_track_matrix)
+    if predicted.shape[1] != reference.shape[1]:
+        raise ValueError(
+            "Predicted and reference matrices must have the same number of sessions"
+        )
+
+    pairs = _session_pairs(predicted, session_pairs=session_pairs)
+    predicted_counts = pairwise_edge_counter(predicted, session_pairs=pairs)
+    reference_counts = pairwise_edge_counter(reference, session_pairs=pairs)
+    names = tuple(session_names or ())
+    rows: list[dict[str, int | str]] = []
+    for edge in sorted(set(predicted_counts) | set(reference_counts)):
+        session_a, session_b, source_roi, target_roi = edge
+        predicted_count = int(predicted_counts.get(edge, 0))
+        reference_count = int(reference_counts.get(edge, 0))
+        true_positive_count = min(predicted_count, reference_count)
+        false_positive_count = max(predicted_count - reference_count, 0)
+        false_negative_count = max(reference_count - predicted_count, 0)
+        rows.append(
+            {
+                "subject": subject,
+                "session_a": int(session_a),
+                "session_b": int(session_b),
+                "session_a_name": _session_name(names, session_a),
+                "session_b_name": _session_name(names, session_b),
+                "source_roi": int(source_roi),
+                "target_roi": int(target_roi),
+                "predicted_count": predicted_count,
+                "reference_count": reference_count,
+                "true_positive_count": true_positive_count,
+                "false_positive_count": false_positive_count,
+                "false_negative_count": false_negative_count,
+                "classification": _edge_classification(
+                    true_positive_count=true_positive_count,
+                    false_positive_count=false_positive_count,
+                    false_negative_count=false_negative_count,
+                ),
+            }
+        )
+    return rows
 
 
 def policy_edge_ledger_rows(
@@ -271,9 +344,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument(
-        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
-    )
+    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
     parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,
@@ -346,6 +417,28 @@ def _apply_seed_roi_filter(
     )
 
 
+def _session_pairs(
+    matrix: np.ndarray,
+    *,
+    session_pairs: Iterable[tuple[int, int]] | None,
+) -> tuple[tuple[int, int], ...]:
+    pairs = (
+        tuple((index, index + 1) for index in range(max(0, matrix.shape[1] - 1)))
+        if session_pairs is None
+        else tuple((int(a), int(b)) for a, b in session_pairs)
+    )
+    for session_a, session_b in pairs:
+        if session_a < 0 or session_b < 0:
+            raise IndexError("session indices must be non-negative")
+        if session_a >= matrix.shape[1] or session_b >= matrix.shape[1]:
+            raise IndexError(
+                f"session pair {(session_a, session_b)!r} out of bounds for {matrix.shape[1]} sessions"
+            )
+        if session_a >= session_b:
+            raise ValueError("session pairs must point forward in time")
+    return pairs
+
+
 def _edge_rows(
     edge: TrackEdge,
     *,
@@ -416,6 +509,28 @@ def _valid_roi_index(value: object) -> bool:
         return int(cast(Any, value)) >= 0
     except (TypeError, ValueError):
         return False
+
+
+def _session_name(session_names: Sequence[str], session_index: int) -> str:
+    if 0 <= session_index < len(session_names):
+        return str(session_names[session_index])
+    return ""
+
+
+def _edge_classification(
+    *,
+    true_positive_count: int,
+    false_positive_count: int,
+    false_negative_count: int,
+) -> str:
+    labels: list[str] = []
+    if true_positive_count:
+        labels.append("true_positive")
+    if false_positive_count:
+        labels.append("false_positive")
+    if false_negative_count:
+        labels.append("false_negative")
+    return "+".join(labels) if labels else "empty"
 
 
 def _format_metadata_value(value: Any) -> str:

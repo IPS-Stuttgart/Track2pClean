@@ -62,6 +62,8 @@ class Track2pPolicyDPConfig:
     threshold_margin_weight: float = 0.5
     beam_width: int = 8
     max_gap: int = 2
+    path_candidates_per_seed: int = 4
+    path_selection_beam_width: int = 256
     logit_epsilon: float = 1.0e-3
     fill_value: int = -1
 
@@ -80,6 +82,10 @@ class Track2pPolicyDPConfig:
             raise ValueError("beam_width must be positive")
         if self.max_gap < 1:
             raise ValueError("max_gap must be at least 1")
+        if self.path_candidates_per_seed <= 0:
+            raise ValueError("path_candidates_per_seed must be positive")
+        if self.path_selection_beam_width <= 0:
+            raise ValueError("path_selection_beam_width must be positive")
         if not 0.0 < self.logit_epsilon < 0.5:
             raise ValueError("logit_epsilon must lie in (0, 0.5)")
 
@@ -162,17 +168,21 @@ def track2p_policy_dp_tracks(
     if not start_rois:
         return np.zeros((0, len(session_list)), dtype=int)
 
-    paths = [
-        _best_track_path(
-            start_roi=start_roi,
-            n_sessions=len(session_list),
-            candidates_by_source=by_source,
-            config=cfg,
+    paths: list[TrackPath] = []
+    for start_roi in start_rois:
+        paths.extend(
+            _best_track_paths(
+                start_roi=start_roi,
+                n_sessions=len(session_list),
+                candidates_by_source=by_source,
+                config=cfg,
+                max_paths=cfg.path_candidates_per_seed,
+            )
         )
-        for start_roi in start_rois
-    ]
     selected_paths = select_non_conflicting_paths(
-        [path for path in paths if path is not None], fill_value=cfg.fill_value
+        paths,
+        fill_value=cfg.fill_value,
+        beam_width=cfg.path_selection_beam_width,
     )
     if not selected_paths:
         return np.zeros((0, len(session_list)), dtype=int)
@@ -376,6 +386,26 @@ def _best_track_path(
     candidates_by_source: Mapping[tuple[int, int], Sequence[PolicyCandidate]],
     config: Track2pPolicyDPConfig,
 ) -> TrackPath | None:
+    paths = _best_track_paths(
+        start_roi=start_roi,
+        n_sessions=n_sessions,
+        candidates_by_source=candidates_by_source,
+        config=config,
+        max_paths=1,
+    )
+    return paths[0] if paths else None
+
+
+def _best_track_paths(
+    *,
+    start_roi: int,
+    n_sessions: int,
+    candidates_by_source: Mapping[tuple[int, int], Sequence[PolicyCandidate]],
+    config: Track2pPolicyDPConfig,
+    max_paths: int,
+) -> tuple[TrackPath, ...]:
+    if max_paths <= 0:
+        raise ValueError("max_paths must be positive")
     row = [int(config.fill_value)] * int(n_sessions)
     row[0] = int(start_roi)
     active = [
@@ -422,31 +452,301 @@ def _best_track_path(
 
     pool = complete + active
     if not pool:
-        return None
-    best = max(pool, key=lambda item: (item.score, _path_length(item.row), item.row))
-    return best.as_path()
+        return ()
+
+    best_by_row: dict[tuple[int, ...], _BeamState] = {}
+    for state in pool:
+        previous = best_by_row.get(state.row)
+        if previous is None or _state_is_better(state, previous):
+            best_by_row[state.row] = state
+
+    ordered = sorted(
+        best_by_row.values(),
+        key=lambda item: (-item.score, -_path_length(item.row), item.row),
+    )
+    return tuple(state.as_path() for state in ordered[: int(max_paths)])
 
 
 def select_non_conflicting_paths(
-    paths: Sequence[TrackPath], *, fill_value: int = -1
+    paths: Sequence[TrackPath],
+    *,
+    fill_value: int = -1,
+    beam_width: int | None = None,
 ) -> tuple[TrackPath, ...]:
-    """Select high-scoring paths while enforcing one ROI use per session."""
+    """Select high-scoring paths while enforcing one ROI use per session.
 
-    occupied: set[tuple[int, int]] = set()
+    The previous implementation was greedy: once the top-scoring path for a seed
+    occupied an ROI, lower-scoring compatible alternatives from other seeds were
+    never considered.  That is fragile for complete-track F1 because one locally
+    attractive path can block two or more slightly weaker but mutually
+    compatible paths.  This selector decomposes the conflict graph into connected
+    components and solves each component as a maximum-weight independent-set
+    problem.  Small components are solved exactly; large components use a bounded
+    deterministic beam to keep the benchmark runtime predictable.
+    """
+
+    if beam_width is not None and int(beam_width) <= 0:
+        raise ValueError("beam_width must be positive when provided")
+
+    candidate_paths, observation_sets = _prepare_candidate_paths(
+        paths, fill_value=fill_value
+    )
+    if not candidate_paths:
+        return ()
+
     selected: list[TrackPath] = []
-    for path in sorted(
-        paths, key=lambda item: (-item.score, -_path_length(item.row), item.row)
-    ):
-        observations = {
+    for component in _conflict_components(observation_sets):
+        if len(component) == 1:
+            selected.append(candidate_paths[component[0]])
+            continue
+        component_paths = tuple(candidate_paths[index] for index in component)
+        component_observations = tuple(observation_sets[index] for index in component)
+        selected.extend(
+            _select_non_conflicting_component(
+                component_paths,
+                component_observations,
+                beam_width=beam_width,
+            )
+        )
+
+    return tuple(
+        sorted(selected, key=lambda item: (-item.score, -_path_length(item.row), item.row))
+    )
+
+
+def _prepare_candidate_paths(
+    paths: Sequence[TrackPath], *, fill_value: int
+) -> tuple[tuple[TrackPath, ...], tuple[frozenset[tuple[int, int]], ...]]:
+    best_by_row: dict[tuple[int, ...], TrackPath] = {}
+    for path in paths:
+        row = tuple(int(value) for value in path.row)
+        observations = _path_observations(row, fill_value=fill_value)
+        if not observations:
+            continue
+        normalized = TrackPath(row=row, score=float(path.score))
+        previous = best_by_row.get(row)
+        if previous is None or _track_path_sort_key(normalized) < _track_path_sort_key(
+            previous
+        ):
+            best_by_row[row] = normalized
+
+    ordered_paths = tuple(sorted(best_by_row.values(), key=_track_path_sort_key))
+    observation_sets = tuple(
+        _path_observations(path.row, fill_value=fill_value)
+        for path in ordered_paths
+    )
+    return ordered_paths, observation_sets
+
+
+def _path_observations(
+    row: Sequence[int], *, fill_value: int
+) -> frozenset[tuple[int, int]]:
+    return frozenset(
+        {
             (session_index, int(roi))
-            for session_index, roi in enumerate(path.row)
+            for session_index, roi in enumerate(row)
             if int(roi) != int(fill_value)
         }
-        if observations & occupied:
+    )
+
+
+def _conflict_components(
+    observation_sets: Sequence[frozenset[tuple[int, int]]],
+) -> tuple[tuple[int, ...], ...]:
+    observation_to_paths: dict[tuple[int, int], list[int]] = {}
+    for path_index, observations in enumerate(observation_sets):
+        for observation in observations:
+            observation_to_paths.setdefault(observation, []).append(path_index)
+
+    neighbors = [set() for _ in observation_sets]
+    for path_indices in observation_to_paths.values():
+        if len(path_indices) < 2:
             continue
-        selected.append(path)
-        occupied.update(observations)
-    return tuple(selected)
+        path_index_set = set(path_indices)
+        for path_index in path_indices:
+            neighbors[path_index].update(path_index_set - {path_index})
+
+    components: list[tuple[int, ...]] = []
+    seen: set[int] = set()
+    for start in range(len(observation_sets)):
+        if start in seen:
+            continue
+        stack = [start]
+        component: list[int] = []
+        seen.add(start)
+        while stack:
+            current = stack.pop()
+            component.append(current)
+            for neighbor in sorted(neighbors[current]):
+                if neighbor in seen:
+                    continue
+                seen.add(neighbor)
+                stack.append(neighbor)
+        components.append(tuple(sorted(component)))
+    return tuple(components)
+
+
+def _select_non_conflicting_component(
+    paths: Sequence[TrackPath],
+    observation_sets: Sequence[frozenset[tuple[int, int]]],
+    *,
+    beam_width: int | None,
+) -> tuple[TrackPath, ...]:
+    if len(paths) <= 20 or beam_width is None:
+        return _select_non_conflicting_component_exact(paths, observation_sets)
+    return _select_non_conflicting_component_beam(
+        paths, observation_sets, beam_width=int(beam_width)
+    )
+
+
+def _select_non_conflicting_component_exact(
+    paths: Sequence[TrackPath],
+    observation_sets: Sequence[frozenset[tuple[int, int]]],
+) -> tuple[TrackPath, ...]:
+    best_index = min(range(len(paths)), key=lambda index: _track_path_sort_key(paths[index]))
+    best_indices: tuple[int, ...] = (best_index,)
+    best_score = float(paths[best_index].score)
+    positive_suffix = [0.0] * (len(paths) + 1)
+    for index in range(len(paths) - 1, -1, -1):
+        positive_suffix[index] = positive_suffix[index + 1] + max(
+            0.0, float(paths[index].score)
+        )
+
+    def update(score: float, selected_indices: tuple[int, ...]) -> None:
+        nonlocal best_indices, best_score
+        if not selected_indices:
+            return
+        if _selection_is_better(
+            score,
+            selected_indices,
+            best_score,
+            best_indices,
+            paths,
+        ):
+            best_score = float(score)
+            best_indices = selected_indices
+
+    def recurse(
+        index: int,
+        score: float,
+        selected_indices: tuple[int, ...],
+        occupied: frozenset[tuple[int, int]],
+    ) -> None:
+        if index >= len(paths):
+            update(score, selected_indices)
+            return
+        if score + positive_suffix[index] < best_score:
+            return
+
+        observations = observation_sets[index]
+        if not observations & occupied:
+            recurse(
+                index + 1,
+                score + float(paths[index].score),
+                selected_indices + (index,),
+                occupied | observations,
+            )
+        recurse(index + 1, score, selected_indices, occupied)
+
+    recurse(0, 0.0, (), frozenset())
+    return tuple(paths[index] for index in best_indices)
+
+
+def _select_non_conflicting_component_beam(
+    paths: Sequence[TrackPath],
+    observation_sets: Sequence[frozenset[tuple[int, int]]],
+    *,
+    beam_width: int,
+) -> tuple[TrackPath, ...]:
+    states: list[tuple[float, tuple[int, ...], frozenset[tuple[int, int]]]] = [
+        (0.0, (), frozenset())
+    ]
+    for index, observations in enumerate(observation_sets):
+        next_states = list(states)
+        for score, selected_indices, occupied in states:
+            if observations & occupied:
+                continue
+            next_states.append(
+                (
+                    score + float(paths[index].score),
+                    selected_indices + (index,),
+                    occupied | observations,
+                )
+            )
+        states = _prune_selection_beam(next_states, paths, beam_width=beam_width)
+
+    nonempty_states = [state for state in states if state[1]]
+    if not nonempty_states:
+        best_index = min(
+            range(len(paths)), key=lambda index: _track_path_sort_key(paths[index])
+        )
+        return (paths[best_index],)
+    best = min(
+        nonempty_states,
+        key=lambda state: _selection_sort_key(state[0], state[1], paths),
+    )
+    return tuple(paths[index] for index in best[1])
+
+
+def _prune_selection_beam(
+    states: Sequence[tuple[float, tuple[int, ...], frozenset[tuple[int, int]]]],
+    paths: Sequence[TrackPath],
+    *,
+    beam_width: int,
+) -> list[tuple[float, tuple[int, ...], frozenset[tuple[int, int]]]]:
+    best_by_occupied: dict[
+        frozenset[tuple[int, int]],
+        tuple[float, tuple[int, ...], frozenset[tuple[int, int]]],
+    ] = {}
+    for state in states:
+        previous = best_by_occupied.get(state[2])
+        if previous is None or _selection_sort_key(
+            state[0], state[1], paths
+        ) < _selection_sort_key(previous[0], previous[1], paths):
+            best_by_occupied[state[2]] = state
+    ordered = sorted(
+        best_by_occupied.values(),
+        key=lambda state: _selection_sort_key(state[0], state[1], paths),
+    )
+    return ordered[: int(beam_width)]
+
+
+def _state_is_better(candidate: _BeamState, incumbent: _BeamState) -> bool:
+    return (
+        float(candidate.score),
+        _path_length(candidate.row),
+        tuple(-int(value) for value in candidate.row),
+    ) > (
+        float(incumbent.score),
+        _path_length(incumbent.row),
+        tuple(-int(value) for value in incumbent.row),
+    )
+
+
+def _track_path_sort_key(path: TrackPath) -> tuple[float, int, tuple[int, ...]]:
+    return (-float(path.score), -_path_length(path.row), path.row)
+
+
+def _selection_sort_key(
+    score: float, selected_indices: Sequence[int], paths: Sequence[TrackPath]
+) -> tuple[float, int, tuple[tuple[int, ...], ...]]:
+    return (
+        -float(score),
+        -sum(_path_length(paths[index].row) for index in selected_indices),
+        tuple(paths[index].row for index in selected_indices),
+    )
+
+
+def _selection_is_better(
+    candidate_score: float,
+    candidate_indices: Sequence[int],
+    incumbent_score: float,
+    incumbent_indices: Sequence[int],
+    paths: Sequence[TrackPath],
+) -> bool:
+    return _selection_sort_key(candidate_score, candidate_indices, paths) < (
+        _selection_sort_key(incumbent_score, incumbent_indices, paths)
+    )
 
 
 def _path_length(row: Sequence[int]) -> int:
@@ -527,6 +827,12 @@ def run_track2p_policy_dp_benchmark(
             "track2p_policy_dp_gap_penalty": float(cfg.gap_penalty),
             "track2p_policy_dp_beam_width": int(cfg.beam_width),
             "track2p_policy_dp_max_gap": int(cfg.max_gap),
+            "track2p_policy_dp_path_candidates_per_seed": int(
+                cfg.path_candidates_per_seed
+            ),
+            "track2p_policy_dp_path_selection_beam_width": int(
+                cfg.path_selection_beam_width
+            ),
         }
         results.append(
             SubjectBenchmarkResult(
@@ -580,6 +886,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--threshold-margin-weight", type=float, default=0.5)
     parser.add_argument("--beam-width", type=int, default=8)
     parser.add_argument("--max-gap", type=int, default=2)
+    parser.add_argument("--path-candidates-per-seed", type=int, default=4)
+    parser.add_argument("--path-selection-beam-width", type=int, default=256)
     parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,
@@ -611,6 +919,8 @@ def main(argv: list[str] | None = None) -> int:
         threshold_margin_weight=args.threshold_margin_weight,
         beam_width=args.beam_width,
         max_gap=args.max_gap,
+        path_candidates_per_seed=args.path_candidates_per_seed,
+        path_selection_beam_width=args.path_selection_beam_width,
     )
     config = Track2pBenchmarkConfig(
         data=args.data,

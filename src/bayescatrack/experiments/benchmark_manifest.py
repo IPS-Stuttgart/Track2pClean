@@ -30,10 +30,12 @@ TRACK2P_CONFIG_FIELDS = {field.name for field in fields(Track2pBenchmarkConfig)}
 DEFAULT_RUNNER = "track2p"
 TRACK2P_POLICY_RUNNER = "track2p-policy"
 TRACK2P_POLICY_DP_RUNNER = "track2p-policy-dp"
+TRACK2P_POLICY_PRUNED_RUNNER = "track2p-policy-pruned"
 BenchmarkRunner = Literal[
     "track2p",
     "track2p-policy",
     "track2p-policy-dp",
+    "track2p-policy-pruned",
     "track2p-loso-calibration",
     "track2p-monotone-loso",
     "track2p-solver-prior-loso",
@@ -53,6 +55,14 @@ TRACK2P_POLICY_DP_FIELDS = TRACK2P_POLICY_FIELDS | {
     "gap_penalty",
     "threshold_margin_weight",
     "beam_width",
+    "path_candidates_per_seed",
+    "path_selection_beam_width",
+}
+TRACK2P_POLICY_PRUNED_FIELDS = TRACK2P_POLICY_FIELDS | {
+    "prune_threshold_margin",
+    "prune_competition_margin",
+    "prune_min_area_ratio",
+    "prune_centroid_distance",
 }
 CONFIGURABLE_LOSO_FIELDS = {
     "feature_names",
@@ -110,6 +120,7 @@ REGISTRATION_QA_SPECIFIC_FIELDS = (
 RUNNER_SPECIFIC_FIELDS = (
     TRACK2P_POLICY_FIELDS
     | TRACK2P_POLICY_DP_FIELDS
+    | TRACK2P_POLICY_PRUNED_FIELDS
     | CONFIGURABLE_LOSO_FIELDS
     | MONOTONE_LOSO_FIELDS
     | SOLVER_PRIOR_FIELDS
@@ -125,6 +136,9 @@ RUNNER_CONFIG_FIELDS: dict[str, set[str]] = {
     DEFAULT_RUNNER: set(TRACK2P_CONFIG_FIELDS),
     TRACK2P_POLICY_RUNNER: set(TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_FIELDS),
     TRACK2P_POLICY_DP_RUNNER: set(TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_DP_FIELDS),
+    TRACK2P_POLICY_PRUNED_RUNNER: set(
+        TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_PRUNED_FIELDS
+    ),
     "track2p-loso-calibration": set(TRACK2P_CONFIG_FIELDS | CONFIGURABLE_LOSO_FIELDS),
     "track2p-monotone-loso": set(TRACK2P_CONFIG_FIELDS | MONOTONE_LOSO_FIELDS),
     "track2p-solver-prior-loso": set(TRACK2P_CONFIG_FIELDS | SOLVER_PRIOR_FIELDS),
@@ -136,6 +150,7 @@ RUNNER_ALIASES = {
     "track2p-benchmark": DEFAULT_RUNNER,
     TRACK2P_POLICY_RUNNER: TRACK2P_POLICY_RUNNER,
     TRACK2P_POLICY_DP_RUNNER: TRACK2P_POLICY_DP_RUNNER,
+    TRACK2P_POLICY_PRUNED_RUNNER: TRACK2P_POLICY_PRUNED_RUNNER,
     "track2p-loso-calibration": "track2p-loso-calibration",
     "track2p-configurable-loso": "track2p-loso-calibration",
     "track2p-configurable-loso-calibration": "track2p-loso-calibration",
@@ -399,6 +414,11 @@ def _run_benchmark_rows(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
+    if run_spec.runner == TRACK2P_POLICY_PRUNED_RUNNER:
+        return _run_track2p_policy_pruned_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
     if run_spec.runner == "track2p-loso-calibration":
         return _run_configurable_loso_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
@@ -450,6 +470,8 @@ def _runner_specific_fields(runner: str) -> set[str]:
         return set(TRACK2P_POLICY_FIELDS)
     if runner == TRACK2P_POLICY_DP_RUNNER:
         return set(TRACK2P_POLICY_DP_FIELDS)
+    if runner == TRACK2P_POLICY_PRUNED_RUNNER:
+        return set(TRACK2P_POLICY_PRUNED_FIELDS)
     if runner == "track2p-loso-calibration":
         return set(CONFIGURABLE_LOSO_FIELDS)
     if runner == "track2p-monotone-loso":
@@ -469,6 +491,10 @@ def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
     if runner == TRACK2P_POLICY_DP_RUNNER:
         return {
             key: run_data[key] for key in TRACK2P_POLICY_DP_FIELDS if key in run_data
+        }
+    if runner == TRACK2P_POLICY_PRUNED_RUNNER:
+        return {
+            key: run_data[key] for key in TRACK2P_POLICY_PRUNED_FIELDS if key in run_data
         }
     if runner == "track2p-loso-calibration":
         return _configurable_loso_runner_kwargs(run_data)
@@ -582,7 +608,11 @@ def _run_config(
 
     config_defaults: dict[str, Any] = {}
     required = ("data", "method")
-    if runner in {TRACK2P_POLICY_RUNNER, TRACK2P_POLICY_DP_RUNNER}:
+    if runner in {
+        TRACK2P_POLICY_RUNNER,
+        TRACK2P_POLICY_DP_RUNNER,
+        TRACK2P_POLICY_PRUNED_RUNNER,
+    }:
         config_defaults = {
             "method": "global-assignment",
             "include_non_cells": False,
@@ -681,6 +711,11 @@ def _run_manifest_entry(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
+    if run_spec.runner == TRACK2P_POLICY_PRUNED_RUNNER:
+        return _run_track2p_policy_pruned_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
     if run_spec.runner == "track2p-loso-calibration":
         return _run_configurable_loso_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
@@ -760,7 +795,12 @@ def _run_track2p_policy_dp_rows(
         "gap_penalty": float(config.gap_penalty),
         "max_gap": int(config.max_gap),
     }
-    for key in ("row_top_k", "beam_width"):
+    for key in (
+        "row_top_k",
+        "beam_width",
+        "path_candidates_per_seed",
+        "path_selection_beam_width",
+    ):
         if key in options:
             dp_kwargs[key] = int(options[key])
     for key in (
@@ -776,6 +816,58 @@ def _run_track2p_policy_dp_rows(
     results = run_track2p_policy_dp_benchmark(
         config,
         dp_config=Track2pPolicyDPConfig(**dp_kwargs),
+        transform_type=config.transform_type,
+        cell_probability_threshold=config.cell_probability_threshold,
+    )
+    return [result.to_dict() for result in results]
+
+
+def _run_track2p_policy_pruned_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.track2p_policy_benchmark import (
+        TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
+    from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
+        Track2pPolicyPruneConfig,
+        run_track2p_policy_pruned_benchmark,
+    )
+
+    prune_defaults = Track2pPolicyPruneConfig()
+    prune_config = Track2pPolicyPruneConfig(
+        threshold_margin=_float_option(
+            options,
+            "prune_threshold_margin",
+            default=prune_defaults.threshold_margin,
+        ),
+        competition_margin=_float_option(
+            options,
+            "prune_competition_margin",
+            default=prune_defaults.competition_margin,
+        ),
+        min_area_ratio=_float_option(
+            options,
+            "prune_min_area_ratio",
+            default=prune_defaults.min_area_ratio,
+        ),
+        centroid_distance=_float_option(
+            options,
+            "prune_centroid_distance",
+            default=prune_defaults.centroid_distance,
+        ),
+    )
+    results = run_track2p_policy_pruned_benchmark(
+        config,
+        threshold_method=_policy_threshold_method(
+            options.get("threshold_method", TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
+        ),
+        iou_distance_threshold=_float_option(
+            options,
+            "iou_distance_threshold",
+            default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        ),
+        prune_config=prune_config,
         transform_type=config.transform_type,
         cell_probability_threshold=config.cell_probability_threshold,
     )

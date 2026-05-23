@@ -193,6 +193,7 @@ def track2p_result_improvement_manifest(
     reference_root: str | None = None,
     max_gap: int = 2,
     transform_type: str = "fov-affine",
+    include_experimental_policy_dp: bool = False,
 ) -> dict[str, Any]:
     """Return a ready-to-run manifest for the highest-leverage result variants.
 
@@ -529,6 +530,32 @@ def track2p_result_improvement_manifest(
         },
     ]
 
+    if include_experimental_policy_dp:
+        runs.insert(
+            2,
+            {
+                "name": "track2p-policy-dp-experimental",
+                "runner": "track2p-policy-dp",
+                "transform_type": "affine",
+                "threshold_method": "min",
+                "iou_distance_threshold": 12.0,
+                "cell_probability_threshold": 0.5,
+                "row_top_k": 2,
+                "rescue_min_iou": 0.10,
+                "threshold_rescue_margin": 0.15,
+                "accepted_bonus": 0.25,
+                "rescue_penalty": 0.25,
+                "gap_penalty": 1.0,
+                "threshold_margin_weight": 0.5,
+                "beam_width": 8,
+                "max_gap": 2,
+                "weighted_masks": False,
+                "weighted_centroids": False,
+                "exclude_overlapping_pixels": False,
+                "output": f"{output_root}/track2p_policy_dp_experimental.csv",
+            },
+        )
+
     comparable_runs = [
         run for run in runs if run.get("runner", "track2p") != "registration-qa"
     ]
@@ -644,6 +671,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     improvement.add_argument("--reference-root", default=None)
     improvement.add_argument("--max-gap", type=int, default=2)
     improvement.add_argument("--transform-type", default="fov-affine")
+    improvement.add_argument(
+        "--include-experimental-policy-dp",
+        action="store_true",
+        help="Also include the currently experimental Track2p-policy DP rescue row",
+    )
     improvement.add_argument("--output", required=True, type=Path)
 
     pr = subparsers.add_parser(
@@ -692,6 +724,7 @@ def main(argv: list[str] | None = None) -> int:
             reference_root=args.reference_root,
             max_gap=args.max_gap,
             transform_type=args.transform_type,
+            include_experimental_policy_dp=args.include_experimental_policy_dp,
         )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
