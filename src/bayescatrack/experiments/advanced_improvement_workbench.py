@@ -292,6 +292,17 @@ def track2p_result_improvement_manifest(
         "area_ratio_weight": 0.10,
         "registration_empty_roi_weight": 8.0,
     }
+    track2p_policy_prior_config = {
+        "threshold_method": "min",
+        "relief": 0.75,
+        "accepted_cost_cap": 0.5,
+        "non_policy_penalty": 0.05,
+        "min_cost": -1.0,
+        "consecutive_only": False,
+        "row_top_k": 2,
+        "rescue_min_iou": 0.10,
+        "rescue_margin": 0.15,
+    }
     teacher_prior_config = {
         "relief": 0.75,
         "teacher_cost_cap": 0.5,
@@ -433,6 +444,17 @@ def track2p_result_improvement_manifest(
             "edge_uncertainty_config": uncertainty_config,
             "candidate_pruning_config": candidate_pruning_config,
             "output": f"{output_root}/roi_aware_shifted_dynamic_priors.csv",
+        },
+        {
+            "name": "roi-aware-shifted-track2p-policy-prior",
+            "method": "global-assignment",
+            "cost": "roi-aware-shifted",
+            **tuned_solver_priors,
+            "dynamic_edge_prior_config": dynamic_edge_prior_config,
+            "edge_uncertainty_config": uncertainty_config,
+            "candidate_pruning_config": candidate_pruning_config,
+            "track2p_policy_prior_config": track2p_policy_prior_config,
+            "output": f"{output_root}/roi_aware_shifted_track2p_policy_prior.csv",
         },
         {
             "name": "roi-aware-shifted-track2p-teacher-prior",
