@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.association.track2p_policy_priors import (
     Track2pPolicyPriorConfig,
     apply_track2p_policy_edge_prior,

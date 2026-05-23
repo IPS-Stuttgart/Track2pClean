@@ -146,7 +146,9 @@ def apply_track2p_policy_edge_prior(
     if cfg.non_policy_penalty > 0.0:
         costs[finite & ~policy_mask] += float(cfg.non_policy_penalty)
     if cfg.accepted_cost_cap is not None:
-        costs[policy_mask] = np.minimum(costs[policy_mask], float(cfg.accepted_cost_cap))
+        costs[policy_mask] = np.minimum(
+            costs[policy_mask], float(cfg.accepted_cost_cap)
+        )
     if cfg.relief > 0.0:
         costs[policy_mask] -= float(cfg.relief)
     costs[policy_mask] = np.maximum(costs[policy_mask], float(cfg.min_cost))
@@ -231,7 +233,9 @@ def _add_row_rescue_edges(
         mask[row_index, ordered] = True
 
 
-def _threshold_assigned_iou(values: np.ndarray, *, method: PolicyThresholdMethod) -> float:
+def _threshold_assigned_iou(
+    values: np.ndarray, *, method: PolicyThresholdMethod
+) -> float:
     values = np.asarray(values, dtype=float)
     values = values[np.isfinite(values)]
     if values.size == 0:
@@ -282,9 +286,9 @@ def _numpy_otsu_threshold(values: np.ndarray) -> float:
     mean_right = (
         np.cumsum((hist * centers)[::-1]) / np.maximum(weight_right[::-1], 1.0)
     )[::-1]
-    between = weight_left[:-1] * weight_right[1:] * (
-        mean_left[:-1] - mean_right[1:]
-    ) ** 2
+    between = (
+        weight_left[:-1] * weight_right[1:] * (mean_left[:-1] - mean_right[1:]) ** 2
+    )
     if between.size == 0:
         return float(np.min(values))
     return float(centers[int(np.argmax(between))])
