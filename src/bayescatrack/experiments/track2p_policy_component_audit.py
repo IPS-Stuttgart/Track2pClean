@@ -244,8 +244,8 @@ def component_audit_rows(
     """Return one audit row per predicted policy component."""
 
     config = config or ComponentCleanupConfig()
-    predicted = normalize_track_matrix(predicted_track_matrix)
-    reference = normalize_track_matrix(reference_track_matrix)
+    predicted = _normalize_int_track_matrix(predicted_track_matrix)
+    reference = _normalize_int_track_matrix(reference_track_matrix)
     diagnostic_by_edge = _diagnostics_by_suite2p_edge(sessions, diagnostics)
     predicted_edge_counts = track_edge_counter(predicted)
     reference_edge_counts = track_edge_counter(reference)
@@ -362,7 +362,7 @@ def apply_weakest_bridge_splits(
 ) -> np.ndarray:
     """Split components marked by ``component_audit_rows`` at their weakest bridge."""
 
-    predicted = normalize_track_matrix(predicted_track_matrix)
+    predicted = _normalize_int_track_matrix(predicted_track_matrix)
     output: list[np.ndarray] = []
     rows_by_component = {
         int(row["predicted_track_id"]): row for row in component_rows
@@ -384,7 +384,7 @@ def apply_weakest_bridge_splits(
 def split_track_at_bridge(track: Any, session_index: int) -> tuple[np.ndarray, np.ndarray]:
     """Return left/right fragments after removing the bridge after ``session_index``."""
 
-    row = np.asarray(track, dtype=int).reshape(-1)
+    row = _track_row_as_int(track)
     if session_index < 0 or session_index >= row.size - 1:
         raise IndexError("session_index must identify a consecutive bridge")
     left = row.copy()
@@ -684,6 +684,36 @@ def _observation_counter(track_matrix: np.ndarray) -> Counter[tuple[int, int]]:
             if roi >= 0:
                 counts[(session_index, int(roi))] += 1
     return counts
+
+
+def _normalize_int_track_matrix(track_matrix: Any) -> np.ndarray:
+    matrix = normalize_track_matrix(track_matrix)
+    output = np.full(matrix.shape, -1, dtype=int)
+    for row_index in range(matrix.shape[0]):
+        for column_index in range(matrix.shape[1]):
+            value = matrix[row_index, column_index]
+            if _valid_roi(value):
+                output[row_index, column_index] = int(value)
+    return output
+
+
+def _track_row_as_int(track: Any) -> np.ndarray:
+    row = np.asarray(track, dtype=object).reshape(-1)
+    output = np.full(row.shape, -1, dtype=int)
+    for index, value in enumerate(row):
+        if _valid_roi(value):
+            output[index] = int(value)
+    return output
+
+
+def _valid_roi(value: Any) -> bool:
+    if value is None:
+        return False
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return False
+    return bool(np.isfinite(numeric) and numeric >= 0.0)
 
 
 def _split_observation_counts(track: np.ndarray, session_index: int) -> tuple[int, int]:
