@@ -197,11 +197,12 @@ def track2p_result_improvement_manifest(
 ) -> dict[str, Any]:
     """Return a ready-to-run manifest for the highest-leverage result variants.
 
-    The generated suite wires together the result-improvement directions that
-    are already exposed elsewhere in the package: solver-prior sweeps,
-    residual-overlap costs, higher-order consistency, activity tie-breaking,
-    local-evidence calibrated features, configurable hard negatives, monotone
-    ranking costs, and registration QA.
+    The generated suite promotes the validated Track2p-policy minimum-threshold
+    row as the current high-quality BayesCaTrack result and wires together the
+    remaining result-improvement directions that are already exposed elsewhere
+    in the package: solver-prior sweeps, residual-overlap costs, higher-order
+    consistency, activity tie-breaking, local-evidence calibrated features,
+    configurable hard negatives, monotone ranking costs, and registration QA.
 
     It intentionally emits a manifest instead of running the benchmarks directly
     so that long LOSO jobs can be reviewed, edited, or scheduled before launch.
@@ -337,6 +338,27 @@ def track2p_result_improvement_manifest(
             "weighted_centroids": False,
             "exclude_overlapping_pixels": False,
             "output": f"{output_root}/track2p_policy.csv",
+        },
+        {
+            "name": "track2p-policy-dp-experimental",
+            "runner": "track2p-policy-dp",
+            "transform_type": "affine",
+            "threshold_method": "min",
+            "iou_distance_threshold": 12.0,
+            "cell_probability_threshold": 0.5,
+            "row_top_k": 2,
+            "rescue_min_iou": 0.10,
+            "threshold_rescue_margin": 0.15,
+            "accepted_bonus": 0.25,
+            "rescue_penalty": 0.25,
+            "gap_penalty": 1.0,
+            "threshold_margin_weight": 0.5,
+            "beam_width": 8,
+            "max_gap": 2,
+            "weighted_masks": False,
+            "weighted_centroids": False,
+            "exclude_overlapping_pixels": False,
+            "output": f"{output_root}/track2p_policy_dp_experimental.csv",
         },
         {
             "name": "oracle-gt-links",

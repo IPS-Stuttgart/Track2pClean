@@ -360,6 +360,7 @@ def main() -> int:
                 "name": "track2p-policy-dp",
                 "runner": "track2p-policy-dp",
                 "format": "csv",
+                "output": "track2p_policy_dp_experimental.csv",
                 "transform_type": "affine",
                 "threshold_method": "min",
                 "iou_distance_threshold": 12.0,
@@ -369,7 +370,6 @@ def main() -> int:
                 "threshold_rescue_margin": 0.15,
                 "beam_width": 8,
                 "max_gap": 2,
-                "output": "track2p_policy_dp_experimental.csv",
             }
         )
         comparison_inputs.update({"Track2p policy DP": "track2p-policy-dp"})
