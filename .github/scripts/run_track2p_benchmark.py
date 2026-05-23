@@ -288,6 +288,9 @@ def main() -> int:
         os.environ.get("TRACK2P_RUN_CALIBRATED_LOSO", "auto"),
         n_subjects=len(subject_dirs),
     )
+    include_policy_dp_experiment = _bool_env(
+        "TRACK2P_INCLUDE_POLICY_DP_EXPERIMENT", default=False
+    )
 
     defaults: dict[str, Any] = {
         "data": str(data_path),
@@ -319,18 +322,10 @@ def main() -> int:
         {
             "name": "track2p-policy",
             "runner": "track2p-policy",
+            "threshold_method": "min",
+            "iou_distance_threshold": 12.0,
             "format": "csv",
             "output": "track2p_policy.csv",
-        },
-        {
-            "name": "track2p-policy-dp",
-            "runner": "track2p-policy-dp",
-            "format": "csv",
-            "output": "track2p_policy_dp.csv",
-            "row_top_k": 2,
-            "rescue_min_iou": 0.10,
-            "threshold_rescue_margin": 0.15,
-            "beam_width": 8,
         },
         {
             "name": "global-registered-iou",
@@ -350,10 +345,25 @@ def main() -> int:
     comparison_inputs = {
         "Track2p baseline": "track2p-baseline",
         "Track2p policy": "track2p-policy",
-        "Track2p policy DP": "track2p-policy-dp",
         "Global registered IoU": "global-registered-iou",
         "Global ROI-aware": "global-roi-aware",
     }
+    if include_policy_dp_experiment:
+        runs.append(
+            {
+                "name": "track2p-policy-dp",
+                "runner": "track2p-policy-dp",
+                "format": "csv",
+                "output": "track2p_policy_dp_experimental.csv",
+                "threshold_method": "min",
+                "iou_distance_threshold": 12.0,
+                "row_top_k": 2,
+                "rescue_min_iou": 0.10,
+                "threshold_rescue_margin": 0.15,
+                "beam_width": 8,
+            }
+        )
+        comparison_inputs.update({"Track2p policy DP": "track2p-policy-dp"})
     if run_calibrated_loso:
         runs.append(
             {
@@ -390,6 +400,7 @@ def main() -> int:
         "subjects": [path.name for path in subject_dirs],
         "n_subjects": len(subject_dirs),
         "run_calibrated_loso": run_calibrated_loso,
+        "include_policy_dp_experiment": include_policy_dp_experiment,
         "pyrecest_repository": PYRECEST_REPOSITORY,
         "pyrecest_commit": PYRECEST_COMMIT,
     }
