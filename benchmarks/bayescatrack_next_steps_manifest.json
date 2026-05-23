@@ -1,0 +1,192 @@
+{
+  "defaults": {
+    "data": "<DATA_ROOT>",
+    "reference": "<REFERENCE_ROOT>",
+    "reference_kind": "manual-gt",
+    "input_format": "suite2p",
+    "include_behavior": false,
+    "restrict_to_reference_seed_rois": true,
+    "seed_session": 0,
+    "format": "csv",
+    "progress": true
+  },
+  "runs": [
+    {
+      "name": "track2p-baseline",
+      "method": "track2p-baseline",
+      "output": "<OUTPUT_ROOT>/track2p_baseline.csv"
+    },
+    {
+      "name": "track2p-policy-min-d10",
+      "runner": "track2p-policy",
+      "transform_type": "affine",
+      "threshold_method": "min",
+      "iou_distance_threshold": 10.0,
+      "cell_probability_threshold": 0.5,
+      "output": "<OUTPUT_ROOT>/track2p_policy_min_d10.csv"
+    },
+    {
+      "name": "track2p-policy-min-d12",
+      "runner": "track2p-policy",
+      "transform_type": "affine",
+      "threshold_method": "min",
+      "iou_distance_threshold": 12.0,
+      "cell_probability_threshold": 0.5,
+      "output": "<OUTPUT_ROOT>/track2p_policy_min_d12.csv"
+    },
+    {
+      "name": "track2p-policy-min-d14",
+      "runner": "track2p-policy",
+      "transform_type": "affine",
+      "threshold_method": "min",
+      "iou_distance_threshold": 14.0,
+      "cell_probability_threshold": 0.5,
+      "output": "<OUTPUT_ROOT>/track2p_policy_min_d14.csv"
+    },
+    {
+      "name": "track2p-policy-otsu-d12",
+      "runner": "track2p-policy",
+      "transform_type": "affine",
+      "threshold_method": "otsu",
+      "iou_distance_threshold": 12.0,
+      "cell_probability_threshold": 0.5,
+      "output": "<OUTPUT_ROOT>/track2p_policy_otsu_d12.csv"
+    },
+    {
+      "name": "track2p-policy-dp-strict",
+      "runner": "track2p-policy-dp",
+      "transform_type": "affine",
+      "threshold_method": "min",
+      "iou_distance_threshold": 12.0,
+      "cell_probability_threshold": 0.5,
+      "max_gap": 2,
+      "gap_penalty": 3.0,
+      "row_top_k": 1,
+      "rescue_min_iou": 0.20,
+      "threshold_rescue_margin": 0.05,
+      "accepted_bonus": 0.5,
+      "rescue_penalty": 1.25,
+      "threshold_margin_weight": 1.0,
+      "beam_width": 4,
+      "output": "<OUTPUT_ROOT>/track2p_policy_dp_strict.csv"
+    },
+    {
+      "name": "global-shifted-iou-policy-prior-strict",
+      "method": "global-assignment",
+      "cost": "registered-shifted-iou",
+      "transform_type": "affine",
+      "include_non_cells": false,
+      "weighted_masks": false,
+      "weighted_centroids": false,
+      "exclude_overlapping_pixels": false,
+      "max_gap": 1,
+      "start_cost": 1.0,
+      "end_cost": 1.0,
+      "gap_penalty": 1.0,
+      "cost_threshold": 2.0,
+      "pairwise_cost_kwargs": {
+        "shifted_iou_radius": 2,
+        "shifted_iou_shift_penalty_weight": 0.25
+      },
+      "track2p_policy_prior_config": {
+        "threshold_method": "min",
+        "relief": 0.75,
+        "accepted_cost_cap": 0.5,
+        "non_policy_penalty": 0.02,
+        "min_cost": -1.0,
+        "consecutive_only": true,
+        "row_top_k": 0,
+        "large_cost": 1000000.0
+      },
+      "output": "<OUTPUT_ROOT>/global_shifted_iou_policy_prior_strict.csv"
+    },
+    {
+      "name": "global-roi-aware-shifted-policy-prior-strict",
+      "method": "global-assignment",
+      "cost": "roi-aware-shifted",
+      "transform_type": "affine",
+      "include_non_cells": false,
+      "weighted_masks": false,
+      "weighted_centroids": false,
+      "exclude_overlapping_pixels": false,
+      "max_gap": 1,
+      "start_cost": 1.0,
+      "end_cost": 1.0,
+      "gap_penalty": 1.0,
+      "cost_threshold": 2.0,
+      "track2p_policy_prior_config": {
+        "threshold_method": "min",
+        "relief": 0.75,
+        "accepted_cost_cap": 0.5,
+        "non_policy_penalty": 0.02,
+        "min_cost": -1.0,
+        "consecutive_only": true,
+        "row_top_k": 0,
+        "large_cost": 1000000.0
+      },
+      "output": "<OUTPUT_ROOT>/global_roi_aware_shifted_policy_prior_strict.csv"
+    },
+    {
+      "name": "global-roi-aware-shifted-policy-prior-rescue",
+      "method": "global-assignment",
+      "cost": "roi-aware-shifted",
+      "transform_type": "affine",
+      "include_non_cells": false,
+      "weighted_masks": false,
+      "weighted_centroids": false,
+      "exclude_overlapping_pixels": false,
+      "max_gap": 2,
+      "start_cost": 1.0,
+      "end_cost": 1.0,
+      "gap_penalty": 2.0,
+      "cost_threshold": 2.0,
+      "track2p_policy_prior_config": {
+        "threshold_method": "min",
+        "relief": 0.5,
+        "accepted_cost_cap": 0.5,
+        "non_policy_penalty": 0.05,
+        "min_cost": -1.0,
+        "max_gap": 1,
+        "row_top_k": 1,
+        "rescue_min_iou": 0.20,
+        "rescue_margin": 0.05,
+        "large_cost": 1000000.0
+      },
+      "output": "<OUTPUT_ROOT>/global_roi_aware_shifted_policy_prior_rescue.csv"
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "next-steps-comparison",
+      "inputs": {
+        "Track2p": "track2p-baseline",
+        "Track2pPolicy d10": "track2p-policy-min-d10",
+        "Track2pPolicy d12": "track2p-policy-min-d12",
+        "Track2pPolicy d14": "track2p-policy-min-d14",
+        "Track2pPolicy otsu": "track2p-policy-otsu-d12",
+        "Track2pPolicyDP strict": "track2p-policy-dp-strict",
+        "Global shifted + policy prior": "global-shifted-iou-policy-prior-strict",
+        "Global ROI-aware + policy prior": "global-roi-aware-shifted-policy-prior-strict",
+        "Global ROI-aware + policy prior rescue": "global-roi-aware-shifted-policy-prior-rescue"
+      },
+      "output": "<OUTPUT_ROOT>/next_steps_comparison.md",
+      "highlight_best": true
+    },
+    {
+      "name": "next-steps-comparison-csv",
+      "inputs": {
+        "Track2p": "track2p-baseline",
+        "Track2pPolicy d10": "track2p-policy-min-d10",
+        "Track2pPolicy d12": "track2p-policy-min-d12",
+        "Track2pPolicy d14": "track2p-policy-min-d14",
+        "Track2pPolicy otsu": "track2p-policy-otsu-d12",
+        "Track2pPolicyDP strict": "track2p-policy-dp-strict",
+        "Global shifted + policy prior": "global-shifted-iou-policy-prior-strict",
+        "Global ROI-aware + policy prior": "global-roi-aware-shifted-policy-prior-strict",
+        "Global ROI-aware + policy prior rescue": "global-roi-aware-shifted-policy-prior-rescue"
+      },
+      "output": "<OUTPUT_ROOT>/next_steps_comparison.csv",
+      "format": "csv"
+    }
+  ]
+}
