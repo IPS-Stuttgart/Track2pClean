@@ -48,6 +48,10 @@ from bayescatrack.association.joint_registration_assignment import (
     JointRefinementConfig,
     apply_joint_anchor_relief_to_pairwise_costs,
 )
+from bayescatrack.association.track2p_policy_priors import (
+    Track2pPolicyPriorConfig,
+    apply_track2p_policy_edge_prior,
+)
 from bayescatrack.association.registered_masks import (
     add_registered_roi_validity_components,
     drop_empty_registered_masks,
@@ -372,6 +376,9 @@ def build_registered_pairwise_costs(
     activity_event_threshold: float = 0.0,
     candidate_pruning_config: CandidatePruningConfig | Mapping[str, Any] | None = None,
     dynamic_edge_prior_config: DynamicEdgePriorConfig | Mapping[str, Any] | None = None,
+    track2p_policy_prior_config: (
+        Track2pPolicyPriorConfig | Mapping[str, Any] | None
+    ) = None,
     edge_uncertainty_config: EdgeUncertaintyConfig | Mapping[str, Any] | None = None,
     segmentation_event_config: (
         SegmentationEventConfig | Mapping[str, Any] | None
@@ -390,6 +397,7 @@ def build_registered_pairwise_costs(
         or cost == "calibrated"
         or activity_tie_breaker_weight > 0.0
         or dynamic_edge_prior_config is not None
+        or track2p_policy_prior_config is not None
         or edge_uncertainty_config is not None
         or segmentation_event_config is not None
     )
@@ -460,6 +468,13 @@ def build_registered_pairwise_costs(
             else:
                 probability_matrix = None
                 cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
+            if track2p_policy_prior_config is not None:
+                cost_matrix = apply_track2p_policy_edge_prior(
+                    cost_matrix,
+                    bundle.pairwise_components,
+                    session_gap=target_session - source_session,
+                    config=track2p_policy_prior_config,
+                )
             if absence_model_config is not None:
                 cost_matrix = apply_absence_adjustment(
                     cost_matrix,
@@ -560,6 +575,9 @@ def solve_global_assignment_for_sessions(
     activity_event_threshold: float = 0.0,
     candidate_pruning_config: CandidatePruningConfig | Mapping[str, Any] | None = None,
     dynamic_edge_prior_config: DynamicEdgePriorConfig | Mapping[str, Any] | None = None,
+    track2p_policy_prior_config: (
+        Track2pPolicyPriorConfig | Mapping[str, Any] | None
+    ) = None,
     higher_order_consistency_config: (
         HigherOrderConsistencyConfig | Mapping[str, Any] | None
     ) = None,
@@ -599,6 +617,7 @@ def solve_global_assignment_for_sessions(
         activity_event_threshold=activity_event_threshold,
         candidate_pruning_config=candidate_pruning_config,
         dynamic_edge_prior_config=dynamic_edge_prior_config,
+        track2p_policy_prior_config=track2p_policy_prior_config,
         edge_uncertainty_config=edge_uncertainty_config,
         segmentation_event_config=segmentation_event_config,
     )
@@ -649,6 +668,7 @@ def solve_global_assignment_for_sessions(
             pairwise_cost_kwargs=pairwise_cost_kwargs,
             candidate_pruning_config=candidate_pruning_config,
             dynamic_edge_prior_config=dynamic_edge_prior_config,
+            track2p_policy_prior_config=track2p_policy_prior_config,
             edge_uncertainty_config=edge_uncertainty_config,
             segmentation_event_config=segmentation_event_config,
             start_cost=start_cost,
@@ -781,6 +801,7 @@ def _apply_consensus_priors_from_variants(  # pylint: disable=too-many-arguments
     pairwise_cost_kwargs: Mapping[str, Any] | None,
     candidate_pruning_config: CandidatePruningConfig | Mapping[str, Any] | None,
     dynamic_edge_prior_config: DynamicEdgePriorConfig | Mapping[str, Any] | None,
+    track2p_policy_prior_config: Track2pPolicyPriorConfig | Mapping[str, Any] | None,
     edge_uncertainty_config: EdgeUncertaintyConfig | Mapping[str, Any] | None,
     segmentation_event_config: SegmentationEventConfig | Mapping[str, Any] | None,
     start_cost: float,
@@ -816,6 +837,7 @@ def _apply_consensus_priors_from_variants(  # pylint: disable=too-many-arguments
                 activity_tie_breaker_weight=0.0,
                 candidate_pruning_config=candidate_pruning_config,
                 dynamic_edge_prior_config=dynamic_edge_prior_config,
+                track2p_policy_prior_config=track2p_policy_prior_config,
                 edge_uncertainty_config=edge_uncertainty_config,
                 segmentation_event_config=segmentation_event_config,
             )

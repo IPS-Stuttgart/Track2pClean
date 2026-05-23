@@ -139,6 +139,7 @@ class Track2pBenchmarkConfig:
     higher_order_consistency_config: dict[str, Any] | None = None
     candidate_pruning_config: dict[str, Any] | None = None
     dynamic_edge_prior_config: dict[str, Any] | None = None
+    track2p_policy_prior_config: dict[str, Any] | None = None
     edge_uncertainty_config: dict[str, Any] | None = None
     adaptive_edge_prior_config: dict[str, Any] | None = None
     learned_gap_prior: bool = False
@@ -669,6 +670,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="JSON object for additive ROI-, gap-, activity-, and registration-quality edge priors",
     )
     parser.add_argument(
+        "--track2p-policy-prior-json",
+        default=None,
+        help="JSON object for an independent Track2p-policy edge prior before global assignment",
+    )
+    parser.add_argument(
         "--edge-uncertainty-json",
         default=None,
         help="JSON object for reliability-aware edge-cost penalties before pruning/assignment",
@@ -1096,6 +1102,7 @@ def solve_configured_global_assignment(
         higher_order_consistency_config=_solver_higher_order_config(config),
         candidate_pruning_config=config.candidate_pruning_config,
         dynamic_edge_prior_config=config.dynamic_edge_prior_config,
+        track2p_policy_prior_config=config.track2p_policy_prior_config,
         edge_uncertainty_config=config.edge_uncertainty_config,
         adaptive_edge_prior_config=config.adaptive_edge_prior_config,
         segmentation_event_config=config.segmentation_event_config,
@@ -1829,6 +1836,10 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         getattr(args, "track2p_teacher_prior_json", None),
         name="--track2p-teacher-prior-json",
     )
+    track2p_policy_prior_config = _parse_json_object(
+        getattr(args, "track2p_policy_prior_json", None),
+        name="--track2p-policy-prior-json",
+    )
     track_refinement_config = _parse_json_object(
         getattr(args, "track_refinement_json", None),
         name="--track-refinement-json",
@@ -1904,6 +1915,7 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
         candidate_pruning_config=candidate_pruning_config,
         dynamic_edge_prior_config=dynamic_edge_prior_config,
         edge_uncertainty_config=edge_uncertainty_config,
+        track2p_policy_prior_config=track2p_policy_prior_config,
         adaptive_edge_prior_config=adaptive_edge_prior_config,
         learned_gap_prior=bool(args.learned_gap_prior),
         learned_gap_prior_smoothing=float(args.learned_gap_prior_smoothing),

@@ -286,6 +286,7 @@ def run_registered_subject_tracking(
     gap_penalty: float = 1.0,
     start_roi_indices: Sequence[int] | None = None,
     start_session_index: int = 0,
+    track2p_policy_prior_config: Mapping[str, Any] | None = None,
     fill_value: int = -1,
     **suite2p_kwargs: Any,
 ) -> SubjectTrackingResult:
@@ -374,6 +375,7 @@ def run_registered_subject_tracking(
             velocity_variance=velocity_variance,
             regularization=regularization,
             pairwise_cost_kwargs=pairwise_cost_kwargs,
+            track2p_policy_prior_config=track2p_policy_prior_config,
         )
         track_rows = _coerce_global_track_rows(
             tracks_to_suite2p_index_matrix(global_assignment.result.tracks, sessions),
