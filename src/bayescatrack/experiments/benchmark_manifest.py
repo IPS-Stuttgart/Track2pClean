@@ -77,6 +77,8 @@ TRACK2P_POLICY_DP_FIELDS = TRACK2P_POLICY_FIELDS | {
     "rescue_penalty",
     "threshold_margin_weight",
     "beam_width",
+    "path_candidates_per_seed",
+    "path_selection_beam_width",
 }
 REGISTRATION_QA_CONFIG_FIELDS = {
     "data",
@@ -755,7 +757,12 @@ def _run_track2p_policy_dp_rows(
         "gap_penalty": float(config.gap_penalty),
         "max_gap": int(config.max_gap),
     }
-    for key in ("row_top_k", "beam_width"):
+    for key in (
+        "row_top_k",
+        "beam_width",
+        "path_candidates_per_seed",
+        "path_selection_beam_width",
+    ):
         if key in options:
             dp_kwargs[key] = int(options[key])
     for key in (

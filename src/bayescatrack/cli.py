@@ -63,6 +63,10 @@ def _handle_benchmark(args: list[str]) -> int:
             help="Run the first-class Track2p-policy benchmark method",
         )
         subparsers.add_parser(
+            "track2p-policy-audit",
+            help="Export a duplicate-aware edge ledger for Track2p-policy results",
+        )
+        subparsers.add_parser(
             "track2p-policy-dp",
             help="Run the DP-rescued Track2p-policy benchmark method",
         )
@@ -189,6 +193,12 @@ def _handle_benchmark(args: list[str]) -> int:
         )
 
         return int(_track2p_policy_main(args[1:]))
+    if args[0] == "track2p-policy-audit":
+        from bayescatrack.experiments.track2p_policy_audit import (
+            main as _track2p_policy_audit_main,
+        )
+
+        return int(_track2p_policy_audit_main(args[1:]))
     if args[0] == "track2p-policy-dp":
         from bayescatrack.experiments.track2p_policy_dp_benchmark import (
             main as _track2p_policy_dp_main,
