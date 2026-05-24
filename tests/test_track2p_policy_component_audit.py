@@ -99,11 +99,17 @@ def test_component_audit_marks_weakest_bridge_and_split_application() -> None:
         diagnostics=diagnostics,
         config=ComponentCleanupConfig(split_risk_threshold=1.0),
     )
-    cleaned = apply_weakest_bridge_splits(predicted, rows)
 
     assert rows[0]["would_split_at_weakest_edge"] == 1
+    assert rows[0]["applied_split"] == 0
     assert rows[0]["weakest_bridge_session_a"] == 1
     assert rows[0]["complete_track_status_against_gt"] == "true_positive"
+
+    no_apply = apply_weakest_bridge_splits(predicted, rows)
+    applied_rows = [{**rows[0], "applied_split": 1}]
+    cleaned = apply_weakest_bridge_splits(predicted, applied_rows)
+
+    np.testing.assert_array_equal(no_apply, predicted)
     np.testing.assert_array_equal(cleaned, [[10, 20, -1, -1], [-1, -1, 30, 40]])
 
 

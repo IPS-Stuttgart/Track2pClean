@@ -26,19 +26,18 @@ from bayescatrack.experiments.track2p_benchmark import (
     OutputFormat,
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
+    _filter_tracks_by_seed_rois,
     _load_reference_for_subject,
     _load_subject_sessions,
     _reference_matrix,
+    _reference_seed_roi_set,
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
     discover_subject_dirs,
     write_results,
 )
-from bayescatrack.experiments.track2p_policy_audit import (
-    _apply_seed_roi_filter,
-    track_edge_counter,
-)
+from bayescatrack.experiments.track2p_policy_audit import track_edge_counter
 from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
@@ -151,26 +150,34 @@ def run_track2p_policy_component_audit(
         reference_tracks = _reference_matrix(
             reference, curated_only=policy_config.curated_only
         )
-        predicted_eval, reference_eval = _apply_seed_roi_filter(
-            prediction.tracks,
-            reference_tracks,
-            config=policy_config,
+        predicted_full = _normalize_int_track_matrix(prediction.tracks)
+        predicted_eval, reference_eval, evaluated_track_ids = (
+            _evaluated_prediction_rows(
+                predicted_full,
+                reference_tracks,
+                config=policy_config,
+            )
         )
-        subject_rows = component_audit_rows(
+        audit_rows = component_audit_rows(
             predicted_eval,
             reference_eval,
             sessions=sessions,
             diagnostics=prediction.diagnostics,
             subject=subject_dir.name,
             config=cleanup_config,
+            track_ids=evaluated_track_ids,
+        )
+        subject_rows = _mark_applied_splits(
+            audit_rows,
+            apply_splits=apply_splits,
         )
         cleaned = (
             apply_weakest_bridge_splits(
-                predicted_eval,
+                predicted_full,
                 subject_rows,
             )
             if apply_splits
-            else predicted_eval
+            else predicted_full
         )
         scores = _score_prediction_against_reference(
             cleaned, reference, config=policy_config
@@ -240,12 +247,20 @@ def component_audit_rows(
     diagnostics: Sequence[Track2pPolicyLinkDiagnostic],
     subject: str = "",
     config: ComponentCleanupConfig | None = None,
+    track_ids: Sequence[int] | None = None,
 ) -> list[dict[str, float | int | str]]:
     """Return one audit row per predicted policy component."""
 
     config = config or ComponentCleanupConfig()
     predicted = _normalize_int_track_matrix(predicted_track_matrix)
     reference = _normalize_int_track_matrix(reference_track_matrix)
+    ids = (
+        tuple(range(predicted.shape[0]))
+        if track_ids is None
+        else tuple(int(track_id) for track_id in track_ids)
+    )
+    if len(ids) != predicted.shape[0]:
+        raise ValueError("track_ids must have one entry per predicted track")
     diagnostic_by_edge = _diagnostics_by_suite2p_edge(sessions, diagnostics)
     predicted_edge_counts = track_edge_counter(predicted)
     reference_edge_counts = track_edge_counter(reference)
@@ -253,7 +268,8 @@ def component_audit_rows(
     reference_by_seed = _reference_rows_by_seed(reference)
     reference_complete_counts = _complete_track_counts(reference)
     rows: list[dict[str, float | int | str]] = []
-    for component_id, track in enumerate(predicted):
+    for row_index, track in enumerate(predicted):
+        component_id = ids[row_index]
         edges = _component_edges(track, diagnostic_by_edge, config=config)
         weakest = max(edges, key=lambda edge: edge.risk, default=None)
         valid_observations = int(np.sum(track >= 0))
@@ -342,7 +358,7 @@ def component_audit_rows(
                 "weakest_bridge_risk": float(weakest.risk if weakest else 0.0),
                 "split_gain": float(split_gain),
                 "would_split_at_weakest_edge": int(would_split),
-                "applied_split": int(would_split),
+                "applied_split": 0,
                 "complete_track_status_against_gt": _complete_track_status(
                     track, reference_complete_counts
                 ),
@@ -379,6 +395,48 @@ def apply_weakest_bridge_splits(
     if not output:
         return predicted[:0]
     return np.vstack(output).astype(int, copy=False)
+
+
+def _evaluated_prediction_rows(
+    predicted: np.ndarray,
+    reference: np.ndarray,
+    *,
+    config: Track2pBenchmarkConfig,
+) -> tuple[np.ndarray, np.ndarray, tuple[int, ...]]:
+    predicted = _normalize_int_track_matrix(predicted)
+    reference = _normalize_int_track_matrix(reference)
+    if not config.restrict_to_reference_seed_rois:
+        return predicted, reference, tuple(range(predicted.shape[0]))
+    reference_seed_rois = _reference_seed_roi_set(
+        reference, seed_session=config.seed_session
+    )
+    keep_indices = tuple(
+        index
+        for index, row in enumerate(predicted)
+        if _valid_seed_roi(row, reference_seed_rois, seed_session=config.seed_session)
+    )
+    predicted_eval = predicted[np.asarray(keep_indices, dtype=int)]
+    reference_eval = _filter_tracks_by_seed_rois(
+        reference,
+        reference_seed_rois,
+        seed_session=config.seed_session,
+    )
+    return predicted_eval, reference_eval, keep_indices
+
+
+def _mark_applied_splits(
+    rows: Sequence[Mapping[str, float | int | str]],
+    *,
+    apply_splits: bool,
+) -> list[dict[str, float | int | str]]:
+    marked: list[dict[str, float | int | str]] = []
+    for row in rows:
+        updated = dict(row)
+        updated["applied_split"] = (
+            int(row.get("would_split_at_weakest_edge", 0)) if apply_splits else 0
+        )
+        marked.append(updated)
+    return marked
 
 
 def split_track_at_bridge(track: Any, session_index: int) -> tuple[np.ndarray, np.ndarray]:
@@ -714,6 +772,18 @@ def _valid_roi(value: Any) -> bool:
     except (TypeError, ValueError):
         return False
     return bool(np.isfinite(numeric) and numeric >= 0.0)
+
+
+def _valid_seed_roi(
+    row: np.ndarray,
+    reference_seed_rois: set[int],
+    *,
+    seed_session: int,
+) -> bool:
+    if seed_session < 0 or seed_session >= row.size:
+        return False
+    value = row[seed_session]
+    return bool(_valid_roi(value) and int(value) in reference_seed_rois)
 
 
 def _split_observation_counts(track: np.ndarray, session_index: int) -> tuple[int, int]:
