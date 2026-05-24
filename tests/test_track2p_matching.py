@@ -35,6 +35,24 @@ def test_build_track_rows_from_matches_requires_explicit_start_roi_indices():
         )
 
 
+def test_build_track_rows_from_matches_rejects_duplicate_reference_rois():
+    with pytest.raises(ValueError, match="duplicate reference ROI 0"):
+        build_track_rows_from_matches(
+            ("s1", "s2"),
+            [np.array([[0, 1], [0, 2]], dtype=int)],
+            start_roi_indices=np.array([0]),
+        )
+
+
+def test_build_track_rows_from_matches_rejects_duplicate_measurement_rois():
+    with pytest.raises(ValueError, match="duplicate measurement ROI 1"):
+        build_track_rows_from_matches(
+            ("s1", "s2"),
+            [np.array([[0, 1], [2, 1]], dtype=int)],
+            start_roi_indices=np.array([0, 2]),
+        )
+
+
 def test_build_track_rows_from_later_seed_session_stitches_both_directions():
     rows = build_track_rows_from_matches(
         ("s1", "s2", "s3"),
