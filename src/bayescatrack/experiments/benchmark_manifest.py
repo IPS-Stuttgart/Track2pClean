@@ -965,9 +965,7 @@ def _run_track2p_policy_component_rows(
             default=cleanup_defaults.split_penalty,
         ),
         min_side_observations=int(
-            options.get(
-                "min_side_observations", cleanup_defaults.min_side_observations
-            )
+            options.get("min_side_observations", cleanup_defaults.min_side_observations)
         ),
         threshold_margin_weight=_float_option(
             options,
