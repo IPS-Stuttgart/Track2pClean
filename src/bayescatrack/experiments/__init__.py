@@ -1,6 +1,7 @@
 """Experiment runners and benchmark CLIs for BayesCaTrack."""
 
 from . import _activity_sweep_defaults as _activity_sweep_defaults
+from . import _bugfix_integrations as _bugfix_integrations
 from . import _cost_sweep_defaults as _cost_sweep_defaults
 from . import _diag_defaults as _diag_defaults
 from . import (
@@ -15,5 +16,6 @@ install_calibration_feature_registry_integration()
 _cost_sweep_defaults.install_cost_sweep_suite2p_defaults()
 _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
 _diag_defaults.install_diagnostic_suite2p_defaults()
+_bugfix_integrations.install_bugfix_integrations()
 
 __all__: list[str] = []
