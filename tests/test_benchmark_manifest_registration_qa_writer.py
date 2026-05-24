@@ -27,7 +27,9 @@ def test_registration_qa_manifest_uses_runner_specific_writer(tmp_path, monkeypa
 
     calls: dict[str, Any] = {}
 
-    def fake_registration_qa_rows(config: Any, options: Mapping[str, Any]) -> list[dict[str, Any]]:
+    def fake_registration_qa_rows(
+        config: Any, options: Mapping[str, Any]
+    ) -> list[dict[str, Any]]:
         calls["config"] = config
         calls["options"] = dict(options)
         return [
