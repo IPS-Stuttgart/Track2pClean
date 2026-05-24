@@ -310,6 +310,16 @@ def track2p_result_improvement_manifest(
         "prune_min_area_ratio": 0.45,
         "prune_centroid_distance": 10.0,
     }
+    track2p_policy_component_config = {
+        "apply_splits": True,
+        "threshold_margin_scale": 0.10,
+        "competition_margin_scale": 0.20,
+        "area_ratio_floor": 0.45,
+        "centroid_distance_scale": 4.0,
+        "split_risk_threshold": 1.50,
+        "split_penalty": 0.25,
+        "min_side_observations": 2,
+    }
     teacher_prior_config = {
         "relief": 0.75,
         "teacher_cost_cap": 0.5,
@@ -356,6 +366,20 @@ def track2p_result_improvement_manifest(
             "weighted_centroids": False,
             "exclude_overlapping_pixels": False,
             "output": f"{output_root}/track2p_policy.csv",
+        },
+        {
+            "name": "track2p-policy-component-cleanup",
+            "runner": "track2p-policy-component-audit",
+            "transform_type": "affine",
+            "threshold_method": "min",
+            "iou_distance_threshold": 12.0,
+            "cell_probability_threshold": 0.5,
+            "max_gap": 1,
+            "weighted_masks": False,
+            "weighted_centroids": False,
+            "exclude_overlapping_pixels": False,
+            **track2p_policy_component_config,
+            "output": f"{output_root}/track2p_policy_component_cleanup.csv",
         },
         {
             "name": "track2p-policy-dp",

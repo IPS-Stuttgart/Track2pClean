@@ -31,11 +31,13 @@ DEFAULT_RUNNER = "track2p"
 TRACK2P_POLICY_RUNNER = "track2p-policy"
 TRACK2P_POLICY_DP_RUNNER = "track2p-policy-dp"
 TRACK2P_POLICY_PRUNED_RUNNER = "track2p-policy-pruned"
+TRACK2P_POLICY_COMPONENT_RUNNER = "track2p-policy-component-audit"
 BenchmarkRunner = Literal[
     "track2p",
     "track2p-policy",
     "track2p-policy-dp",
     "track2p-policy-pruned",
+    "track2p-policy-component-audit",
     "track2p-loso-calibration",
     "track2p-monotone-loso",
     "track2p-solver-prior-loso",
@@ -63,6 +65,21 @@ TRACK2P_POLICY_PRUNED_FIELDS = TRACK2P_POLICY_FIELDS | {
     "prune_competition_margin",
     "prune_min_area_ratio",
     "prune_centroid_distance",
+}
+TRACK2P_POLICY_COMPONENT_FIELDS = TRACK2P_POLICY_FIELDS | {
+    "apply_splits",
+    "threshold_margin_scale",
+    "competition_margin_scale",
+    "area_ratio_floor",
+    "centroid_distance_scale",
+    "split_risk_threshold",
+    "split_penalty",
+    "min_side_observations",
+    "threshold_margin_weight",
+    "row_margin_weight",
+    "column_margin_weight",
+    "centroid_distance_weight",
+    "area_ratio_weight",
 }
 CONFIGURABLE_LOSO_FIELDS = {
     "feature_names",
@@ -121,6 +138,7 @@ RUNNER_SPECIFIC_FIELDS = (
     TRACK2P_POLICY_FIELDS
     | TRACK2P_POLICY_DP_FIELDS
     | TRACK2P_POLICY_PRUNED_FIELDS
+    | TRACK2P_POLICY_COMPONENT_FIELDS
     | CONFIGURABLE_LOSO_FIELDS
     | MONOTONE_LOSO_FIELDS
     | SOLVER_PRIOR_FIELDS
@@ -139,6 +157,9 @@ RUNNER_CONFIG_FIELDS: dict[str, set[str]] = {
     TRACK2P_POLICY_PRUNED_RUNNER: set(
         TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_PRUNED_FIELDS
     ),
+    TRACK2P_POLICY_COMPONENT_RUNNER: set(
+        TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_COMPONENT_FIELDS
+    ),
     "track2p-loso-calibration": set(TRACK2P_CONFIG_FIELDS | CONFIGURABLE_LOSO_FIELDS),
     "track2p-monotone-loso": set(TRACK2P_CONFIG_FIELDS | MONOTONE_LOSO_FIELDS),
     "track2p-solver-prior-loso": set(TRACK2P_CONFIG_FIELDS | SOLVER_PRIOR_FIELDS),
@@ -151,6 +172,8 @@ RUNNER_ALIASES = {
     TRACK2P_POLICY_RUNNER: TRACK2P_POLICY_RUNNER,
     TRACK2P_POLICY_DP_RUNNER: TRACK2P_POLICY_DP_RUNNER,
     TRACK2P_POLICY_PRUNED_RUNNER: TRACK2P_POLICY_PRUNED_RUNNER,
+    TRACK2P_POLICY_COMPONENT_RUNNER: TRACK2P_POLICY_COMPONENT_RUNNER,
+    "track2p-component-cleanup": TRACK2P_POLICY_COMPONENT_RUNNER,
     "track2p-loso-calibration": "track2p-loso-calibration",
     "track2p-configurable-loso": "track2p-loso-calibration",
     "track2p-configurable-loso-calibration": "track2p-loso-calibration",
@@ -419,6 +442,11 @@ def _run_benchmark_rows(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
+    if run_spec.runner == TRACK2P_POLICY_COMPONENT_RUNNER:
+        return _run_track2p_policy_component_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
     if run_spec.runner == "track2p-loso-calibration":
         return _run_configurable_loso_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
@@ -454,7 +482,9 @@ def _runner_name(value: Any) -> BenchmarkRunner:
 def _reject_incompatible_runner_keys(run_data: ManifestObject, runner: str) -> None:
     allowed_specific = _runner_specific_fields(runner)
     disallowed = sorted(
-        key for key in RUNNER_SPECIFIC_FIELDS - allowed_specific if key in run_data
+        key
+        for key in RUNNER_SPECIFIC_FIELDS - TRACK2P_CONFIG_FIELDS - allowed_specific
+        if key in run_data
     )
     if disallowed:
         raise ValueError(
@@ -472,6 +502,8 @@ def _runner_specific_fields(runner: str) -> set[str]:
         return set(TRACK2P_POLICY_DP_FIELDS)
     if runner == TRACK2P_POLICY_PRUNED_RUNNER:
         return set(TRACK2P_POLICY_PRUNED_FIELDS)
+    if runner == TRACK2P_POLICY_COMPONENT_RUNNER:
+        return set(TRACK2P_POLICY_COMPONENT_FIELDS)
     if runner == "track2p-loso-calibration":
         return set(CONFIGURABLE_LOSO_FIELDS)
     if runner == "track2p-monotone-loso":
@@ -496,6 +528,12 @@ def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
         return {
             key: run_data[key]
             for key in TRACK2P_POLICY_PRUNED_FIELDS
+            if key in run_data
+        }
+    if runner == TRACK2P_POLICY_COMPONENT_RUNNER:
+        return {
+            key: run_data[key]
+            for key in TRACK2P_POLICY_COMPONENT_FIELDS
             if key in run_data
         }
     if runner == "track2p-loso-calibration":
@@ -614,6 +652,7 @@ def _run_config(
         TRACK2P_POLICY_RUNNER,
         TRACK2P_POLICY_DP_RUNNER,
         TRACK2P_POLICY_PRUNED_RUNNER,
+        TRACK2P_POLICY_COMPONENT_RUNNER,
     }:
         config_defaults = {
             "method": "global-assignment",
@@ -715,6 +754,11 @@ def _run_manifest_entry(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
         )
     if run_spec.runner == TRACK2P_POLICY_PRUNED_RUNNER:
         return _run_track2p_policy_pruned_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == TRACK2P_POLICY_COMPONENT_RUNNER:
+        return _run_track2p_policy_component_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
@@ -874,6 +918,99 @@ def _run_track2p_policy_pruned_rows(
         cell_probability_threshold=config.cell_probability_threshold,
     )
     return [result.to_dict() for result in results]
+
+
+def _run_track2p_policy_component_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.track2p_policy_benchmark import (
+        TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
+    from bayescatrack.experiments.track2p_policy_component_audit import (
+        ComponentCleanupConfig,
+        run_track2p_policy_component_audit,
+    )
+
+    cleanup_defaults = ComponentCleanupConfig()
+    cleanup_config = ComponentCleanupConfig(
+        threshold_margin_scale=_float_option(
+            options,
+            "threshold_margin_scale",
+            default=cleanup_defaults.threshold_margin_scale,
+        ),
+        competition_margin_scale=_float_option(
+            options,
+            "competition_margin_scale",
+            default=cleanup_defaults.competition_margin_scale,
+        ),
+        area_ratio_floor=_float_option(
+            options,
+            "area_ratio_floor",
+            default=cleanup_defaults.area_ratio_floor,
+        ),
+        centroid_distance_scale=_float_option(
+            options,
+            "centroid_distance_scale",
+            default=cleanup_defaults.centroid_distance_scale,
+        ),
+        split_risk_threshold=_float_option(
+            options,
+            "split_risk_threshold",
+            default=cleanup_defaults.split_risk_threshold,
+        ),
+        split_penalty=_float_option(
+            options,
+            "split_penalty",
+            default=cleanup_defaults.split_penalty,
+        ),
+        min_side_observations=int(
+            options.get(
+                "min_side_observations", cleanup_defaults.min_side_observations
+            )
+        ),
+        threshold_margin_weight=_float_option(
+            options,
+            "threshold_margin_weight",
+            default=cleanup_defaults.threshold_margin_weight,
+        ),
+        row_margin_weight=_float_option(
+            options,
+            "row_margin_weight",
+            default=cleanup_defaults.row_margin_weight,
+        ),
+        column_margin_weight=_float_option(
+            options,
+            "column_margin_weight",
+            default=cleanup_defaults.column_margin_weight,
+        ),
+        centroid_distance_weight=_float_option(
+            options,
+            "centroid_distance_weight",
+            default=cleanup_defaults.centroid_distance_weight,
+        ),
+        area_ratio_weight=_float_option(
+            options,
+            "area_ratio_weight",
+            default=cleanup_defaults.area_ratio_weight,
+        ),
+    )
+    output = run_track2p_policy_component_audit(
+        config,
+        threshold_method=_policy_threshold_method(
+            options.get("threshold_method", TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
+        ),
+        iou_distance_threshold=_float_option(
+            options,
+            "iou_distance_threshold",
+            default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        ),
+        transform_type=config.transform_type,
+        cell_probability_threshold=config.cell_probability_threshold,
+        cleanup_config=cleanup_config,
+        apply_splits=_bool_option(options, "apply_splits", default=True),
+    )
+    return [result.to_dict() for result in output.results]
 
 
 def _run_configurable_loso_rows(
