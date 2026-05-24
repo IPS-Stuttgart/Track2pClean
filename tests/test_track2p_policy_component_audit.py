@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-
 from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
     apply_weakest_bridge_splits,

@@ -75,7 +75,9 @@ class ComponentCleanupConfig:
 
     def __post_init__(self) -> None:
         _require_positive(self.threshold_margin_scale, name="threshold_margin_scale")
-        _require_positive(self.competition_margin_scale, name="competition_margin_scale")
+        _require_positive(
+            self.competition_margin_scale, name="competition_margin_scale"
+        )
         _require_positive(self.area_ratio_floor, name="area_ratio_floor")
         _require_positive(self.centroid_distance_scale, name="centroid_distance_scale")
         _require_nonnegative(self.split_risk_threshold, name="split_risk_threshold")
@@ -342,9 +344,7 @@ def component_audit_rows(
                 "n_conflicting_edges": int(
                     sum(
                         observation_counts[(edge.session_index, edge.source_roi)] > 1
-                        or observation_counts[
-                            (edge.session_index + 1, edge.target_roi)
-                        ]
+                        or observation_counts[(edge.session_index + 1, edge.target_roi)]
                         > 1
                         for edge in edges
                     )
@@ -380,9 +380,7 @@ def apply_weakest_bridge_splits(
 
     predicted = _normalize_int_track_matrix(predicted_track_matrix)
     output: list[np.ndarray] = []
-    rows_by_component = {
-        int(row["predicted_track_id"]): row for row in component_rows
-    }
+    rows_by_component = {int(row["predicted_track_id"]): row for row in component_rows}
     for component_id, track in enumerate(predicted):
         row = rows_by_component.get(component_id)
         if row is None or int(row.get("applied_split", 0)) == 0:
@@ -439,7 +437,9 @@ def _mark_applied_splits(
     return marked
 
 
-def split_track_at_bridge(track: Any, session_index: int) -> tuple[np.ndarray, np.ndarray]:
+def split_track_at_bridge(
+    track: Any, session_index: int
+) -> tuple[np.ndarray, np.ndarray]:
     """Return left/right fragments after removing the bridge after ``session_index``."""
 
     row = _track_row_as_int(track)
@@ -636,9 +636,7 @@ def _diagnostics_by_suite2p_edge(
     output: dict[tuple[int, int, int], Track2pPolicyLinkDiagnostic] = {}
     for diagnostic in diagnostics:
         session_index = int(diagnostic.session_index)
-        source_roi = int(
-            roi_indices_by_session[session_index][diagnostic.local_roi_a]
-        )
+        source_roi = int(roi_indices_by_session[session_index][diagnostic.local_roi_a])
         target_roi = int(
             roi_indices_by_session[session_index + 1][diagnostic.local_roi_b]
         )
@@ -680,7 +678,12 @@ def _component_pairwise_counts(
     true_positive = 0
     false_positive = 0
     for edge in edges:
-        key = (edge.session_index, edge.session_index + 1, edge.source_roi, edge.target_roi)
+        key = (
+            edge.session_index,
+            edge.session_index + 1,
+            edge.source_roi,
+            edge.target_roi,
+        )
         if reference_edge_counts.get(key, 0) > 0:
             true_positive += 1
         elif predicted_edge_counts.get(key, 0) > 0:
@@ -732,7 +735,11 @@ def _complete_track_status(
     if not np.all(track >= 0):
         return "incomplete"
     key = tuple(int(value) for value in track)
-    return "true_positive" if reference_complete_counts.get(key, 0) > 0 else "false_positive"
+    return (
+        "true_positive"
+        if reference_complete_counts.get(key, 0) > 0
+        else "false_positive"
+    )
 
 
 def _observation_counter(track_matrix: np.ndarray) -> Counter[tuple[int, int]]:
@@ -817,9 +824,7 @@ def _diagnostic_value(edge: _ComponentEdge, name: str) -> float:
     return float(getattr(diagnostic, name))
 
 
-def _is_marginal_edge(
-    edge: _ComponentEdge, *, config: ComponentCleanupConfig
-) -> bool:
+def _is_marginal_edge(edge: _ComponentEdge, *, config: ComponentCleanupConfig) -> bool:
     diagnostic = edge.diagnostic
     if diagnostic is None:
         return False
@@ -832,9 +837,7 @@ def _is_marginal_edge(
     )
 
 
-def _is_boundary_edge(
-    edge: _ComponentEdge, *, config: ComponentCleanupConfig
-) -> bool:
+def _is_boundary_edge(edge: _ComponentEdge, *, config: ComponentCleanupConfig) -> bool:
     diagnostic = edge.diagnostic
     if diagnostic is None:
         return False
