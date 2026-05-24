@@ -281,7 +281,7 @@ def run_benchmark_manifest(manifest: BenchmarkManifest) -> BenchmarkManifestResu
     run_outputs: dict[str, Path] = {}
     for run_spec in manifest.runs:
         rows = _run_benchmark_rows(run_spec)
-        write_results(rows, run_spec.output, run_spec.output_format)
+        _write_run_rows(run_spec, rows)
         run_summaries.append(
             BenchmarkOutputSummary(
                 name=run_spec.name,
