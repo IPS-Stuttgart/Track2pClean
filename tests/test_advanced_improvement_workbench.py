@@ -28,6 +28,7 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     assert len(run_names) == len(set(run_names))
     run_name_set = set(run_names)
     assert "track2p-policy" in run_name_set
+    assert "track2p-policy-component-cleanup" in run_name_set
     assert "track2p-policy-dp" in run_name_set
     assert "track2p-policy-pruned" in run_name_set
     assert "global-registered-iou-prior-sweep" in run_name_set
@@ -52,6 +53,16 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     )
     assert configurable["runner"] == "track2p-loso-calibration"
     assert "one_minus_weighted_dice" in configurable["feature_names"]
+
+    component_cleanup = next(
+        run
+        for run in manifest["runs"]
+        if run["name"] == "track2p-policy-component-cleanup"
+    )
+    assert component_cleanup["runner"] == "track2p-policy-component-audit"
+    assert component_cleanup["apply_splits"] is True
+    assert component_cleanup["split_risk_threshold"] == 1.5
+    assert component_cleanup["min_side_observations"] == 2
 
 
 def test_track2p_result_improvement_manifest_adds_experimental_policy_dp_once():

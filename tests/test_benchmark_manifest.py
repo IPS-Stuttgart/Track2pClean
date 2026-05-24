@@ -99,6 +99,29 @@ def test_benchmark_manifest_rejects_unknown_run_keys(tmp_path):
         load_benchmark_manifest(manifest_path)
 
 
+def test_benchmark_manifest_allows_overlapping_track2p_config_keys(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+            },
+            "runs": [
+                {
+                    "name": "global",
+                    "gap_penalty": 0.6,
+                }
+            ],
+        },
+    )
+
+    manifest = load_benchmark_manifest(manifest_path)
+
+    assert manifest.runs[0].config.gap_penalty == 0.6
+
+
 def test_benchmark_manifest_accepts_hgb_loso_runner_options(tmp_path):
     manifest_path = tmp_path / "benchmarks.json"
     _write_manifest(
