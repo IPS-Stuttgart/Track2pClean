@@ -15,6 +15,7 @@ gap is caused by data loading/registration/mask geometry or by the global solver
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Literal
@@ -50,6 +51,7 @@ def run_track2p_emulation_benchmark(
     *,
     threshold_method: ThresholdMethod = "otsu",
     iou_distance_threshold: float = 16.0,
+    max_gap: int = 1,
 ) -> list[SubjectBenchmarkResult]:
     """Run Track2p baseline and Track2p-policy emulation rows."""
 
@@ -61,7 +63,7 @@ def run_track2p_emulation_benchmark(
         weighted_masks=False,
         weighted_centroids=False,
         exclude_overlapping_pixels=False,
-        max_gap=1,
+        max_gap=int(max_gap),
     )
     baseline_config = replace(emulation_config, method="track2p-baseline")
 
@@ -83,14 +85,22 @@ def run_track2p_emulation_benchmark(
             transform_type=emulation_config.transform_type,
             threshold_method=threshold_method,
             iou_distance_threshold=iou_distance_threshold,
+            max_gap=emulation_config.max_gap,
         )
         scores = _score_prediction_against_reference(
             predicted, reference, config=emulation_config
         )
+        scores = {
+            **scores,
+            "track2p_policy_max_gap": int(emulation_config.max_gap),
+        }
+        variant = f"Track2p-policy emulation ({threshold_method})"
+        if emulation_config.max_gap > 1:
+            variant = f"{variant} gap-rescue-{emulation_config.max_gap}"
         results.append(
             SubjectBenchmarkResult(
                 subject=subject_dir.name,
-                variant=f"Track2p-policy emulation ({threshold_method})",
+                variant=variant,
                 method="global-assignment",
                 scores=scores,
                 n_sessions=len(sessions),
@@ -101,13 +111,25 @@ def run_track2p_emulation_benchmark(
 
 
 def emulate_track2p_tracks(
-    sessions: list[Track2pSession],
+    sessions: Sequence[Track2pSession],
     *,
     transform_type: str = "affine",
     threshold_method: ThresholdMethod = "otsu",
     iou_distance_threshold: float = 16.0,
+    max_gap: int = 1,
 ) -> np.ndarray:
-    """Return Suite2p-indexed tracks from Track2p's consecutive-link policy."""
+    """Return Suite2p-indexed tracks from Track2p's consecutive-link policy.
+
+    ``max_gap`` enables conservative gap rescue.  The propagation still prefers
+    the consecutive Track2p-style link whenever it exists, but it may jump over
+    isolated missing intermediate sessions when a direct threshold-accepted link
+    to a later session is available.
+    """
+
+    sessions = tuple(sessions)
+    max_gap = int(max_gap)
+    if max_gap < 1:
+        raise ValueError("max_gap must be at least 1")
 
     if not sessions:
         return np.zeros((0, 0), dtype=int)
@@ -115,36 +137,48 @@ def emulate_track2p_tracks(
         roi_indices = _roi_indices(sessions[0])
         return roi_indices.reshape(-1, 1)
 
-    thresholded_links = [
-        _thresholded_hungarian_links(
-            sessions[index],
-            sessions[index + 1],
-            transform_type=transform_type,
-            threshold_method=threshold_method,
-            iou_distance_threshold=iou_distance_threshold,
-        )
-        for index in range(len(sessions) - 1)
-    ]
+    thresholded_links = _thresholded_links_by_gap(
+        sessions,
+        transform_type=transform_type,
+        threshold_method=threshold_method,
+        iou_distance_threshold=iou_distance_threshold,
+        max_gap=max_gap,
+    )
 
     local_tracks = np.full(
         (sessions[0].plane_data.n_rois, len(sessions)), -1, dtype=int
     )
-    first_links = thresholded_links[0]
-    if first_links.size:
-        local_tracks[first_links[:, 0], 0] = first_links[:, 0]
+    seed_rois = _seed_rois_with_outgoing_links(
+        thresholded_links,
+        max_gap=max_gap,
+        first_session_size=sessions[0].plane_data.n_rois,
+    )
+    if seed_rois.size:
+        local_tracks[seed_rois, 0] = seed_rois
 
     for row_index in range(local_tracks.shape[0]):
-        current = local_tracks[row_index, 0]
+        current_session = 0
+        current = local_tracks[row_index, current_session]
         if current < 0:
             continue
-        for session_index, links in enumerate(thresholded_links):
-            if not links.size:
+
+        while current_session < len(sessions) - 1:
+            found_link = False
+            max_step = min(max_gap, len(sessions) - 1 - current_session)
+            for step in range(1, max_step + 1):
+                links = thresholded_links.get((current_session, step))
+                if links is None or not links.size:
+                    continue
+                matches = np.flatnonzero(links[:, 0] == current)
+                if matches.size == 0:
+                    continue
+                current_session += step
+                current = int(links[matches[0], 1])
+                local_tracks[row_index, current_session] = current
+                found_link = True
                 break
-            matches = np.flatnonzero(links[:, 0] == current)
-            if matches.size == 0:
+            if not found_link:
                 break
-            current = int(links[matches[0], 1])
-            local_tracks[row_index, session_index + 1] = current
 
     suite2p_tracks = np.full_like(local_tracks, -1)
     roi_indices_by_session = [_roi_indices(session) for session in sessions]
@@ -155,6 +189,45 @@ def emulate_track2p_tracks(
                 local_tracks[valid, session_index]
             ]
     return suite2p_tracks
+
+
+def _thresholded_links_by_gap(
+    sessions: Sequence[Track2pSession],
+    *,
+    transform_type: str,
+    threshold_method: ThresholdMethod,
+    iou_distance_threshold: float,
+    max_gap: int,
+) -> dict[tuple[int, int], np.ndarray]:
+    links_by_gap: dict[tuple[int, int], np.ndarray] = {}
+    for session_index in range(len(sessions) - 1):
+        max_step = min(max_gap, len(sessions) - 1 - session_index)
+        for step in range(1, max_step + 1):
+            links_by_gap[(session_index, step)] = _thresholded_hungarian_links(
+                sessions[session_index],
+                sessions[session_index + step],
+                transform_type=transform_type,
+                threshold_method=threshold_method,
+                iou_distance_threshold=iou_distance_threshold,
+            )
+    return links_by_gap
+
+
+def _seed_rois_with_outgoing_links(
+    thresholded_links: Mapping[tuple[int, int], np.ndarray],
+    *,
+    max_gap: int,
+    first_session_size: int,
+) -> np.ndarray:
+    seeds: set[int] = set()
+    for step in range(1, max_gap + 1):
+        links = thresholded_links.get((0, step))
+        if links is None or not links.size:
+            continue
+        for source_roi in links[:, 0]:
+            if 0 <= int(source_roi) < int(first_session_size):
+                seeds.add(int(source_roi))
+    return np.asarray(sorted(seeds), dtype=int)
 
 
 def _thresholded_hungarian_links(
@@ -223,9 +296,7 @@ def _mask_centroids(masks: np.ndarray) -> np.ndarray:
     return np.asarray(centroids, dtype=float)
 
 
-def _threshold_assigned_iou(
-    assigned_iou: np.ndarray, *, method: ThresholdMethod
-) -> float:
+def _threshold_assigned_iou(assigned_iou: np.ndarray, *, method: ThresholdMethod) -> float:
     values = np.asarray(assigned_iou, dtype=float)
     if values.size == 0:
         return float("inf")
@@ -276,6 +347,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--transform-type", default="affine")
     parser.add_argument("--threshold-method", choices=("otsu", "min"), default="otsu")
     parser.add_argument("--iou-distance-threshold", type=float, default=16.0)
+    parser.add_argument(
+        "--max-gap",
+        type=int,
+        default=1,
+        help=(
+            "Maximum session jump for conservative gap rescue. The consecutive "
+            "Track2p-policy link is always tried first."
+        ),
+    )
     parser.add_argument("--cell-probability-threshold", type=float, default=0.5)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--comparison-output", type=Path, default=None)
@@ -294,6 +374,7 @@ def main(argv: list[str] | None = None) -> int:
         reference_kind=args.reference_kind,
         plane_name=args.plane_name,
         transform_type=args.transform_type,
+        max_gap=args.max_gap,
         include_behavior=False,
         include_non_cells=False,
         cell_probability_threshold=args.cell_probability_threshold,
@@ -305,6 +386,7 @@ def main(argv: list[str] | None = None) -> int:
         config,
         threshold_method=args.threshold_method,
         iou_distance_threshold=args.iou_distance_threshold,
+        max_gap=args.max_gap,
     )
     rows = [result.to_dict() for result in results]
     write_results(rows, args.output, "csv")
