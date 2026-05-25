@@ -41,6 +41,7 @@ class ComponentCleanupSweepConfig:
     split_risk_thresholds: tuple[float, ...] = (1.0, 1.25, 1.5, 1.75, 2.0)
     split_penalties: tuple[float, ...] = (0.0, 0.25, 0.5)
     min_side_observations: tuple[int, ...] = (2,)
+    require_complete_track_options: tuple[bool, ...] = (True, False)
     base_cleanup: ComponentCleanupConfig = field(default_factory=ComponentCleanupConfig)
     objective: ComponentSweepObjective = "complete_track_f1_micro"
     best_only: bool = False
@@ -55,6 +56,8 @@ class ComponentCleanupSweepConfig:
         min_side_observations = tuple(int(value) for value in self.min_side_observations)
         if not min_side_observations:
             raise ValueError("min_side_observations must not be empty")
+        if not self.require_complete_track_options:
+            raise ValueError("require_complete_track_options must not be empty")
         if any(value < 1 for value in min_side_observations):
             raise ValueError("min_side_observations entries must be at least 1")
         if str(self.objective) not in COMPONENT_SWEEP_OBJECTIVES:
@@ -138,21 +141,25 @@ def _cleanup_grid(
             split_risk_threshold=float(risk),
             split_penalty=float(penalty),
             min_side_observations=int(min_side),
+            require_complete_track=bool(require_complete_track),
         )
-        for risk, penalty, min_side in product(
+        for risk, penalty, min_side, require_complete_track in product(
             config.split_risk_thresholds,
             config.split_penalties,
             config.min_side_observations,
+            config.require_complete_track_options,
         )
     )
 
 
 def _candidate_name(index: int, config: ComponentCleanupConfig) -> str:
+    completeness = "complete" if config.require_complete_track else "partial"
     return (
         f"component-cleanup-{index:02d}"
         f"-risk{config.split_risk_threshold:g}"
         f"-penalty{config.split_penalty:g}"
         f"-side{config.min_side_observations}"
+        f"-{completeness}"
     )
 
 
@@ -229,6 +236,9 @@ def _annotate_subject_rows(
                     ),
                     "component_sweep_min_side_observations": int(
                         cleanup_config.min_side_observations
+                    ),
+                    "component_sweep_require_complete_track": int(
+                        cleanup_config.require_complete_track
                     ),
                 }
             )
