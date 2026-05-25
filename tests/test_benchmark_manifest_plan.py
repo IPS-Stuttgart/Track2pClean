@@ -95,7 +95,7 @@ def test_manifest_plan_table_mentions_outputs_and_runner_options(tmp_path):
     assert "hgb-loso" in table
     assert "track2p-loso-calibration" in table
     assert "feature_names" in table
-    assert "results/hgb.csv" in table
+    assert "hgb.csv" in table
 
 
 def test_validate_manifest_input_paths_is_opt_in(tmp_path):

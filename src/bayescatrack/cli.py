@@ -169,6 +169,10 @@ _BENCHMARK_COMMANDS: dict[str, _BenchmarkCommand] = {
         "bayescatrack.experiments.benchmark_manifest_plan",
         "Validate a JSON benchmark manifest without running benchmarks",
     ),
+    "resolve-suite": _BenchmarkCommand(
+        "bayescatrack.experiments.benchmark_manifest_resolver",
+        "Resolve benchmark manifest root placeholders into an executable copy",
+    ),
 }
 
 _BENCHMARK_ALIASES: dict[str, str] = {
