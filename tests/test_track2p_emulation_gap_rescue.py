@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.experiments.track2p_emulation_benchmark import (
     _seed_rois_with_outgoing_links,
     emulate_track2p_tracks,

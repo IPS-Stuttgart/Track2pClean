@@ -3,7 +3,7 @@
 This diagnostic intentionally mirrors Track2p's core matching policy:
 
 * filter Suite2p ROIs by the configured iscell threshold,
-* register only consecutive sessions,
+* register consecutive session pairs, plus direct skip pairs when gap rescue is enabled,
 * solve a Hungarian assignment on ``1 - IoU``,
 * threshold assigned IoUs per session pair with Otsu/minimum thresholding,
 * greedily propagate tracks from the first session and stop at the first miss.
@@ -123,7 +123,9 @@ def emulate_track2p_tracks(
     ``max_gap`` enables conservative gap rescue.  The propagation still prefers
     the consecutive Track2p-style link whenever it exists, but it may jump over
     isolated missing intermediate sessions when a direct threshold-accepted link
-    to a later session is available.
+    to a later session is available.  Direct skip links use a proportionally
+    larger centroid-distance gate because drift and registration error can
+    accumulate across skipped sessions.
     """
 
     sessions = tuple(sessions)
@@ -199,16 +201,25 @@ def _thresholded_links_by_gap(
     iou_distance_threshold: float,
     max_gap: int,
 ) -> dict[tuple[int, int], np.ndarray]:
+    """Return threshold-accepted links keyed by start session and temporal step.
+
+    The IoU distance gate is scaled by the temporal step for direct skip links:
+    a two-session jump may require twice the adjacent-session centroid radius.
+    Consecutive links are still preferred during propagation, so this only
+    broadens opt-in gap rescue when the adjacent link is unavailable.
+    """
+
     links_by_gap: dict[tuple[int, int], np.ndarray] = {}
     for session_index in range(len(sessions) - 1):
         max_step = min(max_gap, len(sessions) - 1 - session_index)
         for step in range(1, max_step + 1):
+            step_distance_threshold = float(iou_distance_threshold) * float(step)
             links_by_gap[(session_index, step)] = _thresholded_hungarian_links(
                 sessions[session_index],
                 sessions[session_index + step],
                 transform_type=transform_type,
                 threshold_method=threshold_method,
-                iou_distance_threshold=iou_distance_threshold,
+                iou_distance_threshold=step_distance_threshold,
             )
     return links_by_gap
 
@@ -296,7 +307,9 @@ def _mask_centroids(masks: np.ndarray) -> np.ndarray:
     return np.asarray(centroids, dtype=float)
 
 
-def _threshold_assigned_iou(assigned_iou: np.ndarray, *, method: ThresholdMethod) -> float:
+def _threshold_assigned_iou(
+    assigned_iou: np.ndarray, *, method: ThresholdMethod
+) -> float:
     values = np.asarray(assigned_iou, dtype=float)
     if values.size == 0:
         return float("inf")
@@ -331,7 +344,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="python -m bayescatrack.experiments.track2p_emulation_benchmark",
-        description="Compare Track2p output against a BayesCaTrack Track2p-policy emulation.",
+        description=(
+            "Compare Track2p output against a BayesCaTrack Track2p-policy " "emulation."
+        ),
     )
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--reference", type=Path, default=None)

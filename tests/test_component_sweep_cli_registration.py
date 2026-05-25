@@ -12,3 +12,13 @@ def test_component_cleanup_sweep_is_registered():
     assert cli._BENCHMARK_COMMANDS[canonical].module == (
         "bayescatrack.experiments.track2p_policy_component_sweep"
     )
+
+
+def test_multisplit_cleanup_is_registered():
+    canonical = cli._BENCHMARK_ALIASES["track2p-multisplit-cleanup"]
+
+    assert canonical == "track2p-policy-multisplit-cleanup"
+    assert cli._BENCHMARK_ALIASES["track2p-component-multisplit-cleanup"] == canonical
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_multisplit_cleanup"
+    )

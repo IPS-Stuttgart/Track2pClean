@@ -243,7 +243,8 @@ def apply_stability_splits_to_tracks(
         selected_splits = _select_safe_splits(
             row,
             candidates,
-            min_side_observations=min_side_observations,
+            required_support_votes=int(required_support_votes),
+            min_side_observations=int(min_side_observations),
         )
         if not selected_splits:
             output.append(np.asarray(row, dtype=int).copy())
@@ -425,16 +426,74 @@ def _select_safe_splits(
     row: np.ndarray,
     candidates: Sequence[tuple[int, int, Edge]],
     *,
+    required_support_votes: int,
     min_side_observations: int,
 ) -> tuple[int, ...]:
-    selected: set[int] = set()
-    for _, split_index, _ in sorted(candidates, key=lambda item: (item[0], item[1])):
-        proposed = {*selected, int(split_index)}
-        if _fragments_have_min_observations(
-            row, proposed, min_observations=int(min_side_observations)
+    """Return the highest-deficit compatible split set.
+
+    A greedy pass can keep an unstable bridge because an earlier selected split
+    creates a short fragment. This optimizer scores each candidate by missing
+    support votes and selects the maximum-scoring split set whose fragments all
+    retain the requested number of observations.
+    """
+
+    if not candidates:
+        return ()
+    support_by_split: dict[int, int] = {}
+    for support, split_index, _ in candidates:
+        index = int(split_index)
+        support_by_split[index] = min(
+            int(support),
+            support_by_split.get(index, int(support)),
+        )
+    split_indices = tuple(sorted(support_by_split))
+    split_weights = {
+        split_index: max(1, int(required_support_votes) - support)
+        for split_index, support in support_by_split.items()
+    }
+    cache: dict[tuple[int, int], tuple[tuple[int, int, int], tuple[int, ...]]] = {}
+    impossible = (-(10**9), -(10**9), -(10**9))
+
+    def best_from(
+        fragment_start: int,
+        candidate_start: int,
+    ) -> tuple[tuple[int, int, int], tuple[int, ...]]:
+        key = (int(fragment_start), int(candidate_start))
+        if key in cache:
+            return cache[key]
+
+        best_score = impossible
+        best_splits: tuple[int, ...] = ()
+        if _observation_count(row, fragment_start, row.size - 1) >= int(
+            min_side_observations
         ):
-            selected = proposed
-    return tuple(sorted(selected))
+            best_score = (0, 0, 0)
+
+        for candidate_pos in range(candidate_start, len(split_indices)):
+            split_index = split_indices[candidate_pos]
+            if split_index < fragment_start:
+                continue
+            if _observation_count(row, fragment_start, split_index) < int(
+                min_side_observations
+            ):
+                continue
+            tail_score, tail_splits = best_from(split_index + 1, candidate_pos + 1)
+            if tail_score == impossible:
+                continue
+            score = (
+                tail_score[0] + split_weights[split_index],
+                tail_score[1] + 1,
+                tail_score[2] - split_index,
+            )
+            if score > best_score:
+                best_score = score
+                best_splits = (split_index, *tail_splits)
+
+        cache[key] = (best_score, best_splits)
+        return cache[key]
+
+    _, selected = best_from(0, 0)
+    return selected
 
 
 def _fragments_have_min_observations(
@@ -456,6 +515,12 @@ def _fragment_observation_counts(
         start = int(split_index) + 1
     counts.append(int(np.sum(row[start:] >= 0)))
     return tuple(counts)
+
+
+def _observation_count(row: np.ndarray, start: int, stop: int) -> int:
+    if int(stop) < int(start):
+        return 0
+    return int(np.sum(row[int(start) : int(stop) + 1] >= 0))
 
 
 def _split_row_at_indices(

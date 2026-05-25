@@ -58,7 +58,7 @@ def track2p_policy_config(
             if transform_type is None
             else str(transform_type)
         ),
-        max_gap=TRACK2P_POLICY_DEFAULT_MAX_GAP if max_gap is None else int(max_gap),
+        max_gap=int(config.max_gap) if max_gap is None else int(max_gap),
         include_non_cells=False,
         cell_probability_threshold=(
             TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD

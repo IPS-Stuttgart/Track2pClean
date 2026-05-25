@@ -155,11 +155,15 @@ def test_component_cleanup_sweep_can_select_partial_track_guard(monkeypatch) -> 
     assert best_rows[0]["component_sweep_require_complete_track"] == 0
 
 
-def test_component_cleanup_sweep_cli_legacy_guard_flag_is_honored(monkeypatch, tmp_path) -> None:
+def test_component_cleanup_sweep_cli_legacy_guard_flag_is_honored(
+    monkeypatch, tmp_path
+) -> None:
     captured: dict[str, tuple[bool, ...]] = {}
 
     def fake_component_sweep(config, *, sweep_config, **kwargs):
-        captured["require_complete_track_options"] = sweep_config.require_complete_track_options
+        captured["require_complete_track_options"] = (
+            sweep_config.require_complete_track_options
+        )
         return ComponentCleanupSweepOutput(
             rows=(),
             aggregate_rows=(),
@@ -188,11 +192,15 @@ def test_component_cleanup_sweep_cli_legacy_guard_flag_is_honored(monkeypatch, t
     assert captured["require_complete_track_options"] == (False,)
 
 
-def test_component_cleanup_sweep_cli_accepts_guard_options(monkeypatch, tmp_path) -> None:
+def test_component_cleanup_sweep_cli_accepts_guard_options(
+    monkeypatch, tmp_path
+) -> None:
     captured: dict[str, tuple[bool, ...]] = {}
 
     def fake_component_sweep(config, *, sweep_config, **kwargs):
-        captured["require_complete_track_options"] = sweep_config.require_complete_track_options
+        captured["require_complete_track_options"] = (
+            sweep_config.require_complete_track_options
+        )
         return ComponentCleanupSweepOutput(
             rows=(),
             aggregate_rows=(),
@@ -222,7 +230,9 @@ def test_component_cleanup_sweep_cli_accepts_guard_options(monkeypatch, tmp_path
     assert captured["require_complete_track_options"] == (False, True)
 
 
-def test_component_cleanup_sweep_cli_rejects_conflicting_guard_options(tmp_path) -> None:
+def test_component_cleanup_sweep_cli_rejects_conflicting_guard_options(
+    tmp_path,
+) -> None:
     with pytest.raises(SystemExit):
         sweep_module.main(
             [
