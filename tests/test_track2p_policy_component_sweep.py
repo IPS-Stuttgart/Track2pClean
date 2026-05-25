@@ -4,7 +4,6 @@ import math
 from pathlib import Path
 
 import pytest
-
 from bayescatrack.experiments.track2p_benchmark import (
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,

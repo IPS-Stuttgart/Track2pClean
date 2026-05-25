@@ -49,13 +49,12 @@ from bayescatrack.experiments.track2p_policy_benchmark import (
     track2p_policy_config,
 )
 from bayescatrack.experiments.track2p_policy_component_audit import (
-    TRACK2P_POLICY_COMPONENT_CLEANUP_METHOD,
     ComponentAuditOutput,
     ComponentCleanupConfig,
     _component_edges,
     _diagnostics_by_suite2p_edge,
-    _normalize_int_track_matrix,
     _no_prune_config,
+    _normalize_int_track_matrix,
     _valid_seed_roi,
     component_audit_rows,
     write_component_rows,
@@ -129,10 +128,12 @@ def run_track2p_policy_multisplit_cleanup(
             reference, curated_only=policy_config.curated_only
         )
         predicted_full = _normalize_int_track_matrix(prediction.tracks)
-        predicted_eval, reference_eval, evaluated_track_ids = _evaluated_prediction_rows(
-            predicted_full,
-            reference_tracks,
-            config=policy_config,
+        predicted_eval, reference_eval, evaluated_track_ids = (
+            _evaluated_prediction_rows(
+                predicted_full,
+                reference_tracks,
+                config=policy_config,
+            )
         )
         subject_rows = component_audit_rows(
             predicted_eval,
@@ -281,7 +282,9 @@ def apply_ranked_bridge_splits(
     return np.vstack(output).astype(int, copy=False)
 
 
-def split_track_at_bridges(track: Any, session_indices: Sequence[int]) -> tuple[np.ndarray, ...]:
+def split_track_at_bridges(
+    track: Any, session_indices: Sequence[int]
+) -> tuple[np.ndarray, ...]:
     """Split one track at multiple bridges and return masked fragments."""
 
     row = np.asarray(_normalize_int_track_matrix([track])[0], dtype=int)
@@ -331,9 +334,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
-    parser.add_argument("--apply-splits", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--require-complete-track", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
+    parser.add_argument(
+        "--apply-splits", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--require-complete-track", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--threshold-margin-scale", type=float, default=0.10)
     parser.add_argument("--competition-margin-scale", type=float, default=0.20)
     parser.add_argument("--area-ratio-floor", type=float, default=0.45)
@@ -348,8 +357,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=True,
     )
     parser.add_argument("--seed-session", type=int, default=0)
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=False
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     parser.add_argument("--component-output", type=Path, default=None)
