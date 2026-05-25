@@ -1,7 +1,7 @@
 """Complete-track-F1-oriented Track2p accuracy preset.
 
 This module is a thin, reproducible preset around the Track2p-policy
-component-cleanup sweep.  The generic sweep is intentionally flexible; this
+component-cleanup sweep. The generic sweep is intentionally flexible; this
 preset encodes the paper-facing operating point we most often want when the
 primary target is longitudinal identity continuity: select the best candidate by
 complete-track micro-F1 and write only that selected candidate by default.
@@ -33,16 +33,6 @@ def main(argv: list[str] | None = None) -> int:
 
     args = list(argv or [])
     all_candidates = _pop_flag(args, "--all-candidates")
-    if any(arg in {"-h", "--help"} for arg in args):
-        args.append(
-            "--help-epilog=Preset defaults: "
-            f"objective={DEFAULT_OBJECTIVE}, "
-            f"split-risk-thresholds={DEFAULT_SPLIT_RISK_THRESHOLDS}, "
-            f"split-penalties={DEFAULT_SPLIT_PENALTIES}, "
-            f"min-side-observations={DEFAULT_MIN_SIDE_OBSERVATIONS}, "
-            f"require-complete-track-options={DEFAULT_REQUIRE_COMPLETE_TRACK_OPTIONS}. "
-            "Use --all-candidates to keep every sweep row instead of only the selected best candidate."
-        )
     for option, value in _PRESET_ARGUMENT_DEFAULTS:
         if not _contains_option(args, option):
             args.extend((option, value))
