@@ -35,6 +35,12 @@ ComponentSweepObjective = Literal[
     "mean_micro_f1",
     "complete_track_f1_macro",
 ]
+COMPONENT_SWEEP_OBJECTIVES = (
+    "complete_track_f1_micro",
+    "pairwise_f1_micro",
+    "mean_micro_f1",
+    "complete_track_f1_macro",
+)
 
 
 @dataclass(frozen=True)
@@ -49,18 +55,22 @@ class ComponentCleanupSweepConfig:
     best_only: bool = False
 
     def __post_init__(self) -> None:
-        if not self.split_risk_thresholds:
-            raise ValueError("split_risk_thresholds must not be empty")
-        if not self.split_penalties:
-            raise ValueError("split_penalties must not be empty")
-        if not self.min_side_observations:
-            raise ValueError("min_side_observations must not be empty")
-        if any(float(value) < 0.0 for value in self.split_risk_thresholds):
-            raise ValueError("split_risk_thresholds entries must be non-negative")
-        if any(float(value) < 0.0 for value in self.split_penalties):
-            raise ValueError("split_penalties entries must be non-negative")
-        if any(int(value) < 1 for value in self.min_side_observations):
-            raise ValueError("min_side_observations entries must be at least 1")
+        split_risk_thresholds = _finite_nonnegative_tuple(
+            self.split_risk_thresholds, name="split_risk_thresholds"
+        )
+        split_penalties = _finite_nonnegative_tuple(
+            self.split_penalties, name="split_penalties"
+        )
+        min_side_observations = _positive_int_tuple(
+            self.min_side_observations, name="min_side_observations"
+        )
+        if str(self.objective) not in COMPONENT_SWEEP_OBJECTIVES:
+            raise ValueError(
+                "objective must be one of: " + ", ".join(COMPONENT_SWEEP_OBJECTIVES)
+            )
+        object.__setattr__(self, "split_risk_thresholds", split_risk_thresholds)
+        object.__setattr__(self, "split_penalties", split_penalties)
+        object.__setattr__(self, "min_side_observations", min_side_observations)
 
 
 @dataclass(frozen=True)
@@ -264,6 +274,42 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _finite_nonnegative_tuple(values: Sequence[Any], *, name: str) -> tuple[float, ...]:
+    normalized = tuple(_finite_nonnegative_value(value, name=name) for value in values)
+    if not normalized:
+        raise ValueError(f"{name} must not be empty")
+    return normalized
+
+
+def _finite_nonnegative_value(value: Any, *, name: str) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} entries must be finite non-negative values") from exc
+    if not math.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} entries must be finite non-negative values")
+    return numeric
+
+
+def _positive_int_tuple(values: Sequence[Any], *, name: str) -> tuple[int, ...]:
+    normalized = tuple(_positive_int_value(value, name=name) for value in values)
+    if not normalized:
+        raise ValueError(f"{name} must not be empty")
+    return normalized
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} entries must be positive integers")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} entries must be positive integers") from exc
+    if not math.isfinite(numeric) or not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} entries must be positive integers")
+    return int(numeric)
+
+
 def _cleanup_grid(config: ComponentCleanupSweepConfig) -> tuple[ComponentCleanupConfig, ...]:
     return tuple(
         replace(
@@ -349,21 +395,13 @@ def _annotate_subject_rows(
 
 
 def _float_tuple_arg(value: str, *, name: str) -> tuple[float, ...]:
-    values = tuple(float(token.strip()) for token in str(value).split(",") if token.strip())
-    if not values:
-        raise ValueError(f"{name} must contain at least one value")
-    if any(not math.isfinite(item) for item in values):
-        raise ValueError(f"{name} values must be finite")
-    return values
+    tokens = tuple(token.strip() for token in str(value).split(",") if token.strip())
+    return _finite_nonnegative_tuple(tokens, name=name)
 
 
 def _int_tuple_arg(value: str, *, name: str) -> tuple[int, ...]:
-    values = tuple(int(token.strip()) for token in str(value).split(",") if token.strip())
-    if not values:
-        raise ValueError(f"{name} must contain at least one value")
-    if any(item < 1 for item in values):
-        raise ValueError(f"{name} values must be at least 1")
-    return values
+    tokens = tuple(token.strip() for token in str(value).split(",") if token.strip())
+    return _positive_int_tuple(tokens, name=name)
 
 
 if __name__ == "__main__":  # pragma: no cover
