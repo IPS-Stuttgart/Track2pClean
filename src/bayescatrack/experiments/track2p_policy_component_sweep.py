@@ -23,7 +23,11 @@ from bayescatrack.experiments.track2p_policy_benchmark import (
 )
 from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
+)
+from bayescatrack.experiments.track2p_policy_component_audit import (
     build_arg_parser as _build_component_audit_parser,
+)
+from bayescatrack.experiments.track2p_policy_component_audit import (
     run_track2p_policy_component_audit,
 )
 
@@ -142,7 +146,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     parser = _build_component_audit_parser()
     parser.prog = "bayescatrack benchmark track2p-policy-component-sweep"
-    parser.description = "Sweep Track2p-policy weakest-bridge component cleanup settings."
+    parser.description = (
+        "Sweep Track2p-policy weakest-bridge component cleanup settings."
+    )
     _remove_parser_options(
         parser,
         "--apply-splits",
@@ -196,9 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         split_risk_thresholds=_float_tuple_arg(
             args.split_risk_thresholds, name="split-risk-thresholds"
         ),
-        split_penalties=_float_tuple_arg(
-            args.split_penalties, name="split-penalties"
-        ),
+        split_penalties=_float_tuple_arg(args.split_penalties, name="split-penalties"),
         min_side_observations=_int_tuple_arg(
             args.min_side_observations, name="min-side-observations"
         ),
