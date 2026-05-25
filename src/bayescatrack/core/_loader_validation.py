@@ -44,6 +44,9 @@ def install_loader_validation_patches(bridge_impl: ModuleType) -> None:
                 cell_probability_threshold=float(
                     kwargs.get("cell_probability_threshold", 0.5)
                 ),
+                exclude_overlapping_pixels=bool(
+                    kwargs.get("exclude_overlapping_pixels", True)
+                ),
             )
             return original_suite2p_loader(plane_dir, *args, **kwargs)
 
@@ -100,6 +103,7 @@ def _validate_suite2p_stat_coordinates(
     *,
     include_non_cells: bool,
     cell_probability_threshold: float,
+    exclude_overlapping_pixels: bool,
 ) -> None:
     stat_path = plane_dir / "stat.npy"
     if not stat_path.exists():
@@ -140,6 +144,13 @@ def _validate_suite2p_stat_coordinates(
                 f"Suite2p ROI {roi_index} has lam shape {lam.shape}, "
                 f"but expected {ypix.shape}"
             )
+        if exclude_overlapping_pixels and "overlap" in roi_stat:
+            overlap = np.asarray(roi_stat["overlap"], dtype=bool)
+            if overlap.shape == ypix.shape:
+                valid = ~overlap
+                ypix = ypix[valid]
+                xpix = xpix[valid]
+                lam = lam[valid]
         if ypix.size == 0:
             continue
         invalid = (ypix < 0) | (ypix >= height) | (xpix < 0) | (xpix >= width)
