@@ -50,6 +50,9 @@ def score_track_matrices(
     recall, F1, and count fields with multiset counts.
     """
 
+    _validate_no_boolean_observations(predicted_track_matrix, "predicted_track_matrix")
+    _validate_no_boolean_observations(reference_track_matrix, "reference_track_matrix")
+
     normalized_session_pairs = _normalize_session_pairs(session_pairs)
     normalized_complete_session_indices = _normalize_complete_session_indices(
         complete_session_indices
@@ -261,9 +264,23 @@ def _validate_compatible_shapes(predicted: np.ndarray, reference: np.ndarray) ->
         )
 
 
+def _validate_no_boolean_observations(track_matrix: Any, matrix_name: str) -> None:
+    array = np.asarray(track_matrix, dtype=object)
+    for index, value in np.ndenumerate(array):
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError(
+                f"{matrix_name} contains boolean ROI index at {index}: {value!r}; "
+                "ROI observations must be integer-like or missing"
+            )
+
+
 def _is_valid_observation(value: object) -> bool:
     if value is None:
         return False
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(
+            f"ROI index must be integer-like or missing, got boolean {value!r}"
+        )
     if isinstance(value, (float, np.floating)) and np.isnan(value):
         return False
     try:
