@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from bayescatrack.experiments.track2p_benchmark import (
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
@@ -77,6 +79,32 @@ def test_component_cleanup_sweep_best_only_filters_rows(monkeypatch) -> None:
     assert output.rows[0]["component_sweep_best"] == 1
     assert output.rows[0]["component_sweep_split_penalty"] == 0.5
     assert len(output.aggregate_rows) == 2
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        (
+            {"split_risk_thresholds": (float("inf"),)},
+            "finite non-negative",
+        ),
+        (
+            {"split_penalties": (float("nan"),)},
+            "finite non-negative",
+        ),
+        (
+            {"min_side_observations": (1.5,)},
+            "positive integers",
+        ),
+        (
+            {"min_side_observations": (True,)},
+            "positive integers",
+        ),
+    ],
+)
+def test_component_cleanup_sweep_rejects_invalid_grid_entries(kwargs, message) -> None:
+    with pytest.raises(ValueError, match=message):
+        ComponentCleanupSweepConfig(**kwargs)
 
 
 def _sweep_output(
