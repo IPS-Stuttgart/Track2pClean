@@ -31,22 +31,23 @@ def test_solver_prior_grid_rejects_negative_programmatic_thresholds():
 
 
 @pytest.mark.parametrize(
-    "kwargs",
+    "field,bad_value",
     [
-        {"start_costs": (True,)},
-        {"end_costs": (False,)},
-        {"gap_penalties": (np.bool_(True),)},
-        {"cost_thresholds": (np.bool_(False),)},
+        ("start_costs", True),
+        ("end_costs", False),
+        ("gap_penalties", np.bool_(True)),
+        ("cost_thresholds", np.bool_(False)),
     ],
 )
-def test_solver_prior_grid_rejects_boolean_programmatic_values(kwargs):
-    search = SolverPriorSearchConfig(
-        start_costs=(1.0,),
-        end_costs=(1.0,),
-        gap_penalties=(0.0,),
-        cost_thresholds=(None,),
-        **kwargs,
-    )
+def test_solver_prior_grid_rejects_boolean_programmatic_values(field, bad_value):
+    kwargs = {
+        "start_costs": (1.0,),
+        "end_costs": (1.0,),
+        "gap_penalties": (0.0,),
+        "cost_thresholds": (None,),
+    }
+    kwargs[field] = (bad_value,)
+    search = SolverPriorSearchConfig(**kwargs)
 
     with pytest.raises(ValueError, match="boolean"):
         search.candidates()
