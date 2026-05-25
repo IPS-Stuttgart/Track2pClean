@@ -80,6 +80,37 @@ def test_policy_link_diagnostics_from_iou_matrix_prunes_only_weak_links() -> Non
     assert all(not diagnostic.pruned for diagnostic in kept_diagnostics)
 
 
+def test_policy_link_diagnostics_keep_degenerate_positive_iou_links() -> None:
+    iou = np.asarray(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ],
+        dtype=float,
+    )
+
+    links, diagnostics = policy_link_diagnostics_from_iou_matrix(
+        iou,
+        threshold_method="otsu",
+        prune_config=Track2pPolicyPruneConfig(),
+        distances=np.zeros_like(iou),
+        area_ratios=np.ones_like(iou),
+    )
+
+    assert links.tolist() == [[0, 0], [1, 1]]
+    assert len(diagnostics) == 2
+    assert all(not diagnostic.pruned for diagnostic in diagnostics)
+
+
+def test_policy_link_diagnostics_reject_degenerate_zero_iou_links() -> None:
+    links, diagnostics = policy_link_diagnostics_from_iou_matrix(
+        np.zeros((2, 2), dtype=float), threshold_method="otsu"
+    )
+
+    assert links.size == 0
+    assert diagnostics == ()
+
+
 def test_prune_config_rejects_invalid_values() -> None:
     with pytest.raises(ValueError, match="threshold_margin"):
         Track2pPolicyPruneConfig(threshold_margin=-0.1)

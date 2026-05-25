@@ -242,7 +242,14 @@ def _threshold_assigned_iou(
     if values.size == 0:
         return float("inf")
     if np.allclose(values, values[0]):
-        return float(values[0])
+        value = float(values[0])
+        # The caller accepts links with ``assigned_iou > threshold``. Returning
+        # the observed value for a degenerate positive distribution would reject
+        # every identical match, including perfect IoU=1 links. Nudge only
+        # positive thresholds downward; all-zero assignments should stay rejected.
+        if value > 0.0:
+            return float(np.nextafter(value, -np.inf))
+        return value
     if method == "otsu":
         return _otsu_threshold(values)
     if method == "min":

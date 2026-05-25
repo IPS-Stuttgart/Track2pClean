@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from bayescatrack import load_suite2p_plane
 
 
@@ -31,7 +30,9 @@ def test_load_suite2p_plane_validation_respects_overlap_pixel_exclusion(tmp_path
     assert bool(plane.roi_masks[0, 0, 0])
 
 
-def test_load_suite2p_plane_validation_rejects_out_of_bounds_overlap_pixels_when_retained(tmp_path):
+def test_load_suite2p_plane_validation_rejects_out_of_bounds_overlap_pixels_when_retained(
+    tmp_path,
+):
     plane_dir = tmp_path / "plane0"
     _write_suite2p_plane_with_invalid_overlap_pixel(plane_dir)
 
