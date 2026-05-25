@@ -112,6 +112,7 @@ def test_multisplit_respects_complete_track_guard() -> None:
         config=MultiSplitCleanupConfig(
             component=ComponentCleanupConfig(
                 split_risk_threshold=1.0,
+                min_side_observations=1,
                 require_complete_track=True,
             ),
         ),
@@ -123,13 +124,14 @@ def test_multisplit_respects_complete_track_guard() -> None:
         config=MultiSplitCleanupConfig(
             component=ComponentCleanupConfig(
                 split_risk_threshold=1.0,
+                min_side_observations=1,
                 require_complete_track=False,
             ),
         ),
     )
 
     assert guarded == {}
-    assert unguarded == {0: (1,)}
+    assert unguarded == {0: (0, 1)}
 
 
 def _diagnostic(
