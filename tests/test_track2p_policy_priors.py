@@ -97,6 +97,26 @@ def test_policy_prior_caps_reliefs_and_penalizes_costs() -> None:
     np.testing.assert_allclose(adjusted[1, 0], 3.25)
 
 
+def test_policy_prior_penalizes_non_policy_edges_when_no_policy_edge_survives() -> None:
+    costs = np.asarray([[1.0, 2.0, np.inf, 1.0e6]], dtype=float)
+    components = {"iou": np.asarray([[0.0, 0.0, 0.0, 0.0]], dtype=float)}
+
+    adjusted = apply_track2p_policy_edge_prior(
+        costs,
+        components,
+        session_gap=1,
+        config=Track2pPolicyPriorConfig(
+            threshold_method="otsu",
+            non_policy_penalty=0.5,
+        ),
+    )
+
+    np.testing.assert_allclose(
+        adjusted,
+        np.asarray([[1.5, 2.5, np.inf, 1.0e6]], dtype=float),
+    )
+
+
 def test_policy_prior_respects_gap_restrictions() -> None:
     costs = np.asarray([[5.0]], dtype=float)
     components = {"iou": np.asarray([[0.95]], dtype=float)}
