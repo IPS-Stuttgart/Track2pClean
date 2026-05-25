@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+import argparse
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import product
-from typing import Any, Literal
+from pathlib import Path
+from typing import Any, Literal, cast
 
 from bayescatrack.experiments.benchmark_comparison import aggregate_rows
-from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
+from bayescatrack.experiments.track2p_benchmark import (
+    OutputFormat,
+    Track2pBenchmarkConfig,
+    write_results,
+)
 from bayescatrack.experiments.track2p_policy_benchmark import (
+    TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+    TRACK2P_POLICY_DEFAULT_MAX_GAP,
     TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE,
     ThresholdMethod,
 )
 from bayescatrack.experiments.track2p_policy_component_audit import (
@@ -114,6 +123,158 @@ def run_track2p_policy_component_sweep(
         best_candidate=best_candidate,
         objective=sweep_config.objective,
     )
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser for component-cleanup sweeps."""
+
+    parser = argparse.ArgumentParser(
+        prog="bayescatrack benchmark track2p-component-sweep",
+        description=(
+            "Sweep Track2p-policy component-cleanup parameters and select the "
+            "best aggregate operating point."
+        ),
+    )
+    parser.add_argument("--data", type=Path, required=True)
+    parser.add_argument("--reference", type=Path, default=None)
+    parser.add_argument(
+        "--reference-kind",
+        choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
+        default="manual-gt",
+    )
+    parser.add_argument("--plane", dest="plane_name", default="plane0")
+    parser.add_argument(
+        "--input-format", choices=("auto", "suite2p", "npy"), default="suite2p"
+    )
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
+    parser.add_argument(
+        "--threshold-method",
+        choices=("otsu", "min"),
+        default=TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
+    parser.add_argument(
+        "--iou-distance-threshold",
+        type=float,
+        default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+    )
+    parser.add_argument(
+        "--cell-probability-threshold",
+        type=float,
+        default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
+    )
+    parser.add_argument(
+        "--split-risk-thresholds",
+        type=_float_tuple_arg,
+        default=ComponentCleanupSweepConfig.split_risk_thresholds,
+        help="Comma-separated component split-risk thresholds to sweep.",
+    )
+    parser.add_argument(
+        "--split-penalties",
+        type=_float_tuple_arg,
+        default=ComponentCleanupSweepConfig.split_penalties,
+        help="Comma-separated penalties subtracted from weakest-bridge split gains.",
+    )
+    parser.add_argument(
+        "--min-side-observations-sweep",
+        type=_int_tuple_arg,
+        default=ComponentCleanupSweepConfig.min_side_observations,
+        help="Comma-separated minimum fragment observation counts to sweep.",
+    )
+    parser.add_argument(
+        "--objective",
+        choices=(
+            "complete_track_f1_micro",
+            "pairwise_f1_micro",
+            "mean_micro_f1",
+            "complete_track_f1_macro",
+        ),
+        default="complete_track_f1_micro",
+    )
+    parser.add_argument(
+        "--best-only",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Write only subject rows for the selected aggregate-best candidate.",
+    )
+    parser.add_argument(
+        "--restrict-to-reference-seed-rois",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument("--seed-session", type=int, default=0)
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=False
+    )
+    parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument(
+        "--aggregate-output",
+        type=Path,
+        default=None,
+        help="Optional path for the aggregate candidate ranking table.",
+    )
+    parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the Track2p component-cleanup sweep CLI."""
+
+    args = build_arg_parser().parse_args(argv)
+    config = Track2pBenchmarkConfig(
+        data=args.data,
+        method="global-assignment",
+        plane_name=args.plane_name,
+        input_format=args.input_format,
+        reference=args.reference,
+        reference_kind=args.reference_kind,
+        allow_track2p_as_reference_for_smoke_test=(
+            args.allow_track2p_as_reference_for_smoke_test
+        ),
+        seed_session=args.seed_session,
+        restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        transform_type=args.transform_type,
+        max_gap=TRACK2P_POLICY_DEFAULT_MAX_GAP,
+        include_behavior=args.include_behavior,
+        include_non_cells=False,
+        cell_probability_threshold=args.cell_probability_threshold,
+        weighted_masks=False,
+        weighted_centroids=False,
+        exclude_overlapping_pixels=False,
+    )
+    sweep_config = ComponentCleanupSweepConfig(
+        split_risk_thresholds=tuple(args.split_risk_thresholds),
+        split_penalties=tuple(args.split_penalties),
+        min_side_observations=tuple(args.min_side_observations_sweep),
+        objective=cast(ComponentSweepObjective, args.objective),
+        best_only=bool(args.best_only),
+    )
+    output = run_track2p_policy_component_sweep(
+        config,
+        threshold_method=cast(Literal["otsu", "min"], args.threshold_method),
+        iou_distance_threshold=args.iou_distance_threshold,
+        transform_type=args.transform_type,
+        cell_probability_threshold=args.cell_probability_threshold,
+        sweep_config=sweep_config,
+    )
+    rows: Sequence[Mapping[str, Any]] = output.rows
+    if args.output is not None:
+        write_results(rows, args.output, cast(OutputFormat, args.format))
+    else:
+        from bayescatrack.experiments.track2p_benchmark import _write_stdout
+
+        _write_stdout(rows, cast(OutputFormat, args.format))
+    if args.aggregate_output is not None:
+        write_results(
+            output.aggregate_rows,
+            args.aggregate_output,
+            cast(OutputFormat, args.format),
+        )
+    return 0
 
 
 def _cleanup_grid(
@@ -220,3 +381,35 @@ def _annotate_subject_rows(
                 }
             )
     return annotated
+
+
+def _float_tuple_arg(value: str | Sequence[float]) -> tuple[float, ...]:
+    if isinstance(value, str):
+        tokens = tuple(token.strip() for token in value.split(",") if token.strip())
+        if not tokens:
+            raise argparse.ArgumentTypeError("expected at least one float")
+        try:
+            return tuple(float(token) for token in tokens)
+        except ValueError as exc:  # pragma: no cover - argparse reports this path
+            raise argparse.ArgumentTypeError(str(exc)) from exc
+    return tuple(float(item) for item in value)
+
+
+def _int_tuple_arg(value: str | Sequence[int]) -> tuple[int, ...]:
+    if isinstance(value, str):
+        tokens = tuple(token.strip() for token in value.split(",") if token.strip())
+        if not tokens:
+            raise argparse.ArgumentTypeError("expected at least one integer")
+        try:
+            parsed = tuple(int(token) for token in tokens)
+        except ValueError as exc:  # pragma: no cover - argparse reports this path
+            raise argparse.ArgumentTypeError(str(exc)) from exc
+    else:
+        parsed = tuple(int(item) for item in value)
+    if any(item < 1 for item in parsed):
+        raise argparse.ArgumentTypeError("integer entries must be at least 1")
+    return parsed
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
