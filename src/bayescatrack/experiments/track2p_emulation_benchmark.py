@@ -348,8 +348,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m bayescatrack.experiments.track2p_emulation_benchmark",
         description=(
-            "Compare Track2p output against a BayesCaTrack Track2p-policy "
-            "emulation."
+            "Compare Track2p output against a BayesCaTrack Track2p-policy " "emulation."
         ),
     )
     parser.add_argument("--data", type=Path, required=True)

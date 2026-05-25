@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.experiments.track2p_emulation_benchmark import (
     _threshold_assigned_iou,
 )
