@@ -70,3 +70,13 @@ def test_sklearn_probability_adapter_preserves_pairwise_tensor_shape():
     assert probabilities.shape == (2, 3)
     assert np.isclose(probabilities[0, 0], 0.1)
     assert np.isclose(probabilities[-1, -1], 0.9)
+
+
+def test_resolved_feature_names_uses_config_default_when_unspecified():
+    class DummyConfig:
+        calibration_feature_set = "default"
+
+    resolved = loso._resolved_feature_names(DummyConfig(), None)
+
+    assert resolved == loso.calibration_feature_names("default")
+    assert len(resolved) > 0
