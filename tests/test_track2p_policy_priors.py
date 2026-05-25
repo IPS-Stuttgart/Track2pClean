@@ -48,6 +48,17 @@ def test_policy_mask_keeps_degenerate_positive_hungarian_edges() -> None:
     assert mask.tolist() == [[True, False], [False, True]]
 
 
+def test_policy_mask_keeps_single_positive_hungarian_edge() -> None:
+    iou = np.asarray([[0.95]], dtype=float)
+
+    mask = track2p_policy_edge_mask(
+        iou,
+        config=Track2pPolicyPriorConfig(threshold_method="otsu"),
+    )
+
+    np.testing.assert_array_equal(mask, np.asarray([[True]]))
+
+
 def test_policy_mask_rejects_degenerate_zero_iou_edges() -> None:
     mask = track2p_policy_edge_mask(
         np.zeros((2, 2), dtype=float),
@@ -95,6 +106,23 @@ def test_policy_prior_caps_reliefs_and_penalizes_costs() -> None:
     np.testing.assert_allclose(adjusted[2, 2], 5.25)
     np.testing.assert_allclose(adjusted[0, 1], 4.25)
     np.testing.assert_allclose(adjusted[1, 0], 3.25)
+
+
+def test_policy_prior_penalizes_non_policy_edges_when_no_policy_edge_survives() -> None:
+    costs = np.asarray([[1.0, 2.0]], dtype=float)
+    components = {"iou": np.asarray([[0.0, 0.0]], dtype=float)}
+
+    adjusted = apply_track2p_policy_edge_prior(
+        costs,
+        components,
+        session_gap=1,
+        config=Track2pPolicyPriorConfig(
+            threshold_method="otsu",
+            non_policy_penalty=0.5,
+        ),
+    )
+
+    np.testing.assert_allclose(adjusted, np.asarray([[1.5, 2.5]], dtype=float))
 
 
 def test_policy_prior_respects_gap_restrictions() -> None:
