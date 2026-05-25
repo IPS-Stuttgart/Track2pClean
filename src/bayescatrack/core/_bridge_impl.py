@@ -739,16 +739,16 @@ def load_suite2p_plane(
         keep_roi = True
         probability = np.nan
         if iscell is not None:
-            probability = (
-                float(iscell[roi_index, 1])
-                if np.ndim(iscell) == 2 and iscell.shape[1] > 1
-                else float(iscell[roi_index])
-            )
-            is_cell = (
-                bool(iscell[roi_index, 0])
-                if np.ndim(iscell) == 2
-                else bool(iscell[roi_index])
-            )
+            if np.ndim(iscell) == 2:
+                is_cell = bool(iscell[roi_index, 0])
+                probability = (
+                    float(iscell[roi_index, 1])
+                    if iscell.shape[1] > 1
+                    else float(iscell[roi_index, 0])
+                )
+            else:
+                is_cell = bool(iscell[roi_index])
+                probability = float(iscell[roi_index])
             if not include_non_cells:
                 keep_roi = is_cell and probability >= cell_probability_threshold
 

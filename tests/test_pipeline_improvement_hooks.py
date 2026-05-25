@@ -77,6 +77,22 @@ def test_consensus_prior_relieves_edges_with_enough_votes():
     assert adjusted[(0, 1)][0, 0] == 1.0
 
 
+def test_consensus_votes_ignore_missing_negative_roi_entries():
+    votes = edge_votes_from_tracks(
+        [
+            [{0: 0, 1: -1, 2: 5}],
+            [{0: 0, 1: -1, 2: 5}],
+        ],
+        session_edges=((0, 1), (1, 2), (0, 2)),
+    )
+
+    assert (0, 1, 0, -1) not in votes
+    assert (1, 2, -1, 5) not in votes
+    assert votes == {
+        (0, 2, 0, 5): 2,
+    }
+
+
 def test_postsolve_relinking_replaces_flagged_detection_with_better_candidate():
     tracks = np.array([[0, 5], [1, 6]], dtype=int)
     issues = [

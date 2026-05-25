@@ -15,6 +15,15 @@ def test_degenerate_positive_iou_threshold_keeps_identical_matches() -> None:
     assert np.all(assigned_iou > threshold)
 
 
+def test_single_positive_iou_threshold_keeps_link_with_strict_filter() -> None:
+    assigned_iou = np.asarray([0.75], dtype=float)
+
+    threshold = _threshold_assigned_iou(assigned_iou, method="otsu")
+
+    assert threshold < 0.75
+    assert bool(assigned_iou[0] > threshold)
+
+
 def test_degenerate_zero_iou_threshold_still_rejects_zero_matches() -> None:
     assigned_iou = np.asarray([0.0, 0.0], dtype=float)
 

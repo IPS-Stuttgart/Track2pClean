@@ -187,14 +187,16 @@ def _suite2p_validation_keep_mask(
 
     keep = np.zeros((int(stat.shape[0]),), dtype=bool)
     for roi_index in range(int(stat.shape[0])):
-        probability = (
-            float(iscell[roi_index, 1])
-            if iscell.ndim == 2 and iscell.shape[1] > 1
-            else float(iscell[roi_index])
-        )
-        is_cell = (
-            bool(iscell[roi_index, 0]) if iscell.ndim == 2 else bool(iscell[roi_index])
-        )
+        if iscell.ndim == 2:
+            is_cell = bool(iscell[roi_index, 0])
+            probability = (
+                float(iscell[roi_index, 1])
+                if iscell.shape[1] > 1
+                else float(iscell[roi_index, 0])
+            )
+        else:
+            is_cell = bool(iscell[roi_index])
+            probability = float(iscell[roi_index])
         keep[roi_index] = bool(is_cell and probability >= cell_probability_threshold)
     return keep
 

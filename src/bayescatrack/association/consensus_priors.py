@@ -72,7 +72,15 @@ def edge_votes_from_tracks(
     for tracks in track_sets:
         seen_this_variant: set[TrackEdge] = set()
         for track in tracks:
-            normalized = {int(session): int(roi) for session, roi in track.items()}
+            normalized: dict[int, int] = {}
+            for session, roi in track.items():
+                session_index = int(session)
+                roi_index = int(roi)
+                if roi_index < 0:
+                    # Dense track matrices conventionally use -1 for missing detections.
+                    # Missing detections must not vote for consensus edges.
+                    continue
+                normalized[session_index] = roi_index
             for source, target in edges:
                 if source not in normalized or target not in normalized:
                     continue
