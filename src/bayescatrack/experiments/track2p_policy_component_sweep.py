@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import product
@@ -25,6 +26,12 @@ ComponentSweepObjective = Literal[
     "mean_micro_f1",
     "complete_track_f1_macro",
 ]
+COMPONENT_SWEEP_OBJECTIVES = (
+    "complete_track_f1_micro",
+    "pairwise_f1_micro",
+    "mean_micro_f1",
+    "complete_track_f1_macro",
+)
 
 
 @dataclass(frozen=True)
@@ -39,18 +46,24 @@ class ComponentCleanupSweepConfig:
     best_only: bool = False
 
     def __post_init__(self) -> None:
-        if not self.split_risk_thresholds:
-            raise ValueError("split_risk_thresholds must not be empty")
-        if not self.split_penalties:
-            raise ValueError("split_penalties must not be empty")
-        if not self.min_side_observations:
+        split_risk_thresholds = _finite_nonnegative_tuple(
+            self.split_risk_thresholds, name="split_risk_thresholds"
+        )
+        split_penalties = _finite_nonnegative_tuple(
+            self.split_penalties, name="split_penalties"
+        )
+        min_side_observations = tuple(int(value) for value in self.min_side_observations)
+        if not min_side_observations:
             raise ValueError("min_side_observations must not be empty")
-        if any(float(value) < 0.0 for value in self.split_risk_thresholds):
-            raise ValueError("split_risk_thresholds entries must be non-negative")
-        if any(float(value) < 0.0 for value in self.split_penalties):
-            raise ValueError("split_penalties entries must be non-negative")
-        if any(int(value) < 1 for value in self.min_side_observations):
+        if any(value < 1 for value in min_side_observations):
             raise ValueError("min_side_observations entries must be at least 1")
+        if str(self.objective) not in COMPONENT_SWEEP_OBJECTIVES:
+            raise ValueError(
+                "objective must be one of: " + ", ".join(COMPONENT_SWEEP_OBJECTIVES)
+            )
+        object.__setattr__(self, "split_risk_thresholds", split_risk_thresholds)
+        object.__setattr__(self, "split_penalties", split_penalties)
+        object.__setattr__(self, "min_side_observations", min_side_observations)
 
 
 @dataclass(frozen=True)
@@ -220,3 +233,16 @@ def _annotate_subject_rows(
                 }
             )
     return annotated
+
+
+def _finite_nonnegative_tuple(
+    values: Sequence[float],
+    *,
+    name: str,
+) -> tuple[float, ...]:
+    normalized = tuple(float(value) for value in values)
+    if not normalized:
+        raise ValueError(f"{name} must not be empty")
+    if any(not math.isfinite(value) or value < 0.0 for value in normalized):
+        raise ValueError(f"{name} entries must be finite non-negative values")
+    return normalized
