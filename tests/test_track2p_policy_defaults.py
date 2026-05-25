@@ -35,7 +35,7 @@ def test_policy_config() -> None:
     cfg = track2p_policy_config(base)
 
     assert cfg.transform_type == "affine"
-    assert cfg.max_gap == 1
+    assert cfg.max_gap == 2
     assert cfg.include_non_cells is False
     assert cfg.cell_probability_threshold == 0.5
     assert cfg.weighted_masks is False
