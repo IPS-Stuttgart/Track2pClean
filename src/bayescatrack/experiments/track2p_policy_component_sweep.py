@@ -2,21 +2,28 @@
 
 from __future__ import annotations
 
+import argparse
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import product
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from bayescatrack.experiments.benchmark_comparison import aggregate_rows
-from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
+from bayescatrack.experiments.track2p_benchmark import (
+    OutputFormat,
+    Track2pBenchmarkConfig,
+    write_results,
+)
 from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+    TRACK2P_POLICY_DEFAULT_MAX_GAP,
     TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
     ThresholdMethod,
 )
 from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
+    build_arg_parser as _build_component_audit_parser,
     run_track2p_policy_component_audit,
 )
 
@@ -53,13 +60,11 @@ class ComponentCleanupSweepConfig:
         split_penalties = _finite_nonnegative_tuple(
             self.split_penalties, name="split_penalties"
         )
-        min_side_observations = tuple(int(value) for value in self.min_side_observations)
-        if not min_side_observations:
-            raise ValueError("min_side_observations must not be empty")
+        min_side_observations = _positive_int_tuple(
+            self.min_side_observations, name="min_side_observations"
+        )
         if not self.require_complete_track_options:
             raise ValueError("require_complete_track_options must not be empty")
-        if any(value < 1 for value in min_side_observations):
-            raise ValueError("min_side_observations entries must be at least 1")
         if str(self.objective) not in COMPONENT_SWEEP_OBJECTIVES:
             raise ValueError(
                 "objective must be one of: " + ", ".join(COMPONENT_SWEEP_OBJECTIVES)
@@ -130,6 +135,167 @@ def run_track2p_policy_component_sweep(
         best_candidate=best_candidate,
         objective=sweep_config.objective,
     )
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser for component-cleanup parameter sweeps."""
+
+    parser = _build_component_audit_parser()
+    parser.prog = "bayescatrack benchmark track2p-policy-component-sweep"
+    parser.description = "Sweep Track2p-policy weakest-bridge component cleanup settings."
+    _remove_parser_options(
+        parser,
+        "--apply-splits",
+        "--component-output",
+        "--component-format",
+        "--split-risk-threshold",
+        "--split-penalty",
+        "--min-side-observations",
+    )
+    parser.add_argument(
+        "--split-risk-thresholds",
+        default="1.0,1.25,1.5,1.75,2.0",
+        help="Comma-separated split-risk thresholds to evaluate.",
+    )
+    parser.add_argument(
+        "--split-penalties",
+        default="0.0,0.25,0.5",
+        help="Comma-separated split penalties to evaluate.",
+    )
+    parser.add_argument(
+        "--min-side-observations",
+        default="2",
+        help="Comma-separated minimum fragment lengths to evaluate.",
+    )
+    parser.add_argument(
+        "--objective",
+        choices=COMPONENT_SWEEP_OBJECTIVES,
+        default="complete_track_f1_micro",
+        help="Aggregate metric used to select the best cleanup candidate.",
+    )
+    parser.add_argument(
+        "--best-only",
+        action="store_true",
+        help="Write only subject rows for the selected best candidate.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the Track2p-policy component-cleanup sweep CLI."""
+
+    args = build_arg_parser().parse_args(argv)
+    base_cleanup = ComponentCleanupConfig(
+        threshold_margin_scale=args.threshold_margin_scale,
+        competition_margin_scale=args.competition_margin_scale,
+        area_ratio_floor=args.area_ratio_floor,
+        centroid_distance_scale=args.centroid_distance_scale,
+        require_complete_track=args.require_complete_track,
+    )
+    sweep_config = ComponentCleanupSweepConfig(
+        split_risk_thresholds=_float_tuple_arg(
+            args.split_risk_thresholds, name="split-risk-thresholds"
+        ),
+        split_penalties=_float_tuple_arg(
+            args.split_penalties, name="split-penalties"
+        ),
+        min_side_observations=_int_tuple_arg(
+            args.min_side_observations, name="min-side-observations"
+        ),
+        base_cleanup=base_cleanup,
+        objective=cast(ComponentSweepObjective, args.objective),
+        best_only=bool(args.best_only),
+    )
+    config = Track2pBenchmarkConfig(
+        data=args.data,
+        method="global-assignment",
+        input_format=args.input_format,
+        reference=args.reference,
+        reference_kind=args.reference_kind,
+        plane_name=args.plane_name,
+        seed_session=args.seed_session,
+        restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        transform_type=args.transform_type,
+        max_gap=TRACK2P_POLICY_DEFAULT_MAX_GAP,
+        allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
+        include_behavior=args.include_behavior,
+        include_non_cells=False,
+        cell_probability_threshold=args.cell_probability_threshold,
+        exclude_overlapping_pixels=False,
+        weighted_masks=False,
+        weighted_centroids=False,
+    )
+    output = run_track2p_policy_component_sweep(
+        config,
+        threshold_method=cast(ThresholdMethod, args.threshold_method),
+        iou_distance_threshold=float(args.iou_distance_threshold),
+        transform_type=args.transform_type,
+        cell_probability_threshold=float(args.cell_probability_threshold),
+        sweep_config=sweep_config,
+    )
+    rows = [dict(row) for row in output.rows]
+    if args.output is not None:
+        write_results(rows, args.output, cast(OutputFormat, args.format))
+    else:
+        from bayescatrack.experiments.track2p_benchmark import _write_stdout
+
+        _write_stdout(rows, cast(OutputFormat, args.format))
+    return 0
+
+
+def _remove_parser_options(
+    parser: argparse.ArgumentParser, *option_strings: str
+) -> None:
+    option_string_set = set(option_strings)
+    actions = [
+        action
+        for action in parser._actions
+        if option_string_set.intersection(action.option_strings)
+    ]
+    for action in actions:
+        for option_string in action.option_strings:
+            parser._option_string_actions.pop(option_string, None)
+        if action in parser._actions:
+            parser._actions.remove(action)
+        for group in parser._action_groups:
+            if action in group._group_actions:
+                group._group_actions.remove(action)
+
+
+def _finite_nonnegative_tuple(values: Sequence[Any], *, name: str) -> tuple[float, ...]:
+    normalized = tuple(_finite_nonnegative_value(value, name=name) for value in values)
+    if not normalized:
+        raise ValueError(f"{name} must not be empty")
+    return normalized
+
+
+def _finite_nonnegative_value(value: Any, *, name: str) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} entries must be finite non-negative values") from exc
+    if not math.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} entries must be finite non-negative values")
+    return numeric
+
+
+def _positive_int_tuple(values: Sequence[Any], *, name: str) -> tuple[int, ...]:
+    normalized = tuple(_positive_int_value(value, name=name) for value in values)
+    if not normalized:
+        raise ValueError(f"{name} must not be empty")
+    return normalized
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} entries must be positive integers")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} entries must be positive integers") from exc
+    if not math.isfinite(numeric) or not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} entries must be positive integers")
+    return int(numeric)
 
 
 def _cleanup_grid(
@@ -245,14 +411,15 @@ def _annotate_subject_rows(
     return annotated
 
 
-def _finite_nonnegative_tuple(
-    values: Sequence[float],
-    *,
-    name: str,
-) -> tuple[float, ...]:
-    normalized = tuple(float(value) for value in values)
-    if not normalized:
-        raise ValueError(f"{name} must not be empty")
-    if any(not math.isfinite(value) or value < 0.0 for value in normalized):
-        raise ValueError(f"{name} entries must be finite non-negative values")
-    return normalized
+def _float_tuple_arg(value: str, *, name: str) -> tuple[float, ...]:
+    tokens = tuple(token.strip() for token in str(value).split(",") if token.strip())
+    return _finite_nonnegative_tuple(tokens, name=name)
+
+
+def _int_tuple_arg(value: str, *, name: str) -> tuple[int, ...]:
+    tokens = tuple(token.strip() for token in str(value).split(",") if token.strip())
+    return _positive_int_tuple(tokens, name=name)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
