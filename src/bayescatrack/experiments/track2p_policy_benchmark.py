@@ -4,9 +4,9 @@ The policy runner promotes the strongest Track2p-emulation setting from the
 standalone diagnostic into a normal benchmarkable method. It deliberately keeps
 Track2p's high-performing inductive bias: hard Suite2p cell filtering,
 consecutive-session affine registration, Hungarian matching on registered IoU,
-minimum-threshold filtering, and greedy first-session propagation.  Its default
-gap-rescue setting still prefers consecutive links, but can bridge isolated
-misses with a direct registered link over a skipped session.
+minimum-threshold filtering, and greedy first-session propagation.  Its optional gap-rescue setting still
+prefers consecutive links, but can bridge isolated misses with a direct
+registered link over a skipped session when enabled.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE = "affine"
 TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD: ThresholdMethod = "min"
 TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD = 12.0
 TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD = 0.5
-TRACK2P_POLICY_DEFAULT_MAX_GAP = 2
+TRACK2P_POLICY_DEFAULT_MAX_GAP = 1
 
 
 def track2p_policy_config(
