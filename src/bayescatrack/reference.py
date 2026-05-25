@@ -486,6 +486,8 @@ def _as_nullable_int_matrix(array_like: Any) -> np.ndarray:
 def _parse_optional_int(value: Any) -> int | None:
     if value is None:
         return None
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"ROI index must be integer-like, got boolean {value!r}")
     if isinstance(value, bytes):
         value = value.decode("utf-8")
     if isinstance(value, str):
