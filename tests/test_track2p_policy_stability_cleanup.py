@@ -96,6 +96,35 @@ def test_stability_cleanup_rejects_splits_that_create_short_fragments() -> None:
     assert split_rows[0]["split_session_a"] == 1
 
 
+def test_stability_cleanup_optimizes_compatible_split_set() -> None:
+    base = np.asarray([[10, 20, 30, 40, 50, 60, 70, 80, 90, 100]], dtype=int)
+    support = {
+        (2, 3, 30, 40): 1,
+        (4, 5, 50, 60): 0,
+        (6, 7, 70, 80): 1,
+    }
+
+    cleaned, split_rows = apply_stability_splits_to_tracks(
+        base,
+        support,
+        required_support_votes=3,
+        min_side_observations=3,
+    )
+
+    np.testing.assert_array_equal(
+        cleaned,
+        np.asarray(
+            [
+                [10, 20, 30, -1, -1, -1, -1, -1, -1, -1],
+                [-1, -1, -1, 40, 50, 60, 70, -1, -1, -1],
+                [-1, -1, -1, -1, -1, -1, -1, 80, 90, 100],
+            ],
+            dtype=int,
+        ),
+    )
+    assert tuple(row["split_session_a"] for row in split_rows) == (2, 6)
+
+
 def test_stability_cleanup_config_includes_base_threshold_in_vote_ensemble() -> None:
     config = StabilityCleanupConfig(
         iou_distance_thresholds=(10.0, 14.0),
