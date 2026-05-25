@@ -348,7 +348,7 @@ def score_pairwise_matches(
 
     precision = _ratio_or_nan(true_positives, true_positives + false_positives)
     recall = _ratio_or_nan(true_positives, true_positives + false_negatives)
-    f1 = _ratio_or_nan(2.0 * precision * recall, precision + recall)
+    f1 = _f1_or_nan(precision, recall)
 
     return {
         "true_positives": true_positives,
@@ -655,6 +655,17 @@ def _pair_counter(
 
 def _pair_set(pairs: Sequence[Sequence[Any]] | np.ndarray) -> set[tuple[int, int]]:
     return set(_pair_counter(pairs))
+
+
+def _f1_or_nan(precision: float, recall: float) -> float:
+    if np.isnan(precision) and np.isnan(recall):
+        return float("nan")
+    if np.isnan(precision) or np.isnan(recall):
+        return 0.0
+    denominator = precision + recall
+    if denominator == 0.0:
+        return 0.0
+    return float(2.0 * precision * recall / denominator)
 
 
 def _ratio_or_nan(numerator: float, denominator: float) -> float:
