@@ -233,7 +233,9 @@ def main(argv: list[str] | None = None) -> int:
         "split_risk_thresholds": _float_tuple_arg(
             args.split_risk_thresholds, name="split-risk-thresholds"
         ),
-        "split_penalties": _float_tuple_arg(args.split_penalties, name="split-penalties"),
+        "split_penalties": _float_tuple_arg(
+            args.split_penalties, name="split-penalties"
+        ),
         "min_side_observations": _int_tuple_arg(
             args.min_side_observations, name="min-side-observations"
         ),

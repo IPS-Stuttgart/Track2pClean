@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.experiments import track2p_emulation_benchmark as bench
 
 

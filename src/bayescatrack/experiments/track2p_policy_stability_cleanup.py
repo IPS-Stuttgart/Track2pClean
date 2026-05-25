@@ -449,7 +449,7 @@ def _select_safe_splits(
         for split_index, support in support_by_split.items()
     }
     cache: dict[tuple[int, int], tuple[tuple[int, int, int], tuple[int, ...]]] = {}
-    impossible = (-10**9, -10**9, -10**9)
+    impossible = (-(10**9), -(10**9), -(10**9))
 
     def best_from(
         fragment_start: int,
