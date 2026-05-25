@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import sys
+from dataclasses import dataclass
 
 from bayescatrack.core.bridge import main as _core_main
 
@@ -20,6 +22,157 @@ commands:
 
 Run 'bayescatrack <command> --help' for command-specific options.
 """
+
+
+@dataclass(frozen=True)
+class _BenchmarkCommand:
+    """One benchmark CLI subcommand target."""
+
+    module: str
+    help: str
+
+
+_BENCHMARK_COMMANDS: dict[str, _BenchmarkCommand] = {
+    "track2p": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_benchmark",
+        "Track2p baseline and global-assignment ablations",
+    ),
+    "track2p-policy": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_policy_benchmark",
+        "Run the first-class Track2p-policy benchmark method",
+    ),
+    "track2p-policy-audit": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_policy_audit",
+        "Export a duplicate-aware edge ledger for Track2p-policy results",
+    ),
+    "track2p-policy-dp": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_policy_dp_benchmark",
+        "Run the DP-rescued Track2p-policy benchmark method",
+    ),
+    "track2p-policy-pruned": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_policy_pruned_benchmark",
+        "Run conservative prune-only Track2p-policy benchmark method",
+    ),
+    "track2p-policy-component-audit": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_policy_component_audit",
+        "Audit Track2p-policy components and split weak bridges",
+    ),
+    "track2p-policy-component-sweep": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_policy_component_sweep",
+        "Sweep Track2p-policy component-cleanup operating points",
+    ),
+    "track2p-shifted-iou": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_shifted_iou_benchmark",
+        "Track2p global-assignment ablation with residual shifted-IoU costs",
+    ),
+    "track2p-sweep": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_cost_sweep",
+        "Sweep Track2p global-assignment cost scales and thresholds",
+    ),
+    "track2p-search": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_experiment_search",
+        "Run a compact grid search over Track2p global-assignment protocols",
+    ),
+    "track2p-oracle-variants": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_oracle_variants",
+        "Score reference-row, consecutive-link and gap-limited oracle variants",
+    ),
+    "track2p-error-taxonomy": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_error_taxonomy",
+        "Classify prediction false-positive and false-negative links",
+    ),
+    "track2p-activity-tie-breaker-sweep": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_activity_tie_breaker_sweep",
+        "Sweep weak activity tie-breaker weights for Track2p global assignment",
+    ),
+    "track2p-mask-input-sweep": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_mask_input_sweep",
+        "Sweep Suite2p ROI filtering, weighted masks, and overlap-pixel handling",
+    ),
+    "track2p-solver-prior-loso": _BenchmarkCommand(
+        "bayescatrack.experiments.solver_prior_tuning",
+        "Tune Track2p global-assignment solver priors inside LOSO folds",
+    ),
+    "track2p-calibrated-solver-prior-loso": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_solver_prior_tuning",
+        "Run calibrated LOSO global assignment with fold-internal solver-prior tuning",
+    ),
+    "track2p-loso-calibration": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_configurable_loso_calibration",
+        "Run configurable hard-negative LOSO calibrated global assignment",
+    ),
+    "track2p-monotone-loso": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_monotone_loso_calibration",
+        "Run LOSO calibrated global assignment with monotone ranking costs",
+    ),
+    "track2p-result-improvement": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_result_improvement_selection",
+        "Run the Track2p improvement suite and select by complete-track objective",
+    ),
+    "track2p-teacher-audit": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_teacher_audit",
+        "Cross-tab manual GT, Track2p output, and BayesCaTrack edges",
+    ),
+    "track2p-teacher-debug": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_teacher_debug",
+        "Export Bayes/Track2p/manual-GT disagreement diagnostics",
+    ),
+    "track2p-diagnose": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_failure_diagnosis",
+        "Triage Track2p result failures into registration, ranking, solver, or scoring fixes",
+    ),
+    "edge-ranking": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_edge_ranking",
+        "Rank manual-GT Track2p edges within pairwise cost/feature matrices",
+    ),
+    "select-edge-ranking-features": _BenchmarkCommand(
+        "bayescatrack.experiments.edge_ranking_feature_selection",
+        "Select calibrated feature names from edge-ranking summary CSVs",
+    ),
+    "select-structured-objective": _BenchmarkCommand(
+        "bayescatrack.experiments.structured_objective_tuning",
+        "Rank benchmark variants by complete-track or other structured metrics",
+    ),
+    "registration-qa": _BenchmarkCommand(
+        "bayescatrack.experiments.registration_qa_report",
+        "Report registration quality on manual-GT Track2p links",
+    ),
+    "oracle-affine-qa": _BenchmarkCommand(
+        "bayescatrack.experiments.oracle_affine_registration_qa",
+        "Compare baseline registration to manual-GT oracle affine geometry",
+    ),
+    "growth-registration-qa": _BenchmarkCommand(
+        "bayescatrack.experiments.growth_registration_qa",
+        "Report spatially resolved growth/deformation registration QA",
+    ),
+    "validate-track2p-inputs": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_input_validator",
+        "Validate manual-GT ROI coverage before Track2p benchmarks",
+    ),
+    "audit-manual-gt-rois": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_roi_index_audit",
+        "Audit manual-GT ROI index spaces before Track2p benchmarks",
+    ),
+    "compare": _BenchmarkCommand(
+        "bayescatrack.experiments.benchmark_comparison",
+        "Aggregate benchmark CSVs into a comparison table",
+    ),
+    "suite": _BenchmarkCommand(
+        "bayescatrack.experiments.benchmark_manifest",
+        "Run a JSON benchmark manifest",
+    ),
+    "validate-suite": _BenchmarkCommand(
+        "bayescatrack.experiments.benchmark_manifest_plan",
+        "Validate a JSON benchmark manifest without running benchmarks",
+    ),
+}
+
+_BENCHMARK_ALIASES: dict[str, str] = {
+    "track2p-component-cleanup": "track2p-policy-component-audit",
+    "track2p-component-cleanup-sweep": "track2p-policy-component-sweep",
+    "track2p-teacher-diagnostics": "track2p-teacher-debug",
+    "audit-manual-gt-roi-index-space": "audit-manual-gt-rois",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,345 +203,30 @@ def main(argv: list[str] | None = None) -> int:
 
 def _handle_benchmark(args: list[str]) -> int:
     if not args or args[0] in {"-h", "--help"}:
-        parser = argparse.ArgumentParser(
-            prog="bayescatrack benchmark",
-            description="Run BayesCaTrack benchmark harnesses.",
-        )
-        subparsers = parser.add_subparsers(dest="benchmark", required=False)
-        subparsers.add_parser(
-            "track2p", help="Track2p baseline and global-assignment ablations"
-        )
-        subparsers.add_parser(
-            "track2p-policy",
-            help="Run the first-class Track2p-policy benchmark method",
-        )
-        subparsers.add_parser(
-            "track2p-policy-audit",
-            help="Export a duplicate-aware edge ledger for Track2p-policy results",
-        )
-        subparsers.add_parser(
-            "track2p-policy-dp",
-            help="Run the DP-rescued Track2p-policy benchmark method",
-        )
-        subparsers.add_parser(
-            "track2p-policy-pruned",
-            help="Run conservative prune-only Track2p-policy benchmark method",
-        )
-        subparsers.add_parser(
-            "track2p-policy-component-audit",
-            help="Audit Track2p-policy components and split weak bridges",
-        )
-        subparsers.add_parser(
-            "track2p-component-cleanup",
-            help="Alias for track2p-policy-component-audit",
-        )
-        subparsers.add_parser(
-            "track2p-shifted-iou",
-            help="Track2p global-assignment ablation with residual shifted-IoU costs",
-        )
-        subparsers.add_parser(
-            "track2p-sweep",
-            help="Sweep Track2p global-assignment cost scales and thresholds",
-        )
-        subparsers.add_parser(
-            "track2p-search",
-            help="Run a compact grid search over Track2p global-assignment protocols",
-        )
-        subparsers.add_parser(
-            "track2p-oracle-variants",
-            help="Score reference-row, consecutive-link and gap-limited oracle variants",
-        )
-        subparsers.add_parser(
-            "track2p-error-taxonomy",
-            help="Classify prediction false-positive and false-negative links",
-        )
-        subparsers.add_parser(
-            "track2p-activity-tie-breaker-sweep",
-            help="Sweep weak activity tie-breaker weights for Track2p global assignment",
-        )
-        subparsers.add_parser(
-            "track2p-mask-input-sweep",
-            help="Sweep Suite2p ROI filtering, weighted masks, and overlap-pixel handling",
-        )
-        subparsers.add_parser(
-            "track2p-solver-prior-loso",
-            help="Tune Track2p global-assignment solver priors inside LOSO folds",
-        )
-        subparsers.add_parser(
-            "track2p-calibrated-solver-prior-loso",
-            help="Run calibrated LOSO global assignment with fold-internal solver-prior tuning",
-        )
-        subparsers.add_parser(
-            "track2p-loso-calibration",
-            help="Run configurable hard-negative LOSO calibrated global assignment",
-        )
-        subparsers.add_parser(
-            "track2p-monotone-loso",
-            help="Run LOSO calibrated global assignment with monotone ranking costs",
-        )
-        subparsers.add_parser(
-            "track2p-result-improvement",
-            help="Run the Track2p improvement suite and select by complete-track objective",
-        )
-        subparsers.add_parser(
-            "track2p-teacher-audit",
-            help="Cross-tab manual GT, Track2p output, and BayesCaTrack edges",
-        )
-        subparsers.add_parser(
-            "track2p-teacher-debug",
-            help="Export Bayes/Track2p/manual-GT disagreement diagnostics",
-        )
-        subparsers.add_parser(
-            "track2p-teacher-diagnostics",
-            help="Alias for track2p-teacher-debug",
-        )
-        subparsers.add_parser(
-            "track2p-diagnose",
-            help="Triage Track2p result failures into registration, ranking, solver, or scoring fixes",
-        )
-        subparsers.add_parser(
-            "edge-ranking",
-            help="Rank manual-GT Track2p edges within pairwise cost/feature matrices",
-        )
-        subparsers.add_parser(
-            "select-edge-ranking-features",
-            help="Select calibrated feature names from edge-ranking summary CSVs",
-        )
-        subparsers.add_parser(
-            "select-structured-objective",
-            help="Rank benchmark variants by complete-track or other structured metrics",
-        )
-        subparsers.add_parser(
-            "registration-qa",
-            help="Report registration quality on manual-GT Track2p links",
-        )
-        subparsers.add_parser(
-            "oracle-affine-qa",
-            help="Compare baseline registration to manual-GT oracle affine geometry",
-        )
-        subparsers.add_parser(
-            "growth-registration-qa",
-            help="Report spatially resolved growth/deformation registration QA",
-        )
-        subparsers.add_parser(
-            "validate-track2p-inputs",
-            help="Validate manual-GT ROI coverage before Track2p benchmarks",
-        )
-        subparsers.add_parser(
-            "audit-manual-gt-rois",
-            help="Audit manual-GT ROI index spaces before Track2p benchmarks",
-        )
-        subparsers.add_parser(
-            "audit-manual-gt-roi-index-space",
-            help="Alias for audit-manual-gt-rois",
-        )
-        subparsers.add_parser(
-            "compare", help="Aggregate benchmark CSVs into a comparison table"
-        )
-        subparsers.add_parser("suite", help="Run a JSON benchmark manifest")
-        subparsers.add_parser(
-            "validate-suite",
-            help="Validate a JSON benchmark manifest without running benchmarks",
-        )
-        parser.parse_args(args)
+        _build_benchmark_help_parser().parse_args(args)
         return 0
 
-    if args[0] == "track2p":
-        from bayescatrack.experiments.track2p_benchmark import (
-            main as _track2p_benchmark_main,
-        )
+    command_name = _BENCHMARK_ALIASES.get(args[0], args[0])
+    command = _BENCHMARK_COMMANDS.get(command_name)
+    if command is None:
+        parser = argparse.ArgumentParser(prog="bayescatrack benchmark")
+        parser.error(f"unknown benchmark {args[0]!r}")
+        return 2
+    module = importlib.import_module(command.module)
+    return int(module.main(args[1:]))
 
-        return int(_track2p_benchmark_main(args[1:]))
-    if args[0] == "track2p-policy":
-        from bayescatrack.experiments.track2p_policy_benchmark import (
-            main as _track2p_policy_main,
-        )
 
-        return int(_track2p_policy_main(args[1:]))
-    if args[0] == "track2p-policy-audit":
-        from bayescatrack.experiments.track2p_policy_audit import (
-            main as _track2p_policy_audit_main,
-        )
-
-        return int(_track2p_policy_audit_main(args[1:]))
-    if args[0] == "track2p-policy-dp":
-        from bayescatrack.experiments.track2p_policy_dp_benchmark import (
-            main as _track2p_policy_dp_main,
-        )
-
-        return int(_track2p_policy_dp_main(args[1:]))
-    if args[0] == "track2p-policy-pruned":
-        from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
-            main as _track2p_policy_pruned_main,
-        )
-
-        return int(_track2p_policy_pruned_main(args[1:]))
-    if args[0] in {"track2p-policy-component-audit", "track2p-component-cleanup"}:
-        from bayescatrack.experiments.track2p_policy_component_audit import (
-            main as _track2p_policy_component_audit_main,
-        )
-
-        return int(_track2p_policy_component_audit_main(args[1:]))
-    if args[0] == "track2p-shifted-iou":
-        from bayescatrack.experiments.track2p_shifted_iou_benchmark import (
-            main as _track2p_shifted_iou_benchmark_main,
-        )
-
-        return int(_track2p_shifted_iou_benchmark_main(args[1:]))
-    if args[0] == "track2p-sweep":
-        from bayescatrack.experiments.track2p_cost_sweep import (
-            main as _track2p_cost_sweep_main,
-        )
-
-        return int(_track2p_cost_sweep_main(args[1:]))
-    if args[0] == "track2p-search":
-        from bayescatrack.experiments.track2p_experiment_search import (
-            main as _track2p_experiment_search_main,
-        )
-
-        return int(_track2p_experiment_search_main(args[1:]))
-    if args[0] == "track2p-oracle-variants":
-        from bayescatrack.experiments.track2p_oracle_variants import (
-            main as _track2p_oracle_variants_main,
-        )
-
-        return int(_track2p_oracle_variants_main(args[1:]))
-    if args[0] == "track2p-error-taxonomy":
-        from bayescatrack.experiments.track2p_error_taxonomy import (
-            main as _track2p_error_taxonomy_main,
-        )
-
-        return int(_track2p_error_taxonomy_main(args[1:]))
-    if args[0] == "track2p-activity-tie-breaker-sweep":
-        from bayescatrack.experiments.track2p_activity_tie_breaker_sweep import (
-            main as _track2p_activity_tie_breaker_sweep_main,
-        )
-
-        return int(_track2p_activity_tie_breaker_sweep_main(args[1:]))
-    if args[0] == "track2p-mask-input-sweep":
-        from bayescatrack.experiments.track2p_mask_input_sweep import (
-            main as _track2p_mask_input_sweep_main,
-        )
-
-        return int(_track2p_mask_input_sweep_main(args[1:]))
-    if args[0] == "track2p-solver-prior-loso":
-        from bayescatrack.experiments.solver_prior_tuning import (
-            main as _track2p_solver_prior_loso_main,
-        )
-
-        return int(_track2p_solver_prior_loso_main(args[1:]))
-    if args[0] == "track2p-calibrated-solver-prior-loso":
-        from bayescatrack.experiments.track2p_solver_prior_tuning import (
-            main as _track2p_calibrated_solver_prior_loso_main,
-        )
-
-        return int(_track2p_calibrated_solver_prior_loso_main(args[1:]))
-    if args[0] == "track2p-loso-calibration":
-        from bayescatrack.experiments.track2p_configurable_loso_calibration import (
-            main as _track2p_loso_calibration_main,
-        )
-
-        return int(_track2p_loso_calibration_main(args[1:]))
-    if args[0] == "track2p-monotone-loso":
-        from bayescatrack.experiments.track2p_monotone_loso_calibration import (
-            main as _track2p_monotone_loso_main,
-        )
-
-        return int(_track2p_monotone_loso_main(args[1:]))
-    if args[0] == "track2p-result-improvement":
-        from bayescatrack.experiments.track2p_result_improvement_selection import (
-            main as _track2p_result_improvement_main,
-        )
-
-        return int(_track2p_result_improvement_main(args[1:]))
-    if args[0] == "track2p-teacher-audit":
-        from bayescatrack.experiments.track2p_teacher_audit import (
-            main as _track2p_teacher_audit_main,
-        )
-
-        return int(_track2p_teacher_audit_main(args[1:]))
-    if args[0] in {"track2p-teacher-debug", "track2p-teacher-diagnostics"}:
-        from bayescatrack.experiments.track2p_teacher_debug import (
-            main as _track2p_teacher_debug_main,
-        )
-
-        return int(_track2p_teacher_debug_main(args[1:]))
-    if args[0] == "track2p-diagnose":
-        from bayescatrack.experiments.track2p_failure_diagnosis import (
-            main as _track2p_failure_diagnosis_main,
-        )
-
-        return int(_track2p_failure_diagnosis_main(args[1:]))
-    if args[0] == "edge-ranking":
-        from bayescatrack.experiments.track2p_edge_ranking import (
-            main as _track2p_edge_ranking_main,
-        )
-
-        return int(_track2p_edge_ranking_main(args[1:]))
-    if args[0] == "select-edge-ranking-features":
-        from bayescatrack.experiments.edge_ranking_feature_selection import (
-            main as _edge_ranking_feature_selection_main,
-        )
-
-        return int(_edge_ranking_feature_selection_main(args[1:]))
-    if args[0] == "select-structured-objective":
-        from bayescatrack.experiments.structured_objective_tuning import (
-            main as _structured_objective_tuning_main,
-        )
-
-        return int(_structured_objective_tuning_main(args[1:]))
-    if args[0] == "registration-qa":
-        from bayescatrack.experiments.registration_qa_report import (
-            main as _registration_qa_main,
-        )
-
-        return int(_registration_qa_main(args[1:]))
-    if args[0] == "oracle-affine-qa":
-        from bayescatrack.experiments.oracle_affine_registration_qa import (
-            main as _oracle_affine_qa_main,
-        )
-
-        return int(_oracle_affine_qa_main(args[1:]))
-    if args[0] == "growth-registration-qa":
-        from bayescatrack.experiments.growth_registration_qa import (
-            main as _growth_registration_qa_main,
-        )
-
-        return int(_growth_registration_qa_main(args[1:]))
-    if args[0] == "validate-track2p-inputs":
-        from bayescatrack.experiments.track2p_input_validator import (
-            main as _track2p_input_validator_main,
-        )
-
-        return int(_track2p_input_validator_main(args[1:]))
-    if args[0] in {"audit-manual-gt-rois", "audit-manual-gt-roi-index-space"}:
-        from bayescatrack.experiments.track2p_roi_index_audit import (
-            main as _track2p_roi_index_audit_main,
-        )
-
-        return int(_track2p_roi_index_audit_main(args[1:]))
-    if args[0] == "compare":
-        from bayescatrack.experiments.benchmark_comparison import (
-            main as _benchmark_comparison_main,
-        )
-
-        return int(_benchmark_comparison_main(args[1:]))
-    if args[0] == "suite":
-        from bayescatrack.experiments.benchmark_manifest import (
-            main as _benchmark_manifest_main,
-        )
-
-        return int(_benchmark_manifest_main(args[1:]))
-    if args[0] == "validate-suite":
-        from bayescatrack.experiments.benchmark_manifest_plan import (
-            main as _benchmark_manifest_plan_main,
-        )
-
-        return int(_benchmark_manifest_plan_main(args[1:]))
-
-    parser = argparse.ArgumentParser(prog="bayescatrack benchmark")
-    parser.error(f"unknown benchmark {args[0]!r}")
-    return 2
+def _build_benchmark_help_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="bayescatrack benchmark",
+        description="Run BayesCaTrack benchmark harnesses.",
+    )
+    subparsers = parser.add_subparsers(dest="benchmark", required=False)
+    for name, command in _BENCHMARK_COMMANDS.items():
+        subparsers.add_parser(name, help=command.help)
+    for alias, canonical in _BENCHMARK_ALIASES.items():
+        subparsers.add_parser(alias, help=f"Alias for {canonical}")
+    return parser
 
 
 if __name__ == "__main__":  # pragma: no cover
