@@ -42,13 +42,14 @@ def test_component_cleanup_sweep_marks_best_candidate(monkeypatch) -> None:
         sweep_config=ComponentCleanupSweepConfig(
             split_risk_thresholds=(1.0, 2.0),
             split_penalties=(0.25,),
+            require_complete_track_options=(True,),
             objective="complete_track_f1_micro",
             best_only=False,
         ),
     )
 
     assert len(calls) == 2
-    assert output.best_candidate.endswith("risk2-penalty0.25-side2")
+    assert output.best_candidate.endswith("risk2-penalty0.25-side2-complete")
     assert [row["component_sweep_rank"] for row in output.aggregate_rows] == [1, 2]
     best_rows = [row for row in output.rows if row["component_sweep_best"] == 1]
     assert len(best_rows) == 1
@@ -72,6 +73,7 @@ def test_component_cleanup_sweep_best_only_filters_rows(monkeypatch) -> None:
         sweep_config=ComponentCleanupSweepConfig(
             split_risk_thresholds=(1.5,),
             split_penalties=(0.0, 0.5),
+            require_complete_track_options=(True,),
             best_only=True,
         ),
     )
@@ -91,7 +93,9 @@ def test_component_cleanup_sweep_best_only_filters_rows(monkeypatch) -> None:
         ({"min_side_observations": (True,)}, "positive integers"),
     ],
 )
-def test_component_cleanup_sweep_config_rejects_invalid_grid_entries(kwargs, message) -> None:
+def test_component_cleanup_sweep_config_rejects_invalid_grid_entries(
+    kwargs, message
+) -> None:
     with pytest.raises(ValueError, match=message):
         ComponentCleanupSweepConfig(**kwargs)
 
@@ -111,6 +115,40 @@ def test_component_cleanup_sweep_config_canonicalizes_valid_grid_entries() -> No
     assert config.split_risk_thresholds == (1.0, 2.5)
     assert config.split_penalties == (0.0,)
     assert config.min_side_observations == (2,)
+
+
+def test_component_cleanup_sweep_can_select_partial_track_guard(monkeypatch) -> None:
+    calls = []
+
+    def fake_component_audit(config, *, cleanup_config, **kwargs):
+        calls.append(cleanup_config)
+        if cleanup_config.require_complete_track:
+            counts = (7, 3, 3)
+        else:
+            counts = (9, 1, 1)
+        return _sweep_output(counts, counts)
+
+    monkeypatch.setattr(
+        "bayescatrack.experiments.track2p_policy_component_sweep."
+        "run_track2p_policy_component_audit",
+        fake_component_audit,
+    )
+
+    output = run_track2p_policy_component_sweep(
+        Track2pBenchmarkConfig(data=Path("unused"), method="global-assignment"),
+        sweep_config=ComponentCleanupSweepConfig(
+            split_risk_thresholds=(1.5,),
+            split_penalties=(0.25,),
+            require_complete_track_options=(True, False),
+            objective="complete_track_f1_micro",
+        ),
+    )
+
+    assert [call.require_complete_track for call in calls] == [True, False]
+    assert output.best_candidate.endswith("-partial")
+    best_rows = output.best_rows()
+    assert len(best_rows) == 1
+    assert best_rows[0]["component_sweep_require_complete_track"] == 0
 
 
 def _sweep_output(
