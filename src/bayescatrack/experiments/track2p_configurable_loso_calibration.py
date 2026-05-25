@@ -114,7 +114,7 @@ def run_track2p_configurable_loso_calibration(
         raise ValueError(
             "LOSO calibration requires method='global-assignment' and cost='calibrated'"
         )
-    feature_names = tuple(feature_names)
+    feature_names = _resolved_feature_names(config, feature_names)
     config = _config_with_pairwise_kwargs_for_features(config, feature_names)
     subjects = _load_subjects(config)
     sample_weight_strategy = _validate_sample_weight_strategy(sample_weight_strategy)
@@ -226,6 +226,17 @@ def run_track2p_configurable_loso_calibration(
         feature_names=feature_names,
         max_gap=int(config.max_gap),
     )
+
+
+def _resolved_feature_names(
+    config: Track2pBenchmarkConfig,
+    feature_names: Sequence[str] | None,
+) -> tuple[str, ...]:
+    """Resolve explicit or config-selected calibration feature names."""
+
+    if feature_names is None:
+        return calibration_feature_names(config.calibration_feature_set)
+    return tuple(feature_names)
 
 
 def _load_subjects(
