@@ -40,6 +40,30 @@ def test_configurable_loso_parser_builds_hard_negative_options_and_model_kwargs(
     assert options.hardness_feature_names == ("centroid_distance", "one_minus_iou")
 
 
+def test_configurable_loso_config_forwards_activity_tie_breaker_knobs():
+    args = loso.build_arg_parser().parse_args(
+        [
+            "--data",
+            "dataset",
+            "--activity-tie-breaker-weight",
+            "0.125",
+            "--activity-tie-breaker-component",
+            "spike_similarity_cost",
+            "--activity-trace-source",
+            "spike_traces",
+            "--activity-event-threshold",
+            "0.2",
+        ]
+    )
+
+    config = loso._config_from_args(args)
+
+    assert config.activity_tie_breaker_weight == 0.125
+    assert config.activity_tie_breaker_component == "spike_similarity_cost"
+    assert config.activity_trace_source == "spike_traces"
+    assert config.activity_event_threshold == 0.2
+
+
 def test_sklearn_probability_adapter_preserves_pairwise_tensor_shape():
     class DummyEstimator:
         def __init__(self):
