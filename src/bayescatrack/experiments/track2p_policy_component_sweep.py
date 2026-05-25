@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import product
@@ -25,6 +26,12 @@ ComponentSweepObjective = Literal[
     "mean_micro_f1",
     "complete_track_f1_macro",
 ]
+COMPONENT_SWEEP_OBJECTIVES = (
+    "complete_track_f1_micro",
+    "pairwise_f1_micro",
+    "mean_micro_f1",
+    "complete_track_f1_macro",
+)
 
 
 @dataclass(frozen=True)
@@ -39,18 +46,24 @@ class ComponentCleanupSweepConfig:
     best_only: bool = False
 
     def __post_init__(self) -> None:
-        if not self.split_risk_thresholds:
-            raise ValueError("split_risk_thresholds must not be empty")
-        if not self.split_penalties:
-            raise ValueError("split_penalties must not be empty")
-        if not self.min_side_observations:
+        risks = _finite_nonnegative_tuple(
+            self.split_risk_thresholds, name="split_risk_thresholds"
+        )
+        penalties = _finite_nonnegative_tuple(
+            self.split_penalties, name="split_penalties"
+        )
+        min_sides = tuple(int(value) for value in self.min_side_observations)
+        if not min_sides:
             raise ValueError("min_side_observations must not be empty")
-        if any(float(value) < 0.0 for value in self.split_risk_thresholds):
-            raise ValueError("split_risk_thresholds entries must be non-negative")
-        if any(float(value) < 0.0 for value in self.split_penalties):
-            raise ValueError("split_penalties entries must be non-negative")
-        if any(int(value) < 1 for value in self.min_side_observations):
+        if any(value < 1 for value in min_sides):
             raise ValueError("min_side_observations entries must be at least 1")
+        if str(self.objective) not in COMPONENT_SWEEP_OBJECTIVES:
+            raise ValueError(
+                "objective must be one of: " + ", ".join(COMPONENT_SWEEP_OBJECTIVES)
+            )
+        object.__setattr__(self, "split_risk_thresholds", risks)
+        object.__setattr__(self, "split_penalties", penalties)
+        object.__setattr__(self, "min_side_observations", min_sides)
 
 
 @dataclass(frozen=True)
@@ -110,10 +123,7 @@ def run_track2p_policy_component_sweep(
     if sweep_config.best_only:
         rows = [row for row in rows if int(row["component_sweep_best"]) == 1]
     return ComponentCleanupSweepOutput(
-        rows=tuple(rows),
-        aggregate_rows=tuple(ranked),
-        best_candidate=best_candidate,
-        objective=sweep_config.objective,
+        tuple(rows), tuple(ranked), best_candidate, sweep_config.objective
     )
 
 
@@ -156,16 +166,15 @@ def _rank_aggregates(
     *,
     objective: ComponentSweepObjective,
 ) -> list[dict[str, float | int | str]]:
-    enriched = [
-        {
-            **row,
-            "component_sweep_objective": _objective_value(row, objective),
-            "component_sweep_objective_name": objective,
-        }
-        for row in rows
-    ]
     ranked = sorted(
-        enriched,
+        (
+            {
+                **row,
+                "component_sweep_objective": _objective_value(row, objective),
+                "component_sweep_objective_name": objective,
+            }
+            for row in rows
+        ),
         key=lambda row: (
             -float(row["component_sweep_objective"]),
             -float(row["complete_track_f1_micro"]),
@@ -195,23 +204,30 @@ def _annotate_subject_rows(
     ranks: Mapping[str, int],
     objectives: Mapping[str, float],
 ) -> list[dict[str, float | int | str]]:
-    annotated: list[dict[str, float | int | str]] = []
-    for candidate, cleanup_config, rows in candidate_rows:
-        for row in rows:
-            annotated.append(
-                {
-                    **dict(row),
-                    "component_sweep_candidate": candidate,
-                    "component_sweep_rank": int(ranks[candidate]),
-                    "component_sweep_best": int(candidate == best_candidate),
-                    "component_sweep_objective": float(objectives[candidate]),
-                    "component_sweep_split_risk_threshold": float(
-                        cleanup_config.split_risk_threshold
-                    ),
-                    "component_sweep_split_penalty": float(cleanup_config.split_penalty),
-                    "component_sweep_min_side_observations": int(
-                        cleanup_config.min_side_observations
-                    ),
-                }
-            )
-    return annotated
+    return [
+        {
+            **dict(row),
+            "component_sweep_candidate": candidate,
+            "component_sweep_rank": int(ranks[candidate]),
+            "component_sweep_best": int(candidate == best_candidate),
+            "component_sweep_objective": float(objectives[candidate]),
+            "component_sweep_split_risk_threshold": float(
+                cleanup_config.split_risk_threshold
+            ),
+            "component_sweep_split_penalty": float(cleanup_config.split_penalty),
+            "component_sweep_min_side_observations": int(
+                cleanup_config.min_side_observations
+            ),
+        }
+        for candidate, cleanup_config, rows in candidate_rows
+        for row in rows
+    ]
+
+
+def _finite_nonnegative_tuple(values: Sequence[float], *, name: str) -> tuple[float, ...]:
+    normalized = tuple(float(value) for value in values)
+    if not normalized:
+        raise ValueError(f"{name} must not be empty")
+    if any(not math.isfinite(value) or value < 0.0 for value in normalized):
+        raise ValueError(f"{name} entries must be finite non-negative values")
+    return normalized
