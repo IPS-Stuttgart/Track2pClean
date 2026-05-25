@@ -242,30 +242,14 @@ def apply_affine_roi_mask_warp(
         (roi_masks.shape[0], int(output_shape[0]), int(output_shape[1])),
         dtype=roi_masks.dtype,
     )
-    if roi_masks.dtype == np.bool_:
-        nearest_y = np.zeros(source_y.shape, dtype=int)
-        nearest_x = np.zeros(source_x.shape, dtype=int)
-        nearest_y[valid] = np.clip(
-            np.rint(source_y[valid]).astype(int), 0, roi_masks.shape[1] - 1
-        )
-        nearest_x[valid] = np.clip(
-            np.rint(source_x[valid]).astype(int), 0, roi_masks.shape[2] - 1
-        )
-        for roi_index, mask in enumerate(roi_masks):
-            sampled = np.zeros(output_shape, dtype=bool)
-            sampled[valid] = mask[nearest_y[valid], nearest_x[valid]] > 0
-            output[roi_index] = sampled
-        return output
-
     for roi_index, mask in enumerate(roi_masks):
-        sampled = _bilinear_sample_image(
-            np.asarray(mask, dtype=float),
+        output[roi_index] = _nearest_sample_image(
+            mask,
             source_y,
             source_x,
             valid,
-            fill_value=0.0,
+            fill_value=0,
         )
-        output[roi_index] = sampled.astype(output.dtype, copy=False)
     return output
 
 
