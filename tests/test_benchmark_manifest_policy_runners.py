@@ -2,9 +2,11 @@ from pathlib import Path
 
 from bayescatrack.experiments.benchmark_manifest import (
     _run_config,
+    _run_track2p_policy_rows,
     _runner_kwargs,
     _runner_name,
 )
+from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
 
 
 def test_policy_runner_aliases_are_supported() -> None:
@@ -38,12 +40,48 @@ def test_policy_runner_kwargs_are_separate_from_track2p_config() -> None:
             "threshold_method": "min",
             "iou_distance_threshold": 12.0,
             "cell_probability_threshold": 0.5,
+            "max_gap": 3,
         },
         "track2p-policy",
     ) == {
         "threshold_method": "min",
         "iou_distance_threshold": 12.0,
+        "max_gap": 3,
     }
+
+
+def test_policy_manifest_runner_passes_configured_max_gap(monkeypatch) -> None:
+    from bayescatrack.experiments import track2p_policy_benchmark
+
+    calls: list[dict[str, object]] = []
+
+    class DummyResult:
+        def to_dict(self) -> dict[str, str]:
+            return {"variant": "sentinel"}
+
+    def fake_run_track2p_policy_benchmark(
+        config: Track2pBenchmarkConfig, **kwargs: object
+    ) -> list[DummyResult]:
+        calls.append(kwargs)
+        return [DummyResult()]
+
+    monkeypatch.setattr(
+        track2p_policy_benchmark,
+        "run_track2p_policy_benchmark",
+        fake_run_track2p_policy_benchmark,
+    )
+
+    config = Track2pBenchmarkConfig(
+        data=Path("data-root"),
+        method="global-assignment",
+        max_gap=3,
+    )
+
+    rows = _run_track2p_policy_rows(config, {"max_gap": 3})
+
+    assert rows == [{"variant": "sentinel"}]
+    assert calls
+    assert calls[0]["max_gap"] == 3
 
 
 def test_policy_dp_runner_kwargs_include_only_dp_specific_options() -> None:
