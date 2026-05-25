@@ -13,6 +13,9 @@ from bayescatrack.experiments.benchmark_manifest import (
     load_benchmark_manifest,
     run_benchmark_manifest,
 )
+from bayescatrack.experiments.benchmark_manifest_resolver import (
+    resolve_benchmark_manifest_placeholders,
+)
 from tests._support import run_module
 
 
@@ -370,3 +373,92 @@ def test_benchmark_suite_cli_runs_manifest(tmp_path):
 
     assert "track2p-default" in proc.stdout
     assert (tmp_path / "results" / "track2p.csv").exists()
+
+
+def test_benchmark_manifest_resolver_writes_executable_copy(tmp_path):
+    template_path = tmp_path / "template.json"
+    output_path = tmp_path / "bundle" / "manifest_resolved.json"
+    data_root = tmp_path / "track2p data"
+    reference_root = tmp_path / "manual gt"
+    output_root = tmp_path / "results"
+    _write_manifest(
+        template_path,
+        {
+            "defaults": {
+                "data": "<DATA_ROOT>",
+                "reference": "<REFERENCE_ROOT>",
+                "method": "track2p-baseline",
+                "input_format": "suite2p",
+            },
+            "runs": [
+                {
+                    "name": "track2p-default",
+                    "output": "<OUTPUT_ROOT>/track2p.csv",
+                }
+            ],
+            "comparisons": [
+                {
+                    "name": "summary",
+                    "inputs": {"Track2p": "track2p-default"},
+                    "output": "<OUTPUT_ROOT>/comparison.md",
+                }
+            ],
+        },
+    )
+
+    resolved_path = resolve_benchmark_manifest_placeholders(
+        template_path,
+        data_root=data_root,
+        reference_root=reference_root,
+        output_root=output_root,
+        output=output_path,
+    )
+
+    assert resolved_path == output_path
+    assert "<DATA_ROOT>" in template_path.read_text(encoding="utf-8")
+    resolved_text = output_path.read_text(encoding="utf-8")
+    assert "<DATA_ROOT>" not in resolved_text
+    assert "<REFERENCE_ROOT>" not in resolved_text
+    assert "<OUTPUT_ROOT>" not in resolved_text
+
+    manifest = load_benchmark_manifest(output_path)
+    assert manifest.runs[0].config.data == data_root
+    assert manifest.runs[0].config.reference == reference_root
+    assert manifest.runs[0].output == output_root / "track2p.csv"
+    assert manifest.comparisons[0].output == output_root / "comparison.md"
+
+
+def test_benchmark_resolve_suite_cli_writes_manifest(tmp_path):
+    template_path = tmp_path / "template.json"
+    output_path = tmp_path / "resolved.json"
+    _write_manifest(
+        template_path,
+        {
+            "defaults": {
+                "data": "<DATA_ROOT>",
+                "reference": "<REFERENCE_ROOT>",
+                "method": "track2p-baseline",
+            },
+            "runs": [{"name": "track2p-default", "output": "<OUTPUT_ROOT>/row.csv"}],
+        },
+    )
+
+    proc = run_module(
+        "-m",
+        "bayescatrack",
+        "benchmark",
+        "resolve-suite",
+        str(template_path),
+        "--data-root",
+        str(tmp_path / "data"),
+        "--reference-root",
+        str(tmp_path / "reference"),
+        "--output-root",
+        str(tmp_path / "results"),
+        "--output",
+        str(output_path),
+    )
+
+    assert json.loads(proc.stdout)["output"] == str(output_path)
+    assert output_path.exists()
+    assert "<OUTPUT_ROOT>" not in output_path.read_text(encoding="utf-8")
