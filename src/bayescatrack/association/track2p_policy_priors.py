@@ -139,12 +139,13 @@ def apply_track2p_policy_edge_prior(
             "Track2p-policy prior mask shape mismatch: "
             f"expected {costs.shape}, got {policy_mask.shape}"
         )
-    if not np.any(policy_mask):
-        return costs
 
     finite = np.isfinite(costs) & (costs < float(cfg.large_cost))
     if cfg.non_policy_penalty > 0.0:
         costs[finite & ~policy_mask] += float(cfg.non_policy_penalty)
+    if not np.any(policy_mask):
+        return costs
+
     if cfg.accepted_cost_cap is not None:
         costs[policy_mask] = np.minimum(
             costs[policy_mask], float(cfg.accepted_cost_cap)
@@ -175,7 +176,7 @@ def track2p_policy_edge_mask(
     row_ind, col_ind = linear_sum_assignment(1.0 - finite_iou)
     assigned_iou = finite_iou[row_ind, col_ind]
     threshold = _threshold_assigned_iou(assigned_iou, method=cfg.threshold_method)
-    accepted = (assigned_iou > threshold) & (assigned_iou > 0.0)
+    accepted = (assigned_iou >= threshold) & (assigned_iou > 0.0)
     if np.any(accepted):
         mask[row_ind[accepted], col_ind[accepted]] = True
 
