@@ -1,0 +1,177 @@
+name: Track2p consensus cleanup validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to validate"
+        required: true
+        default: "286"
+      data_root:
+        description: "Track2p lightweight data root"
+        required: true
+        default: "/home/florianpfaff/codex-runs/BayesCaTrack/results/policy_dp/data_lightweight"
+      reference_root:
+        description: "Manual-GT reference root"
+        required: true
+        default: "/home/florianpfaff/codex-runs/BayesCaTrack/results/policy_dp/data_lightweight"
+      output_root:
+        description: "Output root"
+        required: true
+        default: "/home/florianpfaff/codex-runs/BayesCaTrack/results"
+
+jobs:
+  consensus-cleanup:
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ inputs.pr_number }}/head
+
+      - name: Prepare output directory
+        id: prep
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${{ inputs.output_root }}/consensus_cleanup_pr${{ inputs.pr_number }}_$(date +%Y%m%d_%H%M%S)"
+          mkdir -p "$OUT"
+          echo "out=$OUT" >> "$GITHUB_OUTPUT"
+          git rev-parse HEAD | tee "$OUT/git_sha.txt"
+          git status --short | tee "$OUT/git_status_before.txt"
+
+      - name: Install package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e . > "${{ steps.prep.outputs.out }}/pip_install.log" 2>&1
+          python -m pip freeze > "${{ steps.prep.outputs.out }}/pip_freeze.txt"
+
+      - name: Run focused consensus-cleanup benchmark
+        shell: bash
+        env:
+          DATA: ${{ inputs.data_root }}
+          REF: ${{ inputs.reference_root }}
+          OUT: ${{ steps.prep.outputs.out }}
+        run: |
+          set -euo pipefail
+
+          python -m bayescatrack benchmark track2p-policy \
+            --data "$DATA" \
+            --reference "$REF" \
+            --reference-kind manual-gt \
+            --input-format suite2p \
+            --threshold-method min \
+            --transform-type affine \
+            --iou-distance-threshold 12 \
+            --cell-probability-threshold 0.5 \
+            --output "$OUT/track2p_policy_d12.csv" \
+            --format csv
+
+          python -m bayescatrack benchmark track2p-policy-component-audit \
+            --data "$DATA" \
+            --reference "$REF" \
+            --reference-kind manual-gt \
+            --input-format suite2p \
+            --threshold-method min \
+            --transform-type affine \
+            --iou-distance-threshold 12 \
+            --cell-probability-threshold 0.5 \
+            --apply-splits \
+            --split-risk-threshold 1.5 \
+            --min-side-observations 2 \
+            --output "$OUT/track2p_policy_component_cleanup.csv" \
+            --format csv \
+            --component-output "$OUT/track2p_policy_component_cleanup_components.csv" \
+            --component-format csv
+
+          python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+            --data "$DATA" \
+            --reference "$REF" \
+            --reference-kind manual-gt \
+            --input-format suite2p \
+            --threshold-method min \
+            --transform-type affine \
+            --base-iou-distance-threshold 12 \
+            --stability-iou-distance-thresholds 10,12,14 \
+            --cell-probability-threshold 0.5 \
+            --consensus-mode risk-and-stability \
+            --split-risk-threshold 1.5 \
+            --min-side-observations 2 \
+            --max-splits-per-component 2 \
+            --no-apply-splits \
+            --output "$OUT/consensus_cleanup_no_apply.csv" \
+            --format csv \
+            --component-output "$OUT/consensus_cleanup_no_apply_components.csv" \
+            --component-format csv
+
+          python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+            --data "$DATA" \
+            --reference "$REF" \
+            --reference-kind manual-gt \
+            --input-format suite2p \
+            --threshold-method min \
+            --transform-type affine \
+            --base-iou-distance-threshold 12 \
+            --stability-iou-distance-thresholds 10,12,14 \
+            --cell-probability-threshold 0.5 \
+            --consensus-mode risk-and-stability \
+            --split-risk-threshold 1.5 \
+            --min-side-observations 2 \
+            --max-splits-per-component 2 \
+            --apply-splits \
+            --output "$OUT/consensus_cleanup_default.csv" \
+            --format csv \
+            --component-output "$OUT/consensus_cleanup_default_components.csv" \
+            --component-format csv
+
+          python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+            --data "$DATA" \
+            --reference "$REF" \
+            --reference-kind manual-gt \
+            --input-format suite2p \
+            --threshold-method min \
+            --transform-type affine \
+            --base-iou-distance-threshold 12 \
+            --stability-iou-distance-thresholds 10,12,14 \
+            --cell-probability-threshold 0.5 \
+            --consensus-mode risk-or-stability \
+            --split-risk-threshold 1.5 \
+            --min-side-observations 2 \
+            --max-splits-per-component 2 \
+            --apply-splits \
+            --output "$OUT/consensus_cleanup_risk_or_stability.csv" \
+            --format csv \
+            --component-output "$OUT/consensus_cleanup_risk_or_stability_components.csv" \
+            --component-format csv
+
+          python -m bayescatrack benchmark compare \
+            "$OUT/track2p_policy_d12.csv" \
+            "$OUT/track2p_policy_component_cleanup.csv" \
+            "$OUT/consensus_cleanup_no_apply.csv" \
+            "$OUT/consensus_cleanup_default.csv" \
+            "$OUT/consensus_cleanup_risk_or_stability.csv" \
+            --output "$OUT/consensus_cleanup_comparison.md" \
+            --format md
+
+          python -m bayescatrack benchmark compare \
+            "$OUT/track2p_policy_d12.csv" \
+            "$OUT/track2p_policy_component_cleanup.csv" \
+            "$OUT/consensus_cleanup_no_apply.csv" \
+            "$OUT/consensus_cleanup_default.csv" \
+            "$OUT/consensus_cleanup_risk_or_stability.csv" \
+            --output "$OUT/consensus_cleanup_comparison.csv" \
+            --format csv
+
+          git status --short | tee "$OUT/git_status_after.txt"
+          echo 0 > "$OUT/exit_status.txt"
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: consensus-cleanup-pr${{ inputs.pr_number }}
+          path: ${{ steps.prep.outputs.out }}
