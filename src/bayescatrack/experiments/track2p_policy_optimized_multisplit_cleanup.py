@@ -102,7 +102,11 @@ def _best_feasible_split_subset(
     *,
     config: MultiSplitCleanupConfig,
 ) -> tuple[int, ...]:
-    candidate_indices = tuple(sorted(int(index) for index in candidate_risks))
+    candidate_indices = tuple(
+        index
+        for index in sorted({int(index) for index in candidate_risks})
+        if 0 <= index < int(track.size) - 1
+    )
     max_splits = min(int(config.max_splits_per_component), len(candidate_indices))
     best_gain = 0.0
     best_count = 0
