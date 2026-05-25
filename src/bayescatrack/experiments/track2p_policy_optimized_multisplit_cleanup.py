@@ -20,7 +20,9 @@ from bayescatrack.experiments.track2p_policy_multisplit_cleanup import (
     _multi_split_gain,
 )
 
-TRACK2P_POLICY_MULTISPLIT_CLEANUP_METHOD = _base.TRACK2P_POLICY_MULTISPLIT_CLEANUP_METHOD
+TRACK2P_POLICY_MULTISPLIT_CLEANUP_METHOD = (
+    _base.TRACK2P_POLICY_MULTISPLIT_CLEANUP_METHOD
+)
 apply_ranked_bridge_splits = _base.apply_ranked_bridge_splits
 build_arg_parser = _base.build_arg_parser
 split_track_at_bridges = _base.split_track_at_bridges
@@ -114,7 +116,9 @@ def _best_feasible_split_subset(
             ):
                 continue
             gain = sum(
-                _multi_split_gain(float(candidate_risks[index]), config=config.component)
+                _multi_split_gain(
+                    float(candidate_risks[index]), config=config.component
+                )
                 for index in candidate
             )
             if (
