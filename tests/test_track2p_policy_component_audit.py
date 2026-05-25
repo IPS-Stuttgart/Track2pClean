@@ -174,6 +174,29 @@ def test_component_audit_skips_incomplete_tracks_by_default() -> None:
     assert unguarded_rows[0]["would_split_at_weakest_edge"] == 1
 
 
+def test_component_audit_pairwise_false_negatives_respect_seed_session() -> None:
+    sessions = [_Session((1, 99)), _Session((10, 20)), _Session((20, 30))]
+    predicted = np.asarray([[99, 10, -1]], dtype=int)
+    reference = np.asarray([[1, 10, 20], [2, 20, 30]], dtype=int)
+
+    default_seed_rows = component_audit_rows(
+        predicted,
+        reference,
+        sessions=sessions,  # type: ignore[arg-type]
+        diagnostics=(),
+    )
+    nonzero_seed_rows = component_audit_rows(
+        predicted,
+        reference,
+        sessions=sessions,  # type: ignore[arg-type]
+        diagnostics=(),
+        seed_session=1,
+    )
+
+    assert default_seed_rows[0]["pairwise_fn_edges"] == 0
+    assert nonzero_seed_rows[0]["pairwise_fn_edges"] == 2
+
+
 def _diagnostic(
     *,
     session_index: int = 0,

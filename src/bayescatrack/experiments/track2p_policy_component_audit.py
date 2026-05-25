@@ -171,6 +171,7 @@ def run_track2p_policy_component_audit(
             subject=subject_dir.name,
             config=cleanup_config,
             track_ids=evaluated_track_ids,
+            seed_session=policy_config.seed_session,
         )
         subject_rows = _mark_applied_splits(
             audit_rows,
@@ -256,12 +257,18 @@ def component_audit_rows(
     subject: str = "",
     config: ComponentCleanupConfig | None = None,
     track_ids: Sequence[int] | None = None,
+    seed_session: int = 0,
 ) -> list[dict[str, float | int | str]]:
     """Return one audit row per predicted policy component."""
 
     config = config or ComponentCleanupConfig()
     predicted = _normalize_int_track_matrix(predicted_track_matrix)
     reference = _normalize_int_track_matrix(reference_track_matrix)
+    seed_session = int(seed_session)
+    if seed_session < 0 or seed_session >= predicted.shape[1]:
+        raise IndexError(
+            f"seed_session {seed_session} out of bounds for {predicted.shape[1]} sessions"
+        )
     ids = (
         tuple(range(predicted.shape[0]))
         if track_ids is None
@@ -273,7 +280,7 @@ def component_audit_rows(
     predicted_edge_counts = track_edge_counter(predicted)
     reference_edge_counts = track_edge_counter(reference)
     observation_counts = _observation_counter(predicted)
-    reference_by_seed = _reference_rows_by_seed(reference)
+    reference_by_seed = _reference_rows_by_seed(reference, seed_session=seed_session)
     reference_complete_counts = _complete_track_counts(reference)
     rows: list[dict[str, float | int | str]] = []
     for row_index, track in enumerate(predicted):
@@ -374,7 +381,11 @@ def component_audit_rows(
                 "pairwise_tp_edges": int(pairwise_tp),
                 "pairwise_fp_edges": int(pairwise_fp),
                 "pairwise_fn_edges": int(
-                    _component_pairwise_false_negatives(track, reference_by_seed)
+                    _component_pairwise_false_negatives(
+                        track,
+                        reference_by_seed,
+                        seed_session=seed_session,
+                    )
                 ),
             }
         )
@@ -713,8 +724,14 @@ def _component_pairwise_counts(
 def _component_pairwise_false_negatives(
     track: np.ndarray,
     reference_by_seed: Mapping[int, np.ndarray],
+    *,
+    seed_session: int = 0,
 ) -> int:
-    seed = int(track[0]) if track.size and track[0] >= 0 else -1
+    seed = (
+        int(track[seed_session])
+        if 0 <= seed_session < track.size and track[seed_session] >= 0
+        else -1
+    )
     reference = reference_by_seed.get(seed)
     if reference is None:
         return 0
@@ -731,11 +748,13 @@ def _component_pairwise_false_negatives(
     return len(reference_edges - predicted_edges)
 
 
-def _reference_rows_by_seed(reference: np.ndarray) -> dict[int, np.ndarray]:
+def _reference_rows_by_seed(
+    reference: np.ndarray, *, seed_session: int = 0
+) -> dict[int, np.ndarray]:
     rows: dict[int, np.ndarray] = {}
     for row in reference:
-        if row.size and row[0] >= 0:
-            rows.setdefault(int(row[0]), row)
+        if 0 <= seed_session < row.size and row[seed_session] >= 0:
+            rows.setdefault(int(row[seed_session]), row)
     return rows
 
 

@@ -31,6 +31,32 @@ def test_policy_mask_keeps_high_thresholded_hungarian_edges() -> None:
     assert not bool(mask[2, 2])
 
 
+def test_policy_mask_keeps_degenerate_positive_hungarian_edges() -> None:
+    iou = np.asarray(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ],
+        dtype=float,
+    )
+
+    mask = track2p_policy_edge_mask(
+        iou,
+        config=Track2pPolicyPriorConfig(threshold_method="otsu"),
+    )
+
+    assert mask.tolist() == [[True, False], [False, True]]
+
+
+def test_policy_mask_rejects_degenerate_zero_iou_edges() -> None:
+    mask = track2p_policy_edge_mask(
+        np.zeros((2, 2), dtype=float),
+        config=Track2pPolicyPriorConfig(threshold_method="otsu"),
+    )
+
+    assert not bool(np.any(mask))
+
+
 def test_policy_prior_caps_reliefs_and_penalizes_costs() -> None:
     costs = np.asarray(
         [
