@@ -129,7 +129,9 @@ def _replace_placeholders(value: Any, replacements: Mapping[str, str]) -> Any:
 def _find_known_placeholders(value: Any) -> set[str]:
     found: set[str] = set()
     if isinstance(value, str):
-        found.update(placeholder for placeholder in _PLACEHOLDERS if placeholder in value)
+        found.update(
+            placeholder for placeholder in _PLACEHOLDERS if placeholder in value
+        )
     elif isinstance(value, list):
         for item in value:
             found.update(_find_known_placeholders(item))
