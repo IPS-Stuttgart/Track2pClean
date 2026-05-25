@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
+import pytest
 from bayescatrack.experiments.track2p_benchmark import (
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
@@ -77,6 +79,18 @@ def test_component_cleanup_sweep_best_only_filters_rows(monkeypatch) -> None:
     assert output.rows[0]["component_sweep_best"] == 1
     assert output.rows[0]["component_sweep_split_penalty"] == 0.5
     assert len(output.aggregate_rows) == 2
+
+
+def test_component_cleanup_sweep_config_rejects_nonfinite_grid_values() -> None:
+    with pytest.raises(ValueError, match="split_risk_thresholds entries"):
+        ComponentCleanupSweepConfig(split_risk_thresholds=(math.nan,))
+    with pytest.raises(ValueError, match="split_penalties entries"):
+        ComponentCleanupSweepConfig(split_penalties=(math.inf,))
+
+
+def test_component_cleanup_sweep_config_rejects_unknown_objective() -> None:
+    with pytest.raises(ValueError, match="objective must be one of"):
+        ComponentCleanupSweepConfig(objective="not-a-metric")  # type: ignore[arg-type]
 
 
 def _sweep_output(
