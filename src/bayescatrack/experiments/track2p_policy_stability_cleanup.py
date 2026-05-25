@@ -69,10 +69,14 @@ class StabilityCleanupConfig:
         )
         if not 0.0 < float(self.min_support_fraction) <= 1.0:
             raise ValueError("min_support_fraction must lie in (0, 1]")
-        if self.min_support_votes is not None and int(self.min_support_votes) <= 0:
-            raise ValueError("min_support_votes must be positive when provided")
-        if int(self.min_side_observations) < 1:
-            raise ValueError("min_side_observations must be at least 1")
+        min_support_votes = (
+            None
+            if self.min_support_votes is None
+            else _positive_int_value(self.min_support_votes, name="min_support_votes")
+        )
+        min_side_observations = _positive_int_value(
+            self.min_side_observations, name="min_side_observations"
+        )
         object.__setattr__(self, "iou_distance_thresholds", thresholds)
         object.__setattr__(
             self,
@@ -82,11 +86,8 @@ class StabilityCleanupConfig:
         object.__setattr__(
             self, "min_support_fraction", float(self.min_support_fraction)
         )
-        object.__setattr__(
-            self, "min_side_observations", int(self.min_side_observations)
-        )
-        if self.min_support_votes is not None:
-            object.__setattr__(self, "min_support_votes", int(self.min_support_votes))
+        object.__setattr__(self, "min_side_observations", min_side_observations)
+        object.__setattr__(self, "min_support_votes", min_support_votes)
 
     @property
     def ensemble_iou_distance_thresholds(self) -> tuple[float, ...]:
@@ -223,10 +224,12 @@ def apply_stability_splits_to_tracks(
 ) -> tuple[np.ndarray, tuple[dict[str, int], ...]]:
     """Split base tracks at adjacent bridges with insufficient support."""
 
-    if int(required_support_votes) <= 0:
-        raise ValueError("required_support_votes must be positive")
-    if int(min_side_observations) < 1:
-        raise ValueError("min_side_observations must be at least 1")
+    required_support_votes = _positive_int_value(
+        required_support_votes, name="required_support_votes"
+    )
+    min_side_observations = _positive_int_value(
+        min_side_observations, name="min_side_observations"
+    )
 
     predicted = _normalize_int_track_matrix(predicted_track_matrix)
     output: list[np.ndarray] = []
@@ -235,12 +238,12 @@ def apply_stability_splits_to_tracks(
         candidates: list[tuple[int, int, Edge]] = []
         for split_index, edge in _track_row_edges_with_split_indices(row):
             support = int(support_counts.get(edge, 0))
-            if support < int(required_support_votes):
+            if support < required_support_votes:
                 candidates.append((support, split_index, edge))
         selected_splits = _select_safe_splits(
             row,
             candidates,
-            min_side_observations=int(min_side_observations),
+            min_side_observations=min_side_observations,
         )
         if not selected_splits:
             output.append(np.asarray(row, dtype=int).copy())
@@ -488,6 +491,20 @@ def _valid_roi(value: Any) -> bool:
 def _require_finite_nonnegative(value: float, *, name: str) -> None:
     if not math.isfinite(float(value)) or float(value) < 0.0:
         raise ValueError(f"{name} must be finite and non-negative")
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a positive integer")
+    if isinstance(value, int):
+        numeric = value
+    elif isinstance(value, float) and value.is_integer():
+        numeric = int(value)
+    else:
+        raise ValueError(f"{name} must be a positive integer")
+    if numeric <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)
 
 
 def _float_tuple_arg(value: str | Sequence[float]) -> tuple[float, ...]:
