@@ -67,8 +67,9 @@ class ComponentCleanupSweepConfig:
         min_side_observations = _positive_int_tuple(
             self.min_side_observations, name="min_side_observations"
         )
-        if not self.require_complete_track_options:
-            raise ValueError("require_complete_track_options must not be empty")
+        require_complete_track_options = _boolean_tuple(
+            self.require_complete_track_options, name="require_complete_track_options"
+        )
         if str(self.objective) not in COMPONENT_SWEEP_OBJECTIVES:
             raise ValueError(
                 "objective must be one of: " + ", ".join(COMPONENT_SWEEP_OBJECTIVES)
@@ -76,6 +77,9 @@ class ComponentCleanupSweepConfig:
         object.__setattr__(self, "split_risk_thresholds", split_risk_thresholds)
         object.__setattr__(self, "split_penalties", split_penalties)
         object.__setattr__(self, "min_side_observations", min_side_observations)
+        object.__setattr__(
+            self, "require_complete_track_options", require_complete_track_options
+        )
 
 
 @dataclass(frozen=True)
@@ -157,6 +161,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--split-risk-threshold",
         "--split-penalty",
         "--min-side-observations",
+        "--require-complete-track",
     )
     parser.add_argument(
         "--split-risk-thresholds",
@@ -172,6 +177,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--min-side-observations",
         default="2",
         help="Comma-separated minimum fragment lengths to evaluate.",
+    )
+    parser.add_argument(
+        "--require-complete-track",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Evaluate only one complete-track guard setting. By default the "
+            "sweep evaluates both complete-track-only and partial-track cleanup."
+        ),
+    )
+    parser.add_argument(
+        "--require-complete-track-options",
+        default=None,
+        help=(
+            "Comma-separated complete-track guard settings to evaluate, e.g. "
+            "true,false. Defaults to true,false unless --require-complete-track "
+            "or --no-require-complete-track is used."
+        ),
     )
     parser.add_argument(
         "--objective",
@@ -190,26 +213,43 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Run the Track2p-policy component-cleanup sweep CLI."""
 
-    args = build_arg_parser().parse_args(argv)
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    if (
+        args.require_complete_track is not None
+        and args.require_complete_track_options is not None
+    ):
+        parser.error(
+            "use either --require-complete-track-options or "
+            "--require-complete-track/--no-require-complete-track, not both"
+        )
     base_cleanup = ComponentCleanupConfig(
         threshold_margin_scale=args.threshold_margin_scale,
         competition_margin_scale=args.competition_margin_scale,
         area_ratio_floor=args.area_ratio_floor,
         centroid_distance_scale=args.centroid_distance_scale,
-        require_complete_track=args.require_complete_track,
     )
-    sweep_config = ComponentCleanupSweepConfig(
-        split_risk_thresholds=_float_tuple_arg(
+    sweep_kwargs: dict[str, Any] = {
+        "split_risk_thresholds": _float_tuple_arg(
             args.split_risk_thresholds, name="split-risk-thresholds"
         ),
-        split_penalties=_float_tuple_arg(args.split_penalties, name="split-penalties"),
-        min_side_observations=_int_tuple_arg(
+        "split_penalties": _float_tuple_arg(args.split_penalties, name="split-penalties"),
+        "min_side_observations": _int_tuple_arg(
             args.min_side_observations, name="min-side-observations"
         ),
-        base_cleanup=base_cleanup,
-        objective=cast(ComponentSweepObjective, args.objective),
-        best_only=bool(args.best_only),
-    )
+        "base_cleanup": base_cleanup,
+        "objective": cast(ComponentSweepObjective, args.objective),
+        "best_only": bool(args.best_only),
+    }
+    if args.require_complete_track_options is not None:
+        sweep_kwargs["require_complete_track_options"] = _bool_tuple_arg(
+            args.require_complete_track_options, name="require-complete-track-options"
+        )
+    elif args.require_complete_track is not None:
+        sweep_kwargs["require_complete_track_options"] = (
+            bool(args.require_complete_track),
+        )
+    sweep_config = ComponentCleanupSweepConfig(**sweep_kwargs)
     config = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -300,6 +340,25 @@ def _positive_int_value(value: Any, *, name: str) -> int:
     if not math.isfinite(numeric) or not numeric.is_integer() or numeric < 1.0:
         raise ValueError(f"{name} entries must be positive integers")
     return int(numeric)
+
+
+def _boolean_tuple(values: Sequence[Any], *, name: str) -> tuple[bool, ...]:
+    normalized = tuple(_boolean_value(value, name=name) for value in values)
+    if not normalized:
+        raise ValueError(f"{name} must not be empty")
+    return normalized
+
+
+def _boolean_value(value: Any, *, name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token in {"1", "true", "yes", "y"}:
+            return True
+        if token in {"0", "false", "no", "n"}:
+            return False
+    raise ValueError(f"{name} entries must be boolean values")
 
 
 def _cleanup_grid(
@@ -423,6 +482,11 @@ def _float_tuple_arg(value: str, *, name: str) -> tuple[float, ...]:
 def _int_tuple_arg(value: str, *, name: str) -> tuple[int, ...]:
     tokens = tuple(token.strip() for token in str(value).split(",") if token.strip())
     return _positive_int_tuple(tokens, name=name)
+
+
+def _bool_tuple_arg(value: str, *, name: str) -> tuple[bool, ...]:
+    tokens = tuple(token.strip() for token in str(value).split(",") if token.strip())
+    return _boolean_tuple(tokens, name=name)
 
 
 if __name__ == "__main__":  # pragma: no cover

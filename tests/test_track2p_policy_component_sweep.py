@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 
 import pytest
+from bayescatrack.experiments import track2p_policy_component_sweep as sweep_module
 from bayescatrack.experiments.track2p_benchmark import (
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
@@ -13,6 +14,7 @@ from bayescatrack.experiments.track2p_policy_component_audit import (
 )
 from bayescatrack.experiments.track2p_policy_component_sweep import (
     ComponentCleanupSweepConfig,
+    ComponentCleanupSweepOutput,
     run_track2p_policy_component_sweep,
 )
 
@@ -90,6 +92,7 @@ def test_component_cleanup_sweep_best_only_filters_rows(monkeypatch) -> None:
         ({"split_penalties": (math.nan,)}, "finite non-negative"),
         ({"min_side_observations": (1.5,)}, "positive integers"),
         ({"min_side_observations": (True,)}, "positive integers"),
+        ({"require_complete_track_options": ("maybe",)}, "boolean"),
     ],
 )
 def test_component_cleanup_sweep_config_rejects_invalid_grid_entries(
@@ -109,11 +112,13 @@ def test_component_cleanup_sweep_config_canonicalizes_valid_grid_entries() -> No
         split_risk_thresholds=(1, "2.5"),  # type: ignore[list-item]
         split_penalties=("0.0",),  # type: ignore[list-item]
         min_side_observations=("2",),  # type: ignore[list-item]
+        require_complete_track_options=("true", "false", "1", "0"),  # type: ignore[list-item]
     )
 
     assert config.split_risk_thresholds == (1.0, 2.5)
     assert config.split_penalties == (0.0,)
     assert config.min_side_observations == (2,)
+    assert config.require_complete_track_options == (True, False, True, False)
 
 
 def test_component_cleanup_sweep_can_select_partial_track_guard(monkeypatch) -> None:
@@ -148,6 +153,88 @@ def test_component_cleanup_sweep_can_select_partial_track_guard(monkeypatch) -> 
     best_rows = output.best_rows()
     assert len(best_rows) == 1
     assert best_rows[0]["component_sweep_require_complete_track"] == 0
+
+
+def test_component_cleanup_sweep_cli_legacy_guard_flag_is_honored(monkeypatch, tmp_path) -> None:
+    captured: dict[str, tuple[bool, ...]] = {}
+
+    def fake_component_sweep(config, *, sweep_config, **kwargs):
+        captured["require_complete_track_options"] = sweep_config.require_complete_track_options
+        return ComponentCleanupSweepOutput(
+            rows=(),
+            aggregate_rows=(),
+            best_candidate="none",
+            objective=sweep_config.objective,
+        )
+
+    monkeypatch.setattr(
+        sweep_module, "run_track2p_policy_component_sweep", fake_component_sweep
+    )
+    monkeypatch.setattr(sweep_module, "write_results", lambda *args, **kwargs: None)
+
+    assert (
+        sweep_module.main(
+            [
+                "--data",
+                str(tmp_path),
+                "--output",
+                str(tmp_path / "rows.csv"),
+                "--no-require-complete-track",
+            ]
+        )
+        == 0
+    )
+
+    assert captured["require_complete_track_options"] == (False,)
+
+
+def test_component_cleanup_sweep_cli_accepts_guard_options(monkeypatch, tmp_path) -> None:
+    captured: dict[str, tuple[bool, ...]] = {}
+
+    def fake_component_sweep(config, *, sweep_config, **kwargs):
+        captured["require_complete_track_options"] = sweep_config.require_complete_track_options
+        return ComponentCleanupSweepOutput(
+            rows=(),
+            aggregate_rows=(),
+            best_candidate="none",
+            objective=sweep_config.objective,
+        )
+
+    monkeypatch.setattr(
+        sweep_module, "run_track2p_policy_component_sweep", fake_component_sweep
+    )
+    monkeypatch.setattr(sweep_module, "write_results", lambda *args, **kwargs: None)
+
+    assert (
+        sweep_module.main(
+            [
+                "--data",
+                str(tmp_path),
+                "--output",
+                str(tmp_path / "rows.csv"),
+                "--require-complete-track-options",
+                "false,true",
+            ]
+        )
+        == 0
+    )
+
+    assert captured["require_complete_track_options"] == (False, True)
+
+
+def test_component_cleanup_sweep_cli_rejects_conflicting_guard_options(tmp_path) -> None:
+    with pytest.raises(SystemExit):
+        sweep_module.main(
+            [
+                "--data",
+                str(tmp_path),
+                "--output",
+                str(tmp_path / "rows.csv"),
+                "--require-complete-track-options",
+                "true,false",
+                "--no-require-complete-track",
+            ]
+        )
 
 
 def _sweep_output(
