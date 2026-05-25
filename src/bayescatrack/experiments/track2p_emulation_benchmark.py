@@ -328,7 +328,10 @@ def _threshold_assigned_iou(
         positive = values[values > 0]
         if positive.size < 3 or np.allclose(positive, positive[0]):
             return float(threshold_otsu(values))
-        return float(threshold_minimum(positive))
+        try:
+            return float(threshold_minimum(positive))
+        except RuntimeError:
+            return float(threshold_otsu(values))
     raise ValueError(f"Unsupported threshold method: {method!r}")
 
 
@@ -345,7 +348,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m bayescatrack.experiments.track2p_emulation_benchmark",
         description=(
-            "Compare Track2p output against a BayesCaTrack Track2p-policy " "emulation."
+            "Compare Track2p output against a BayesCaTrack Track2p-policy "
+            "emulation."
         ),
     )
     parser.add_argument("--data", type=Path, required=True)
