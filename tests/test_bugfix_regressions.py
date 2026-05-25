@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import warnings
 from types import SimpleNamespace
 
 import numpy as np
@@ -219,6 +220,39 @@ def test_load_suite2p_plane_rejects_mismatched_iscell_rows(tmp_path):
 
     with pytest.raises(ValueError, match="iscell.npy first dimension"):
         load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)
+
+
+def test_load_suite2p_plane_accepts_single_column_iscell_without_scalar_warning(
+    tmp_path,
+):
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([0], dtype=int),
+                "xpix": np.asarray([0], dtype=int),
+                "lam": np.asarray([1.0], dtype=float),
+            },
+            {
+                "ypix": np.asarray([1], dtype=int),
+                "xpix": np.asarray([1], dtype=int),
+                "lam": np.asarray([1.0], dtype=float),
+            },
+        ],
+        dtype=object,
+    )
+    np.save(tmp_path / "stat.npy", stat)
+    np.save(tmp_path / "iscell.npy", np.asarray([[1.0], [0.0]], dtype=float))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        plane = load_suite2p_plane(
+            tmp_path,
+            load_traces=False,
+            load_spike_traces=False,
+        )
+
+    assert plane.roi_indices.tolist() == [0]
+    np.testing.assert_allclose(plane.cell_probabilities, np.asarray([1.0]))
 
 
 def test_load_suite2p_plane_rejects_mismatched_trace_rows(tmp_path):
