@@ -8,7 +8,11 @@ from bayescatrack.experiments import track2p_emulation_benchmark as bench
 def test_gap_rescue_scales_distance_threshold_for_direct_skips(monkeypatch) -> None:
     calls: list[float] = []
 
-    def fake_links(reference_session, moving_session, **kwargs):
+    def fake_links(
+        reference_session: object,
+        moving_session: object,
+        **kwargs: object,
+    ) -> np.ndarray:
         del reference_session, moving_session
         calls.append(float(kwargs["iou_distance_threshold"]))
         return np.zeros((0, 2), dtype=int)
