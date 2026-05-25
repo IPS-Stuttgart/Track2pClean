@@ -55,11 +55,21 @@ def test_plan_ranked_bridge_splits_selects_multiple_guarded_weak_bridges() -> No
     ]
     predicted = np.asarray([[10, 20, 30, 40, 50, 60]], dtype=int)
     diagnostics = (
-        _diagnostic(session_index=0, threshold_margin=0.30, row_margin=0.50, column_margin=0.50),
-        _diagnostic(session_index=1, threshold_margin=0.01, row_margin=0.02, column_margin=0.03),
-        _diagnostic(session_index=2, threshold_margin=0.01, row_margin=0.02, column_margin=0.03),
-        _diagnostic(session_index=3, threshold_margin=0.01, row_margin=0.02, column_margin=0.03),
-        _diagnostic(session_index=4, threshold_margin=0.30, row_margin=0.50, column_margin=0.50),
+        _diagnostic(
+            session_index=0, threshold_margin=0.30, row_margin=0.50, column_margin=0.50
+        ),
+        _diagnostic(
+            session_index=1, threshold_margin=0.01, row_margin=0.02, column_margin=0.03
+        ),
+        _diagnostic(
+            session_index=2, threshold_margin=0.01, row_margin=0.02, column_margin=0.03
+        ),
+        _diagnostic(
+            session_index=3, threshold_margin=0.01, row_margin=0.02, column_margin=0.03
+        ),
+        _diagnostic(
+            session_index=4, threshold_margin=0.30, row_margin=0.50, column_margin=0.50
+        ),
     )
 
     split_plan = plan_ranked_bridge_splits(
@@ -101,8 +111,12 @@ def test_multisplit_respects_complete_track_guard() -> None:
     sessions = [_Session((10,)), _Session((20,)), _Session((30,)), _Session((40,))]
     predicted = np.asarray([[10, 20, 30, -1]], dtype=int)
     diagnostics = (
-        _diagnostic(session_index=0, threshold_margin=0.01, row_margin=0.02, column_margin=0.03),
-        _diagnostic(session_index=1, threshold_margin=0.01, row_margin=0.02, column_margin=0.03),
+        _diagnostic(
+            session_index=0, threshold_margin=0.01, row_margin=0.02, column_margin=0.03
+        ),
+        _diagnostic(
+            session_index=1, threshold_margin=0.01, row_margin=0.02, column_margin=0.03
+        ),
     )
 
     guarded = plan_ranked_bridge_splits(
