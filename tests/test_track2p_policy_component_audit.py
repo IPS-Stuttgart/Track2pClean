@@ -112,6 +112,36 @@ def test_component_audit_marks_weakest_bridge_and_split_application() -> None:
     np.testing.assert_array_equal(cleaned, [[10, 20, -1, -1], [-1, -1, 30, 40]])
 
 
+def test_apply_weakest_bridge_splits_uses_original_track_ids() -> None:
+    predicted = np.asarray(
+        [
+            [1, 2, 3, 4],
+            [10, 20, 30, 40],
+            [100, 200, 300, 400],
+        ],
+        dtype=int,
+    )
+    component_rows = [
+        {
+            "predicted_track_id": 1,
+            "applied_split": 1,
+            "weakest_bridge_session_a": 1,
+        }
+    ]
+
+    cleaned = apply_weakest_bridge_splits(predicted, component_rows)
+
+    np.testing.assert_array_equal(
+        cleaned,
+        [
+            [1, 2, 3, 4],
+            [10, 20, -1, -1],
+            [-1, -1, 30, 40],
+            [100, 200, 300, 400],
+        ],
+    )
+
+
 def _diagnostic(
     *,
     session_index: int = 0,
