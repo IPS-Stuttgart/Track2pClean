@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pytest
 import numpy as np
+from bayescatrack import cli
 from bayescatrack.experiments.track2p_policy_stability_cleanup import (
     StabilityCleanupConfig,
     apply_stability_splits_to_tracks,
@@ -139,3 +141,47 @@ def test_stability_cleanup_config_includes_base_threshold_in_vote_ensemble() -> 
 
     assert config.ensemble_iou_distance_thresholds == (12.0, 10.0, 14.0)
     assert config.required_support_votes == 2
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"min_support_votes": True},
+        {"min_support_votes": 1.5},
+        {"min_support_votes": 0},
+        {"min_side_observations": False},
+        {"min_side_observations": 1.5},
+        {"min_side_observations": 0},
+    ],
+)
+def test_stability_cleanup_config_rejects_invalid_integer_options(kwargs: dict[str, object]) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        StabilityCleanupConfig(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("required_support_votes", "min_side_observations"),
+    [
+        (True, 2),
+        (1.5, 2),
+        (0, 2),
+        (2, False),
+        (2, 1.5),
+        (2, 0),
+    ],
+)
+def test_apply_stability_splits_rejects_invalid_integer_options(
+    required_support_votes: object, min_side_observations: object
+) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        apply_stability_splits_to_tracks(
+            np.asarray([[10, 20]], dtype=int),
+            {(0, 1, 10, 20): 1},
+            required_support_votes=required_support_votes,  # type: ignore[arg-type]
+            min_side_observations=min_side_observations,  # type: ignore[arg-type]
+        )
+
+
+def test_stability_cleanup_benchmark_command_is_registered() -> None:
+    assert cli._BENCHMARK_COMMANDS["track2p-policy-stability-cleanup"].module == "bayescatrack.experiments.track2p_policy_stability_cleanup"
+    assert cli._BENCHMARK_ALIASES["track2p-stability-cleanup"] == "track2p-policy-stability-cleanup"
