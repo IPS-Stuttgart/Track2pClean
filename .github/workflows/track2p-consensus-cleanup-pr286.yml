@@ -41,7 +41,8 @@ jobs:
             git checkout --force "refs/remotes/pr/${{ inputs.pr_number }}/head"
           fi
           REQUESTED_ROOT="${{ inputs.output_root }}"
-          if mkdir -p "$REQUESTED_ROOT" 2>/dev/null; then
+          if mkdir -p "$REQUESTED_ROOT" 2>/dev/null && touch "$REQUESTED_ROOT/.write_test" 2>/dev/null; then
+            rm -f "$REQUESTED_ROOT/.write_test"
             OUT_ROOT="$REQUESTED_ROOT"
           else
             OUT_ROOT="${RUNNER_TEMP:-$PWD}/bayescatrack-results"
