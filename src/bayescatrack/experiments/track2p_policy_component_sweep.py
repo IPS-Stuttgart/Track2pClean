@@ -7,7 +7,6 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import product
-from pathlib import Path
 from typing import Any, Literal, cast
 
 from bayescatrack.experiments.benchmark_comparison import aggregate_rows
@@ -26,6 +25,7 @@ from bayescatrack.experiments.track2p_policy_benchmark import (
 )
 from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
+    build_arg_parser as _build_component_audit_parser,
     run_track2p_policy_component_audit,
 )
 
@@ -117,10 +117,14 @@ def run_track2p_policy_component_sweep(
         candidate_rows.append((candidate, cleanup_config, rows))
         aggregate_input.extend(_aggregate_input_rows(candidate, rows))
 
-    ranked = _rank_aggregates(aggregate_rows(aggregate_input), objective=sweep_config.objective)
+    ranked = _rank_aggregates(
+        aggregate_rows(aggregate_input), objective=sweep_config.objective
+    )
     best_candidate = str(ranked[0]["approach"])
     ranks = {str(row["approach"]): int(row["component_sweep_rank"]) for row in ranked}
-    objectives = {str(row["approach"]): float(row["component_sweep_objective"]) for row in ranked}
+    objectives = {
+        str(row["approach"]): float(row["component_sweep_objective"]) for row in ranked
+    }
     rows = _annotate_subject_rows(candidate_rows, best_candidate, ranks, objectives)
     if sweep_config.best_only:
         rows = [row for row in rows if int(row["component_sweep_best"]) == 1]
@@ -135,44 +139,17 @@ def run_track2p_policy_component_sweep(
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command-line parser for component-cleanup parameter sweeps."""
 
-    parser = argparse.ArgumentParser(
-        prog="bayescatrack benchmark track2p-policy-component-sweep",
-        description="Sweep Track2p-policy weakest-bridge component cleanup settings.",
-    )
-    parser.add_argument("--data", type=Path, required=True)
-    parser.add_argument("--reference", type=Path, default=None)
-    parser.add_argument(
-        "--reference-kind",
-        choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
-        default="manual-gt",
-    )
-    parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", choices=("auto", "suite2p", "npy"), default="suite2p")
-    parser.add_argument(
-        "--threshold-method",
-        choices=("otsu", "min"),
-        default=TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
-    )
-    parser.add_argument(
-        "--iou-distance-threshold",
-        type=float,
-        default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
-    )
-    parser.add_argument(
-        "--cell-probability-threshold",
-        type=float,
-        default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
-    )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
-    parser.add_argument("--threshold-margin-scale", type=float, default=0.10)
-    parser.add_argument("--competition-margin-scale", type=float, default=0.20)
-    parser.add_argument("--area-ratio-floor", type=float, default=0.45)
-    parser.add_argument("--centroid-distance-scale", type=float, default=4.0)
-    parser.add_argument(
-        "--require-complete-track",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Only split components observed in every session unless disabled.",
+    parser = _build_component_audit_parser()
+    parser.prog = "bayescatrack benchmark track2p-policy-component-sweep"
+    parser.description = "Sweep Track2p-policy weakest-bridge component cleanup settings."
+    _remove_parser_options(
+        parser,
+        "--apply-splits",
+        "--component-output",
+        "--component-format",
+        "--split-risk-threshold",
+        "--split-penalty",
+        "--min-side-observations",
     )
     parser.add_argument(
         "--split-risk-thresholds",
@@ -191,12 +168,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--objective",
-        choices=(
-            "complete_track_f1_micro",
-            "pairwise_f1_micro",
-            "mean_micro_f1",
-            "complete_track_f1_macro",
-        ),
+        choices=COMPONENT_SWEEP_OBJECTIVES,
         default="complete_track_f1_micro",
         help="Aggregate metric used to select the best cleanup candidate.",
     )
@@ -205,16 +177,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write only subject rows for the selected best candidate.",
     )
-    parser.add_argument(
-        "--restrict-to-reference-seed-rois",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-    )
-    parser.add_argument("--seed-session", type=int, default=0)
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--output", type=Path, default=None)
-    parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     return parser
 
 
@@ -230,9 +192,15 @@ def main(argv: list[str] | None = None) -> int:
         require_complete_track=args.require_complete_track,
     )
     sweep_config = ComponentCleanupSweepConfig(
-        split_risk_thresholds=_float_tuple_arg(args.split_risk_thresholds, name="split-risk-thresholds"),
-        split_penalties=_float_tuple_arg(args.split_penalties, name="split-penalties"),
-        min_side_observations=_int_tuple_arg(args.min_side_observations, name="min-side-observations"),
+        split_risk_thresholds=_float_tuple_arg(
+            args.split_risk_thresholds, name="split-risk-thresholds"
+        ),
+        split_penalties=_float_tuple_arg(
+            args.split_penalties, name="split-penalties"
+        ),
+        min_side_observations=_int_tuple_arg(
+            args.min_side_observations, name="min-side-observations"
+        ),
         base_cleanup=base_cleanup,
         objective=cast(ComponentSweepObjective, args.objective),
         best_only=bool(args.best_only),
@@ -274,6 +242,25 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _remove_parser_options(
+    parser: argparse.ArgumentParser, *option_strings: str
+) -> None:
+    option_string_set = set(option_strings)
+    actions = [
+        action
+        for action in parser._actions
+        if option_string_set.intersection(action.option_strings)
+    ]
+    for action in actions:
+        for option_string in action.option_strings:
+            parser._option_string_actions.pop(option_string, None)
+        if action in parser._actions:
+            parser._actions.remove(action)
+        for group in parser._action_groups:
+            if action in group._group_actions:
+                group._group_actions.remove(action)
+
+
 def _finite_nonnegative_tuple(values: Sequence[Any], *, name: str) -> tuple[float, ...]:
     normalized = tuple(_finite_nonnegative_value(value, name=name) for value in values)
     if not normalized:
@@ -310,7 +297,9 @@ def _positive_int_value(value: Any, *, name: str) -> int:
     return int(numeric)
 
 
-def _cleanup_grid(config: ComponentCleanupSweepConfig) -> tuple[ComponentCleanupConfig, ...]:
+def _cleanup_grid(
+    config: ComponentCleanupSweepConfig,
+) -> tuple[ComponentCleanupConfig, ...]:
     return tuple(
         replace(
             config.base_cleanup,
@@ -335,8 +324,13 @@ def _candidate_name(index: int, config: ComponentCleanupConfig) -> str:
     )
 
 
-def _aggregate_input_rows(candidate: str, rows: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
-    return [{"approach": candidate, **{key: str(value) for key, value in row.items()}} for row in rows]
+def _aggregate_input_rows(
+    candidate: str, rows: Sequence[Mapping[str, Any]]
+) -> list[dict[str, str]]:
+    return [
+        {"approach": candidate, **{key: str(value) for key, value in row.items()}}
+        for row in rows
+    ]
 
 
 def _rank_aggregates(
@@ -361,17 +355,26 @@ def _rank_aggregates(
             str(row["approach"]),
         ),
     )
-    return [{**row, "component_sweep_rank": rank} for rank, row in enumerate(ranked, start=1)]
+    return [
+        {**row, "component_sweep_rank": rank}
+        for rank, row in enumerate(ranked, start=1)
+    ]
 
 
-def _objective_value(row: Mapping[str, float | int | str], objective: ComponentSweepObjective) -> float:
+def _objective_value(
+    row: Mapping[str, float | int | str], objective: ComponentSweepObjective
+) -> float:
     if objective == "mean_micro_f1":
-        return 0.5 * (float(row["complete_track_f1_micro"]) + float(row["pairwise_f1_micro"]))
+        return 0.5 * (
+            float(row["complete_track_f1_micro"]) + float(row["pairwise_f1_micro"])
+        )
     return float(row[objective])
 
 
 def _annotate_subject_rows(
-    candidate_rows: Sequence[tuple[str, ComponentCleanupConfig, Sequence[Mapping[str, Any]]]],
+    candidate_rows: Sequence[
+        tuple[str, ComponentCleanupConfig, Sequence[Mapping[str, Any]]]
+    ],
     best_candidate: str,
     ranks: Mapping[str, int],
     objectives: Mapping[str, float],
@@ -386,9 +389,15 @@ def _annotate_subject_rows(
                     "component_sweep_rank": int(ranks[candidate]),
                     "component_sweep_best": int(candidate == best_candidate),
                     "component_sweep_objective": float(objectives[candidate]),
-                    "component_sweep_split_risk_threshold": float(cleanup_config.split_risk_threshold),
-                    "component_sweep_split_penalty": float(cleanup_config.split_penalty),
-                    "component_sweep_min_side_observations": int(cleanup_config.min_side_observations),
+                    "component_sweep_split_risk_threshold": float(
+                        cleanup_config.split_risk_threshold
+                    ),
+                    "component_sweep_split_penalty": float(
+                        cleanup_config.split_penalty
+                    ),
+                    "component_sweep_min_side_observations": int(
+                        cleanup_config.min_side_observations
+                    ),
                 }
             )
     return annotated
