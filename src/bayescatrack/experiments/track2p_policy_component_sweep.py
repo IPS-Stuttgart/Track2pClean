@@ -103,8 +103,7 @@ def run_track2p_policy_component_sweep(
     best_candidate = str(ranked[0]["approach"])
     ranks = {str(row["approach"]): int(row["component_sweep_rank"]) for row in ranked}
     objectives = {
-        str(row["approach"]): float(row["component_sweep_objective"])
-        for row in ranked
+        str(row["approach"]): float(row["component_sweep_objective"]) for row in ranked
     }
     rows = _annotate_subject_rows(candidate_rows, best_candidate, ranks, objectives)
     if sweep_config.best_only:
@@ -117,7 +116,9 @@ def run_track2p_policy_component_sweep(
     )
 
 
-def _cleanup_grid(config: ComponentCleanupSweepConfig) -> tuple[ComponentCleanupConfig, ...]:
+def _cleanup_grid(
+    config: ComponentCleanupSweepConfig,
+) -> tuple[ComponentCleanupConfig, ...]:
     return tuple(
         replace(
             config.base_cleanup,
@@ -190,7 +191,9 @@ def _objective_value(
 
 
 def _annotate_subject_rows(
-    candidate_rows: Sequence[tuple[str, ComponentCleanupConfig, Sequence[Mapping[str, Any]]]],
+    candidate_rows: Sequence[
+        tuple[str, ComponentCleanupConfig, Sequence[Mapping[str, Any]]]
+    ],
     best_candidate: str,
     ranks: Mapping[str, int],
     objectives: Mapping[str, float],
@@ -208,7 +211,9 @@ def _annotate_subject_rows(
                     "component_sweep_split_risk_threshold": float(
                         cleanup_config.split_risk_threshold
                     ),
-                    "component_sweep_split_penalty": float(cleanup_config.split_penalty),
+                    "component_sweep_split_penalty": float(
+                        cleanup_config.split_penalty
+                    ),
                     "component_sweep_min_side_observations": int(
                         cleanup_config.min_side_observations
                     ),
