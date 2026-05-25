@@ -99,9 +99,15 @@ def test_stability_cleanup_rejects_splits_that_create_short_fragments() -> None:
 def test_stability_cleanup_optimizes_compatible_split_set() -> None:
     base = np.asarray([[10, 20, 30, 40, 50, 60, 70, 80, 90, 100]], dtype=int)
     support = {
+        (0, 1, 10, 20): 3,
+        (1, 2, 20, 30): 3,
         (2, 3, 30, 40): 1,
+        (3, 4, 40, 50): 3,
         (4, 5, 50, 60): 0,
+        (5, 6, 60, 70): 3,
         (6, 7, 70, 80): 1,
+        (7, 8, 80, 90): 3,
+        (8, 9, 90, 100): 3,
     }
 
     cleaned, split_rows = apply_stability_splits_to_tracks(
