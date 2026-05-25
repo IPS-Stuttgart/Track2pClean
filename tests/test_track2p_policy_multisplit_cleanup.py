@@ -85,6 +85,54 @@ def test_plan_ranked_bridge_splits_selects_multiple_guarded_weak_bridges() -> No
     assert split_plan == {0: (1, 3)}
 
 
+def test_plan_ranked_bridge_splits_optimizes_global_gain_not_greedy_risk() -> None:
+    sessions = [
+        _Session((10,)),
+        _Session((20,)),
+        _Session((30,)),
+        _Session((40,)),
+        _Session((50,)),
+        _Session((60,)),
+        _Session((70,)),
+        _Session((80,)),
+        _Session((90,)),
+        _Session((100,)),
+    ]
+    predicted = np.asarray([[10, 20, 30, 40, 50, 60, 70, 80, 90, 100]], dtype=int)
+    diagnostics = (
+        _diagnostic(
+            session_index=2, threshold_margin=0.02, row_margin=0.50, column_margin=0.50
+        ),
+        _diagnostic(
+            session_index=4, threshold_margin=0.005, row_margin=0.50, column_margin=0.50
+        ),
+        _diagnostic(
+            session_index=6, threshold_margin=0.02, row_margin=0.50, column_margin=0.50
+        ),
+    )
+
+    split_plan = plan_ranked_bridge_splits(
+        predicted,
+        sessions=sessions,  # type: ignore[arg-type]
+        diagnostics=diagnostics,
+        config=MultiSplitCleanupConfig(
+            component=ComponentCleanupConfig(
+                split_risk_threshold=0.5,
+                split_penalty=0.0,
+                min_side_observations=3,
+                threshold_margin_weight=1.0,
+                row_margin_weight=0.0,
+                column_margin_weight=0.0,
+                centroid_distance_weight=0.0,
+                area_ratio_weight=0.0,
+            ),
+            max_splits_per_component=2,
+        ),
+    )
+
+    assert split_plan == {0: (2, 6)}
+
+
 def test_apply_ranked_bridge_splits_keeps_unplanned_components() -> None:
     predicted = np.asarray(
         [
