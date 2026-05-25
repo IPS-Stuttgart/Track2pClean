@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from bayescatrack.experiments.track2p_policy_component_audit import ComponentCleanupConfig
+from bayescatrack.experiments.track2p_policy_component_audit import (
+    ComponentCleanupConfig,
+)
 from bayescatrack.experiments.track2p_policy_consensus_cleanup import (
     ConsensusSplitConfig,
     apply_consensus_bridge_splits,
