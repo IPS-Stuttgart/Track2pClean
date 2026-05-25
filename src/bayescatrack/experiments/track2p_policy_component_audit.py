@@ -4,7 +4,9 @@ The edge-level prune diagnostics showed that local edge features do not cleanly
 separate false-positive from true-positive links.  This module therefore audits
 whole predicted policy tracks and can apply one conservative operation per
 component: split the component at its weakest bridge when the component-level
-risk score is high enough.
+risk score is high enough.  By default, cleanup is restricted to complete
+predicted tracks so the post-processing targets complete-track precision without
+unnecessarily damaging partial tracks used by pairwise scoring.
 """
 
 from __future__ import annotations
@@ -67,6 +69,7 @@ class ComponentCleanupConfig:
     split_risk_threshold: float = 1.50
     split_penalty: float = 0.25
     min_side_observations: int = 2
+    require_complete_track: bool = True
     threshold_margin_weight: float = 1.0
     row_margin_weight: float = 1.0
     column_margin_weight: float = 1.0
@@ -210,6 +213,9 @@ def run_track2p_policy_component_audit(
             "track2p_component_min_side_observations": int(
                 cleanup_config.min_side_observations
             ),
+            "track2p_component_require_complete_track": int(
+                cleanup_config.require_complete_track
+            ),
         }
         results.append(
             SubjectBenchmarkResult(
@@ -275,6 +281,7 @@ def component_audit_rows(
         edges = _component_edges(track, diagnostic_by_edge, config=config)
         weakest = max(edges, key=lambda edge: edge.risk, default=None)
         valid_observations = int(np.sum(track >= 0))
+        is_complete_track = bool(valid_observations == int(predicted.shape[1]))
         split_index = -1 if weakest is None else int(weakest.session_index)
         left_observations, right_observations = _split_observation_counts(
             track, split_index
@@ -294,6 +301,7 @@ def component_audit_rows(
             and weakest.risk >= config.split_risk_threshold
             and left_observations >= config.min_side_observations
             and right_observations >= config.min_side_observations
+            and (is_complete_track or not config.require_complete_track)
             and split_gain > 0.0
         )
         pairwise_tp, pairwise_fp = _component_pairwise_counts(
@@ -309,6 +317,7 @@ def component_audit_rows(
                 "total_sessions": int(predicted.shape[1]),
                 "n_rois": valid_observations,
                 "n_edges": int(len(edges)),
+                "is_complete_track": int(is_complete_track),
                 "min_edge_margin": _min_or_nan(
                     _diagnostic_value(edge, "threshold_margin") for edge in edges
                 ),
@@ -545,6 +554,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=True,
         help="Apply weakest-bridge splits before scoring; use --no-apply-splits for audit-only output.",
     )
+    parser.add_argument(
+        "--require-complete-track",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Only split components observed in every session; use "
+            "--no-require-complete-track to allow incomplete component splits."
+        ),
+    )
     parser.add_argument("--threshold-margin-scale", type=float, default=0.10)
     parser.add_argument("--competition-margin-scale", type=float, default=0.20)
     parser.add_argument("--area-ratio-floor", type=float, default=0.45)
@@ -583,6 +601,7 @@ def main(argv: list[str] | None = None) -> int:
         split_risk_threshold=args.split_risk_threshold,
         split_penalty=args.split_penalty,
         min_side_observations=args.min_side_observations,
+        require_complete_track=args.require_complete_track,
     )
     config = Track2pBenchmarkConfig(
         data=args.data,

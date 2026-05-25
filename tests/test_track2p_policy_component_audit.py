@@ -99,6 +99,7 @@ def test_component_audit_marks_weakest_bridge_and_split_application() -> None:
         config=ComponentCleanupConfig(split_risk_threshold=1.0),
     )
 
+    assert rows[0]["is_complete_track"] == 1
     assert rows[0]["would_split_at_weakest_edge"] == 1
     assert rows[0]["applied_split"] == 0
     assert rows[0]["weakest_bridge_session_a"] == 1
@@ -110,6 +111,67 @@ def test_component_audit_marks_weakest_bridge_and_split_application() -> None:
 
     np.testing.assert_array_equal(no_apply, predicted)
     np.testing.assert_array_equal(cleaned, [[10, 20, -1, -1], [-1, -1, 30, 40]])
+
+
+def test_component_audit_skips_incomplete_tracks_by_default() -> None:
+    sessions = [
+        _Session((10,)),
+        _Session((20,)),
+        _Session((30,)),
+        _Session((40,)),
+        _Session((50,)),
+    ]
+    predicted = np.asarray([[10, 20, 30, 40, -1]], dtype=int)
+    reference = np.asarray([[10, 20, 30, 40, -1]], dtype=int)
+    diagnostics = (
+        _diagnostic(
+            session_index=0,
+            threshold_margin=0.30,
+            row_margin=0.50,
+            column_margin=0.50,
+            centroid_distance=2.0,
+            area_ratio=0.90,
+        ),
+        _diagnostic(
+            session_index=1,
+            threshold_margin=0.01,
+            row_margin=0.02,
+            column_margin=0.03,
+            centroid_distance=8.0,
+            area_ratio=0.20,
+        ),
+        _diagnostic(
+            session_index=2,
+            threshold_margin=0.30,
+            row_margin=0.50,
+            column_margin=0.50,
+            centroid_distance=2.0,
+            area_ratio=0.90,
+        ),
+    )
+
+    guarded_rows = component_audit_rows(
+        predicted,
+        reference,
+        sessions=sessions,  # type: ignore[arg-type]
+        diagnostics=diagnostics,
+        config=ComponentCleanupConfig(split_risk_threshold=1.0),
+    )
+    unguarded_rows = component_audit_rows(
+        predicted,
+        reference,
+        sessions=sessions,  # type: ignore[arg-type]
+        diagnostics=diagnostics,
+        config=ComponentCleanupConfig(
+            split_risk_threshold=1.0,
+            require_complete_track=False,
+        ),
+    )
+
+    assert guarded_rows[0]["is_complete_track"] == 0
+    assert guarded_rows[0]["weakest_bridge_session_a"] == 1
+    assert guarded_rows[0]["would_split_at_weakest_edge"] == 0
+    assert unguarded_rows[0]["would_split_at_weakest_edge"] == 1
 
 
 def _diagnostic(
