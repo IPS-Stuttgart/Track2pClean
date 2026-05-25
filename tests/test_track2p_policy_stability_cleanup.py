@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import pytest
 import numpy as np
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments.track2p_policy_stability_cleanup import (
     StabilityCleanupConfig,
@@ -154,7 +154,9 @@ def test_stability_cleanup_config_includes_base_threshold_in_vote_ensemble() -> 
         {"min_side_observations": 0},
     ],
 )
-def test_stability_cleanup_config_rejects_invalid_integer_options(kwargs: dict[str, object]) -> None:
+def test_stability_cleanup_config_rejects_invalid_integer_options(
+    kwargs: dict[str, object],
+) -> None:
     with pytest.raises(ValueError, match="positive integer"):
         StabilityCleanupConfig(**kwargs)
 
@@ -183,5 +185,11 @@ def test_apply_stability_splits_rejects_invalid_integer_options(
 
 
 def test_stability_cleanup_benchmark_command_is_registered() -> None:
-    assert cli._BENCHMARK_COMMANDS["track2p-policy-stability-cleanup"].module == "bayescatrack.experiments.track2p_policy_stability_cleanup"
-    assert cli._BENCHMARK_ALIASES["track2p-stability-cleanup"] == "track2p-policy-stability-cleanup"
+    assert (
+        cli._BENCHMARK_COMMANDS["track2p-policy-stability-cleanup"].module
+        == "bayescatrack.experiments.track2p_policy_stability_cleanup"
+    )
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-stability-cleanup"]
+        == "track2p-policy-stability-cleanup"
+    )
