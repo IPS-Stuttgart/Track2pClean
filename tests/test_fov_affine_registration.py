@@ -38,7 +38,7 @@ def test_apply_affine_roi_mask_warp_applies_translation():
 def test_apply_affine_roi_mask_warp_nearest_mode_uses_nearest_for_numeric_masks():
     masks = np.zeros((1, 5, 5), dtype=float)
     masks[0, 2, 2] = 1.0
-    affine_xy = np.asarray([[1.0, 0.0, 0.5], [0.0, 1.0, 0.0]], dtype=float)
+    affine_xy = np.asarray([[1.0, 0.0, 0.25], [0.0, 1.0, 0.0]], dtype=float)
 
     nearest = apply_affine_roi_mask_warp(
         masks,
@@ -57,8 +57,8 @@ def test_apply_affine_roi_mask_warp_nearest_mode_uses_nearest_for_numeric_masks(
     expected_nearest[0, 2, 2] = 1.0
     np.testing.assert_array_equal(nearest, expected_nearest)
     assert np.any(np.abs(bilinear - nearest) > 0.0)
-    assert np.isclose(bilinear[0, 2, 2], 0.5)
-    assert np.isclose(bilinear[0, 2, 3], 0.5)
+    assert np.isclose(bilinear[0, 2, 2], 0.75)
+    assert np.isclose(bilinear[0, 2, 3], 0.25)
 
 
 def test_apply_affine_image_warp_applies_translation():
