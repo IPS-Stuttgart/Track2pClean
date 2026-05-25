@@ -103,18 +103,27 @@ def _track_split_indices(
             continue
         diagnostic = diagnostics_by_edge.get((session_index, source, target))
         risk = edge_risk_score(diagnostic, config=cfg.component)
-        support = int(support_counts.get((session_index, session_index + 1, source, target), 0))
-        risky = risk >= cfg.component.split_risk_threshold and risk > cfg.component.split_penalty
+        support = int(
+            support_counts.get((session_index, session_index + 1, source, target), 0)
+        )
+        risky = (
+            risk >= cfg.component.split_risk_threshold
+            and risk > cfg.component.split_penalty
+        )
         unstable = support < int(cfg.required_support_votes)
         if _passes_mode(risky, unstable, cfg.mode):
             candidates.append((support, risk, session_index))
 
     selected: list[int] = []
-    for _, _, split_index in sorted(candidates, key=lambda item: (item[0], -item[1], item[2])):
+    for _, _, split_index in sorted(
+        candidates, key=lambda item: (item[0], -item[1], item[2])
+    ):
         if len(selected) >= int(cfg.max_splits_per_component):
             break
         proposed = sorted((*selected, split_index))
-        if _fragments_have_min_observations(row, proposed, cfg.component.min_side_observations):
+        if _fragments_have_min_observations(
+            row, proposed, cfg.component.min_side_observations
+        ):
             selected.append(split_index)
     return tuple(sorted(selected))
 
