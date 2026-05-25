@@ -117,3 +117,68 @@ def test_postsolve_relinking_replaces_flagged_detection_with_better_candidate():
 
     assert relinked[0, 1] == 7
     assert relinked[1, 1] == 6
+
+
+def test_postsolve_relinking_uses_next_context_for_interior_detection():
+    tracks = np.array([[0, 5, 9]], dtype=int)
+    issues = [
+        TrackGeometryIssue(
+            track_index=0,
+            session_index=1,
+            roi_index=5,
+            residual=10.0,
+            robust_z=4.0,
+            suggested_action="split_or_relink",
+        )
+    ]
+    pairwise = {
+        (0, 1): np.array([[5.0, 0.2, 0.4]], dtype=float),
+        (1, 2): np.array([[5.0], [6.0], [0.2]], dtype=float),
+    }
+
+    relinked = relink_tracks_at_geometry_issues(
+        tracks,
+        issues,
+        pairwise,
+        roi_indices_by_session=(
+            np.array([0]),
+            np.array([5, 7, 8]),
+            np.array([9]),
+        ),
+        config={
+            "max_edge_cost": 6.0,
+            "min_cost_improvement": 0.25,
+            "use_next_context": True,
+        },
+    )
+
+    assert relinked[0, 1] == 8
+
+
+def test_postsolve_relinking_can_repair_first_flagged_detection_from_next_edge():
+    tracks = np.array([[5, 9]], dtype=int)
+    issues = [
+        TrackGeometryIssue(
+            track_index=0,
+            session_index=0,
+            roi_index=5,
+            residual=10.0,
+            robust_z=4.0,
+            suggested_action="split_or_relink",
+        )
+    ]
+    pairwise = {(0, 1): np.array([[4.0], [0.5]], dtype=float)}
+
+    relinked = relink_tracks_at_geometry_issues(
+        tracks,
+        issues,
+        pairwise,
+        roi_indices_by_session=(np.array([5, 7]), np.array([9])),
+        config={
+            "max_edge_cost": 6.0,
+            "min_cost_improvement": 0.25,
+            "use_next_context": True,
+        },
+    )
+
+    assert relinked[0, 0] == 7
