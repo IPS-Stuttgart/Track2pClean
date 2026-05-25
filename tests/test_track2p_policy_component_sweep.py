@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
@@ -86,27 +87,34 @@ def test_component_cleanup_sweep_best_only_filters_rows(monkeypatch) -> None:
 @pytest.mark.parametrize(
     "kwargs, message",
     [
-        (
-            {"split_risk_thresholds": (float("inf"),)},
-            "finite non-negative",
-        ),
-        (
-            {"split_penalties": (float("nan"),)},
-            "finite non-negative",
-        ),
-        (
-            {"min_side_observations": (1.5,)},
-            "positive integers",
-        ),
-        (
-            {"min_side_observations": (True,)},
-            "positive integers",
-        ),
+        ({"split_risk_thresholds": (math.inf,)}, "finite non-negative"),
+        ({"split_penalties": (math.nan,)}, "finite non-negative"),
+        ({"min_side_observations": (1.5,)}, "positive integers"),
+        ({"min_side_observations": (True,)}, "positive integers"),
     ],
 )
-def test_component_cleanup_sweep_rejects_invalid_grid_entries(kwargs, message) -> None:
+def test_component_cleanup_sweep_config_rejects_invalid_grid_entries(
+    kwargs, message
+) -> None:
     with pytest.raises(ValueError, match=message):
         ComponentCleanupSweepConfig(**kwargs)
+
+
+def test_component_cleanup_sweep_config_rejects_unknown_objective() -> None:
+    with pytest.raises(ValueError, match="objective must be one of"):
+        ComponentCleanupSweepConfig(objective="not-a-metric")  # type: ignore[arg-type]
+
+
+def test_component_cleanup_sweep_config_canonicalizes_valid_grid_entries() -> None:
+    config = ComponentCleanupSweepConfig(
+        split_risk_thresholds=(1, "2.5"),  # type: ignore[list-item]
+        split_penalties=("0.0",),  # type: ignore[list-item]
+        min_side_observations=("2",),  # type: ignore[list-item]
+    )
+
+    assert config.split_risk_thresholds == (1.0, 2.5)
+    assert config.split_penalties == (0.0,)
+    assert config.min_side_observations == (2,)
 
 
 def test_component_cleanup_sweep_can_select_partial_track_guard(monkeypatch) -> None:
