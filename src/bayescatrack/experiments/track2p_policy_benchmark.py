@@ -4,7 +4,9 @@ The policy runner promotes the strongest Track2p-emulation setting from the
 standalone diagnostic into a normal benchmarkable method. It deliberately keeps
 Track2p's high-performing inductive bias: hard Suite2p cell filtering,
 consecutive-session affine registration, Hungarian matching on registered IoU,
-minimum-threshold filtering, and greedy first-session propagation.
+minimum-threshold filtering, and greedy first-session propagation.  Its default
+gap-rescue setting still prefers consecutive links, but can bridge isolated
+misses with a direct registered link over a skipped session.
 """
 
 from __future__ import annotations
@@ -36,7 +38,7 @@ TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE = "affine"
 TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD: ThresholdMethod = "min"
 TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD = 12.0
 TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD = 0.5
-TRACK2P_POLICY_DEFAULT_MAX_GAP = 1
+TRACK2P_POLICY_DEFAULT_MAX_GAP = 2
 
 
 def track2p_policy_config(
@@ -44,6 +46,7 @@ def track2p_policy_config(
     *,
     transform_type: str | None = None,
     cell_probability_threshold: float | None = None,
+    max_gap: int | None = None,
 ) -> Track2pBenchmarkConfig:
     """Return ``config`` with the first-class Track2p-policy defaults applied."""
 
@@ -55,7 +58,7 @@ def track2p_policy_config(
             if transform_type is None
             else str(transform_type)
         ),
-        max_gap=TRACK2P_POLICY_DEFAULT_MAX_GAP,
+        max_gap=TRACK2P_POLICY_DEFAULT_MAX_GAP if max_gap is None else int(max_gap),
         include_non_cells=False,
         cell_probability_threshold=(
             TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD
@@ -75,6 +78,7 @@ def run_track2p_policy_benchmark(
     iou_distance_threshold: float = TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
     transform_type: str | None = None,
     cell_probability_threshold: float | None = None,
+    max_gap: int | None = None,
 ) -> list[SubjectBenchmarkResult]:
     """Run the Track2p-policy benchmark row over all discovered subjects."""
 
@@ -82,6 +86,7 @@ def run_track2p_policy_benchmark(
         config,
         transform_type=transform_type,
         cell_probability_threshold=cell_probability_threshold,
+        max_gap=max_gap,
     )
     subject_dirs = discover_subject_dirs(policy_config.data)
     if not subject_dirs:
@@ -104,6 +109,7 @@ def run_track2p_policy_benchmark(
             transform_type=policy_config.transform_type,
             threshold_method=threshold_method,
             iou_distance_threshold=float(iou_distance_threshold),
+            max_gap=policy_config.max_gap,
         )
         scores = _score_prediction_against_reference(
             predicted, reference, config=policy_config
@@ -116,11 +122,15 @@ def run_track2p_policy_benchmark(
                 policy_config.cell_probability_threshold
             ),
             "track2p_policy_transform_type": str(policy_config.transform_type),
+            "track2p_policy_max_gap": int(policy_config.max_gap),
         }
+        variant = f"Track2p-policy {threshold_method}"
+        if policy_config.max_gap > 1:
+            variant = f"{variant} gap-rescue-{policy_config.max_gap}"
         results.append(
             SubjectBenchmarkResult(
                 subject=subject_dir.name,
-                variant=f"Track2p-policy {threshold_method}",
+                variant=variant,
                 method=cast(Any, TRACK2P_POLICY_METHOD),
                 scores=scores,
                 n_sessions=len(sessions),
@@ -169,6 +179,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
     parser.add_argument(
+        "--max-gap",
+        type=int,
+        default=TRACK2P_POLICY_DEFAULT_MAX_GAP,
+        help=(
+            "Maximum session jump for conservative gap rescue. A consecutive "
+            "policy link is always preferred when present."
+        ),
+    )
+    parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -200,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
         transform_type=args.transform_type,
-        max_gap=TRACK2P_POLICY_DEFAULT_MAX_GAP,
+        max_gap=args.max_gap,
         include_behavior=args.include_behavior,
         include_non_cells=False,
         cell_probability_threshold=args.cell_probability_threshold,
@@ -214,6 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         iou_distance_threshold=args.iou_distance_threshold,
         transform_type=args.transform_type,
         cell_probability_threshold=args.cell_probability_threshold,
+        max_gap=args.max_gap,
     )
     rows = [result.to_dict() for result in results]
     if args.output is not None:
