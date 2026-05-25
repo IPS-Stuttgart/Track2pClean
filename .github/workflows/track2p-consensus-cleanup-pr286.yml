@@ -60,13 +60,16 @@ jobs:
           git rev-parse HEAD | tee "$OUT/git_sha.txt"
           git status --short | tee "$OUT/git_status_before.txt"
 
-      - name: Install package
+      - name: Install package with Poetry
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -e . > "${{ steps.prep.outputs.out }}/pip_install.log" 2>&1
-          python3 -m pip freeze > "${{ steps.prep.outputs.out }}/pip_freeze.txt"
+          if ! command -v poetry >/dev/null 2>&1; then
+            python3 -m pipx install poetry
+          fi
+          poetry env use python3
+          poetry install --with dev --no-interaction --no-ansi > "${{ steps.prep.outputs.out }}/poetry_install.log" 2>&1
+          poetry run python -m pip freeze > "${{ steps.prep.outputs.out }}/pip_freeze.txt"
 
       - name: Run focused consensus-cleanup benchmark
         shell: bash
@@ -77,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python3 -m bayescatrack benchmark track2p-policy \
+          poetry run python -m bayescatrack benchmark track2p-policy \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -89,7 +92,7 @@ jobs:
             --output "$OUT/track2p_policy_d12.csv" \
             --format csv
 
-          python3 -m bayescatrack benchmark track2p-policy-component-audit \
+          poetry run python -m bayescatrack benchmark track2p-policy-component-audit \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -106,7 +109,7 @@ jobs:
             --component-output "$OUT/track2p_policy_component_cleanup_components.csv" \
             --component-format csv
 
-          python3 -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+          poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -126,7 +129,7 @@ jobs:
             --component-output "$OUT/consensus_cleanup_no_apply_components.csv" \
             --component-format csv
 
-          python3 -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+          poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -146,7 +149,7 @@ jobs:
             --component-output "$OUT/consensus_cleanup_default_components.csv" \
             --component-format csv
 
-          python3 -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+          poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -166,7 +169,7 @@ jobs:
             --component-output "$OUT/consensus_cleanup_risk_or_stability_components.csv" \
             --component-format csv
 
-          python3 -m bayescatrack benchmark compare \
+          poetry run python -m bayescatrack benchmark compare \
             "$OUT/track2p_policy_d12.csv" \
             "$OUT/track2p_policy_component_cleanup.csv" \
             "$OUT/consensus_cleanup_no_apply.csv" \
@@ -175,7 +178,7 @@ jobs:
             --output "$OUT/consensus_cleanup_comparison.md" \
             --format md
 
-          python3 -m bayescatrack benchmark compare \
+          poetry run python -m bayescatrack benchmark compare \
             "$OUT/track2p_policy_d12.csv" \
             "$OUT/track2p_policy_component_cleanup.csv" \
             "$OUT/consensus_cleanup_no_apply.csv" \
