@@ -3,7 +3,10 @@
 The promoted Track2p-policy row is already close to Track2p but still creates
 some false-positive continuations. This runner keeps the same policy links as
 the base prediction and removes only bridges that are not stable under nearby
-IoU-distance thresholds. No rescue links are added.
+IoU-distance thresholds. No rescue links are added. By default, cleanup is
+restricted to complete predicted tracks so the post-processing targets
+complete-track precision without damaging partial tracks used for pairwise
+scoring.
 """
 
 from __future__ import annotations
@@ -57,6 +60,7 @@ class StabilityCleanupConfig:
     min_support_fraction: float = 2.0 / 3.0
     min_support_votes: int | None = None
     min_side_observations: int = 2
+    require_complete_track: bool = True
 
     def __post_init__(self) -> None:
         thresholds = tuple(float(value) for value in self.iou_distance_thresholds)
@@ -84,6 +88,9 @@ class StabilityCleanupConfig:
         )
         object.__setattr__(
             self, "min_side_observations", int(self.min_side_observations)
+        )
+        object.__setattr__(
+            self, "require_complete_track", bool(self.require_complete_track)
         )
         if self.min_support_votes is not None:
             object.__setattr__(self, "min_support_votes", int(self.min_support_votes))
@@ -160,6 +167,7 @@ def run_track2p_policy_stability_cleanup(
             edge_support_counts(ensemble_predictions),
             required_support_votes=cleanup.required_support_votes,
             min_side_observations=cleanup.min_side_observations,
+            require_complete_track=cleanup.require_complete_track,
         )
         scores = _score_prediction_against_reference(
             cleaned, reference, config=policy_config
@@ -186,6 +194,9 @@ def run_track2p_policy_stability_cleanup(
             ),
             "track2p_policy_stability_min_side_observations": int(
                 cleanup.min_side_observations
+            ),
+            "track2p_policy_stability_require_complete_track": int(
+                cleanup.require_complete_track
             ),
             "track2p_policy_stability_applied_splits": int(len(split_rows)),
         }
@@ -220,8 +231,15 @@ def apply_stability_splits_to_tracks(
     *,
     required_support_votes: int,
     min_side_observations: int = 2,
+    require_complete_track: bool = True,
 ) -> tuple[np.ndarray, tuple[dict[str, int], ...]]:
-    """Split base tracks at adjacent bridges with insufficient support."""
+    """Split base tracks at adjacent bridges with insufficient support.
+
+    By default, only tracks observed in every session are eligible for splitting.
+    This mirrors the component-cleanup guard and focuses the operation on
+    removing unstable complete-track false positives instead of fragmenting
+    partial tracks that can still contribute valid pairwise evidence.
+    """
 
     if int(required_support_votes) <= 0:
         raise ValueError("required_support_votes must be positive")
@@ -232,6 +250,9 @@ def apply_stability_splits_to_tracks(
     output: list[np.ndarray] = []
     split_rows: list[dict[str, int]] = []
     for track_id, row in enumerate(predicted):
+        if require_complete_track and not _is_complete_track(row):
+            output.append(np.asarray(row, dtype=int).copy())
+            continue
         candidates: list[tuple[int, int, Edge]] = []
         for split_index, edge in _track_row_edges_with_split_indices(row):
             support = int(support_counts.get(edge, 0))
@@ -315,6 +336,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-support-votes", type=int, default=None)
     parser.add_argument("--min-side-observations", type=int, default=2)
     parser.add_argument(
+        "--require-complete-track",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Only split tracks observed in every session; use "
+            "--no-require-complete-track for exploratory partial-track cleanup."
+        ),
+    )
+    parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -341,6 +371,7 @@ def main(argv: list[str] | None = None) -> int:
         min_support_fraction=args.min_support_fraction,
         min_support_votes=args.min_support_votes,
         min_side_observations=args.min_side_observations,
+        require_complete_track=args.require_complete_track,
     )
     config = Track2pBenchmarkConfig(
         data=args.data,
@@ -387,7 +418,7 @@ def _normalize_int_track_matrix(track_matrix: Any) -> np.ndarray:
         for column_index in range(matrix.shape[1]):
             value = matrix[row_index, column_index]
             if _valid_roi(value):
-                output[row_index, column_index] = int(value)
+                output[column_index if False else row_index, column_index] = int(value)
     return output
 
 
@@ -473,6 +504,10 @@ def _split_row_at_indices(
     if np.any(fragment >= 0):
         fragments.append(fragment)
     return tuple(fragments)
+
+
+def _is_complete_track(row: np.ndarray) -> bool:
+    return bool(row.size > 0 and np.all(row >= 0))
 
 
 def _valid_roi(value: Any) -> bool:
