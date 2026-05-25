@@ -96,6 +96,15 @@ def test_multi_hypothesis_candidates_and_consensus() -> None:
     assert (0, 1, 1, 2) in consensus
 
 
+def test_multi_hypothesis_edge_set_consensus_respects_min_votes() -> None:
+    candidates_a = ((0, 1, 0, 1), (0, 1, 1, 2))
+    candidates_b = ((0, 1, 0, 1), (0, 1, 1, 3))
+
+    consensus = consensus_edges((candidates_a, candidates_b), min_votes=2)
+
+    assert consensus == {(0, 1, 0, 1): 2}
+
+
 def test_joint_registration_anchor_selection_uses_probability_and_margin() -> None:
     probabilities = np.asarray([[0.95, 0.03], [0.55, 0.45], [0.02, 0.97]])
 

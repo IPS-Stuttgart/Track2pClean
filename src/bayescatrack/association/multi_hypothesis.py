@@ -187,7 +187,7 @@ def consensus_edges(
         if matrix.ndim != 2:
             raise ValueError("track matrices or edge sets must be two-dimensional")
         seen_this_model: set[Edge] = set()
-        if min_support_fraction is not None and matrix.shape[1] == 4:
+        if _is_edge_set_input(matrix_values, matrix):
             seen_this_model.update(
                 (int(row[0]), int(row[1]), int(row[2]), int(row[3])) for row in matrix
             )
@@ -202,6 +202,20 @@ def consensus_edges(
         for edge in seen_this_model:
             counts[edge] = counts.get(edge, 0) + 1
     return {edge: votes for edge, votes in counts.items() if votes >= threshold}
+
+
+def _is_edge_set_input(matrix_values: Any, matrix: np.ndarray) -> bool:
+    """Return whether a 2D input is an explicit ``(s, t, i, j)`` edge set."""
+
+    if matrix.shape[1] != 4:
+        return False
+    if isinstance(matrix_values, np.ndarray):
+        # A dense ndarray with four columns is ambiguous with a four-session
+        # track matrix. Keep ndarray inputs on the established track-matrix path
+        # and treat the native tuples returned by top_k_edge_candidates as edge
+        # sets.
+        return False
+    return True
 
 
 def hypotheses_to_matrix(hypotheses: Sequence[TrackHypothesis]) -> np.ndarray:
