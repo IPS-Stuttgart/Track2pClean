@@ -31,6 +31,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Prepare output directory
         id: prep
         shell: bash
@@ -64,11 +69,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v poetry >/dev/null 2>&1; then
-            python3 -m pipx install poetry
-          fi
-          poetry env use python3
-          poetry install --with dev --no-interaction --no-ansi > "${{ steps.prep.outputs.out }}/poetry_install.log" 2>&1
+          python -m pip install --upgrade pip
+          python -m pip install poetry
+          poetry env use "$(which python)"
+          poetry install --with dev --extras track2p --no-interaction --no-ansi > "${{ steps.prep.outputs.out }}/poetry_install.log" 2>&1
           poetry run python -m pip freeze > "${{ steps.prep.outputs.out }}/pip_freeze.txt"
 
       - name: Run focused consensus-cleanup benchmark
