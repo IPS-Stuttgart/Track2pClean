@@ -55,3 +55,17 @@ def test_score_pairwise_matches_f1_is_zero_for_empty_reference_only():
     assert scores["precision"] == 0.0
     assert np.isnan(scores["recall"])
     assert scores["f1"] == 0.0
+
+
+def test_score_pairwise_matches_f1_is_zero_for_disjoint_nonempty_pairs():
+    scores = score_pairwise_matches(
+        predicted_pairs=np.array([[1, 2]], dtype=int),
+        reference_pairs=np.array([[3, 4]], dtype=int),
+    )
+
+    assert scores["true_positives"] == 0
+    assert scores["false_positives"] == 1
+    assert scores["false_negatives"] == 1
+    assert scores["precision"] == 0.0
+    assert scores["recall"] == 0.0
+    assert scores["f1"] == 0.0
