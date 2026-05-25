@@ -603,6 +603,10 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
             args.track_refinement_json,
             "--track-refinement-json",
         ),
+        activity_tie_breaker_weight=args.activity_tie_breaker_weight,
+        activity_tie_breaker_component=args.activity_tie_breaker_component,
+        activity_trace_source=args.activity_trace_source,
+        activity_event_threshold=args.activity_event_threshold,
         calibration_feature_set=args.calibration_feature_set,
         progress=args.progress,
     )
