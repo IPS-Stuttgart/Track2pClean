@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from itertools import product
@@ -45,12 +46,16 @@ class ComponentCleanupSweepConfig:
             raise ValueError("split_penalties must not be empty")
         if not self.min_side_observations:
             raise ValueError("min_side_observations must not be empty")
-        if any(float(value) < 0.0 for value in self.split_risk_thresholds):
-            raise ValueError("split_risk_thresholds entries must be non-negative")
-        if any(float(value) < 0.0 for value in self.split_penalties):
-            raise ValueError("split_penalties entries must be non-negative")
-        if any(int(value) < 1 for value in self.min_side_observations):
-            raise ValueError("min_side_observations entries must be at least 1")
+        if any(_invalid_nonnegative_float(value) for value in self.split_risk_thresholds):
+            raise ValueError(
+                "split_risk_thresholds entries must be finite non-negative values"
+            )
+        if any(_invalid_nonnegative_float(value) for value in self.split_penalties):
+            raise ValueError("split_penalties entries must be finite non-negative values")
+        if any(not _positive_integral_value(value) for value in self.min_side_observations):
+            raise ValueError(
+                "min_side_observations entries must be positive integers"
+            )
 
 
 @dataclass(frozen=True)
@@ -114,6 +119,24 @@ def run_track2p_policy_component_sweep(
         best_candidate=best_candidate,
         objective=sweep_config.objective,
     )
+
+
+def _invalid_nonnegative_float(value: Any) -> bool:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return True
+    return not math.isfinite(numeric) or numeric < 0.0
+
+
+def _positive_integral_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return False
+    return bool(math.isfinite(numeric) and numeric.is_integer() and numeric >= 1.0)
 
 
 def _cleanup_grid(
