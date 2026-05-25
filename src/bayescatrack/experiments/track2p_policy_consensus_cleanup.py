@@ -61,8 +61,8 @@ from bayescatrack.experiments.track2p_policy_component_audit import (
     write_component_rows,
 )
 from bayescatrack.experiments.track2p_policy_multisplit_cleanup import (
+    _select_optimal_split_indices,
     apply_ranked_bridge_splits,
-    split_track_at_bridges,
 )
 from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     emulate_track2p_pruned_tracks,
@@ -327,7 +327,10 @@ def plan_consensus_bridge_splits(
     ``diagnostics_by_edge`` uses ``(session, source_roi, target_roi)`` keys in
     the same ROI-index space as ``predicted_track_matrix``. ``support_counts``
     uses ``(session, next_session, source_roi, target_roi)`` keys as returned by
-    the stability-cleanup helper.
+    the stability-cleanup helper. Candidate bridges are selected with the same
+    global compatible-split optimizer as the multisplit cleanup, rather than a
+    greedy ranked pass, so one central bridge cannot block two stronger
+    compatible side splits.
     """
 
     cfg = config or ConsensusSplitConfig()
@@ -507,8 +510,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.component_output is not None:
         write_component_rows(
             output.component_rows,
-            args.component_output,
             output_format=cast(Literal["csv", "json"], args.component_format),
+            output_path=args.component_output,
         )
     return 0
 
@@ -548,7 +551,7 @@ def _track_split_indices(
 ) -> tuple[int, ...]:
     if cfg.component.require_complete_track and int(np.sum(row >= 0)) != int(row.size):
         return ()
-    candidates: list[tuple[int, float, int]] = []
+    candidate_gains: dict[int, float] = {}
     for session_index in range(max(0, row.size - 1)):
         source = int(row[session_index])
         target = int(row[session_index + 1])
@@ -565,21 +568,35 @@ def _track_split_indices(
         )
         unstable = support < int(cfg.required_support_votes)
         if _passes_mode(risky, unstable, cfg.mode):
-            candidates.append((support, risk, session_index))
+            gain = _consensus_split_gain(risk, support, cfg)
+            split_index = int(session_index)
+            candidate_gains[split_index] = max(
+                float(gain), candidate_gains.get(split_index, -float("inf"))
+            )
 
-    selected: list[int] = []
-    for _, _, split_index in sorted(
-        candidates,
-        key=lambda item: (item[0], -item[1], item[2]),
-    ):
-        if len(selected) >= int(cfg.max_splits_per_component):
-            break
-        proposed = sorted((*selected, split_index))
-        if _fragments_have_min_observations(
-            row, proposed, cfg.component.min_side_observations
-        ):
-            selected.append(split_index)
-    return tuple(sorted(selected))
+    return _select_optimal_split_indices(
+        row,
+        candidate_gains,
+        max_splits=int(cfg.max_splits_per_component),
+        min_observations=int(cfg.component.min_side_observations),
+    )
+
+
+def _consensus_split_gain(
+    risk: float,
+    support: int,
+    cfg: ConsensusSplitConfig,
+) -> float:
+    """Return the optimization gain for one consensus bridge split."""
+
+    risk_gain = float(risk) - float(cfg.component.split_penalty)
+    support_deficit = max(0, int(cfg.required_support_votes) - int(support))
+    if support_deficit > 0:
+        support_bonus = float(support_deficit) * max(
+            float(cfg.component.split_risk_threshold), 1.0
+        )
+        return float(support_bonus + max(risk_gain, 0.0))
+    return float(risk_gain)
 
 
 def _passes_mode(risky: bool, unstable: bool, mode: ConsensusMode) -> bool:
@@ -592,17 +609,6 @@ def _passes_mode(risky: bool, unstable: bool, mode: ConsensusMode) -> bool:
     if mode == "stability-only":
         return bool(unstable)
     raise ValueError(f"unsupported consensus mode: {mode}")
-
-
-def _fragments_have_min_observations(
-    row: np.ndarray,
-    split_indices: Sequence[int],
-    min_observations: int,
-) -> bool:
-    return all(
-        int(np.sum(fragment >= 0)) >= int(min_observations)
-        for fragment in split_track_at_bridges(row, split_indices)
-    )
 
 
 def _enrich_component_rows_with_split_plan(
