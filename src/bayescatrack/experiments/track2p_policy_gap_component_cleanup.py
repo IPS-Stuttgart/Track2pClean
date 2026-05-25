@@ -1,16 +1,11 @@
 """Gap-rescue plus weakest-bridge cleanup for Track2p-policy rows.
 
 The plain Track2p-policy runner can conservatively continue a seed track across
-an isolated missing adjacent link when ``max_gap > 1``.  The component cleanup
-runner can split complete false-positive tracks at weak bridges, but it uses the
-adjacent-only policy track matrix.  This module combines the two operations in a
-separate benchmark row: first run the gap-rescue Track2p-policy propagation,
-then apply the existing weakest-bridge component cleanup on the resulting track
-matrix.
-
-Keeping this as a distinct runner avoids changing the frozen component-cleanup
-row while making the recall/precision trade-off auditable in the same benchmark
-style.
+an isolated missing adjacent link when ``max_gap > 1``. The component-cleanup
+runner can split false complete tracks at weak bridges. This module combines the
+two operations in a distinct benchmark row: first run gap-rescue Track2p-policy
+propagation, then apply the existing weakest-bridge cleanup to the resulting
+track matrix.
 """
 
 from __future__ import annotations
@@ -20,7 +15,6 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, cast
 
-import numpy as np
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
     OutputFormat,
@@ -84,7 +78,6 @@ def run_track2p_policy_gap_component_cleanup(
     )
     if int(policy_config.max_gap) < 1:
         raise ValueError("max_gap must be at least 1")
-
     subject_dirs = discover_subject_dirs(policy_config.data)
     if not subject_dirs:
         raise ValueError(
@@ -152,44 +145,25 @@ def run_track2p_policy_gap_component_cleanup(
         scores = _score_prediction_against_reference(
             cleaned, reference, config=policy_config
         )
-        candidate_splits = int(
-            sum(int(row["would_split_at_weakest_edge"]) for row in subject_rows)
+        scores = _with_scores_metadata(
+            scores,
+            threshold_method=threshold_method,
+            iou_distance_threshold=iou_distance_threshold,
+            cleanup_config=cleanup_config,
+            max_gap=policy_config.max_gap,
+            cell_probability_threshold=policy_config.cell_probability_threshold,
+            transform_type=policy_config.transform_type,
+            apply_splits=apply_splits,
+            component_rows=subject_rows,
         )
-        applied_splits = int(
-            sum(int(row["applied_split"]) for row in subject_rows)
-            if apply_splits
-            else 0
-        )
-        scores = {
-            **scores,
-            "track2p_policy_threshold_method": str(threshold_method),
-            "track2p_policy_iou_distance_threshold": float(iou_distance_threshold),
-            "track2p_policy_cell_probability_threshold": float(
-                policy_config.cell_probability_threshold
-            ),
-            "track2p_policy_transform_type": str(policy_config.transform_type),
-            "track2p_policy_max_gap": int(policy_config.max_gap),
-            "track2p_component_apply_splits": int(apply_splits),
-            "track2p_component_candidate_splits": candidate_splits,
-            "track2p_component_applied_splits": applied_splits,
-            "track2p_component_split_risk_threshold": float(
-                cleanup_config.split_risk_threshold
-            ),
-            "track2p_component_split_penalty": float(cleanup_config.split_penalty),
-            "track2p_component_min_side_observations": int(
-                cleanup_config.min_side_observations
-            ),
-            "track2p_component_require_complete_track": int(
-                cleanup_config.require_complete_track
-            ),
-        }
-        variant = "Track2p-policy gap-rescue weakest-bridge component split"
-        if not apply_splits:
-            variant = "Track2p-policy gap-rescue component audit"
         results.append(
             SubjectBenchmarkResult(
                 subject=subject_dir.name,
-                variant=variant,
+                variant=(
+                    "Track2p-policy gap-rescue weakest-bridge component split"
+                    if apply_splits
+                    else "Track2p-policy gap-rescue component audit"
+                ),
                 method=cast(Any, TRACK2P_POLICY_GAP_COMPONENT_CLEANUP_METHOD),
                 scores=scores,
                 n_sessions=len(sessions),
@@ -212,6 +186,47 @@ def run_track2p_policy_gap_component_cleanup(
             )
         )
     return ComponentAuditOutput(tuple(results), tuple(component_rows))
+
+
+def _with_scores_metadata(
+    scores: Mapping[str, float | int | str],
+    *,
+    threshold_method: ThresholdMethod,
+    iou_distance_threshold: float,
+    cleanup_config: ComponentCleanupConfig,
+    max_gap: int,
+    cell_probability_threshold: float,
+    transform_type: str,
+    apply_splits: bool,
+    component_rows: Sequence[Mapping[str, float | int | str]],
+) -> dict[str, float | int | str]:
+    candidate_splits = int(
+        sum(int(row["would_split_at_weakest_edge"]) for row in component_rows)
+    )
+    applied_splits = int(
+        sum(int(row["applied_split"]) for row in component_rows) if apply_splits else 0
+    )
+    return {
+        **dict(scores),
+        "track2p_policy_threshold_method": str(threshold_method),
+        "track2p_policy_iou_distance_threshold": float(iou_distance_threshold),
+        "track2p_policy_cell_probability_threshold": float(cell_probability_threshold),
+        "track2p_policy_transform_type": str(transform_type),
+        "track2p_policy_max_gap": int(max_gap),
+        "track2p_component_apply_splits": int(apply_splits),
+        "track2p_component_candidate_splits": candidate_splits,
+        "track2p_component_applied_splits": applied_splits,
+        "track2p_component_split_risk_threshold": float(
+            cleanup_config.split_risk_threshold
+        ),
+        "track2p_component_split_penalty": float(cleanup_config.split_penalty),
+        "track2p_component_min_side_observations": int(
+            cleanup_config.min_side_observations
+        ),
+        "track2p_component_require_complete_track": int(
+            cleanup_config.require_complete_track
+        ),
+    }
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -261,17 +276,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "Consecutive Track2p-policy links are still preferred."
         ),
     )
+    parser.add_argument("--apply-splits", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument(
-        "--apply-splits",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Apply weakest-bridge splits before scoring; use --no-apply-splits for audit-only output.",
-    )
-    parser.add_argument(
-        "--require-complete-track",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Only split components observed in every session.",
+        "--require-complete-track", action=argparse.BooleanOptionalAction, default=True
     )
     parser.add_argument("--threshold-margin-scale", type=float, default=0.10)
     parser.add_argument("--competition-margin-scale", type=float, default=0.20)
@@ -289,9 +296,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-track2p-as-reference-for-smoke-test", action="store_true"
     )
-    parser.add_argument(
-        "--include-behavior", action=argparse.BooleanOptionalAction, default=False
-    )
+    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     parser.add_argument("--component-output", type=Path, default=None)
