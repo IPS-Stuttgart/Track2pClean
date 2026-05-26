@@ -50,8 +50,8 @@ def score_track_matrices(
     recall, F1, and count fields with multiset counts.
     """
 
-    _validate_no_boolean_observations(predicted_track_matrix, "predicted_track_matrix")
-    _validate_no_boolean_observations(reference_track_matrix, "reference_track_matrix")
+    _validate_track_matrix_observations(predicted_track_matrix, "predicted_track_matrix")
+    _validate_track_matrix_observations(reference_track_matrix, "reference_track_matrix")
 
     normalized_session_pairs = _normalize_session_pairs(session_pairs)
     normalized_complete_session_indices = _normalize_complete_session_indices(
@@ -105,7 +105,21 @@ def _normalize_session_pairs(
     if session_pairs is None:
         return None
     return tuple(
-        (int(session_a), int(session_b)) for session_a, session_b in session_pairs
+        (
+            _coerce_integer_like_index(
+                session_a,
+                context="session_pairs",
+                index_kind="session",
+                requirement="Session indices must be integer-like",
+            ),
+            _coerce_integer_like_index(
+                session_b,
+                context="session_pairs",
+                index_kind="session",
+                requirement="Session indices must be integer-like",
+            ),
+        )
+        for session_a, session_b in session_pairs
     )
 
 
@@ -114,7 +128,15 @@ def _normalize_complete_session_indices(
 ) -> tuple[int, ...] | None:
     if session_indices is None:
         return None
-    return tuple(int(session_index) for session_index in session_indices)
+    return tuple(
+        _coerce_integer_like_index(
+            session_index,
+            context="complete_session_indices",
+            index_kind="session",
+            requirement="Session indices must be integer-like",
+        )
+        for session_index in session_indices
+    )
 
 
 def _score_multiset_track_links(
@@ -185,9 +207,14 @@ def _complete_track_counter(
     selected_sessions = _selected_sessions(track_matrix, session_indices)
     counter: Counter[tuple[int, ...]] = Counter()
     for row in track_matrix:
-        values = [row[session_index] for session_index in selected_sessions]
-        if all(_is_valid_observation(value) for value in values):
-            counter[tuple(int(value) for value in values)] += 1
+        roi_values: list[int] = []
+        for session_index in selected_sessions:
+            roi_index = _roi_index_or_none(row[session_index])
+            if roi_index is None:
+                break
+            roi_values.append(roi_index)
+        else:
+            counter[tuple(roi_values)] += 1
     return counter
 
 
@@ -199,17 +226,15 @@ def _track_link_counter(
     counter: Counter[TrackLink] = Counter()
     for session_a, session_b in _session_pairs(track_matrix, session_pairs):
         for row in track_matrix:
-            observation_a = row[session_a]
-            observation_b = row[session_b]
-            if _is_valid_observation(observation_a) and _is_valid_observation(
-                observation_b
-            ):
+            observation_a = _roi_index_or_none(row[session_a])
+            observation_b = _roi_index_or_none(row[session_b])
+            if observation_a is not None and observation_b is not None:
                 counter[
                     (
                         int(session_a),
                         int(session_b),
-                        int(observation_a),
-                        int(observation_b),
+                        observation_a,
+                        observation_b,
                     )
                 ] += 1
     return counter
@@ -222,7 +247,15 @@ def _selected_sessions(
     selected = (
         tuple(range(matrix.shape[1]))
         if session_indices is None
-        else tuple(int(index) for index in session_indices)
+        else tuple(
+            _coerce_integer_like_index(
+                index,
+                context="complete_session_indices",
+                index_kind="session",
+                requirement="Session indices must be integer-like",
+            )
+            for index in session_indices
+        )
     )
     if not selected:
         raise ValueError("At least one session must be selected")
@@ -239,7 +272,21 @@ def _session_pairs(
         tuple((index, index + 1) for index in range(max(0, matrix.shape[1] - 1)))
         if session_pairs is None
         else tuple(
-            (int(session_a), int(session_b)) for session_a, session_b in session_pairs
+            (
+                _coerce_integer_like_index(
+                    session_a,
+                    context="session_pairs",
+                    index_kind="session",
+                    requirement="Session indices must be integer-like",
+                ),
+                _coerce_integer_like_index(
+                    session_b,
+                    context="session_pairs",
+                    index_kind="session",
+                    requirement="Session indices must be integer-like",
+                ),
+            )
+            for session_a, session_b in session_pairs
         )
     )
     for session_a, session_b in pairs:
@@ -264,29 +311,79 @@ def _validate_compatible_shapes(predicted: np.ndarray, reference: np.ndarray) ->
         )
 
 
-def _validate_no_boolean_observations(track_matrix: Any, matrix_name: str) -> None:
+def _validate_track_matrix_observations(track_matrix: Any, matrix_name: str) -> None:
     array = np.asarray(track_matrix, dtype=object)
     for index, value in np.ndenumerate(array):
-        if isinstance(value, (bool, np.bool_)):
-            raise ValueError(
-                f"{matrix_name} contains boolean ROI index at {index}: {value!r}; "
-                "ROI observations must be integer-like or missing"
-            )
+        if _is_missing_observation(value):
+            continue
+        _coerce_integer_like_index(
+            value,
+            context=matrix_name,
+            index_kind="ROI",
+            location=index,
+            requirement="ROI observations must be integer-like or missing",
+        )
+
+
+def _is_missing_observation(value: object) -> bool:
+    if value is None:
+        return True
+    return isinstance(value, (float, np.floating)) and np.isnan(value)
+
+
+def _roi_index_or_none(value: object) -> int | None:
+    if _is_missing_observation(value):
+        return None
+    roi_index = _coerce_integer_like_index(
+        value,
+        context="track_matrix",
+        index_kind="ROI",
+        requirement="ROI observations must be integer-like or missing",
+    )
+    if roi_index < 0:
+        return None
+    return roi_index
 
 
 def _is_valid_observation(value: object) -> bool:
-    if value is None:
-        return False
+    return _roi_index_or_none(value) is not None
+
+
+def _coerce_integer_like_index(
+    value: object,
+    *,
+    context: str,
+    index_kind: str,
+    requirement: str,
+    location: tuple[int, ...] | None = None,
+) -> int:
+    location_text = "" if location is None else f" at {location}"
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(
-            f"ROI index must be integer-like or missing, got boolean {value!r}"
+            f"{context} contains boolean {index_kind} index{location_text}: {value!r}; "
+            f"{requirement}"
         )
-    if isinstance(value, (float, np.floating)) and np.isnan(value):
-        return False
-    try:
-        return int(value) >= 0
-    except (TypeError, ValueError):
-        return False
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        if np.isfinite(value) and float(value).is_integer():
+            return int(value)
+        raise ValueError(
+            f"{context} contains non-integer {index_kind} index{location_text}: {value!r}; "
+            f"{requirement}"
+        )
+    if isinstance(value, str):
+        try:
+            return int(value.strip(), 10)
+        except ValueError as exc:
+            raise ValueError(
+                f"{context} contains non-integer {index_kind} index{location_text}: {value!r}; "
+                f"{requirement}"
+            ) from exc
+    raise ValueError(
+        f"{context} contains non-integer {index_kind} index{location_text}: {value!r}; "
+        f"{requirement}"
+    )
 
 
 def _precision(true_positives: int, predicted_total: int) -> float:
