@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from bayescatrack.experiments.track2p_input_validator import (
     Track2pInputValidationConfig,
+    _valid_reference_roi_values,
     format_validation_markdown,
     run_track2p_input_validation,
 )
@@ -112,3 +113,17 @@ def test_track2p_input_validator_rejects_non_manual_references(
                 input_format="npy",
             )
         )
+
+
+def test_valid_reference_roi_values_rejects_fractional_values():
+    with pytest.raises(ValueError, match="integer-like"):
+        _valid_reference_roi_values(np.asarray([0, 1.5], dtype=object))
+
+    with pytest.raises(ValueError, match="integer-like"):
+        _valid_reference_roi_values(np.asarray([0, "1.5"], dtype=object))
+
+
+def test_valid_reference_roi_values_accepts_integer_like_values():
+    assert _valid_reference_roi_values(
+        np.asarray([0, 1.0, "2.0", None, float("nan"), -1], dtype=object)
+    ) == {0, 1, 2}
