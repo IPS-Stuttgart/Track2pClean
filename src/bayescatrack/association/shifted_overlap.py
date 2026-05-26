@@ -254,47 +254,26 @@ def pairwise_shifted_overlap_matrices(
             radius=radius,
         )
 
-    cost_shape = (int(reference_array.shape[0]), int(measurement_array.shape[0]))
-    best_iou: np.ndarray = np.zeros(cost_shape, dtype=float)
-    best_cosine: np.ndarray | None = (
-        np.zeros(cost_shape, dtype=float) if include_mask_cosine else None
+    shifted_iou_result = _pairwise_shifted_iou_from_support(
+        reference_array,
+        measurement_array,
+        radius=radius,
     )
-    best_shift_y: np.ndarray = np.zeros(cost_shape, dtype=float)
-    best_shift_x: np.ndarray = np.zeros(cost_shape, dtype=float)
-    best_shift_norm: np.ndarray = np.zeros(cost_shape, dtype=float)
+    cost_shape = shifted_iou_result["shifted_iou"].shape
+    best_cosine = np.zeros(cost_shape, dtype=float)
 
     for dy, dx in shift_offsets(radius):
         shifted_measurement = shift_mask_stack(measurement_array, dy=dy, dx=dx)
-        iou = _bridge_impl._pairwise_iou_matrix(  # pylint: disable=protected-access
+        cosine = _pairwise_shifted_mask_cosine_similarity(
             reference_array,
+            measurement_array,
             shifted_measurement,
+            similarity_epsilon=similarity_epsilon,
         )
-        improved = iou > best_iou
-        if np.any(improved):
-            shift_norm = float(np.hypot(dy, dx))
-            best_iou[improved] = iou[improved]
-            best_shift_y[improved] = float(dy)
-            best_shift_x[improved] = float(dx)
-            best_shift_norm[improved] = shift_norm
+        np.maximum(best_cosine, cosine, out=best_cosine)
 
-        if include_mask_cosine:
-            assert best_cosine is not None
-            cosine = _bridge_impl._pairwise_mask_cosine_similarity(  # pylint: disable=protected-access
-                reference_array,
-                shifted_measurement,
-                similarity_epsilon=similarity_epsilon,
-            )
-            np.maximum(best_cosine, cosine, out=best_cosine)
-
-    result: dict[str, np.ndarray] = {
-        "shifted_iou": best_iou,
-        "shifted_iou_shift_y": best_shift_y,
-        "shifted_iou_shift_x": best_shift_x,
-        "shifted_iou_shift_norm": best_shift_norm,
-    }
-    if include_mask_cosine:
-        assert best_cosine is not None
-        result["shifted_mask_cosine_similarity"] = best_cosine
+    result = dict(shifted_iou_result)
+    result["shifted_mask_cosine_similarity"] = best_cosine
     return result
 
 
@@ -330,10 +309,6 @@ def _pairwise_shifted_iou_from_support(
             continue
         shifted_pixels = shifted_y[valid] * width + shifted_x[valid]
         shifted_rois = measurement_support.roi[valid]
-        shifted_areas = np.bincount(
-            shifted_rois,
-            minlength=n_measurement,
-        ).astype(float)
         intersections = _pairwise_binary_intersections_from_support(
             reference_pixel,
             reference_roi,
@@ -344,8 +319,15 @@ def _pairwise_shifted_iou_from_support(
             num_pixels=int(height * width),
             reference_is_sorted=True,
         )
+
+        # Keep the source ROI area in the union. A candidate residual shift may
+        # move part of the measurement ROI outside the FOV, but cropping those
+        # pixels out of the denominator would make edge-of-frame false matches
+        # look spuriously accurate.
         unions = (
-            reference_support.areas[:, None] + shifted_areas[None, :] - intersections
+            reference_support.areas[:, None]
+            + measurement_support.areas[None, :]
+            - intersections
         )
         iou: np.ndarray = np.zeros(cost_shape, dtype=float)
         valid_unions = unions > 0.0
@@ -364,6 +346,33 @@ def _pairwise_shifted_iou_from_support(
         "shifted_iou_shift_x": best_shift_x,
         "shifted_iou_shift_norm": best_shift_norm,
     }
+
+
+def _pairwise_shifted_mask_cosine_similarity(
+    reference_masks: np.ndarray,
+    measurement_masks: np.ndarray,
+    shifted_measurement_masks: np.ndarray,
+    *,
+    similarity_epsilon: float,
+) -> np.ndarray:
+    """Return shifted cosine while preserving original measurement norms."""
+
+    numerator = _bridge_impl._pairwise_sparse_mask_dot(  # pylint: disable=protected-access
+        reference_masks,
+        shifted_measurement_masks,
+        binary=False,
+    )
+    denom_reference = _bridge_impl._mask_l2_norms(  # pylint: disable=protected-access
+        reference_masks
+    )
+    denom_measurement = _bridge_impl._mask_l2_norms(  # pylint: disable=protected-access
+        measurement_masks
+    )
+    denominator = np.maximum(
+        denom_reference[:, None] * denom_measurement[None, :],
+        similarity_epsilon,
+    )
+    return numerator / denominator
 
 
 @dataclass(frozen=True)
