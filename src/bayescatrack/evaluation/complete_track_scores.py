@@ -31,6 +31,7 @@ from pyrecest.utils.track_evaluation import (
 )
 
 TrackLink = tuple[int, int, int, int]
+_MISSING_OBSERVATION_STRINGS = frozenset({"", "none", "nan", "null"})
 
 
 def score_track_matrices(
@@ -50,10 +51,10 @@ def score_track_matrices(
     recall, F1, and count fields with multiset counts.
     """
 
-    _validate_track_matrix_observations(
+    predicted_observations = _normalize_track_matrix_observations(
         predicted_track_matrix, "predicted_track_matrix"
     )
-    _validate_track_matrix_observations(
+    reference_observations = _normalize_track_matrix_observations(
         reference_track_matrix, "reference_track_matrix"
     )
 
@@ -63,14 +64,14 @@ def score_track_matrices(
     )
     scores = dict(
         _pyrecest_score_track_matrices(
-            predicted_track_matrix,
-            reference_track_matrix,
+            predicted_observations,
+            reference_observations,
             session_pairs=normalized_session_pairs,
             complete_session_indices=normalized_complete_session_indices,
         )
     )
-    predicted = normalize_track_matrix(predicted_track_matrix)
-    reference = normalize_track_matrix(reference_track_matrix)
+    predicted = normalize_track_matrix(predicted_observations)
+    reference = normalize_track_matrix(reference_observations)
     _validate_compatible_shapes(predicted, reference)
 
     scores.update(
@@ -315,23 +316,28 @@ def _validate_compatible_shapes(predicted: np.ndarray, reference: np.ndarray) ->
         )
 
 
-def _validate_track_matrix_observations(track_matrix: Any, matrix_name: str) -> None:
+def _normalize_track_matrix_observations(track_matrix: Any, matrix_name: str) -> np.ndarray:
     array = np.asarray(track_matrix, dtype=object)
+    normalized = np.empty(array.shape, dtype=object)
     for index, value in np.ndenumerate(array):
         if _is_missing_observation(value):
+            normalized[index] = -1
             continue
-        _coerce_integer_like_index(
+        normalized[index] = _coerce_integer_like_index(
             value,
             context=matrix_name,
             index_kind="ROI",
             location=index,
             requirement="ROI observations must be integer-like or missing",
         )
+    return normalized
 
 
 def _is_missing_observation(value: object) -> bool:
     if value is None:
         return True
+    if isinstance(value, str):
+        return value.strip().lower() in _MISSING_OBSERVATION_STRINGS
     return isinstance(value, (float, np.floating)) and np.isnan(value)
 
 
