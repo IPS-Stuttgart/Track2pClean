@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from bayescatrack.experiments.track2p_policy_gap_consensus_cleanup import (
-    TRACK2P_POLICY_GAP_CONSENSUS_DEFAULT_MAX_GAP,
-    build_arg_parser,
-)
 from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
     TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+)
+from bayescatrack.experiments.track2p_policy_gap_consensus_cleanup import (
+    TRACK2P_POLICY_GAP_CONSENSUS_DEFAULT_MAX_GAP,
+    build_arg_parser,
 )
 
 
@@ -15,7 +15,10 @@ def test_gap_consensus_cleanup_parser_defaults_to_gap_rescue_consensus() -> None
 
     assert args.max_gap == TRACK2P_POLICY_GAP_CONSENSUS_DEFAULT_MAX_GAP
     assert args.threshold_method == TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD
-    assert args.base_iou_distance_threshold == TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD
+    assert (
+        args.base_iou_distance_threshold
+        == TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD
+    )
     assert args.apply_splits is True
     assert args.require_complete_track is True
     assert args.consensus_mode == "risk-and-stability"

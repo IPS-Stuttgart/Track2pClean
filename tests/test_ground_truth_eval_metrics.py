@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bayescatrack.ground_truth_eval import (
     TrackTable,
     complete_tracks_score,
@@ -58,9 +57,7 @@ def test_evaluate_track_table_prediction_counts_only_complete_exact_matches():
 def test_long_format_rejects_missing_track_ids(tmp_path):
     csv_path = tmp_path / "tracks.csv"
     csv_path.write_text(
-        "track_id,session,roi\n"
-        ",s1,10\n"
-        "nan,s2,20\n",
+        "track_id,session,roi\n" ",s1,10\n" "nan,s2,20\n",
         encoding="utf-8",
     )
 
@@ -71,9 +68,7 @@ def test_long_format_rejects_missing_track_ids(tmp_path):
 def test_long_format_rejects_missing_session_names(tmp_path):
     csv_path = tmp_path / "tracks.csv"
     csv_path.write_text(
-        "track_id,session,roi\n"
-        "track_1,,10\n"
-        "track_2,nan,20\n",
+        "track_id,session,roi\n" "track_1,,10\n" "track_2,nan,20\n",
         encoding="utf-8",
     )
 

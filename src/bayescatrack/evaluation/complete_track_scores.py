@@ -50,8 +50,12 @@ def score_track_matrices(
     recall, F1, and count fields with multiset counts.
     """
 
-    _validate_track_matrix_observations(predicted_track_matrix, "predicted_track_matrix")
-    _validate_track_matrix_observations(reference_track_matrix, "reference_track_matrix")
+    _validate_track_matrix_observations(
+        predicted_track_matrix, "predicted_track_matrix"
+    )
+    _validate_track_matrix_observations(
+        reference_track_matrix, "reference_track_matrix"
+    )
 
     normalized_session_pairs = _normalize_session_pairs(session_pairs)
     normalized_complete_session_indices = _normalize_complete_session_indices(

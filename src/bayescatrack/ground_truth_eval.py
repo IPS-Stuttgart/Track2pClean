@@ -206,7 +206,9 @@ def _infer_semicolon_session_count(
         if not semicolon_values:
             continue
         nonempty_plain_values = [
-            value for value in values if ";" not in value and not _is_missing_text(value)
+            value
+            for value in values
+            if ";" not in value and not _is_missing_text(value)
         ]
         if len(semicolon_values) == 1 and not nonempty_plain_values:
             widths.append(len(semicolon_values[0].split(";")))
