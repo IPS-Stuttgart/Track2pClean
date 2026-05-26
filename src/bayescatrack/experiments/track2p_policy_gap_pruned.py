@@ -124,7 +124,9 @@ def tracks_from_gap_links(
             continue
         while current_session < len(sessions) - 1:
             matched = False
-            for step in range(1, min(int(max_gap), len(sessions) - 1 - current_session) + 1):
+            for step in range(
+                1, min(int(max_gap), len(sessions) - 1 - current_session) + 1
+            ):
                 links = links_by_gap.get((current_session, step))
                 if links is None or not links.size:
                     continue
@@ -140,10 +142,14 @@ def tracks_from_gap_links(
                 break
 
     suite2p_tracks = np.full_like(local_tracks, -1)
-    for session_index, roi_indices in enumerate(_roi_indices(session) for session in sessions):
+    for session_index, roi_indices in enumerate(
+        _roi_indices(session) for session in sessions
+    ):
         valid = local_tracks[:, session_index] >= 0
         if np.any(valid):
-            suite2p_tracks[valid, session_index] = roi_indices[local_tracks[valid, session_index]]
+            suite2p_tracks[valid, session_index] = roi_indices[
+                local_tracks[valid, session_index]
+            ]
     return suite2p_tracks
 
 
