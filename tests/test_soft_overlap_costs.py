@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack import CalciumPlaneData
 from bayescatrack.association import pyrecest_global_assignment as global_assignment
 from bayescatrack.soft_overlap_costs import registered_soft_iou_cost_kwargs
@@ -52,3 +53,13 @@ def test_registered_soft_iou_preset_is_available_to_global_assignment_dispatcher
     assert dispatcher_kwargs["iou_weight"] == 0.0
     assert dispatcher_kwargs["soft_iou_weight"] > 0.0
     assert dispatcher_kwargs["distance_transform_overlap_weight"] > 0.0
+
+
+def test_registered_soft_iou_rejects_fractional_radius():
+    with pytest.raises(ValueError, match="soft_iou_radius"):
+        registered_soft_iou_cost_kwargs(soft_iou_radius=1.5)
+
+
+def test_registered_soft_iou_rejects_boolean_radius():
+    with pytest.raises(ValueError, match="distance_transform_overlap_radius"):
+        registered_soft_iou_cost_kwargs(distance_transform_overlap_radius=True)
