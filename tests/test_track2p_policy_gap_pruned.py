@@ -74,3 +74,20 @@ def test_tracks_from_gap_links_uses_skip_when_consecutive_missing() -> None:
     )
 
     np.testing.assert_array_equal(tracks, [[10, -1, 30]])
+
+
+def test_tracks_from_gap_links_uses_skip_to_avoid_consecutive_dead_end() -> None:
+    sessions = [_Session((10,)), _Session((20,)), _Session((30,)), _Session((40,))]
+    links_by_gap = {
+        (0, 1): np.asarray([[0, 0]], dtype=int),
+        (0, 2): np.asarray([[0, 0]], dtype=int),
+        (1, 1): np.zeros((0, 2), dtype=int),
+        (1, 2): np.zeros((0, 2), dtype=int),
+        (2, 1): np.asarray([[0, 0]], dtype=int),
+    }
+
+    tracks = tracks_from_gap_links(  # type: ignore[arg-type]
+        sessions, links_by_gap, max_gap=2
+    )
+
+    np.testing.assert_array_equal(tracks, [[10, -1, 30, 40]])

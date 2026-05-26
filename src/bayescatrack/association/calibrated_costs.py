@@ -205,6 +205,7 @@ class ReferenceTrainingOptions:
     auto_registration_candidates: tuple[str, ...] = ()
     fov_affine_mask_warp_mode: str = "nearest"
     pairwise_cost_kwargs: Mapping[str, Any] | None = None
+    restrict_training_to_reference_rois: bool = True
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,7 @@ class ReferencePairwiseExamples:
     reference_roi_indices: np.ndarray
     measurement_roi_indices: np.ndarray
     feature_names: tuple[str, ...]
+    supervised_mask: np.ndarray | None = None
 
     @property
     def gap(self) -> int:
@@ -326,6 +328,48 @@ def label_matrix_from_reference(
     return labels
 
 
+def supervised_pairwise_mask_from_reference(
+    reference: Track2pReference,
+    session_a: int,
+    session_b: int,
+    *,
+    reference_roi_indices: Any,
+    measurement_roi_indices: Any,
+    curated_only: bool = False,
+) -> np.ndarray:
+    """Return pairwise entries whose two endpoint ROIs are annotated.
+
+    A missing Track2p reference entry means "unknown", not "definitely not the
+    same cell".  When calibrated association models are trained from sparse or
+    manually curated references, treating every unlabeled pair as a negative can
+    inject many false negatives.  This mask keeps positives and annotated
+    negatives, while excluding pairs involving ROIs that have no reference label
+    in the corresponding session.
+    """
+
+    loaded_reference_indices = np.asarray(reference_roi_indices, dtype=int).reshape(-1)
+    loaded_measurement_indices = np.asarray(
+        measurement_roi_indices, dtype=int
+    ).reshape(-1)
+    filtered_reference = reference.filtered_indices(curated_only=curated_only)
+
+    annotated_reference_rois = _present_reference_roi_set(
+        filtered_reference[:, session_a]
+    )
+    annotated_measurement_rois = _present_reference_roi_set(
+        filtered_reference[:, session_b]
+    )
+    supervised_reference = _isin_roi_set(
+        loaded_reference_indices,
+        annotated_reference_rois,
+    )
+    supervised_measurement = _isin_roi_set(
+        loaded_measurement_indices,
+        annotated_measurement_rois,
+    )
+    return supervised_reference[:, None] & supervised_measurement[None, :]
+
+
 # pylint: disable=too-many-arguments
 def collect_reference_training_examples(
     sessions: Sequence[Track2pSession],
@@ -342,12 +386,24 @@ def collect_reference_training_examples(
         session_edges=session_edges,
         options=options,
     )
-    feature_blocks = [
-        block.features.reshape(-1, block.features.shape[-1]) for block in example_blocks
-    ]
-    label_blocks = [block.labels.reshape(-1) for block in example_blocks]
+    feature_blocks: list[np.ndarray] = []
+    label_blocks: list[np.ndarray] = []
+    for block in example_blocks:
+        features = np.asarray(block.features, dtype=float)
+        labels = np.asarray(block.labels, dtype=int)
+        if features.ndim != 3:
+            raise ValueError("Pairwise training features must be three-dimensional")
+        if labels.shape != features.shape[:2]:
+            raise ValueError(
+                "Pairwise labels must match the first two feature dimensions"
+            )
+        supervised_mask = _validated_supervised_mask(block, labels.shape)
+        if not np.any(supervised_mask):
+            continue
+        feature_blocks.append(features[supervised_mask].reshape(-1, features.shape[-1]))
+        label_blocks.append(labels[supervised_mask].reshape(-1))
     if not feature_blocks:
-        raise ValueError("At least one training edge is required")
+        raise ValueError("At least one supervised training pair is required")
     return np.concatenate(feature_blocks, axis=0), np.concatenate(label_blocks, axis=0)
 
 
@@ -381,6 +437,18 @@ def collect_reference_pairwise_example_blocks(
             measurement_roi_indices=bundle.measurement_roi_indices,
             curated_only=options.curated_only,
         )
+        supervised_mask = (
+            supervised_pairwise_mask_from_reference(
+                reference,
+                session_a,
+                session_b,
+                reference_roi_indices=bundle.reference_roi_indices,
+                measurement_roi_indices=bundle.measurement_roi_indices,
+                curated_only=options.curated_only,
+            )
+            if options.restrict_training_to_reference_rois
+            else np.ones(labels.shape, dtype=bool)
+        )
         blocks.append(
             ReferencePairwiseExamples(
                 session_a=int(session_a),
@@ -394,6 +462,7 @@ def collect_reference_pairwise_example_blocks(
                     bundle.measurement_roi_indices, dtype=int
                 ).reshape(-1),
                 feature_names=tuple(options.feature_names),
+                supervised_mask=supervised_mask,
             )
         )
     if not blocks:
@@ -635,6 +704,32 @@ def _zero_like_pairwise_component(pairwise_components: Mapping[str, Any]) -> np.
     raise KeyError(
         "Pairwise components do not contain any two-dimensional matrix to infer feature shape"
     )
+
+
+def _validated_supervised_mask(
+    block: ReferencePairwiseExamples,
+    label_shape: tuple[int, int],
+) -> np.ndarray:
+    if block.supervised_mask is None:
+        return np.ones(label_shape, dtype=bool)
+    supervised_mask = np.asarray(block.supervised_mask, dtype=bool)
+    if supervised_mask.shape != label_shape:
+        raise ValueError("supervised_mask must match the pairwise label matrix shape")
+    return supervised_mask
+
+
+def _present_reference_roi_set(values: Any) -> set[int]:
+    return {
+        int(value)
+        for value in np.asarray(values, dtype=object).reshape(-1)
+        if value is not None
+    }
+
+
+def _isin_roi_set(roi_indices: np.ndarray, roi_set: set[int]) -> np.ndarray:
+    if not roi_set:
+        return np.zeros(np.asarray(roi_indices).shape, dtype=bool)
+    return np.isin(np.asarray(roi_indices, dtype=int), np.asarray(sorted(roi_set)))
 
 
 def _reference_position_covariances(reference_state_covariances: Any) -> np.ndarray:
