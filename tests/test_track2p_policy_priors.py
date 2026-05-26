@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.association.track2p_policy_priors import (
     Track2pPolicyPriorConfig,
     apply_track2p_policy_edge_prior,
@@ -152,3 +153,36 @@ def test_policy_prior_can_rescue_row_top_k_edges() -> None:
     assert bool(mask[0, 1])
     assert bool(mask[0, 2])
     assert not bool(mask[0, 0])
+
+
+def test_policy_prior_can_rescue_column_top_k_edges() -> None:
+    iou = np.asarray(
+        [
+            [0.90, 0.39],
+            [0.88, 0.10],
+            [0.05, 0.95],
+        ],
+        dtype=float,
+    )
+
+    mask = track2p_policy_edge_mask(
+        iou,
+        config=Track2pPolicyPriorConfig(
+            threshold_method="otsu",
+            column_top_k=2,
+            rescue_min_iou=0.85,
+            rescue_margin=0.10,
+        ),
+    )
+
+    assert bool(mask[0, 0])
+    assert bool(mask[1, 0])
+    assert bool(mask[2, 1])
+    assert not bool(mask[0, 1])
+    assert not bool(mask[1, 1])
+    assert not bool(mask[2, 0])
+
+
+def test_policy_config_rejects_negative_column_top_k() -> None:
+    with pytest.raises(ValueError, match="column_top_k"):
+        Track2pPolicyPriorConfig(column_top_k=-1)
