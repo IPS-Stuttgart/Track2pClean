@@ -54,15 +54,18 @@ class TrackTable:
 
     def __post_init__(self) -> None:
         session_names = tuple(str(name) for name in self.session_names)
-        tracks = np.asarray(self.tracks, dtype=int)
-        if tracks.ndim != 2:
+        raw_tracks = np.asarray(self.tracks, dtype=object)
+        if raw_tracks.ndim != 2:
             raise ValueError("tracks must have shape (n_tracks, n_sessions)")
-        if tracks.shape[1] != len(session_names):
+        if raw_tracks.shape[1] != len(session_names):
             raise ValueError(
                 "tracks second dimension must equal the number of session names"
             )
         if len(session_names) == 0:
             raise ValueError("session_names must not be empty")
+        tracks = np.empty(raw_tracks.shape, dtype=int)
+        for index, value in np.ndenumerate(raw_tracks):
+            tracks[index] = _parse_roi_value(value)
         object.__setattr__(self, "session_names", session_names)
         object.__setattr__(self, "tracks", tracks)
 
@@ -145,29 +148,43 @@ def _parse_required_long_text(value: object, *, column_name: str) -> str:
     return text
 
 
+def _validate_roi_index(index: int, *, raw_value: object) -> int:
+    if index < -1:
+        raise ValueError(
+            "ROI index must be non-negative or -1 for missing, "
+            f"got {raw_value!r}"
+        )
+    return int(index)
+
+
 def _parse_roi_value(  # pylint: disable=too-many-return-statements
-    value: str | int | float | None,
+    value: object,
 ) -> int:
     if value is None:
         return -1
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"ROI index must not be boolean, got {value!r}")
     if isinstance(value, (int, np.integer)):
-        return int(value)
+        return _validate_roi_index(int(value), raw_value=value)
     if isinstance(value, (float, np.floating)):
         if np.isnan(value):
             return -1
         if float(value).is_integer():
-            return int(value)
+            return _validate_roi_index(int(value), raw_value=value)
         raise ValueError(f"ROI index must be integer-like, got {value!r}")
 
     text = str(value).strip()
     if _is_missing_text(text):
         return -1
-    number = float(text)
+    try:
+        number = float(text)
+    except ValueError as exc:
+        raise ValueError(f"ROI index must be integer-like, got {value!r}") from exc
     if np.isnan(number):
         return -1
     if not float(number).is_integer():
         raise ValueError(f"ROI index must be integer-like, got {value!r}")
-    return int(number)
+    return _validate_roi_index(int(number), raw_value=value)
 
 
 def _parse_semicolon_roi_values(value: str, *, n_sessions: int) -> list[int]:
