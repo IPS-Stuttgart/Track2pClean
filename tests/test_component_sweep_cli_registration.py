@@ -39,7 +39,9 @@ def test_gap_consensus_cleanup_is_registered():
 
     assert canonical == "track2p-policy-gap-consensus-cleanup"
     assert cli._BENCHMARK_ALIASES["track2p-gap-rescue-consensus-cleanup"] == canonical
-    assert cli._BENCHMARK_ALIASES["track2p-component-gap-consensus-cleanup"] == canonical
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-component-gap-consensus-cleanup"] == canonical
+    )
     assert cli._BENCHMARK_COMMANDS[canonical].module == (
         "bayescatrack.experiments.track2p_policy_gap_consensus_cleanup"
     )
