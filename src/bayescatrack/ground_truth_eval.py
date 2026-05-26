@@ -134,6 +134,17 @@ def _normalize_header(header: str) -> str:
     return header.strip().lower().replace(" ", "_")
 
 
+def _is_missing_text(value: object) -> bool:
+    return _normalize_header(str(value).strip()) in _MISSING_VALUE_STRINGS
+
+
+def _parse_required_long_text(value: object, *, column_name: str) -> str:
+    text = str(value).strip()
+    if _is_missing_text(text):
+        raise ValueError(f"Long-format CSV contains missing {column_name}")
+    return text
+
+
 def _parse_roi_value(  # pylint: disable=too-many-return-statements
     value: str | int | float | None,
 ) -> int:
@@ -149,7 +160,7 @@ def _parse_roi_value(  # pylint: disable=too-many-return-statements
         raise ValueError(f"ROI index must be integer-like, got {value!r}")
 
     text = str(value).strip()
-    if _normalize_header(text) in _MISSING_VALUE_STRINGS:
+    if _is_missing_text(text):
         return -1
     number = float(text)
     if np.isnan(number):
@@ -166,14 +177,8 @@ def _parse_semicolon_roi_values(value: str, *, n_sessions: int) -> list[int]:
     if len(parts) < n_sessions:
         parts.extend([""] * (n_sessions - len(parts)))
     extra_parts = parts[n_sessions:]
-    nonempty_parts = [
-        part for part in parts if _normalize_header(part) not in _MISSING_VALUE_STRINGS
-    ]
-    nonempty_extra_parts = [
-        part
-        for part in extra_parts
-        if _normalize_header(part) not in _MISSING_VALUE_STRINGS
-    ]
+    nonempty_parts = [part for part in parts if not _is_missing_text(part)]
+    nonempty_extra_parts = [part for part in extra_parts if not _is_missing_text(part)]
     if nonempty_extra_parts:
         raise ValueError(
             "semicolon-encoded track has more non-empty entries than sessions "
@@ -201,10 +206,7 @@ def _infer_semicolon_session_count(
         if not semicolon_values:
             continue
         nonempty_plain_values = [
-            value
-            for value in values
-            if ";" not in value
-            and _normalize_header(value) not in _MISSING_VALUE_STRINGS
+            value for value in values if ";" not in value and not _is_missing_text(value)
         ]
         if len(semicolon_values) == 1 and not nonempty_plain_values:
             widths.append(len(semicolon_values[0].split(";")))
@@ -237,9 +239,7 @@ def _semicolon_encoded_row(
     if not semicolon_values:
         return None
     nonempty_plain_values = [
-        value
-        for value in values
-        if ";" not in value and _normalize_header(value) not in _MISSING_VALUE_STRINGS
+        value for value in values if ";" not in value and not _is_missing_text(value)
     ]
     if len(semicolon_values) == 1 and not nonempty_plain_values:
         return _parse_semicolon_roi_values(semicolon_values[0], n_sessions=n_sessions)
@@ -292,7 +292,9 @@ def _load_long_format(  # pylint: disable=too-many-locals
         ordered_sessions: list[str] = []
         seen_sessions: set[str] = set()
         for row in rows:
-            session_name = str(row[session_header]).strip()
+            session_name = _parse_required_long_text(
+                row[session_header], column_name="session name"
+            )
             if session_name not in seen_sessions:
                 seen_sessions.add(session_name)
                 ordered_sessions.append(session_name)
@@ -303,8 +305,10 @@ def _load_long_format(  # pylint: disable=too-many-locals
     session_to_index = {name: index for index, name in enumerate(session_names)}
     grouped: dict[str, np.ndarray] = {}
     for row in rows:
-        track_id = str(row[track_header]).strip()
-        session_name = str(row[session_header]).strip()
+        track_id = _parse_required_long_text(row[track_header], column_name="track id")
+        session_name = _parse_required_long_text(
+            row[session_header], column_name="session name"
+        )
         if session_name not in session_to_index:
             continue
         roi_index = _parse_roi_value(row[roi_header])
