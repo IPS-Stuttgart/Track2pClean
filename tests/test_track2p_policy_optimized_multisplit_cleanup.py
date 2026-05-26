@@ -28,3 +28,28 @@ def test_optimizer_prefers_best_feasible_subset() -> None:
     )
 
     assert selected == (1, 3)
+
+
+def test_optimizer_filters_invalid_bridge_indices() -> None:
+    track = np.asarray([1, 2, 3], dtype=int)
+    config = MultiSplitCleanupConfig(
+        component=ComponentCleanupConfig(
+            split_risk_threshold=0.0,
+            split_penalty=0.0,
+            min_side_observations=1,
+        ),
+        max_splits_per_component=2,
+    )
+
+    selected = _best_feasible_split_subset(
+        track,
+        {
+            -1: 100.0,
+            0: 1.0,
+            2: 100.0,
+            99: 100.0,
+        },
+        config=config,
+    )
+
+    assert selected == (0,)
