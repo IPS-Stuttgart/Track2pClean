@@ -34,6 +34,17 @@ def test_consensus_cleanup_is_registered():
     )
 
 
+def test_gap_pruned_policy_is_registered():
+    canonical = cli._BENCHMARK_ALIASES["track2p-gap-pruned"]
+
+    assert canonical == "track2p-policy-gap-pruned"
+    assert cli._BENCHMARK_ALIASES["track2p-gap-rescue-pruned"] == canonical
+    assert cli._BENCHMARK_ALIASES["track2p-policy-gap-rescue-pruned"] == canonical
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_gap_pruned_benchmark"
+    )
+
+
 def test_gap_consensus_cleanup_is_registered():
     canonical = cli._BENCHMARK_ALIASES["track2p-gap-consensus-cleanup"]
 
