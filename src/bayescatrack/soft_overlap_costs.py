@@ -8,6 +8,7 @@ reference ROI, but exact-pixel IoU remains zero.
 
 from __future__ import annotations
 
+import operator
 from typing import Any
 
 import numpy as np
@@ -30,13 +31,19 @@ def registered_soft_iou_cost_kwargs(
     overlap by two soft overlap terms.
     """
 
+    soft_iou_radius = _nonnegative_int(soft_iou_radius, name="soft_iou_radius")
+    distance_transform_overlap_radius = _nonnegative_int(
+        distance_transform_overlap_radius,
+        name="distance_transform_overlap_radius",
+    )
+
     return {
         "centroid_weight": 0.0,
         "iou_weight": 0.0,
         "soft_iou_weight": 1.0,
-        "soft_iou_radius": int(soft_iou_radius),
+        "soft_iou_radius": soft_iou_radius,
         "distance_transform_overlap_weight": float(distance_transform_overlap_weight),
-        "distance_transform_overlap_radius": int(distance_transform_overlap_radius),
+        "distance_transform_overlap_radius": distance_transform_overlap_radius,
         "distance_transform_overlap_scale": distance_transform_overlap_scale,
         "mask_cosine_weight": 0.0,
         "area_weight": 0.0,
@@ -72,16 +79,15 @@ def _install_cost_matrix_patch() -> None:
     ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
         soft_iou_weight = float(soft_iou_weight)
         distance_transform_overlap_weight = float(distance_transform_overlap_weight)
-        soft_iou_radius = int(soft_iou_radius)
-        distance_transform_overlap_radius = int(distance_transform_overlap_radius)
+        soft_iou_radius = _nonnegative_int(soft_iou_radius, name="soft_iou_radius")
+        distance_transform_overlap_radius = _nonnegative_int(
+            distance_transform_overlap_radius,
+            name="distance_transform_overlap_radius",
+        )
         if soft_iou_weight < 0.0:
             raise ValueError("soft_iou_weight must be non-negative")
         if distance_transform_overlap_weight < 0.0:
             raise ValueError("distance_transform_overlap_weight must be non-negative")
-        if soft_iou_radius < 0:
-            raise ValueError("soft_iou_radius must be non-negative")
-        if distance_transform_overlap_radius < 0:
-            raise ValueError("distance_transform_overlap_radius must be non-negative")
         if (
             distance_transform_overlap_scale is not None
             and distance_transform_overlap_scale <= 0.0
@@ -227,8 +233,7 @@ def _pairwise_dilated_iou_matrix(
     *,
     radius: int,
 ) -> np.ndarray:
-    if radius < 0:
-        raise ValueError("radius must be non-negative")
+    radius = _nonnegative_int(radius, name="radius")
     if radius == 0:
         return _bridge_impl._pairwise_iou_matrix(  # pylint: disable=protected-access
             reference_masks,
@@ -247,8 +252,7 @@ def _pairwise_distance_transform_overlap_matrix(
     radius: int,
     distance_scale: float | None,
 ) -> np.ndarray:
-    if radius < 0:
-        raise ValueError("radius must be non-negative")
+    radius = _nonnegative_int(radius, name="radius")
     if radius == 0:
         return _bridge_impl._pairwise_iou_matrix(  # pylint: disable=protected-access
             reference_masks,
@@ -315,8 +319,7 @@ def _pairwise_one_sided_distance_overlap(
 
 
 def _dilate_binary_mask_stack(masks: np.ndarray, radius: int) -> np.ndarray:
-    if radius < 0:
-        raise ValueError("radius must be non-negative")
+    radius = _nonnegative_int(radius, name="radius")
     mask_array = np.asarray(masks) > 0
     if radius == 0 or mask_array.size == 0:
         return mask_array
@@ -338,6 +341,25 @@ def _dilate_binary_mask_stack(masks: np.ndarray, radius: int) -> np.ndarray:
             x_slice = slice(x_start, x_start + width)
             dilated |= padded[:, y_slice, x_slice]
     return dilated
+
+
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(value)
+    else:
+        try:
+            integer_value = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+
+    integer_value = int(integer_value)
+    if integer_value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return integer_value
 
 
 __all__ = ["install_soft_overlap_costs", "registered_soft_iou_cost_kwargs"]
