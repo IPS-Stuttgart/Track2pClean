@@ -645,7 +645,9 @@ def _support_for_row_split(
     if split_index == int(row.get("weakest_bridge_session_a", -1)):
         source = int(row.get("weakest_bridge_source_roi", -1))
         target = int(row.get("weakest_bridge_target_roi", -1))
-        return int(support_counts.get((split_index, split_index + 1, source, target), 0))
+        return int(
+            support_counts.get((split_index, split_index + 1, source, target), 0)
+        )
     return -1
 
 
