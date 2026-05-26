@@ -73,6 +73,10 @@ _BENCHMARK_COMMANDS: dict[str, _BenchmarkCommand] = {
         "bayescatrack.experiments.track2p_policy_consensus_cleanup",
         "Run conservative Track2p-policy consensus bridge cleanup",
     ),
+    "track2p-policy-gap-consensus-cleanup": _BenchmarkCommand(
+        "bayescatrack.experiments.track2p_policy_gap_consensus_cleanup",
+        "Run Track2p-policy gap rescue plus conservative consensus cleanup",
+    ),
     "track2p-shifted-iou": _BenchmarkCommand(
         "bayescatrack.experiments.track2p_shifted_iou_benchmark",
         "Track2p global-assignment ablation with residual shifted-IoU costs",
@@ -191,6 +195,9 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-multisplit-cleanup": "track2p-policy-multisplit-cleanup",
     "track2p-consensus-cleanup": "track2p-policy-consensus-cleanup",
     "track2p-component-consensus-cleanup": "track2p-policy-consensus-cleanup",
+    "track2p-gap-consensus-cleanup": "track2p-policy-gap-consensus-cleanup",
+    "track2p-gap-rescue-consensus-cleanup": "track2p-policy-gap-consensus-cleanup",
+    "track2p-component-gap-consensus-cleanup": "track2p-policy-gap-consensus-cleanup",
     "track2p-teacher-diagnostics": "track2p-teacher-debug",
     "audit-manual-gt-roi-index-space": "audit-manual-gt-rois",
 }
