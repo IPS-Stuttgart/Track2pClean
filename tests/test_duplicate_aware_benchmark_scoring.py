@@ -91,3 +91,44 @@ def test_score_track_matrices_rejects_numpy_boolean_reference_observations():
         ValueError, match="reference_track_matrix contains boolean ROI index"
     ):
         score_track_matrices(predicted, reference)
+
+
+def test_score_track_matrices_rejects_fractional_predicted_observations():
+    reference = np.array([[1, 2]], dtype=object)
+    predicted = np.array([[1.5, 2]], dtype=object)
+
+    with pytest.raises(
+        ValueError, match="predicted_track_matrix contains non-integer ROI index"
+    ):
+        score_track_matrices(predicted, reference)
+
+
+def test_score_track_matrices_rejects_fractional_reference_observations():
+    reference = np.array([[1, np.float64(2.25)]], dtype=object)
+    predicted = np.array([[1, 2]], dtype=object)
+
+    with pytest.raises(
+        ValueError, match="reference_track_matrix contains non-integer ROI index"
+    ):
+        score_track_matrices(predicted, reference)
+
+
+def test_score_track_matrices_rejects_fractional_session_pair_indices():
+    reference = np.array([[1, 2]], dtype=object)
+    predicted = np.array([[1, 2]], dtype=object)
+
+    with pytest.raises(
+        ValueError, match="session_pairs contains non-integer session index"
+    ):
+        score_track_matrices(predicted, reference, session_pairs=((0.5, 1),))
+
+
+def test_score_track_matrices_rejects_boolean_complete_session_indices():
+    reference = np.array([[1, 2]], dtype=object)
+    predicted = np.array([[1, 2]], dtype=object)
+
+    with pytest.raises(
+        ValueError,
+        match="complete_session_indices contains boolean session index",
+    ):
+        score_track_matrices(predicted, reference, complete_session_indices=(True, 1))
