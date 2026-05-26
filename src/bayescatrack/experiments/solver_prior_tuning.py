@@ -602,9 +602,11 @@ def _nonnegative_values(values: Sequence[float], *, name: str) -> tuple[float, .
 
 def _thresholds(values: Sequence[float | None]) -> tuple[float | None, ...]:
     result = tuple(
-        None
-        if value is None
-        else _coerce_solver_prior_float(value, name="cost thresholds")
+        (
+            None
+            if value is None
+            else _coerce_solver_prior_float(value, name="cost thresholds")
+        )
         for value in values
     )
     if not result or any(value is not None and value < 0.0 for value in result):
