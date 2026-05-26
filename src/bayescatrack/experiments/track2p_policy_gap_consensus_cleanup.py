@@ -68,9 +68,7 @@ from bayescatrack.experiments.track2p_policy_stability_cleanup import (
     edge_support_counts,
 )
 
-TRACK2P_POLICY_GAP_CONSENSUS_CLEANUP_METHOD = (
-    "track2p-policy-gap-consensus-cleanup"
-)
+TRACK2P_POLICY_GAP_CONSENSUS_CLEANUP_METHOD = "track2p-policy-gap-consensus-cleanup"
 TRACK2P_POLICY_GAP_CONSENSUS_DEFAULT_MAX_GAP = 2
 
 
@@ -92,9 +90,7 @@ def run_track2p_policy_gap_consensus_cleanup(
         transform_type=transform_type,
         cell_probability_threshold=cell_probability_threshold,
         max_gap=(
-            TRACK2P_POLICY_GAP_CONSENSUS_DEFAULT_MAX_GAP
-            if max_gap is None
-            else max_gap
+            TRACK2P_POLICY_GAP_CONSENSUS_DEFAULT_MAX_GAP if max_gap is None else max_gap
         ),
     )
     if int(policy_config.max_gap) < 1:
