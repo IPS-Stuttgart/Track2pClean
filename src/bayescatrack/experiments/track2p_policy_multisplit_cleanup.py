@@ -1,15 +1,15 @@
 """Guarded multi-bridge cleanup for Track2p-policy tracks.
 
 The first component-cleanup pass can split at the single weakest bridge of a
-complete predicted component.  Some false complete tracks, however, are mosaics
-of several reliable sub-trajectories connected by multiple weak bridges.  A
+complete predicted component. Some false complete tracks, however, are mosaics
+of several reliable sub-trajectories connected by multiple weak bridges. A
 single cut removes the complete-track false positive, but it can still leave a
 long fragment with another weak bridge that hurts pairwise precision.
 
 This module keeps the same conservative, unsupervised edge-risk model used by
 ``track2p_policy_component_audit`` and extends only the post-processing step:
-select a ranked set of weak bridges per component subject to a minimum fragment
-length constraint, then split all selected bridges at once.
+select a globally optimized set of weak bridges per component subject to a
+minimum fragment length constraint, then split all selected bridges at once.
 """
 
 from __future__ import annotations
@@ -64,6 +64,7 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
 )
 
 TRACK2P_POLICY_MULTISPLIT_CLEANUP_METHOD = "track2p-policy-multisplit-cleanup"
+_IMPOSSIBLE_SCORE = (-float("inf"), -1)
 
 
 @dataclass(frozen=True)
@@ -235,10 +236,11 @@ def plan_ranked_bridge_splits(
 ) -> dict[int, tuple[int, ...]]:
     """Return selected bridge indices keyed by original component id.
 
-    Candidate bridges are ranked by the existing unsupervised edge-risk score.
-    A bridge is accepted only when all resulting fragments keep at least
-    ``min_side_observations`` valid ROIs.  This makes the operation conservative
-    and prevents isolated one-session fragments from dominating pairwise scores.
+    Candidate bridges are scored by the existing unsupervised edge-risk score.
+    Unlike a greedy ranked pass, this planner maximizes the total compatible
+    split gain under the minimum-fragment-observation constraint. This avoids
+    selecting one slightly riskier central bridge when two side bridges would
+    remove more total weak-bridge evidence.
     """
 
     config = config or MultiSplitCleanupConfig()
@@ -469,24 +471,122 @@ def _ranked_split_indices_for_track(
     if component_config.require_complete_track and not is_complete:
         return ()
     edges = _component_edges(track, diagnostic_by_edge, config=component_config)
-    ranked_edges = sorted(edges, key=lambda edge: (-edge.risk, edge.session_index))
-    selected: list[int] = []
-    for edge in ranked_edges:
-        if len(selected) >= config.max_splits_per_component:
-            break
+    candidate_gains: dict[int, float] = {}
+    for edge in edges:
         if edge.risk < component_config.split_risk_threshold:
             continue
-        candidate = sorted((*selected, int(edge.session_index)))
-        if not _fragments_satisfy_min_observations(
-            track,
-            candidate,
-            min_observations=component_config.min_side_observations,
+        gain = _multi_split_gain(edge.risk, config=component_config)
+        if gain <= 0.0:
+            continue
+        split_index = int(edge.session_index)
+        candidate_gains[split_index] = max(
+            float(gain), candidate_gains.get(split_index, -float("inf"))
+        )
+    return _select_optimal_split_indices(
+        track,
+        candidate_gains,
+        max_splits=int(config.max_splits_per_component),
+        min_observations=int(component_config.min_side_observations),
+    )
+
+
+def _select_optimal_split_indices(
+    track: np.ndarray,
+    candidate_gains: Mapping[int, float],
+    *,
+    max_splits: int,
+    min_observations: int,
+) -> tuple[int, ...]:
+    """Select the maximum-gain compatible split set.
+
+    The previous greedy planner committed to the highest-risk feasible bridge
+    before considering lower-risk bridges. A central bridge can satisfy the
+    fragment-length guard by itself while making the two side bridges mutually
+    infeasible. Dynamic programming avoids that local optimum by optimizing the
+    total selected split gain under the same guards and split-count cap.
+    """
+
+    split_indices = tuple(
+        index
+        for index in sorted({int(index) for index in candidate_gains})
+        if 0 <= int(index) < int(track.size) - 1
+    )
+    if not split_indices or int(max_splits) < 1:
+        return ()
+    gains = {index: float(candidate_gains[index]) for index in split_indices}
+    cache: dict[tuple[int, int, int], tuple[tuple[float, int], tuple[int, ...]]] = {}
+
+    def best_from(
+        fragment_start: int,
+        candidate_start: int,
+        remaining_splits: int,
+    ) -> tuple[tuple[float, int], tuple[int, ...]]:
+        key = (int(fragment_start), int(candidate_start), int(remaining_splits))
+        if key in cache:
+            return cache[key]
+
+        best_score: tuple[float, int] = _IMPOSSIBLE_SCORE
+        best_splits: tuple[int, ...] = ()
+        if _observation_count(track, fragment_start, track.size - 1) >= int(
+            min_observations
         ):
-            continue
-        if _multi_split_gain(edge.risk, config=component_config) <= 0.0:
-            continue
-        selected.append(int(edge.session_index))
-    return tuple(sorted(selected))
+            best_score = (0.0, 0)
+
+        if remaining_splits <= 0:
+            cache[key] = (best_score, best_splits)
+            return cache[key]
+
+        for candidate_pos in range(candidate_start, len(split_indices)):
+            split_index = split_indices[candidate_pos]
+            if split_index < fragment_start:
+                continue
+            if _observation_count(track, fragment_start, split_index) < int(
+                min_observations
+            ):
+                continue
+            tail_score, tail_splits = best_from(
+                split_index + 1,
+                candidate_pos + 1,
+                remaining_splits - 1,
+            )
+            if tail_score == _IMPOSSIBLE_SCORE:
+                continue
+            candidate_score = (
+                tail_score[0] + gains[split_index],
+                tail_score[1] + 1,
+            )
+            candidate_splits = (split_index, *tail_splits)
+            if _is_better_split_plan(
+                candidate_score,
+                candidate_splits,
+                best_score,
+                best_splits,
+            ):
+                best_score = candidate_score
+                best_splits = candidate_splits
+
+        cache[key] = (best_score, best_splits)
+        return cache[key]
+
+    score, selected = best_from(0, 0, int(max_splits))
+    if score == _IMPOSSIBLE_SCORE:
+        return ()
+    return selected
+
+
+def _is_better_split_plan(
+    candidate_score: tuple[float, int],
+    candidate_splits: tuple[int, ...],
+    best_score: tuple[float, int],
+    best_splits: tuple[int, ...],
+) -> bool:
+    if candidate_score[0] > best_score[0] + 1e-12:
+        return True
+    if candidate_score[0] < best_score[0] - 1e-12:
+        return False
+    if candidate_score[1] != best_score[1]:
+        return candidate_score[1] > best_score[1]
+    return candidate_splits < best_splits
 
 
 def _fragments_satisfy_min_observations(
@@ -499,6 +599,12 @@ def _fragments_satisfy_min_observations(
         int(np.sum(fragment >= 0)) >= int(min_observations)
         for fragment in split_track_at_bridges(track, split_indices)
     )
+
+
+def _observation_count(row: np.ndarray, start: int, stop: int) -> int:
+    if int(stop) < int(start):
+        return 0
+    return int(np.sum(row[int(start) : int(stop) + 1] >= 0))
 
 
 def _multi_split_gain(risk: float, *, config: ComponentCleanupConfig) -> float:

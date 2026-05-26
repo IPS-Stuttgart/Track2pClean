@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: "PR number to validate"
+        description: "PR number to validate. Use 0 to validate current main."
         required: true
-        default: "286"
+        default: "0"
       data_root:
         description: "Track2p lightweight data root"
         required: true
@@ -26,19 +26,28 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Checkout PR
+      - name: Checkout requested ref
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: refs/pull/${{ inputs.pr_number }}/head
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
       - name: Prepare output directory
         id: prep
         shell: bash
         run: |
           set -euo pipefail
+          if [ "${{ inputs.pr_number }}" != "0" ]; then
+            git fetch origin "pull/${{ inputs.pr_number }}/head:refs/remotes/pr/${{ inputs.pr_number }}/head"
+            git checkout --force "refs/remotes/pr/${{ inputs.pr_number }}/head"
+          fi
           REQUESTED_ROOT="${{ inputs.output_root }}"
-          if mkdir -p "$REQUESTED_ROOT" 2>/dev/null; then
+          if mkdir -p "$REQUESTED_ROOT" 2>/dev/null && touch "$REQUESTED_ROOT/.write_test" 2>/dev/null; then
+            rm -f "$REQUESTED_ROOT/.write_test"
             OUT_ROOT="$REQUESTED_ROOT"
           else
             OUT_ROOT="${RUNNER_TEMP:-$PWD}/bayescatrack-results"
@@ -46,19 +55,25 @@ jobs:
             echo "Requested output root is not writable: $REQUESTED_ROOT" >&2
             echo "Falling back to: $OUT_ROOT" >&2
           fi
-          OUT="$OUT_ROOT/consensus_cleanup_pr${{ inputs.pr_number }}_$(date +%Y%m%d_%H%M%S)"
+          REF_NAME="main"
+          if [ "${{ inputs.pr_number }}" != "0" ]; then
+            REF_NAME="pr${{ inputs.pr_number }}"
+          fi
+          OUT="$OUT_ROOT/consensus_cleanup_${REF_NAME}_$(date +%Y%m%d_%H%M%S)"
           mkdir -p "$OUT"
           echo "out=$OUT" >> "$GITHUB_OUTPUT"
           git rev-parse HEAD | tee "$OUT/git_sha.txt"
           git status --short | tee "$OUT/git_status_before.txt"
 
-      - name: Install package
+      - name: Install package with Poetry
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e . > "${{ steps.prep.outputs.out }}/pip_install.log" 2>&1
-          python -m pip freeze > "${{ steps.prep.outputs.out }}/pip_freeze.txt"
+          python -m pip install poetry
+          poetry env use "$(which python)"
+          poetry install --with dev --extras track2p --no-interaction --no-ansi > "${{ steps.prep.outputs.out }}/poetry_install.log" 2>&1
+          poetry run python -m pip freeze > "${{ steps.prep.outputs.out }}/pip_freeze.txt"
 
       - name: Run focused consensus-cleanup benchmark
         shell: bash
@@ -69,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          python -m bayescatrack benchmark track2p-policy \
+          poetry run python -m bayescatrack benchmark track2p-policy \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -81,7 +96,7 @@ jobs:
             --output "$OUT/track2p_policy_d12.csv" \
             --format csv
 
-          python -m bayescatrack benchmark track2p-policy-component-audit \
+          poetry run python -m bayescatrack benchmark track2p-policy-component-audit \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -98,7 +113,7 @@ jobs:
             --component-output "$OUT/track2p_policy_component_cleanup_components.csv" \
             --component-format csv
 
-          python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+          poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -118,7 +133,7 @@ jobs:
             --component-output "$OUT/consensus_cleanup_no_apply_components.csv" \
             --component-format csv
 
-          python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+          poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -138,7 +153,7 @@ jobs:
             --component-output "$OUT/consensus_cleanup_default_components.csv" \
             --component-format csv
 
-          python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+          poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
             --data "$DATA" \
             --reference "$REF" \
             --reference-kind manual-gt \
@@ -158,7 +173,7 @@ jobs:
             --component-output "$OUT/consensus_cleanup_risk_or_stability_components.csv" \
             --component-format csv
 
-          python -m bayescatrack benchmark compare \
+          poetry run python -m bayescatrack benchmark compare \
             "$OUT/track2p_policy_d12.csv" \
             "$OUT/track2p_policy_component_cleanup.csv" \
             "$OUT/consensus_cleanup_no_apply.csv" \
@@ -167,7 +182,7 @@ jobs:
             --output "$OUT/consensus_cleanup_comparison.md" \
             --format md
 
-          python -m bayescatrack benchmark compare \
+          poetry run python -m bayescatrack benchmark compare \
             "$OUT/track2p_policy_d12.csv" \
             "$OUT/track2p_policy_component_cleanup.csv" \
             "$OUT/consensus_cleanup_no_apply.csv" \
@@ -182,5 +197,5 @@ jobs:
       - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: consensus-cleanup-pr${{ inputs.pr_number }}
+          name: consensus-cleanup-${{ inputs.pr_number }}
           path: ${{ steps.prep.outputs.out }}

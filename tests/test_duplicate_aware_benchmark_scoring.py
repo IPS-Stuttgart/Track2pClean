@@ -71,3 +71,23 @@ def test_score_track_matrices_reports_zero_f1_when_no_links_match():
     assert scores["pairwise_recall"] == pytest.approx(0.0)
     assert scores["pairwise_f1"] == pytest.approx(0.0)
     assert scores["complete_track_f1"] == pytest.approx(0.0)
+
+
+def test_score_track_matrices_rejects_boolean_predicted_observations():
+    reference = np.array([[1, 2]], dtype=object)
+    predicted = np.array([[True, 2]], dtype=object)
+
+    with pytest.raises(
+        ValueError, match="predicted_track_matrix contains boolean ROI index"
+    ):
+        score_track_matrices(predicted, reference)
+
+
+def test_score_track_matrices_rejects_numpy_boolean_reference_observations():
+    reference = np.array([[np.bool_(False), 2]], dtype=object)
+    predicted = np.array([[0, 2]], dtype=object)
+
+    with pytest.raises(
+        ValueError, match="reference_track_matrix contains boolean ROI index"
+    ):
+        score_track_matrices(predicted, reference)

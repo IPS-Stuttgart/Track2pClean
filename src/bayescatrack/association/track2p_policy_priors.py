@@ -227,7 +227,9 @@ def _add_row_rescue_edges(
         return
     floor = max(0.0, float(rescue_min_iou), float(threshold) - float(rescue_margin))
     for row_index, row_values in enumerate(iou):
-        columns = np.flatnonzero(np.isfinite(row_values) & (row_values >= floor))
+        columns = np.flatnonzero(
+            np.isfinite(row_values) & (row_values > 0.0) & (row_values >= floor)
+        )
         if columns.size == 0:
             continue
         ordered = columns[np.argsort(row_values[columns])[::-1]][:row_top_k]
