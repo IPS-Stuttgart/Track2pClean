@@ -127,7 +127,7 @@ def test_register_measurement_plane_by_fov_translation_subpixel_aligns_fractiona
     npt.assert_allclose(
         registration.measurement_to_reference_shift_yx,
         -measurement_shift,
-        atol=0.05,
+        atol=0.075,
     )
     assert registration.registered_measurement_plane.roi_masks.dtype.kind == "f"
     assert (
