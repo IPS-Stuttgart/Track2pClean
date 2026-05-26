@@ -276,7 +276,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "Consecutive Track2p-policy links are still preferred."
         ),
     )
-    parser.add_argument("--apply-splits", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--apply-splits", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument(
         "--require-complete-track", action=argparse.BooleanOptionalAction, default=True
     )
@@ -296,7 +298,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-track2p-as-reference-for-smoke-test", action="store_true"
     )
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=False
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     parser.add_argument("--component-output", type=Path, default=None)

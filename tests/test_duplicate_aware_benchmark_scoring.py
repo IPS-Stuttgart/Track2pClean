@@ -77,7 +77,9 @@ def test_score_track_matrices_rejects_boolean_predicted_observations():
     reference = np.array([[1, 2]], dtype=object)
     predicted = np.array([[True, 2]], dtype=object)
 
-    with pytest.raises(ValueError, match="predicted_track_matrix contains boolean ROI index"):
+    with pytest.raises(
+        ValueError, match="predicted_track_matrix contains boolean ROI index"
+    ):
         score_track_matrices(predicted, reference)
 
 
@@ -85,5 +87,7 @@ def test_score_track_matrices_rejects_numpy_boolean_reference_observations():
     reference = np.array([[np.bool_(False), 2]], dtype=object)
     predicted = np.array([[0, 2]], dtype=object)
 
-    with pytest.raises(ValueError, match="reference_track_matrix contains boolean ROI index"):
+    with pytest.raises(
+        ValueError, match="reference_track_matrix contains boolean ROI index"
+    ):
         score_track_matrices(predicted, reference)
