@@ -1,21 +1,4 @@
-"""Track2p-policy edge priors for independent global-assignment ablations.
-
-This module converts the strongest Track2p-style pairwise inductive bias into a
-generic additive prior over already-registered BayesCaTrack cost matrices.  It
-does *not* read Track2p output rows and therefore can be used in independent
-BayesCaTrack-vs-Track2p comparisons:
-
-* solve a Hungarian assignment on registered ROI IoU-like evidence,
-* threshold the assigned IoUs with the Track2p-style minimum/Otsu policy,
-* optionally rescue local top-k near-threshold candidates, and
-* subtract a bounded cost relief from policy-supported edges before the global
-  multi-session solver runs.
-
-The prior is intentionally additive.  It preserves BayesCaTrack's richer costs,
-registration QA, dynamic priors, pruning, and global path-cover solver while
-injecting the Track2p bias that complete-track rows are easiest to recover when
-strong consecutive overlap links are kept alive.
-"""
+"""Track2p-policy edge priors for independent global-assignment ablations."""
 
 from __future__ import annotations
 
@@ -33,35 +16,7 @@ AUTO_IOU_COMPONENTS = ("iou_for_cost", "shifted_iou", "iou")
 
 @dataclass(frozen=True)
 class Track2pPolicyPriorConfig:
-    """Add a Track2p-like edge prior without using Track2p output tracks.
-
-    Parameters
-    ----------
-    threshold_method
-        Thresholding policy for IoUs selected by the Hungarian assignment.
-        ``"min"`` mirrors the Track2p-policy benchmark default; ``"otsu"`` is
-        a stable fallback for unimodal assigned IoUs.
-    iou_component
-        Pairwise component used as overlap evidence.  ``"auto"`` prefers the
-        actual IoU-like component used by shifted-overlap costs when present.
-    relief
-        Amount subtracted from policy-supported edges.
-    accepted_cost_cap
-        Optional cap applied before ``relief``.  This can rescue edges that a
-        conservative cost or gate made expensive despite strong policy support.
-    non_policy_penalty
-        Optional additive penalty for finite non-policy edges on eligible session
-        gaps.  Keep this small; high values can overfit to Track2p's policy.
-    min_cost
-        Lower bound after relief to prevent unbounded negative path costs.
-    max_gap / consecutive_only
-        Restrict which session gaps receive the prior.
-    row_top_k / rescue_min_iou / rescue_margin
-        Optional local rescue of each row's top-k columns when their IoU exceeds
-        ``max(rescue_min_iou, threshold - rescue_margin)``.
-    large_cost
-        Finite sentinel used to identify already-gated edges.
-    """
+    """Add a Track2p-like edge prior without reading Track2p output tracks."""
 
     threshold_method: PolicyThresholdMethod = "min"
     iou_component: str = "auto"
@@ -72,6 +27,7 @@ class Track2pPolicyPriorConfig:
     max_gap: int | None = None
     consecutive_only: bool = False
     row_top_k: int = 0
+    column_top_k: int = 0
     rescue_min_iou: float = 0.0
     rescue_margin: float = 0.0
     large_cost: float = 1.0e6
@@ -95,6 +51,8 @@ class Track2pPolicyPriorConfig:
             raise ValueError("max_gap must be at least 1 when provided")
         if int(self.row_top_k) < 0:
             raise ValueError("row_top_k must be non-negative")
+        if int(self.column_top_k) < 0:
+            raise ValueError("column_top_k must be non-negative")
         if not 0.0 <= float(self.rescue_min_iou) <= 1.0:
             raise ValueError("rescue_min_iou must lie in [0, 1]")
         if float(self.large_cost) <= 0.0 or not np.isfinite(float(self.large_cost)):
@@ -180,15 +138,15 @@ def track2p_policy_edge_mask(
     if np.any(accepted):
         mask[row_ind[accepted], col_ind[accepted]] = True
 
-    if int(cfg.row_top_k) > 0:
-        _add_row_rescue_edges(
-            mask,
-            finite_iou,
-            threshold=threshold,
-            row_top_k=int(cfg.row_top_k),
-            rescue_min_iou=float(cfg.rescue_min_iou),
-            rescue_margin=float(cfg.rescue_margin),
-        )
+    _add_local_rescue_edges(
+        mask,
+        finite_iou,
+        threshold=threshold,
+        row_top_k=int(cfg.row_top_k),
+        column_top_k=int(cfg.column_top_k),
+        rescue_min_iou=float(cfg.rescue_min_iou),
+        rescue_margin=float(cfg.rescue_margin),
+    )
     return mask
 
 
@@ -214,26 +172,58 @@ def _policy_iou_component(
     return np.asarray(pairwise_components[component_name], dtype=float)
 
 
-def _add_row_rescue_edges(
+def _add_local_rescue_edges(
     mask: np.ndarray,
     iou: np.ndarray,
     *,
     threshold: float,
     row_top_k: int,
+    column_top_k: int,
     rescue_min_iou: float,
     rescue_margin: float,
 ) -> None:
+    if row_top_k <= 0 and column_top_k <= 0:
+        return
     if not np.isfinite(threshold):
         return
     floor = max(0.0, float(rescue_min_iou), float(threshold) - float(rescue_margin))
-    for row_index, row_values in enumerate(iou):
-        columns = np.flatnonzero(
-            np.isfinite(row_values) & (row_values > 0.0) & (row_values >= floor)
+    if row_top_k > 0:
+        _add_axis_top_k_rescue_edges(mask, iou, top_k=row_top_k, floor=floor, axis=1)
+    if column_top_k > 0:
+        _add_axis_top_k_rescue_edges(
+            mask, iou, top_k=column_top_k, floor=floor, axis=0
         )
-        if columns.size == 0:
-            continue
-        ordered = columns[np.argsort(row_values[columns])[::-1]][:row_top_k]
-        mask[row_index, ordered] = True
+
+
+def _add_axis_top_k_rescue_edges(
+    mask: np.ndarray,
+    iou: np.ndarray,
+    *,
+    top_k: int,
+    floor: float,
+    axis: int,
+) -> None:
+    if axis == 1:
+        for row_index, row_values in enumerate(iou):
+            columns = _top_k_above_floor(row_values, top_k=top_k, floor=floor)
+            mask[row_index, columns] = True
+        return
+    if axis == 0:
+        for column_index, column_values in enumerate(iou.T):
+            rows = _top_k_above_floor(column_values, top_k=top_k, floor=floor)
+            mask[rows, column_index] = True
+        return
+    raise ValueError("axis must be 0 or 1")
+
+
+def _top_k_above_floor(values: np.ndarray, *, top_k: int, floor: float) -> np.ndarray:
+    candidates = np.flatnonzero(
+        np.isfinite(values) & (values > 0.0) & (values >= float(floor))
+    )
+    if candidates.size == 0:
+        return candidates
+    ordered = candidates[np.argsort(values[candidates])[::-1]]
+    return ordered[:top_k]
 
 
 def _threshold_assigned_iou(
@@ -245,10 +235,6 @@ def _threshold_assigned_iou(
         return float("inf")
     if np.allclose(values, values[0]):
         value = float(values[0])
-        # The caller accepts links with ``assigned_iou > threshold``. Returning
-        # the observed value for a degenerate positive distribution would reject
-        # every identical match, including perfect IoU=1 links. Nudge only
-        # positive thresholds downward; all-zero assignments should stay rejected.
         if value > 0.0:
             return float(np.nextafter(value, -np.inf))
         return value
