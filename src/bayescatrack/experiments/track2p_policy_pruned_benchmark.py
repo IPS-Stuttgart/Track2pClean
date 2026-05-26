@@ -741,7 +741,10 @@ def _threshold_assigned_iou(
         positive = values[values > 0]
         if positive.size < 3 or np.allclose(positive, positive[0]):
             return float(threshold_otsu(values))
-        return float(threshold_minimum(positive))
+        try:
+            return float(threshold_minimum(positive))
+        except RuntimeError:
+            return float(threshold_otsu(values))
     raise ValueError(f"Unsupported threshold method: {method!r}")
 
 

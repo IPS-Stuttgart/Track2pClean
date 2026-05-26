@@ -53,9 +53,25 @@ def install_soft_overlap_costs() -> None:
     _install_registration_qa_preset()
 
 
+def _pairwise_method_chain_has_patch(method: Any, marker: str) -> bool:
+    """Return whether a pairwise-cost wrapper chain contains ``marker``."""
+
+    seen: set[int] = set()
+    current: Any = method
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            return True
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
+
+
 def _install_cost_matrix_patch() -> None:
     original = CalciumPlaneData.build_pairwise_cost_matrix
-    if getattr(original, "_bayescatrack_soft_overlap_patch", False):
+    if _pairwise_method_chain_has_patch(original, "_bayescatrack_soft_overlap_patch"):
         return
 
     # pylint: disable=too-many-arguments,too-many-locals

@@ -3,13 +3,27 @@ from __future__ import annotations
 import numpy as np
 import numpy.testing as npt
 import pytest
+from scipy.ndimage import shift as scipy_shift
 from bayescatrack.fov_registration import (
+    apply_image_translation,
     apply_integer_image_translation,
     build_fov_registered_consecutive_session_association_bundles,
     build_fov_registered_session_pair_association_bundle,
+    estimate_fov_shift,
     estimate_integer_fov_shift,
     register_measurement_plane_by_fov_translation,
 )
+
+
+def _asymmetric_smooth_fov(shape: tuple[int, int] = (64, 64)) -> np.ndarray:
+    y_coords, x_coords = np.mgrid[: shape[0], : shape[1]]
+    return (
+        np.exp(-((y_coords - 19.3) ** 2 + (x_coords - 23.1) ** 2) / (2.0 * 3.5**2))
+        + 0.55
+        * np.exp(-((y_coords - 42.0) ** 2 + (x_coords - 37.4) ** 2) / (2.0 * 5.0**2))
+        + 0.25
+        * np.exp(-((y_coords - 27.0) ** 2 + (x_coords - 48.0) ** 2) / (2.0 * 2.0**2))
+    )
 
 
 def test_estimate_integer_fov_shift_recovers_known_translation():
@@ -23,6 +37,27 @@ def test_estimate_integer_fov_shift_recovers_known_translation():
 
     npt.assert_array_equal(shift_yx, np.array([-1, -2]))
     assert peak_correlation > 0.9
+
+
+def test_estimate_fov_shift_refines_fractional_translation():
+    reference_fov = _asymmetric_smooth_fov()
+    measurement_shift_yx = np.array([1.4, -2.25])
+    measurement_fov = scipy_shift(
+        reference_fov,
+        measurement_shift_yx,
+        order=3,
+        mode="constant",
+        cval=0.0,
+    )
+
+    shift_yx, peak_correlation = estimate_fov_shift(
+        reference_fov,
+        measurement_fov,
+        subtract_mean=False,
+    )
+
+    npt.assert_allclose(shift_yx, -measurement_shift_yx, atol=0.05)
+    assert peak_correlation > 0.99
 
 
 def test_estimate_integer_fov_shift_pads_different_shapes():
@@ -56,6 +91,17 @@ def test_apply_integer_image_translation_crops_to_smaller_output_shape():
     )
 
     npt.assert_array_equal(translated, np.array([[-1, -1, -1], [1, 2, 3]]))
+
+
+def test_apply_image_translation_accepts_fractional_shift():
+    image = np.zeros((5, 5), dtype=float)
+    image[2, 2] = 1.0
+
+    translated = apply_image_translation(image, np.array([0.5, -0.5]))
+
+    assert translated.shape == image.shape
+    assert translated.dtype.kind == "f"
+    npt.assert_allclose(np.sum(translated), 1.0)
 
 
 def test_register_measurement_plane_by_fov_translation_aligns_masks_and_fov(
@@ -104,6 +150,65 @@ def test_register_measurement_plane_by_fov_translation_aligns_masks_and_fov(
     )
     npt.assert_array_equal(
         registered_fov[:, -2:], np.zeros_like(registered_fov[:, -2:])
+    )
+
+
+def test_register_measurement_plane_by_fov_translation_refines_fractional_fov(
+    make_track2p_session,
+):
+    reference_fov = _asymmetric_smooth_fov()
+    image_shape = reference_fov.shape
+    measurement_shift_yx = np.array([1.4, -2.25])
+    measurement_fov = scipy_shift(
+        reference_fov,
+        measurement_shift_yx,
+        order=3,
+        mode="constant",
+        cval=0.0,
+    )
+
+    reference_masks = np.zeros((1, *image_shape), dtype=float)
+    reference_masks[0, 20:25, 22:27] = 1.0
+    measurement_masks = np.zeros_like(reference_masks)
+    measurement_masks[0] = scipy_shift(
+        reference_masks[0],
+        measurement_shift_yx,
+        order=1,
+        mode="constant",
+        cval=0.0,
+    )
+
+    reference_session = make_track2p_session(
+        "2024-05-01_a", reference_masks, fov=reference_fov
+    )
+    measurement_session = make_track2p_session(
+        "2024-05-02_a", measurement_masks, fov=measurement_fov
+    )
+
+    registration = register_measurement_plane_by_fov_translation(
+        reference_session.plane_data,
+        measurement_session.plane_data,
+        subtract_mean=False,
+    )
+
+    npt.assert_allclose(
+        registration.measurement_to_reference_shift_yx,
+        -measurement_shift_yx,
+        atol=0.05,
+    )
+    assert registration.peak_correlation > 0.99
+    assert registration.registered_measurement_plane.roi_masks.dtype.kind == "f"
+    assert (
+        registration.registered_measurement_plane.ops[
+            "fov_registration_subpixel_refinement"
+        ]
+        is True
+    )
+    assert (
+        registration.registered_measurement_plane.ops[
+            "fov_registration_mask_interpolation"
+        ]
+        == "bilinear"
     )
 
 

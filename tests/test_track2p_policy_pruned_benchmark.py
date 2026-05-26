@@ -111,6 +111,29 @@ def test_policy_link_diagnostics_reject_degenerate_zero_iou_links() -> None:
     assert diagnostics == ()
 
 
+def test_policy_link_diagnostics_min_threshold_falls_back_when_minimum_fails() -> None:
+    iou = np.diag(np.linspace(0.1, 1.0, 10))
+
+    links, diagnostics = policy_link_diagnostics_from_iou_matrix(
+        iou,
+        threshold_method="min",
+        prune_config=Track2pPolicyPruneConfig(),
+        distances=np.zeros_like(iou),
+        area_ratios=np.ones_like(iou),
+    )
+
+    assert links.shape == (6, 2)
+    assert links.tolist() == [
+        [4, 4],
+        [5, 5],
+        [6, 6],
+        [7, 7],
+        [8, 8],
+        [9, 9],
+    ]
+    assert len(diagnostics) == 6
+
+
 def test_prune_config_rejects_invalid_values() -> None:
     with pytest.raises(ValueError, match="threshold_margin"):
         Track2pPolicyPruneConfig(threshold_margin=-0.1)

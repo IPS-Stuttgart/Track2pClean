@@ -42,6 +42,32 @@ def test_importing_package_does_not_mutate_argparse_add_argument():
     assert argparse.ArgumentParser.add_argument is original
 
 
+def _pairwise_cost_patch_count(method, marker: str) -> int:
+    count = 0
+    seen: set[int] = set()
+    current = method
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            raise AssertionError("cycle in pairwise cost wrapper chain")
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            count += 1
+        current = getattr(current, "_bayescatrack_original", None)
+    return count
+
+
+def test_pairwise_cost_patch_installers_are_reload_idempotent():
+    import bayescatrack
+
+    importlib.reload(bayescatrack)
+    importlib.reload(bayescatrack)
+
+    method = bayescatrack.CalciumPlaneData.build_pairwise_cost_matrix
+    assert _pairwise_cost_patch_count(method, "_bayescatrack_soft_overlap_patch") == 1
+    assert _pairwise_cost_patch_count(method, "_bayescatrack_advanced_roi_patch") == 1
+
+
 def test_fov_affine_registration_keeps_registered_measurement_fov():
     reference_fov = _spot_image((96, 96), ((20, 22), (28, 72), (68, 28), (72, 75)))
     measurement_fov = apply_integer_image_translation(

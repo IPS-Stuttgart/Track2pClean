@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 import numpy as np
 
@@ -30,9 +30,15 @@ class FovRegisteredSessionPairBundle:
     association_bundle: SessionAssociationBundle
 
 
+MaskInterpolation = Literal["nearest", "bilinear"]
+
+
 @dataclass(frozen=True)
 class _FovAssociationOptions:
     subtract_mean: bool = True
+    subpixel_refinement: bool = True
+    subpixel_refinement_radius: float = 1.5
+    mask_interpolation: MaskInterpolation = "bilinear"
     order: str = "xy"
     weighted_centroids: bool = False
     velocity_variance: float = 25.0
@@ -41,21 +47,33 @@ class _FovAssociationOptions:
     return_pairwise_components: bool = True
 
     def registration_kwargs(self) -> dict[str, Any]:
-        return {"subtract_mean": self.subtract_mean}
+        return {
+            "subtract_mean": self.subtract_mean,
+            "subpixel_refinement": self.subpixel_refinement,
+            "subpixel_refinement_radius": self.subpixel_refinement_radius,
+            "mask_interpolation": self.mask_interpolation,
+        }
 
     def association_kwargs(self) -> dict[str, Any]:
+        pairwise_cost_kwargs = self.pairwise_cost_kwargs
+        if self.mask_interpolation == "bilinear":
+            pairwise_cost_kwargs = dict(pairwise_cost_kwargs or {})
+            pairwise_cost_kwargs.setdefault("soft_iou", True)
         return {
             "order": self.order,
             "weighted_centroids": self.weighted_centroids,
             "velocity_variance": self.velocity_variance,
             "regularization": self.regularization,
-            "pairwise_cost_kwargs": self.pairwise_cost_kwargs,
+            "pairwise_cost_kwargs": pairwise_cost_kwargs,
             "return_pairwise_components": self.return_pairwise_components,
         }
 
 
 _FOV_ASSOCIATION_OPTION_DEFAULTS: dict[str, Any] = {
     "subtract_mean": True,
+    "subpixel_refinement": True,
+    "subpixel_refinement_radius": 1.5,
+    "mask_interpolation": "bilinear",
     "order": "xy",
     "weighted_centroids": False,
     "velocity_variance": 25.0,
@@ -74,12 +92,15 @@ def _fov_association_options_from_kwargs(
     if unexpected_names:
         joined_names = ", ".join(unexpected_names)
         raise TypeError(f"Unexpected FOV registration option(s): {joined_names}")
-    return _FovAssociationOptions(
+    options = _FovAssociationOptions(
         **{
             **_FOV_ASSOCIATION_OPTION_DEFAULTS,
             **bundle_kwargs,
         }
     )
+    _validate_mask_interpolation(options.mask_interpolation)
+    _validate_subpixel_refinement_radius(options.subpixel_refinement_radius)
+    return options
 
 
 def estimate_integer_fov_shift(
@@ -90,6 +111,59 @@ def estimate_integer_fov_shift(
 ) -> tuple[np.ndarray, float]:
     """Return the integer shift to apply to ``measurement_fov`` to align it with ``reference_fov``."""
 
+    shift_yx, peak_correlation = estimate_fov_shift(
+        reference_fov,
+        measurement_fov,
+        subtract_mean=subtract_mean,
+        subpixel_refinement=False,
+    )
+    return np.rint(shift_yx).astype(int), peak_correlation
+
+
+# pylint: disable=too-many-arguments
+def estimate_fov_shift(
+    reference_fov: np.ndarray,
+    measurement_fov: np.ndarray,
+    *,
+    subtract_mean: bool = True,
+    subpixel_refinement: bool = True,
+    subpixel_refinement_radius: float = 1.5,
+) -> tuple[np.ndarray, float]:
+    """Return the shift to apply to ``measurement_fov`` to align it with ``reference_fov``.
+
+    Integer phase correlation gives a robust coarse alignment.  When
+    ``subpixel_refinement`` is enabled, the coarse shift is refined by maximizing
+    local normalized cross-correlation after bilinear resampling.  The resulting
+    subpixel shift preserves partial-overlap evidence that would otherwise be
+    lost when a session-to-session drift falls between pixel centers.
+    """
+
+    reference, measurement = _prepare_fov_images_for_phase_correlation(
+        reference_fov,
+        measurement_fov,
+        subtract_mean=subtract_mean,
+    )
+    shift_yx, peak_correlation = _phase_correlation_shift_from_prepared_images(
+        reference,
+        measurement,
+    )
+    if not subpixel_refinement:
+        return shift_yx, peak_correlation
+    _validate_subpixel_refinement_radius(subpixel_refinement_radius)
+    return _refine_shift_by_local_normalized_correlation(
+        reference,
+        measurement,
+        initial_shift_yx=shift_yx,
+        radius=float(subpixel_refinement_radius),
+    )
+
+
+def _prepare_fov_images_for_phase_correlation(
+    reference_fov: np.ndarray,
+    measurement_fov: np.ndarray,
+    *,
+    subtract_mean: bool,
+) -> tuple[np.ndarray, np.ndarray]:
     reference = np.asarray(reference_fov, dtype=float)
     measurement = np.asarray(measurement_fov, dtype=float)
     if reference.ndim != 2 or measurement.ndim != 2:
@@ -123,17 +197,136 @@ def estimate_integer_fov_shift(
         or float(np.linalg.norm(measurement.ravel())) <= np.finfo(float).eps
     ):
         raise ValueError("Cannot estimate FOV shift from constant or empty FOV images")
+    return reference, measurement
 
+
+def _phase_correlation_shift_from_prepared_images(
+    reference: np.ndarray,
+    measurement: np.ndarray,
+) -> tuple[np.ndarray, float]:
     cross_power = np.fft.fftn(reference) * np.conj(np.fft.fftn(measurement))
     magnitude = np.abs(cross_power)
     magnitude[magnitude == 0.0] = 1.0
     correlation = np.abs(np.fft.ifftn(cross_power / magnitude))
     peak_index = np.unravel_index(int(np.argmax(correlation)), correlation.shape)
-    shift_yx = np.asarray(peak_index, dtype=int)
+    shift_yx = np.asarray(peak_index, dtype=float)
     for axis, size in enumerate(reference.shape):
         if shift_yx[axis] > size // 2:
             shift_yx[axis] -= size
     return shift_yx, float(correlation[peak_index])
+
+
+def _refine_shift_by_local_normalized_correlation(
+    reference: np.ndarray,
+    measurement: np.ndarray,
+    *,
+    initial_shift_yx: np.ndarray,
+    radius: float,
+) -> tuple[np.ndarray, float]:
+    from scipy.optimize import minimize
+
+    initial_shift = np.asarray(initial_shift_yx, dtype=float)
+    initial_score = _normalized_correlation_for_shift(
+        reference,
+        measurement,
+        initial_shift,
+    )
+
+    def objective(candidate_shift_yx: np.ndarray) -> float:
+        return -_normalized_correlation_for_shift(
+            reference,
+            measurement,
+            candidate_shift_yx,
+        )
+
+    bounds = [
+        (float(shift_value - radius), float(shift_value + radius))
+        for shift_value in initial_shift
+    ]
+    result = minimize(
+        objective,
+        initial_shift,
+        method="Powell",
+        bounds=bounds,
+        options={"maxiter": 64, "xtol": 1.0e-3, "ftol": 1.0e-6},
+    )
+    candidate_shift = initial_shift
+    if np.all(np.isfinite(result.x)):
+        candidate_shift = np.asarray(result.x, dtype=float)
+    candidate_score = _normalized_correlation_for_shift(
+        reference,
+        measurement,
+        candidate_shift,
+    )
+    if candidate_score + 1.0e-12 < initial_score:
+        candidate_shift = initial_shift
+        candidate_score = initial_score
+    return _snap_near_integer_shift(candidate_shift), float(candidate_score)
+
+
+def _normalized_correlation_for_shift(
+    reference: np.ndarray,
+    measurement: np.ndarray,
+    shift_yx: Sequence[float] | np.ndarray,
+) -> float:
+    registered = _resample_image_translation(
+        measurement,
+        shift_yx,
+        output_shape=reference.shape,
+        fill_value=0.0,
+        interpolation="bilinear",
+    )
+    denominator = float(np.linalg.norm(reference.ravel()) * np.linalg.norm(registered.ravel()))
+    if denominator <= np.finfo(float).eps:
+        return 0.0
+    score = float(np.dot(reference.ravel(), registered.ravel()) / denominator)
+    return float(np.clip(score, -1.0, 1.0))
+
+
+def _snap_near_integer_shift(
+    shift_yx: Sequence[float] | np.ndarray,
+    *,
+    tolerance: float = 1.0e-3,
+) -> np.ndarray:
+    shift = np.asarray(shift_yx, dtype=float)
+    rounded = np.rint(shift)
+    return np.where(np.abs(shift - rounded) <= tolerance, rounded, shift).astype(float)
+
+
+def _integer_array_if_integral(values: Sequence[float] | np.ndarray) -> np.ndarray:
+    array = np.asarray(values, dtype=float)
+    rounded = np.rint(array)
+    if np.all(np.abs(array - rounded) <= 1.0e-9):
+        return rounded.astype(int)
+    return array.astype(float)
+
+
+def _validate_subpixel_refinement_radius(radius: float) -> None:
+    if float(radius) <= 0.0:
+        raise ValueError("subpixel_refinement_radius must be strictly positive")
+
+
+def _validate_mask_interpolation(interpolation: str) -> None:
+    if interpolation not in {"nearest", "bilinear"}:
+        raise ValueError("mask_interpolation must be either 'nearest' or 'bilinear'")
+
+
+def _validate_image_interpolation(interpolation: str) -> None:
+    if interpolation not in {"nearest", "bilinear"}:
+        raise ValueError("interpolation must be either 'nearest' or 'bilinear'")
+
+
+def _coerce_shift_yx(shift_yx: Sequence[float] | np.ndarray) -> np.ndarray:
+    shift = np.asarray(shift_yx, dtype=float).reshape(-1)
+    if shift.shape != (2,):
+        raise ValueError("shift_yx must contain exactly two values")
+    if not np.all(np.isfinite(shift)):
+        raise ValueError("shift_yx must contain only finite values")
+    return shift
+
+
+def _is_effectively_integer_shift(shift_yx: np.ndarray) -> bool:
+    return bool(np.all(np.abs(shift_yx - np.rint(shift_yx)) <= 1.0e-9))
 
 
 def _pad_image_to_shape(image: np.ndarray, output_shape: tuple[int, int]) -> np.ndarray:
@@ -184,6 +377,75 @@ def apply_integer_image_translation(
     return result
 
 
+def apply_image_translation(
+    image: np.ndarray,
+    shift_yx: Sequence[float] | np.ndarray,
+    *,
+    output_shape: tuple[int, int] | None = None,
+    fill_value: float | bool = 0.0,
+    interpolation: MaskInterpolation = "bilinear",
+) -> np.ndarray:
+    """Translate one 2-D image, allowing either integer or subpixel shifts."""
+
+    image = np.asarray(image)
+    if image.ndim != 2:
+        raise ValueError("image must have shape (height, width)")
+    _validate_image_interpolation(interpolation)
+    shift = _coerce_shift_yx(shift_yx)
+    if output_shape is None:
+        output_shape = image.shape
+    output_shape = (int(output_shape[0]), int(output_shape[1]))
+    if _is_effectively_integer_shift(shift):
+        return apply_integer_image_translation(
+            image,
+            np.rint(shift).astype(int),
+            output_shape=output_shape,
+            fill_value=fill_value,
+        )
+    return _resample_image_translation(
+        image,
+        shift,
+        output_shape=output_shape,
+        fill_value=fill_value,
+        interpolation=interpolation,
+    )
+
+
+def _resample_image_translation(
+    image: np.ndarray,
+    shift_yx: Sequence[float] | np.ndarray,
+    *,
+    output_shape: tuple[int, int],
+    fill_value: float | bool,
+    interpolation: MaskInterpolation,
+) -> np.ndarray:
+    from scipy.ndimage import affine_transform
+
+    image_array = np.asarray(image)
+    if image_array.ndim != 2:
+        raise ValueError("image must have shape (height, width)")
+    _validate_image_interpolation(interpolation)
+    shift = _coerce_shift_yx(shift_yx)
+    order = 0 if interpolation == "nearest" else 1
+    working_image = image_array if order == 0 else image_array.astype(float, copy=False)
+    result = affine_transform(
+        working_image,
+        matrix=np.eye(2),
+        offset=(-float(shift[0]), -float(shift[1])),
+        output_shape=(int(output_shape[0]), int(output_shape[1])),
+        order=order,
+        mode="constant",
+        cval=float(fill_value),
+        prefilter=False,
+    )
+    if interpolation == "nearest" and image_array.dtype == np.bool_:
+        return result > 0
+    result = np.asarray(result)
+    if np.issubdtype(result.dtype, np.floating):
+        result[np.abs(result) < 1.0e-12] = 0.0
+    return result
+
+
 def apply_integer_roi_mask_translation(
     roi_masks: np.ndarray,
     shift_yx: Sequence[int] | np.ndarray,
@@ -209,11 +471,52 @@ def apply_integer_roi_mask_translation(
     return translated
 
 
+def apply_roi_mask_translation(
+    roi_masks: np.ndarray,
+    shift_yx: Sequence[float] | np.ndarray,
+    *,
+    output_shape: tuple[int, int] | None = None,
+    interpolation: MaskInterpolation = "bilinear",
+) -> np.ndarray:
+    """Translate an ROI-mask stack, preserving subpixel evidence when requested."""
+
+    roi_masks = np.asarray(roi_masks)
+    if roi_masks.ndim != 3:
+        raise ValueError("roi_masks must have shape (n_roi, height, width)")
+    _validate_mask_interpolation(interpolation)
+    shift = _coerce_shift_yx(shift_yx)
+    if output_shape is None:
+        output_shape = (int(roi_masks.shape[1]), int(roi_masks.shape[2]))
+    output_shape = (int(output_shape[0]), int(output_shape[1]))
+    if _is_effectively_integer_shift(shift):
+        return apply_integer_roi_mask_translation(
+            roi_masks,
+            np.rint(shift).astype(int),
+            output_shape=output_shape,
+        )
+
+    output_dtype = float if interpolation == "bilinear" else roi_masks.dtype
+    translated = np.zeros((roi_masks.shape[0], *output_shape), dtype=output_dtype)
+    for roi_index, mask in enumerate(roi_masks):
+        translated[roi_index] = apply_image_translation(
+            mask,
+            shift,
+            output_shape=output_shape,
+            fill_value=0.0,
+            interpolation=interpolation,
+        )
+    return translated
+
+
+# pylint: disable=too-many-arguments
 def register_measurement_plane_by_fov_translation(
     reference_plane: CalciumPlaneData,
     measurement_plane: CalciumPlaneData,
     *,
     subtract_mean: bool = True,
+    subpixel_refinement: bool = True,
+    subpixel_refinement_radius: float = 1.5,
+    mask_interpolation: MaskInterpolation = "bilinear",
 ) -> FovTranslationRegistration:
     """Align ``measurement_plane`` to ``reference_plane`` using FOV phase correlation."""
 
@@ -221,39 +524,50 @@ def register_measurement_plane_by_fov_translation(
         raise ValueError(
             "Both planes must provide fov images for FOV-based registration"
         )
+    _validate_mask_interpolation(mask_interpolation)
+    _validate_subpixel_refinement_radius(subpixel_refinement_radius)
     try:
-        shift_yx, peak_correlation = estimate_integer_fov_shift(
+        shift_yx, peak_correlation = estimate_fov_shift(
             reference_plane.fov,
             measurement_plane.fov,
             subtract_mean=subtract_mean,
+            subpixel_refinement=subpixel_refinement,
+            subpixel_refinement_radius=subpixel_refinement_radius,
         )
     except ValueError as exc:
         if not _is_constant_fov_registration_error(exc):
             raise
-        shift_yx = np.zeros(2, dtype=int)
+        shift_yx = np.zeros(2, dtype=float)
         peak_correlation = 0.0
-    registered_masks = apply_integer_roi_mask_translation(
+    registered_masks = apply_roi_mask_translation(
         measurement_plane.roi_masks,
         shift_yx,
         output_shape=reference_plane.image_shape,
+        interpolation=mask_interpolation,
     )
-    registered_fov = apply_integer_image_translation(
+    registered_fov = apply_image_translation(
         measurement_plane.fov,
         shift_yx,
         output_shape=reference_plane.image_shape,
         fill_value=0.0,
+        interpolation="bilinear",
     )
     registration_ops = (
         {} if measurement_plane.ops is None else dict(measurement_plane.ops)
     )
+    stored_shift_yx = _integer_array_if_integral(shift_yx)
+    stored_inverse_shift_yx = _integer_array_if_integral(-np.asarray(shift_yx, dtype=float))
     registration_ops.update(
         {
             "fov_registration_method": "phase_correlation_translation",
-            "fov_registration_measurement_to_reference_shift_yx": shift_yx.astype(int),
-            "fov_registration_reference_to_measurement_shift_yx": (-shift_yx).astype(
-                int
-            ),
+            "fov_registration_measurement_to_reference_shift_yx": stored_shift_yx,
+            "fov_registration_reference_to_measurement_shift_yx": stored_inverse_shift_yx,
             "fov_registration_peak_correlation": peak_correlation,
+            "fov_registration_subpixel_refinement": bool(subpixel_refinement),
+            "fov_registration_subpixel_refinement_radius": float(
+                subpixel_refinement_radius
+            ),
+            "fov_registration_mask_interpolation": mask_interpolation,
         }
     )
     registered_plane = measurement_plane.with_replaced_masks(
@@ -266,8 +580,8 @@ def register_measurement_plane_by_fov_translation(
         reference_plane=reference_plane,
         measurement_plane=measurement_plane,
         registered_measurement_plane=registered_plane,
-        measurement_to_reference_shift_yx=shift_yx.astype(int),
-        reference_to_measurement_shift_yx=(-shift_yx).astype(int),
+        measurement_to_reference_shift_yx=stored_shift_yx,
+        reference_to_measurement_shift_yx=stored_inverse_shift_yx,
         peak_correlation=peak_correlation,
     )
 
@@ -286,6 +600,9 @@ def build_fov_registered_session_pair_association_bundle(
     measurement_session: Track2pSession,
     *,
     subtract_mean: bool = True,
+    subpixel_refinement: bool = True,
+    subpixel_refinement_radius: float = 1.5,
+    mask_interpolation: MaskInterpolation = "bilinear",
     order: str = "xy",
     weighted_centroids: bool = False,
     velocity_variance: float = 25.0,
@@ -298,6 +615,9 @@ def build_fov_registered_session_pair_association_bundle(
     options = _fov_association_options_from_kwargs(
         {
             "subtract_mean": subtract_mean,
+            "subpixel_refinement": subpixel_refinement,
+            "subpixel_refinement_radius": subpixel_refinement_radius,
+            "mask_interpolation": mask_interpolation,
             "order": order,
             "weighted_centroids": weighted_centroids,
             "velocity_variance": velocity_variance,

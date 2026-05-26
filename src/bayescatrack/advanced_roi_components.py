@@ -53,7 +53,7 @@ def install_advanced_roi_components() -> None:
     """
 
     original = CalciumPlaneData.build_pairwise_cost_matrix
-    if getattr(original, "_bayescatrack_advanced_roi_patch", False):
+    if _pairwise_method_chain_has_patch(original, "_bayescatrack_advanced_roi_patch"):
         return
 
     # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
@@ -212,6 +212,22 @@ def install_advanced_roi_components() -> None:
     CalciumPlaneData.build_pairwise_cost_matrix = (  # type: ignore[method-assign]
         _build_pairwise_cost_matrix_with_advanced_components
     )
+
+
+def _pairwise_method_chain_has_patch(method: Any, marker: str) -> bool:
+    """Return whether a pairwise-cost wrapper chain contains ``marker``."""
+
+    seen: set[int] = set()
+    current: Any = method
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            return True
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def pairwise_shape_descriptor_components(
