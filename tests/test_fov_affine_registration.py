@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 from bayescatrack import CalciumPlaneData
 from bayescatrack.fov_affine_registration import (
+    _fit_weighted_affine_matrix_xy,
     apply_affine_image_warp,
     apply_affine_roi_mask_warp,
     estimate_fov_affine_transform,
@@ -105,6 +106,30 @@ def test_fov_affine_estimate_contains_residual_metadata():
     assert estimate.inverse_matrix_xy.shape == (2, 3)
     assert estimate.tile_residual_norm.ndim == 1
     assert np.isfinite(estimate.fit_rmse)
+
+
+def test_fov_affine_fit_downweights_low_confidence_tile_outlier():
+    measurement_xy = np.asarray(
+        [[0.0, 0.0], [20.0, 0.0], [0.0, 20.0], [20.0, 20.0]],
+        dtype=float,
+    )
+    expected_matrix = np.asarray(
+        [[1.0, 0.0, 3.0], [0.0, 1.0, -2.0]],
+        dtype=float,
+    )
+    reference_xy = (
+        measurement_xy @ expected_matrix[:, :2].T
+        + expected_matrix[:, 2][None, :]
+    )
+    reference_xy[-1] = np.asarray([-30.0, 45.0], dtype=float)
+
+    fitted = _fit_weighted_affine_matrix_xy(
+        measurement_xy,
+        reference_xy,
+        peak_correlation=np.asarray([1.0, 0.9, 1.0, 0.0], dtype=float),
+    )
+
+    np.testing.assert_allclose(fitted, expected_matrix, atol=1.0e-10)
 
 
 def test_fov_affine_registration_recovers_translation_like_fallback():

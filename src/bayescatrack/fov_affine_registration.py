@@ -134,9 +134,8 @@ def estimate_fov_affine_transform(
         translation_estimate.tile_shift_yx[0],
     ):
         return translation_estimate
-    coef, _, _, _ = np.linalg.lstsq(_design(meas_xy), ref_xy, rcond=None)
-    matrix_xy = np.asarray(coef.T, dtype=float)
-    residual = _design(meas_xy) @ coef - ref_xy
+    matrix_xy = _fit_weighted_affine_matrix_xy(meas_xy, ref_xy, peaks)
+    residual = _affine_residuals(matrix_xy, meas_xy, ref_xy)
     estimate = _make_estimate(
         matrix_xy, ref_xy, meas_xy, shifts_yx, peaks, residual, False
     )
@@ -146,11 +145,10 @@ def estimate_fov_affine_transform(
             np.count_nonzero(keep) >= 3
             and np.linalg.matrix_rank(_design(meas_xy[keep])) >= 3
         ):
-            coef, _, _, _ = np.linalg.lstsq(
-                _design(meas_xy[keep]), ref_xy[keep], rcond=None
+            matrix_xy = _fit_weighted_affine_matrix_xy(
+                meas_xy[keep], ref_xy[keep], peaks[keep]
             )
-            matrix_xy = np.asarray(coef.T, dtype=float)
-            residual = _design(meas_xy[keep]) @ coef - ref_xy[keep]
+            residual = _affine_residuals(matrix_xy, meas_xy[keep], ref_xy[keep])
             estimate = _make_estimate(
                 matrix_xy,
                 ref_xy[keep],
@@ -468,6 +466,59 @@ def _tile_shifts_support_global_translation(
     matches = np.all(rounded_shifts == global_shift_yx[None, :], axis=1)
     min_matches = max(3, int(np.ceil(0.75 * rounded_shifts.shape[0])))
     return int(np.count_nonzero(matches)) >= min_matches
+
+
+def _fit_weighted_affine_matrix_xy(
+    measurement_xy: np.ndarray,
+    reference_xy: np.ndarray,
+    peak_correlation: np.ndarray,
+) -> np.ndarray:
+    """Fit a measurement-to-reference affine map with tile-confidence weights."""
+
+    measurement_xy = np.asarray(measurement_xy, dtype=float)
+    reference_xy = np.asarray(reference_xy, dtype=float)
+    if measurement_xy.ndim != 2 or measurement_xy.shape[1] != 2:
+        raise ValueError("measurement_xy must have shape (n_points, 2)")
+    if reference_xy.shape != measurement_xy.shape:
+        raise ValueError("reference_xy must have the same shape as measurement_xy")
+
+    design = _design(measurement_xy)
+    weights = _affine_fit_weights_from_peak_correlation(peak_correlation, design)
+    weighted_design = design * weights[:, None]
+    weighted_reference = reference_xy * weights[:, None]
+    coef, _, _, _ = np.linalg.lstsq(weighted_design, weighted_reference, rcond=None)
+    return np.asarray(coef.T, dtype=float)
+
+
+def _affine_fit_weights_from_peak_correlation(
+    peak_correlation: np.ndarray,
+    design: np.ndarray,
+) -> np.ndarray:
+    design = np.asarray(design, dtype=float)
+    peaks = np.asarray(peak_correlation, dtype=float).reshape(-1)
+    if peaks.shape != (design.shape[0],):
+        raise ValueError("peak_correlation must contain one value per correspondence")
+
+    weights = np.nan_to_num(peaks, nan=0.0, posinf=0.0, neginf=0.0)
+    weights = np.maximum(weights, 0.0)
+    positive = weights > 0.0
+    if np.count_nonzero(positive) < 3 or np.linalg.matrix_rank(design[positive]) < 3:
+        return np.ones(design.shape[0], dtype=float)
+
+    max_weight = float(np.max(weights[positive]))
+    if max_weight <= 0.0:
+        return np.ones(design.shape[0], dtype=float)
+    return np.sqrt(weights / max_weight)
+
+
+def _affine_residuals(
+    matrix_xy: np.ndarray,
+    measurement_xy: np.ndarray,
+    reference_xy: np.ndarray,
+) -> np.ndarray:
+    return _design(np.asarray(measurement_xy, dtype=float)) @ np.asarray(
+        matrix_xy, dtype=float
+    ).T - np.asarray(reference_xy, dtype=float)
 
 
 def _make_estimate(matrix_xy, ref_xy, meas_xy, shifts_yx, peaks, residual, fallback):

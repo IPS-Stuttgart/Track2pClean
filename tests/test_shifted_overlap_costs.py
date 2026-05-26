@@ -81,6 +81,33 @@ def test_shifted_iou_sparse_path_matches_component_path():
         npt.assert_allclose(with_cosine[key], without_cosine[key])
 
 
+def test_shifted_iou_preserves_measurement_area_when_shift_crops_mask():
+    reference = np.zeros((1, 5, 5), dtype=bool)
+    measurement = np.zeros((1, 5, 5), dtype=bool)
+    reference[0, 0, 0] = True
+    measurement[0, 0, :] = True
+
+    for include_mask_cosine in (False, True):
+        components = pairwise_shifted_overlap_matrices(
+            reference,
+            measurement,
+            radius=4,
+            include_mask_cosine=include_mask_cosine,
+        )
+
+        npt.assert_allclose(components["shifted_iou"], np.array([[0.2]]))
+        assert components["shifted_iou_shift_y"][0, 0] == 0.0
+        assert components["shifted_iou_shift_x"][0, 0] == 0.0
+
+        if include_mask_cosine:
+            npt.assert_allclose(
+                components["shifted_mask_cosine_similarity"],
+                np.array([[1.0 / np.sqrt(5.0)]]),
+            )
+        else:
+            assert "shifted_mask_cosine_similarity" not in components
+
+
 def test_shifted_iou_patch_replaces_registered_iou_cost():
     reference = np.zeros((1, 10, 10), dtype=bool)
     measurement = np.zeros((1, 10, 10), dtype=bool)
