@@ -30,6 +30,7 @@ from bayescatrack.experiments.track2p_benchmark import (
 )
 
 OutputFormat = Literal["csv", "json", "markdown", "table"]
+_MISSING_REFERENCE_STRINGS = {"", "none", "nan", "null"}
 
 
 @dataclass(frozen=True)
@@ -387,16 +388,61 @@ def _valid_reference_roi_values(values: np.ndarray) -> set[int]:
     """Return non-negative integer ROI IDs from a reference column."""
 
     rois: set[int] = set()
-    for value in np.asarray(values, dtype=object).reshape(-1):
-        if value is None:
-            continue
-        try:
-            roi = int(value)
-        except (TypeError, ValueError):
-            continue
-        if roi >= 0:
+    for position, value in enumerate(np.asarray(values, dtype=object).reshape(-1)):
+        roi = _parse_reference_roi_value(value, position=position)
+        if roi is not None:
             rois.add(roi)
     return rois
+
+
+def _parse_reference_roi_value(value: object, *, position: int) -> int | None:
+    """Parse one optional reference ROI value without lossy int truncation."""
+
+    if value is None:
+        return None
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(
+            "reference ROI value at position "
+            f"{position} must be integer-like or missing, got boolean {value!r}"
+        )
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
+    if isinstance(value, str):
+        text = value.strip()
+        if text.lower() in _MISSING_REFERENCE_STRINGS:
+            return None
+        try:
+            integer_value = int(text, 10)
+        except ValueError:
+            try:
+                numeric_value = float(text)
+            except ValueError:
+                return None
+            if np.isfinite(numeric_value) and numeric_value.is_integer():
+                integer_value = int(numeric_value)
+            else:
+                raise ValueError(
+                    "reference ROI value at position "
+                    f"{position} must be integer-like or missing, got {value!r}"
+                )
+    elif isinstance(value, (float, np.floating)):
+        if np.isnan(value):
+            return None
+        if np.isfinite(value) and float(value).is_integer():
+            integer_value = int(value)
+        else:
+            raise ValueError(
+                "reference ROI value at position "
+                f"{position} must be integer-like or missing, got {value!r}"
+            )
+    else:
+        try:
+            integer_value = int(value)
+        except (OverflowError, TypeError, ValueError):
+            return None
+    if integer_value < 0:
+        return None
+    return integer_value
 
 
 def _index_space_hint(
