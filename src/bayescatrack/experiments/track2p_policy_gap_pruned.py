@@ -1,13 +1,14 @@
 """Gap-aware conservative pruning for Track2p-policy links.
 
 This module combines two already useful Track2p-policy levers: direct short-gap
-rescue and conservative edge pruning. Consecutive links are always preferred;
-a skip link is used only when no accepted adjacent continuation exists.
+rescue and conservative edge pruning. Consecutive links are preferred when they
+can support an equally long continuation; a skip link is used when the accepted
+one-step link is a dead end and the skip link reaches a longer valid suffix.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 
 import numpy as np
 from bayescatrack.core.bridge import Track2pSession
@@ -103,9 +104,19 @@ def tracks_from_gap_links(
     *,
     max_gap: int,
 ) -> np.ndarray:
-    """Propagate first-session seeds through consecutive-first gap links."""
+    """Propagate first-session seeds through lookahead-ranked gap links.
+
+    Candidate links are restricted to the already accepted pruned policy links.
+    Among those candidates, propagation chooses the link that reaches the longest
+    accepted future suffix. Consecutive links remain the deterministic tie-breaker,
+    so the old consecutive-first behavior is preserved whenever it can reach the
+    same number of future detections and the same terminal session.
+    """
 
     sessions = tuple(sessions)
+    max_gap = int(max_gap)
+    if max_gap < 1:
+        raise ValueError("max_gap must be at least 1")
     local_tracks = np.full(
         (sessions[0].plane_data.n_rois, len(sessions)), -1, dtype=int
     )
@@ -117,29 +128,26 @@ def tracks_from_gap_links(
     if seed_rois.size:
         local_tracks[seed_rois, 0] = seed_rois
 
+    suffix_memo: dict[tuple[int, int], tuple[int, int]] = {}
     for row_index in range(local_tracks.shape[0]):
         current_session = 0
         current = int(local_tracks[row_index, current_session])
         if current < 0:
             continue
         while current_session < len(sessions) - 1:
-            matched = False
-            for step in range(
-                1, min(int(max_gap), len(sessions) - 1 - current_session) + 1
-            ):
-                links = links_by_gap.get((current_session, step))
-                if links is None or not links.size:
-                    continue
-                matches = np.flatnonzero(links[:, 0] == current)
-                if matches.size == 0:
-                    continue
-                current_session += step
-                current = int(links[matches[0], 1])
-                local_tracks[row_index, current_session] = current
-                matched = True
+            candidate = _best_gap_link_candidate(
+                current_session,
+                current,
+                links_by_gap,
+                max_gap=max_gap,
+                n_sessions=len(sessions),
+                suffix_memo=suffix_memo,
+            )
+            if candidate is None:
                 break
-            if not matched:
-                break
+            step, current = candidate
+            current_session += step
+            local_tracks[row_index, current_session] = current
 
     suite2p_tracks = np.full_like(local_tracks, -1)
     for session_index, roi_indices in enumerate(
@@ -170,3 +178,120 @@ def seed_rois_with_outgoing_gap_links(
             if 0 <= int(source_roi) < int(first_session_size):
                 seeds.add(int(source_roi))
     return np.asarray(sorted(seeds), dtype=int)
+
+
+def _best_gap_link_candidate(
+    source_session: int,
+    source_roi: int,
+    links_by_gap: Mapping[tuple[int, int], np.ndarray],
+    *,
+    max_gap: int,
+    n_sessions: int,
+    suffix_memo: dict[tuple[int, int], tuple[int, int]],
+) -> tuple[int, int] | None:
+    """Return the next accepted gap link that maximizes reachable suffix length."""
+
+    best_candidate: tuple[int, int] | None = None
+    best_score: tuple[int, int, int, int] | None = None
+    for step, target_roi in _gap_link_candidates(
+        source_session,
+        source_roi,
+        links_by_gap,
+        max_gap=max_gap,
+        n_sessions=n_sessions,
+    ):
+        target_session = int(source_session) + int(step)
+        future_count, terminal_session = _best_suffix_score(
+            target_session,
+            target_roi,
+            links_by_gap,
+            max_gap=max_gap,
+            n_sessions=n_sessions,
+            suffix_memo=suffix_memo,
+        )
+        score = (
+            1 + int(future_count),
+            int(terminal_session),
+            -int(step),
+            -int(target_roi),
+        )
+        if best_score is None or score > best_score:
+            best_score = score
+            best_candidate = (int(step), int(target_roi))
+    return best_candidate
+
+
+def _best_suffix_score(
+    source_session: int,
+    source_roi: int,
+    links_by_gap: Mapping[tuple[int, int], np.ndarray],
+    *,
+    max_gap: int,
+    n_sessions: int,
+    suffix_memo: dict[tuple[int, int], tuple[int, int]],
+) -> tuple[int, int]:
+    """Return ``(future_detection_count, terminal_session)`` from one node."""
+
+    key = (int(source_session), int(source_roi))
+    if key in suffix_memo:
+        return suffix_memo[key]
+
+    best_score = (0, int(source_session), 0, 0)
+    for step, target_roi in _gap_link_candidates(
+        source_session,
+        source_roi,
+        links_by_gap,
+        max_gap=max_gap,
+        n_sessions=n_sessions,
+    ):
+        target_session = int(source_session) + int(step)
+        future_count, terminal_session = _best_suffix_score(
+            target_session,
+            target_roi,
+            links_by_gap,
+            max_gap=max_gap,
+            n_sessions=n_sessions,
+            suffix_memo=suffix_memo,
+        )
+        score = (
+            1 + int(future_count),
+            int(terminal_session),
+            -int(step),
+            -int(target_roi),
+        )
+        if score > best_score:
+            best_score = score
+
+    suffix_memo[key] = (int(best_score[0]), int(best_score[1]))
+    return suffix_memo[key]
+
+
+def _gap_link_candidates(
+    source_session: int,
+    source_roi: int,
+    links_by_gap: Mapping[tuple[int, int], np.ndarray],
+    *,
+    max_gap: int,
+    n_sessions: int,
+) -> Iterator[tuple[int, int]]:
+    """Yield accepted ``(step, target_roi)`` links from one local detection."""
+
+    remaining_sessions = int(n_sessions) - 1 - int(source_session)
+    for step in range(1, min(int(max_gap), remaining_sessions) + 1):
+        links = _as_link_matrix(links_by_gap.get((int(source_session), int(step))))
+        if links.size == 0:
+            continue
+        matches = links[links[:, 0] == int(source_roi), 1]
+        for target_roi in matches:
+            yield int(step), int(target_roi)
+
+
+def _as_link_matrix(value: np.ndarray | None) -> np.ndarray:
+    if value is None:
+        return np.zeros((0, 2), dtype=int)
+    links = np.asarray(value, dtype=int)
+    if links.size == 0:
+        return np.zeros((0, 2), dtype=int)
+    if links.ndim != 2 or links.shape[1] != 2:
+        raise ValueError(f"gap links must have shape (n, 2), got {links.shape}")
+    return links
