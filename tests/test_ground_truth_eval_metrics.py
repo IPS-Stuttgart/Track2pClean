@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from bayescatrack.ground_truth_eval import (
     TrackTable,
@@ -52,6 +53,42 @@ def test_evaluate_track_table_prediction_counts_only_complete_exact_matches():
     evaluation = evaluate_track_table_prediction(ground_truth, prediction)
 
     assert evaluation.n_exact_full_track_matches == 1
+
+
+def test_track_table_normalizes_missing_roi_values():
+    table = TrackTable(("s1", "s2", "s3"), [[None, np.nan, -1]])
+
+    assert table.tracks.tolist() == [[-1, -1, -1]]
+
+
+@pytest.mark.parametrize(
+    "tracks",
+    [
+        [[True, 2]],
+        [[np.bool_(False), 2]],
+        [[1.5, 2]],
+        [[-2, 2]],
+    ],
+)
+def test_track_table_rejects_invalid_roi_values(tracks):
+    with pytest.raises(ValueError, match="ROI index"):
+        TrackTable(("s1", "s2"), tracks)
+
+
+@pytest.mark.parametrize(
+    ("roi_text", "message"),
+    [
+        ("true", "integer-like"),
+        ("1.5", "integer-like"),
+        ("-2", "non-negative"),
+    ],
+)
+def test_wide_csv_rejects_invalid_roi_values(tmp_path, roi_text, message):
+    csv_path = tmp_path / "tracks.csv"
+    csv_path.write_text(f"s1,s2\n{roi_text},2\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match=message):
+        load_track_table_csv(csv_path)
 
 
 def test_long_format_rejects_missing_track_ids(tmp_path):
