@@ -64,6 +64,44 @@ def test_consensus_preserves_original_track_ids_for_filtered_rows() -> None:
     assert plan == {7: (1,)}
 
 
+def test_consensus_optimizes_compatible_splits_not_greedy_central_bridge() -> None:
+    predicted = np.asarray([[10, 20, 30, 40, 50, 60]], dtype=int)
+    diagnostics = {
+        (1, 20, 30): _Diagnostic(centroid_distance=3.2),
+        (2, 30, 40): _Diagnostic(centroid_distance=4.0),
+        (3, 40, 50): _Diagnostic(centroid_distance=3.2),
+    }
+    support = {
+        (1, 2, 20, 30): 0,
+        (2, 3, 30, 40): 0,
+        (3, 4, 40, 50): 0,
+    }
+    component_config = ComponentCleanupConfig(
+        centroid_distance_scale=1.0,
+        split_risk_threshold=0.5,
+        split_penalty=0.0,
+        min_side_observations=2,
+        threshold_margin_weight=0.0,
+        row_margin_weight=0.0,
+        column_margin_weight=0.0,
+        centroid_distance_weight=1.0,
+        area_ratio_weight=0.0,
+    )
+
+    plan = plan_consensus_bridge_splits(
+        predicted,
+        diagnostics_by_edge=diagnostics,
+        support_counts=support,
+        config=ConsensusSplitConfig(
+            component=component_config,
+            required_support_votes=1,
+            max_splits_per_component=2,
+        ),
+    )
+
+    assert plan == {0: (1, 3)}
+
+
 def test_consensus_risk_only_ablation_and_apply() -> None:
     predicted = np.asarray([[10, 20, 30, 40, 50, 60]], dtype=int)
     diagnostics = {(1, 20, 30): _Diagnostic(), (3, 40, 50): _Diagnostic()}

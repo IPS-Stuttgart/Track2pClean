@@ -574,26 +574,43 @@ def _parse_float(token: str, *, name: str) -> float:
     return value
 
 
+def _coerce_solver_prior_float(value: object, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} values must be numeric, not boolean")
+    try:
+        numeric_value = float(cast(Any, value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} values must be numeric") from exc
+    if not np.isfinite(numeric_value):
+        raise ValueError(f"{name} values must be finite")
+    return numeric_value
+
+
 def _positive_values(values: Sequence[float], *, name: str) -> tuple[float, ...]:
-    result = tuple(float(value) for value in values)
-    if not result or any(value <= 0.0 or not np.isfinite(value) for value in result):
+    result = tuple(_coerce_solver_prior_float(value, name=name) for value in values)
+    if not result or any(value <= 0.0 for value in result):
         raise ValueError(f"{name} values must be positive finite numbers")
     return result
 
 
 def _nonnegative_values(values: Sequence[float], *, name: str) -> tuple[float, ...]:
-    result = tuple(float(value) for value in values)
-    if not result or any(value < 0.0 or not np.isfinite(value) for value in result):
+    result = tuple(_coerce_solver_prior_float(value, name=name) for value in values)
+    if not result or any(value < 0.0 for value in result):
         raise ValueError(f"{name} values must be non-negative finite numbers")
     return result
 
 
 def _thresholds(values: Sequence[float | None]) -> tuple[float | None, ...]:
-    result = tuple(None if value is None else float(value) for value in values)
-    if not result or any(
-        value is not None and not np.isfinite(value) for value in result
-    ):
-        raise ValueError("cost thresholds must be finite numbers or none")
+    result = tuple(
+        (
+            None
+            if value is None
+            else _coerce_solver_prior_float(value, name="cost thresholds")
+        )
+        for value in values
+    )
+    if not result or any(value is not None and value < 0.0 for value in result):
+        raise ValueError("cost thresholds must be non-negative finite numbers or none")
     return result
 
 
