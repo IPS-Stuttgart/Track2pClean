@@ -60,13 +60,19 @@ def run_track2p_policy_gap_pruned_benchmark(
 
     subject_dirs = discover_subject_dirs(policy_config.data)
     if not subject_dirs:
-        raise ValueError(f"No Track2p-style subject directories found under {policy_config.data}")
+        raise ValueError(
+            f"No Track2p-style subject directories found under {policy_config.data}"
+        )
 
     prune_config = prune_config or Track2pPolicyPruneConfig()
     results: list[SubjectBenchmarkResult] = []
     for subject_dir in subject_dirs:
-        reference = _load_reference_for_subject(subject_dir, data_root=policy_config.data, config=policy_config)
-        _validate_reference_for_benchmark(reference, subject_dir=subject_dir, config=policy_config)
+        reference = _load_reference_for_subject(
+            subject_dir, data_root=policy_config.data, config=policy_config
+        )
+        _validate_reference_for_benchmark(
+            reference, subject_dir=subject_dir, config=policy_config
+        )
         sessions = _load_subject_sessions(subject_dir, policy_config)
         _validate_reference_roi_indices(reference, sessions)
         prediction = emulate_track2p_gap_pruned_tracks(
@@ -78,18 +84,30 @@ def run_track2p_policy_gap_pruned_benchmark(
             max_gap=int(policy_config.max_gap),
         )
         candidate_edges = int(len(prediction.diagnostics))
-        pruned_edges = int(sum(diagnostic.pruned for diagnostic in prediction.diagnostics))
+        pruned_edges = int(
+            sum(diagnostic.pruned for diagnostic in prediction.diagnostics)
+        )
         scores = {
-            **_score_prediction_against_reference(prediction.tracks, reference, config=policy_config),
+            **_score_prediction_against_reference(
+                prediction.tracks, reference, config=policy_config
+            ),
             "track2p_policy_threshold_method": str(threshold_method),
             "track2p_policy_iou_distance_threshold": float(iou_distance_threshold),
-            "track2p_policy_cell_probability_threshold": float(policy_config.cell_probability_threshold),
+            "track2p_policy_cell_probability_threshold": float(
+                policy_config.cell_probability_threshold
+            ),
             "track2p_policy_transform_type": str(policy_config.transform_type),
             "track2p_policy_max_gap": int(policy_config.max_gap),
-            "track2p_policy_prune_threshold_margin": float(prune_config.threshold_margin),
-            "track2p_policy_prune_competition_margin": float(prune_config.competition_margin),
+            "track2p_policy_prune_threshold_margin": float(
+                prune_config.threshold_margin
+            ),
+            "track2p_policy_prune_competition_margin": float(
+                prune_config.competition_margin
+            ),
             "track2p_policy_prune_min_area_ratio": float(prune_config.min_area_ratio),
-            "track2p_policy_prune_centroid_distance": float(prune_config.centroid_distance),
+            "track2p_policy_prune_centroid_distance": float(
+                prune_config.centroid_distance
+            ),
             "track2p_policy_candidate_edges": candidate_edges,
             "track2p_policy_pruned_edges": pruned_edges,
             "track2p_policy_kept_edges": candidate_edges - pruned_edges,
@@ -108,25 +126,71 @@ def run_track2p_policy_gap_pruned_benchmark(
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run gap-aware pruned Track2p-policy benchmark.")
+    parser = argparse.ArgumentParser(
+        description="Run gap-aware pruned Track2p-policy benchmark."
+    )
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--reference", type=Path, default=None)
-    parser.add_argument("--reference-kind", choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"), default="manual-gt")
+    parser.add_argument(
+        "--reference-kind",
+        choices=("auto", "manual-gt", "track2p-output", "aligned-subject-rows"),
+        default="manual-gt",
+    )
     parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", choices=("auto", "suite2p", "npy"), default="suite2p")
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
-    parser.add_argument("--threshold-method", choices=("otsu", "min"), default=TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
-    parser.add_argument("--iou-distance-threshold", type=float, default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD)
+    parser.add_argument(
+        "--input-format", choices=("auto", "suite2p", "npy"), default="suite2p"
+    )
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
+    parser.add_argument(
+        "--threshold-method",
+        choices=("otsu", "min"),
+        default=TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
+    parser.add_argument(
+        "--iou-distance-threshold",
+        type=float,
+        default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+    )
     parser.add_argument("--max-gap", type=int, default=DEFAULT_GAP_PRUNED_MAX_GAP)
-    parser.add_argument("--cell-probability-threshold", type=float, default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD)
-    parser.add_argument("--prune-threshold-margin", type=float, default=Track2pPolicyPruneConfig().threshold_margin)
-    parser.add_argument("--prune-competition-margin", type=float, default=Track2pPolicyPruneConfig().competition_margin)
-    parser.add_argument("--prune-min-area-ratio", type=float, default=Track2pPolicyPruneConfig().min_area_ratio)
-    parser.add_argument("--prune-centroid-distance", type=float, default=Track2pPolicyPruneConfig().centroid_distance)
-    parser.add_argument("--restrict-to-reference-seed-rois", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--cell-probability-threshold",
+        type=float,
+        default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
+    )
+    parser.add_argument(
+        "--prune-threshold-margin",
+        type=float,
+        default=Track2pPolicyPruneConfig().threshold_margin,
+    )
+    parser.add_argument(
+        "--prune-competition-margin",
+        type=float,
+        default=Track2pPolicyPruneConfig().competition_margin,
+    )
+    parser.add_argument(
+        "--prune-min-area-ratio",
+        type=float,
+        default=Track2pPolicyPruneConfig().min_area_ratio,
+    )
+    parser.add_argument(
+        "--prune-centroid-distance",
+        type=float,
+        default=Track2pPolicyPruneConfig().centroid_distance,
+    )
+    parser.add_argument(
+        "--restrict-to-reference-seed-rois",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument("--seed-session", type=int, default=0)
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=False
+    )
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     return parser
