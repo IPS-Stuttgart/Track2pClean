@@ -17,6 +17,7 @@ column per session.
 from __future__ import annotations
 
 import csv
+import operator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -247,7 +248,11 @@ def build_track_rows_from_matches(
             "omit unmatched ROIs. Use build_track_rows_from_bundles() when bundle "
             "ROI indices are available."
         )
-    start_roi_indices = [int(index) for index in start_roi_indices]
+    start_roi_indices = _normalize_roi_index_sequence(
+        start_roi_indices,
+        "start_roi_indices",
+        require_unique=True,
+    )
 
     reverse_matches = [
         _invert_match_mapping(normalized_matches[match_index])
@@ -411,8 +416,8 @@ def _normalize_match_mapping(
     if isinstance(match, Mapping):
         return _pairs_to_match_mapping(match.keys(), match.values())
     if isinstance(match, tuple) and len(match) == 2:
-        reference_roi_indices = [int(value) for value in match[0]]
-        measurement_roi_indices = [int(value) for value in match[1]]
+        reference_roi_indices = list(match[0])
+        measurement_roi_indices = list(match[1])
         if len(reference_roi_indices) != len(measurement_roi_indices):
             raise ValueError("tuple-based matches must have equal lengths")
         return _pairs_to_match_mapping(reference_roi_indices, measurement_roi_indices)
@@ -436,8 +441,11 @@ def _pairs_to_match_mapping(
         measurement_roi_indices,
         strict=True,
     ):
-        reference_roi = int(reference_roi)
-        measurement_roi = int(measurement_roi)
+        reference_roi = _normalize_roi_index(reference_roi, "reference_roi_indices")
+        measurement_roi = _normalize_roi_index(
+            measurement_roi,
+            "measurement_roi_indices",
+        )
         if reference_roi in mapping:
             raise ValueError(
                 "match mappings must be one-to-one; "
@@ -451,6 +459,40 @@ def _pairs_to_match_mapping(
         mapping[reference_roi] = measurement_roi
         used_measurement_rois.add(measurement_roi)
     return mapping
+
+
+def _normalize_roi_index_sequence(
+    values: Sequence[int] | np.ndarray,
+    field_name: str,
+    *,
+    require_unique: bool = False,
+) -> list[int]:
+    normalized = [_normalize_roi_index(value, field_name) for value in values]
+    if require_unique and len(set(normalized)) != len(normalized):
+        raise ValueError(f"{field_name} must contain unique ROI indices")
+    return normalized
+
+
+def _normalize_roi_index(value: Any, field_name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{field_name} contains boolean ROI index")
+
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{field_name} must contain integer ROI indices")
+        normalized = int(value)
+    else:
+        try:
+            normalized = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(
+                f"{field_name} must contain integer ROI indices"
+            ) from exc
+
+    normalized = int(normalized)
+    if normalized < 0:
+        raise ValueError(f"{field_name} must contain non-negative ROI indices")
+    return normalized
 
 
 def _empty_match_result(bundle: Any) -> SessionMatchResult:
