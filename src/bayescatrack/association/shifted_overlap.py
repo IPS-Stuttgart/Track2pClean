@@ -8,6 +8,7 @@ whole measurement ROI, so shape selectivity is preserved in crowded fields.
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -555,10 +556,28 @@ def _ensure_finite_cost_matrix(
 
 
 def _nonnegative_int(value: Any, *, name: str) -> int:
-    try:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{name} must be an integer")
         integer_value = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{name} must be an integer") from exc
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric_value = float(stripped)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(numeric_value)
+    else:
+        try:
+            integer_value = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
     if integer_value < 0:
         raise ValueError(f"{name} must be non-negative")
-    return integer_value
+    return int(integer_value)
