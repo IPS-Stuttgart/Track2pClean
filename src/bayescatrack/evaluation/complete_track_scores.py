@@ -316,7 +316,9 @@ def _validate_compatible_shapes(predicted: np.ndarray, reference: np.ndarray) ->
         )
 
 
-def _normalize_track_matrix_observations(track_matrix: Any, matrix_name: str) -> np.ndarray:
+def _normalize_track_matrix_observations(
+    track_matrix: Any, matrix_name: str
+) -> np.ndarray:
     array = np.asarray(track_matrix, dtype=object)
     normalized = np.empty(array.shape, dtype=object)
     for index, value in np.ndenumerate(array):

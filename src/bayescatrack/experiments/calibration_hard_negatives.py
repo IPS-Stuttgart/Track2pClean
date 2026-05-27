@@ -108,12 +108,25 @@ def _validated_pairwise_block_arrays(
     return features, labels
 
 
+def _validated_supervised_mask(
+    block: ReferencePairwiseExamples,
+    label_shape: tuple[int, int],
+) -> np.ndarray:
+    if block.supervised_mask is None:
+        return np.ones(label_shape, dtype=bool)
+    supervised_mask = np.asarray(block.supervised_mask, dtype=bool)
+    if supervised_mask.shape != label_shape:
+        raise ValueError("supervised_mask must match the pairwise label matrix shape")
+    return supervised_mask
+
+
 def _candidate_hard_negative_selection_mask(
     block: ReferencePairwiseExamples,
     options: CandidateHardNegativeOptions,
 ) -> np.ndarray:
     _features, labels = _validated_pairwise_block_arrays(block)
-    positive_mask = labels != 0
+    supervised_mask = _validated_supervised_mask(block, labels.shape)
+    positive_mask = (labels != 0) & supervised_mask
     candidate_mask = _top_k_candidate_negative_mask(block, options)
     selected_negative_mask = np.zeros(labels.shape, dtype=bool)
     n_positive = int(np.sum(positive_mask))
@@ -135,7 +148,8 @@ def _top_k_candidate_negative_mask(
     options: CandidateHardNegativeOptions,
 ) -> np.ndarray:
     _features, labels = _validated_pairwise_block_arrays(block)
-    candidate_mask = labels == 0
+    supervised_mask = _validated_supervised_mask(block, labels.shape)
+    candidate_mask = (labels == 0) & supervised_mask
     if options.candidate_top_k_per_anchor is None or not np.any(candidate_mask):
         return candidate_mask
 

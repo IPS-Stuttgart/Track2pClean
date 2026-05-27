@@ -9,7 +9,9 @@ from bayescatrack.experiments.calibration_hard_negatives import (
 )
 
 
-def _example_block() -> ReferencePairwiseExamples:
+def _example_block(
+    supervised_mask: np.ndarray | None = None,
+) -> ReferencePairwiseExamples:
     feature_names = ("centroid_distance", "one_minus_iou", "session_gap")
     centroid = np.array(
         [
@@ -37,6 +39,7 @@ def _example_block() -> ReferencePairwiseExamples:
         reference_roi_indices=np.array([0, 1, 2], dtype=int),
         measurement_roi_indices=np.array([0, 1, 2], dtype=int),
         feature_names=feature_names,
+        supervised_mask=supervised_mask,
     )
 
 
@@ -58,6 +61,27 @@ def test_candidate_limited_hard_negatives_keep_all_positives_and_hard_negatives(
         float(value) for value in features[labels == 0, 0]
     )
     assert selected_centroid_distances == [0.1, 0.2, 0.3]
+
+
+def test_candidate_limited_hard_negatives_ignore_unsupervised_pairs():
+    supervised_mask = np.eye(3, dtype=bool)
+    supervised_mask[0, 1] = True
+
+    features, labels = collect_candidate_limited_training_examples(
+        [_example_block(supervised_mask=supervised_mask)],
+        options=CandidateHardNegativeOptions(
+            negative_to_positive_ratio=10.0,
+            candidate_top_k_per_anchor=None,
+            hardness_feature_names=("centroid_distance",),
+        ),
+    )
+
+    assert int(np.sum(labels == 1)) == 3
+    assert int(np.sum(labels == 0)) == 1
+    selected_centroid_distances = sorted(
+        float(value) for value in features[labels == 0, 0]
+    )
+    assert selected_centroid_distances == [0.1]
 
 
 def test_balanced_binary_sample_weights_are_inverse_frequency():
