@@ -242,10 +242,14 @@ def _robust_z_scores(values: np.ndarray) -> np.ndarray:
     if values.size == 0:
         return values
     median = float(np.median(values))
-    mad = float(np.median(np.abs(values - median)))
+    deviations = np.abs(values - median)
+    mad = float(np.median(deviations))
     scale = 1.4826 * mad
-    if not np.isfinite(scale) or scale <= 1.0e-12:
-        scale = float(np.std(values))
-    if not np.isfinite(scale) or scale <= 1.0e-12:
-        scale = 1.0
-    return np.abs(values - median) / scale
+    if np.isfinite(scale) and scale > 1.0e-12:
+        return deviations / scale
+
+    z_scores = np.zeros(values.shape, dtype=float)
+    non_median = np.isfinite(deviations) & (deviations > 1.0e-12)
+    z_scores[non_median] = np.inf
+    z_scores[~np.isfinite(deviations)] = np.inf
+    return z_scores
