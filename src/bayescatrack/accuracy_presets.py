@@ -118,6 +118,16 @@ def build_track2p_accuracy_presets(
             "column_top_k": 24,
             "max_cost": 6.0 if cost_threshold is None else float(cost_threshold),
         },
+        track2p_policy_prior_config={
+            "threshold_method": "min",
+            "relief": 0.20,
+            "accepted_cost_cap": 4.0,
+            "non_policy_penalty": 0.05,
+            "mutual_top_k": 2,
+            "rescue_min_iou": 0.10,
+            "rescue_margin": 0.05,
+            "max_gap": max_gap,
+        },
         dynamic_edge_prior_config={
             "session_gap_weight": 0.25,
             "cell_probability_weight": 0.50,
@@ -160,8 +170,8 @@ def build_track2p_accuracy_presets(
             name="roi-aware-shifted-pruned",
             description=(
                 "ROI-aware shifted-overlap costs with high-recall row/column "
-                "candidate pruning, dynamic edge priors, activity tie-breaking, "
-                "and higher-order consistency."
+                "candidate pruning, mutual-top-k Track2p-policy relief, dynamic "
+                "edge priors, activity tie-breaking, and higher-order consistency."
             ),
             config=pruned_roi_aware,
         ),
@@ -222,6 +232,7 @@ def accuracy_preset_metadata(
                 "max_gap": cfg.max_gap,
                 "cost_threshold": "none" if cfg.cost_threshold is None else cfg.cost_threshold,
                 "candidate_pruning": cfg.candidate_pruning_config is not None,
+                "track2p_policy_prior": cfg.track2p_policy_prior_config is not None,
                 "dynamic_edge_prior": cfg.dynamic_edge_prior_config is not None,
                 "higher_order_consistency": cfg.higher_order_consistency_config is not None,
                 "consensus_prior": cfg.consensus_prior_config is not None,
