@@ -276,7 +276,9 @@ def _pairwise_trace_correlations(
     measurement_square_sums = reference_available @ (measurement_values**2).T
 
     reference_sum_squares = reference_square_sums - (reference_sums**2 / safe_counts)
-    measurement_sum_squares = measurement_square_sums - (measurement_sums**2 / safe_counts)
+    measurement_sum_squares = measurement_square_sums - (
+        measurement_sums**2 / safe_counts
+    )
     covariance_sums = cross_sums - (reference_sums * measurement_sums / safe_counts)
 
     reference_sum_squares = np.maximum(reference_sum_squares, 0.0)

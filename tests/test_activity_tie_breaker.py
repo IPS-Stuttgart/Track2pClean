@@ -3,7 +3,6 @@ from __future__ import annotations
 import numpy as np
 import numpy.testing as npt
 import pytest
-
 from bayescatrack.association.activity_tie_breaker import (
     activity_tie_breaker_cost_matrix,
 )
