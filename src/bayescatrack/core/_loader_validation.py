@@ -146,11 +146,15 @@ def _validate_suite2p_stat_coordinates(
             )
         if exclude_overlapping_pixels and "overlap" in roi_stat:
             overlap = np.asarray(roi_stat["overlap"], dtype=bool)
-            if overlap.shape == ypix.shape:
-                valid = ~overlap
-                ypix = ypix[valid]
-                xpix = xpix[valid]
-                lam = lam[valid]
+            if overlap.shape != ypix.shape:
+                raise ValueError(
+                    f"Suite2p ROI {roi_index} has overlap shape {overlap.shape}, "
+                    f"but expected {ypix.shape}"
+                )
+            valid = ~overlap
+            ypix = ypix[valid]
+            xpix = xpix[valid]
+            lam = lam[valid]
         if ypix.size == 0:
             continue
         invalid = (ypix < 0) | (ypix >= height) | (xpix < 0) | (xpix >= width)

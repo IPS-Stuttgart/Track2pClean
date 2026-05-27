@@ -255,6 +255,29 @@ def test_load_suite2p_plane_accepts_single_column_iscell_without_scalar_warning(
     np.testing.assert_allclose(plane.cell_probabilities, np.asarray([1.0]))
 
 
+def test_load_suite2p_plane_rejects_mismatched_overlap_vector(tmp_path):
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([0, 1], dtype=int),
+                "xpix": np.asarray([0, 1], dtype=int),
+                "lam": np.asarray([1.0, 1.0], dtype=float),
+                "overlap": np.asarray([False], dtype=bool),
+            }
+        ],
+        dtype=object,
+    )
+    np.save(tmp_path / "stat.npy", stat)
+
+    with pytest.raises(ValueError, match="overlap shape"):
+        load_suite2p_plane(
+            tmp_path,
+            load_traces=False,
+            load_spike_traces=False,
+            exclude_overlapping_pixels=True,
+        )
+
+
 def test_load_suite2p_plane_rejects_mismatched_trace_rows(tmp_path):
     stat = np.asarray(
         [
