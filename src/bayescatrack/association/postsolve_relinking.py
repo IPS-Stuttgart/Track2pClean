@@ -20,12 +20,17 @@ class PostSolveRelinkingConfig:
     min_cost_improvement: float = 0.25
     enforce_unique_session_rois: bool = True
     fill_value: int = -1
+    bidirectional_next_weight: float = 1.0
 
     def __post_init__(self) -> None:
         if self.max_edge_cost is not None and self.max_edge_cost < 0.0:
             raise ValueError("max_edge_cost must be non-negative when provided")
         if self.min_cost_improvement < 0.0:
             raise ValueError("min_cost_improvement must be non-negative")
+        next_weight = float(self.bidirectional_next_weight)
+        if not np.isfinite(next_weight) or next_weight < 0.0:
+            raise ValueError("bidirectional_next_weight must be finite and non-negative")
+        object.__setattr__(self, "bidirectional_next_weight", next_weight)
 
 
 def relink_tracks_at_geometry_issues(
@@ -38,11 +43,13 @@ def relink_tracks_at_geometry_issues(
 ) -> np.ndarray:
     """Return a track matrix with local relinks for flagged high-residual detections.
 
-    The relinker is intentionally conservative.  It only replaces the ROI at a
+    The relinker is intentionally conservative. It only replaces the ROI at a
     flagged session if the previous present detection has a finite pairwise edge
     to that session and a lower-cost unused candidate beats the current edge by
-    at least ``min_cost_improvement``.  It does not invent missing sessions or
-    repair unflagged detections.
+    at least ``min_cost_improvement``. When the next present detection is also
+    available, candidates are ranked by incoming plus outgoing edge evidence so
+    a local repair remains compatible with the full track. It does not invent
+    missing sessions or repair unflagged detections.
     """
 
     cfg = _coerce_config(config)
@@ -91,6 +98,15 @@ def relink_tracks_at_geometry_issues(
             if current_local is not None and current_local < matrix.shape[1]
             else float("inf")
         )
+        next_costs, current_next_cost = _outgoing_relink_costs(
+            rows[track_index],
+            session_index,
+            current_local,
+            pairwise_costs,
+            roi_indices,
+            local_index_by_session,
+            config=cfg,
+        )
 
         target_local = _best_relink_candidate(
             matrix[source_local],
@@ -98,6 +114,8 @@ def relink_tracks_at_geometry_issues(
             occupied[session_index] - {current_roi},
             current_cost=current_cost,
             config=cfg,
+            next_costs=next_costs,
+            current_next_cost=current_next_cost,
         )
         if target_local is None:
             continue
@@ -152,6 +170,58 @@ def _previous_present_session(
     return None
 
 
+def _next_present_session(
+    row: np.ndarray,
+    session_index: int,
+    *,
+    fill_value: int,
+) -> int | None:
+    for candidate in range(int(session_index) + 1, row.shape[0]):
+        if int(row[candidate]) != int(fill_value):
+            return candidate
+    return None
+
+
+def _outgoing_relink_costs(
+    row: np.ndarray,
+    session_index: int,
+    current_local: int | None,
+    pairwise_costs: Mapping[SessionEdge, np.ndarray],
+    roi_indices: Sequence[np.ndarray],
+    local_index_by_session: Sequence[Mapping[int, int]],
+    *,
+    config: PostSolveRelinkingConfig,
+) -> tuple[np.ndarray | None, float | None]:
+    if config.bidirectional_next_weight <= 0.0:
+        return None, None
+    next_session = _next_present_session(
+        row, session_index, fill_value=config.fill_value
+    )
+    if next_session is None:
+        return None, None
+    next_matrix = pairwise_costs.get((session_index, next_session))
+    if next_matrix is None:
+        return None, None
+    matrix = np.asarray(next_matrix, dtype=float)
+    if matrix.ndim != 2:
+        return None, None
+    next_roi = int(row[next_session])
+    next_local = local_index_by_session[next_session].get(next_roi)
+    if next_local is None or next_local >= matrix.shape[1]:
+        return None, None
+    n_candidates = len(roi_indices[session_index])
+    outgoing = np.full(n_candidates, float("inf"), dtype=float)
+    row_limit = min(n_candidates, matrix.shape[0])
+    if row_limit > 0:
+        outgoing[:row_limit] = matrix[:row_limit, next_local]
+    current_next_cost = (
+        float(outgoing[current_local])
+        if current_local is not None and current_local < outgoing.shape[0]
+        else float("inf")
+    )
+    return outgoing, current_next_cost
+
+
 def _best_relink_candidate(
     costs: np.ndarray,
     target_roi_indices: np.ndarray,
@@ -159,6 +229,8 @@ def _best_relink_candidate(
     *,
     current_cost: float,
     config: PostSolveRelinkingConfig,
+    next_costs: np.ndarray | None = None,
+    current_next_cost: float | None = None,
 ) -> int | None:
     costs = np.asarray(costs, dtype=float).reshape(-1)
     target_roi_indices = np.asarray(target_roi_indices, dtype=int).reshape(-1)
@@ -167,9 +239,25 @@ def _best_relink_candidate(
         return None
     costs = costs[:limit]
     target_roi_indices = target_roi_indices[:limit]
+    candidate_scores = costs.copy()
+    current_score = float(current_cost)
     finite = np.isfinite(costs)
     if config.max_edge_cost is not None:
         finite &= costs <= float(config.max_edge_cost)
+    if next_costs is not None and config.bidirectional_next_weight > 0.0:
+        next_costs = np.asarray(next_costs, dtype=float).reshape(-1)
+        padded_next_costs = np.full(limit, float("inf"), dtype=float)
+        padded_next_costs[: min(limit, next_costs.size)] = next_costs[:limit]
+        finite &= np.isfinite(padded_next_costs)
+        if config.max_edge_cost is not None:
+            finite &= padded_next_costs <= float(config.max_edge_cost)
+        next_weight = float(config.bidirectional_next_weight)
+        candidate_scores = costs + next_weight * padded_next_costs
+        current_score = _joint_current_cost(
+            current_cost,
+            current_next_cost,
+            next_weight=next_weight,
+        )
     if config.enforce_unique_session_rois:
         for local_index, roi_index in enumerate(target_roi_indices):
             if int(roi_index) in occupied_target_rois:
@@ -177,14 +265,27 @@ def _best_relink_candidate(
     candidates = np.flatnonzero(finite)
     if candidates.size == 0:
         return None
-    best_local = int(candidates[np.argmin(costs[candidates])])
-    best_cost = float(costs[best_local])
+    best_local = int(candidates[np.argmin(candidate_scores[candidates])])
+    best_cost = float(candidate_scores[best_local])
     if (
-        np.isfinite(current_cost)
-        and current_cost - best_cost < config.min_cost_improvement
+        np.isfinite(current_score)
+        and current_score - best_cost < config.min_cost_improvement
     ):
         return None
     return best_local
+
+
+def _joint_current_cost(
+    current_cost: float,
+    current_next_cost: float | None,
+    *,
+    next_weight: float,
+) -> float:
+    if current_next_cost is None:
+        return float(current_cost)
+    if not np.isfinite(current_next_cost):
+        return float("inf")
+    return float(current_cost) + next_weight * float(current_next_cost)
 
 
 __all__ = ("PostSolveRelinkingConfig", "relink_tracks_at_geometry_issues")
