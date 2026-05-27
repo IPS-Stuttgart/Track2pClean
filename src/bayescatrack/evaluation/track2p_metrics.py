@@ -31,9 +31,14 @@ __all__ = [
 def normalize_track_matrix(track_matrix: Any) -> np.ndarray:
     """Normalize a track matrix after strict BayesCaTrack ROI-index validation."""
 
-    return _pyrecest_normalize_track_matrix(
+    normalized = _pyrecest_normalize_track_matrix(
         _normalize_track_matrix_observations(track_matrix, "track_matrix")
     )
+    matrix = np.full(normalized.shape, -1, dtype=int)
+    for index, value in np.ndenumerate(normalized):
+        if value is not None:
+            matrix[index] = int(value)
+    return matrix
 
 
 def score_track_matrix_against_reference(
