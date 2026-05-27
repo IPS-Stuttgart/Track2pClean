@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+
 from bayescatrack.association.shifted_overlap import (
     pairwise_shifted_overlap_matrices,
     shift_offsets,
