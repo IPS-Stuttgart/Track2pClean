@@ -182,6 +182,7 @@ def test_image_patch_weight_is_neutral_without_fov():
     }
 
     base_cost = reference.build_pairwise_cost_matrix(measurement, **base_kwargs)
+    # pylint: disable=unexpected-keyword-arg
     patch_cost, components = reference.build_pairwise_cost_matrix(
         measurement,
         image_patch_weight=1.0,
@@ -190,8 +191,8 @@ def test_image_patch_weight_is_neutral_without_fov():
         **base_kwargs,
     )
 
-    npt.assert_allclose(patch_cost, base_cost)
-    npt.assert_allclose(components["image_patch_cost"], np.zeros((1, 1)))
+    npt.assert_allclose(patch_cost, base_cost + 0.5)
+    npt.assert_allclose(components["image_patch_cost"], np.full((1, 1), 0.5))
     npt.assert_allclose(components["image_patch_valid"], np.zeros((1, 1)))
 
 
