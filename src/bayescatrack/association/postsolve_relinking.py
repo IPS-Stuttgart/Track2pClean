@@ -29,7 +29,9 @@ class PostSolveRelinkingConfig:
             raise ValueError("min_cost_improvement must be non-negative")
         next_weight = float(self.bidirectional_next_weight)
         if not np.isfinite(next_weight) or next_weight < 0.0:
-            raise ValueError("bidirectional_next_weight must be finite and non-negative")
+            raise ValueError(
+                "bidirectional_next_weight must be finite and non-negative"
+            )
         object.__setattr__(self, "bidirectional_next_weight", next_weight)
 
 

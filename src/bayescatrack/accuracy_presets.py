@@ -201,7 +201,9 @@ def run_track2p_accuracy_presets(
     if requested is not None:
         missing = requested.difference(results)
         if missing:
-            raise ValueError(f"Unknown accuracy preset(s): {', '.join(sorted(missing))}")
+            raise ValueError(
+                f"Unknown accuracy preset(s): {', '.join(sorted(missing))}"
+            )
     return results
 
 
@@ -220,10 +222,13 @@ def accuracy_preset_metadata(
                 "cost": cfg.cost,
                 "transform_type": cfg.transform_type,
                 "max_gap": cfg.max_gap,
-                "cost_threshold": "none" if cfg.cost_threshold is None else cfg.cost_threshold,
+                "cost_threshold": (
+                    "none" if cfg.cost_threshold is None else cfg.cost_threshold
+                ),
                 "candidate_pruning": cfg.candidate_pruning_config is not None,
                 "dynamic_edge_prior": cfg.dynamic_edge_prior_config is not None,
-                "higher_order_consistency": cfg.higher_order_consistency_config is not None,
+                "higher_order_consistency": cfg.higher_order_consistency_config
+                is not None,
                 "consensus_prior": cfg.consensus_prior_config is not None,
             }
         )
