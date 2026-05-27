@@ -14,7 +14,11 @@ from .complete_track_scores import *  # noqa: F401,F403
 from .complete_track_scores import __all__ as _complete_track_score_exports
 from .complete_track_scores import (
     _normalize_track_matrix_observations,
+)
+from .complete_track_scores import (
     normalize_track_matrix as _pyrecest_normalize_track_matrix,
+)
+from .complete_track_scores import (
     score_track_matrices,
 )
 from .track_error_ledger import *  # noqa: F401,F403

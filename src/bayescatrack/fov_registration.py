@@ -450,9 +450,7 @@ def apply_image_translation(
         shift_yx,
         output_shape=output_shape,
         fill_value=float(fill_value),
-        interpolation_order=_interpolation_order_from_mask_interpolation(
-            interpolation
-        ),
+        interpolation_order=_interpolation_order_from_mask_interpolation(interpolation),
     )
 
 
@@ -520,9 +518,7 @@ def apply_roi_mask_translation(
         roi_masks,
         shift_yx,
         output_shape=output_shape,
-        interpolation_order=_interpolation_order_from_mask_interpolation(
-            interpolation
-        ),
+        interpolation_order=_interpolation_order_from_mask_interpolation(interpolation),
     )
 
 

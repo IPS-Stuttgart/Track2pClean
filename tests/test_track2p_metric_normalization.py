@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bayescatrack.evaluation.track2p_metrics import normalize_track_matrix
 
 

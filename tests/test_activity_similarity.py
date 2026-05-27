@@ -69,9 +69,7 @@ def test_activity_similarity_prefers_spike_traces_in_auto_mode() -> None:
     )
 
 
-def test_activity_similarity_uses_pairwise_finite_overlap_for_missing_samples() -> (
-    None
-):
+def test_activity_similarity_uses_pairwise_finite_overlap_for_missing_samples() -> None:
     masks = _masks()
     reference_traces = np.array(
         [
