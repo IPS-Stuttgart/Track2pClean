@@ -1,4 +1,4 @@
-"""BayesCaTrack command line entry point."""
+﻿"""BayesCaTrack command line entry point."""
 
 from __future__ import annotations
 
@@ -87,6 +87,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "track2p-policy-consensus-cleanup",
         "bayescatrack.experiments.track2p_policy_consensus_cleanup",
         "Run conservative Track2p-policy consensus bridge cleanup",
+    ),
+    (
+        "track2p-policy-gap-component-cleanup",
+        "bayescatrack.experiments.track2p_policy_gap_component_cleanup",
+        "Run Track2p-policy gap rescue plus weakest-bridge component cleanup",
     ),
     (
         "track2p-policy-gap-consensus-cleanup",

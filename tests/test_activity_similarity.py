@@ -69,6 +69,36 @@ def test_activity_similarity_prefers_spike_traces_in_auto_mode() -> None:
     )
 
 
+def test_activity_similarity_uses_pairwise_finite_overlap_for_missing_samples() -> (
+    None
+):
+    masks = _masks()
+    reference_traces = np.array(
+        [
+            [0.0, 1.0, np.nan, 1.0, 0.0],
+            [1.0, 0.0, 1.0, 0.0, np.nan],
+        ]
+    )
+    measurement_traces = np.array(
+        [
+            [0.0, 1.0, 0.0, 1.0, np.nan],
+            [1.0, 0.0, np.nan, 0.0, 1.0],
+        ]
+    )
+    reference = CalciumPlaneData(roi_masks=masks, traces=reference_traces)
+    measurement = CalciumPlaneData(roi_masks=masks, traces=measurement_traces)
+
+    components = activity_similarity_components(reference, measurement)
+
+    npt.assert_allclose(np.diag(components["activity_similarity_available"]), 1.0)
+    npt.assert_allclose(np.diag(components["activity_correlation"]), 1.0)
+    npt.assert_allclose(np.diag(components["activity_similarity_cost"]), 0.0)
+    assert (
+        components["activity_similarity"][0, 0]
+        > components["activity_similarity"][0, 1]
+    )
+
+
 def test_activity_similarity_hook_is_neutral_when_traces_are_missing() -> None:
     masks = _masks()
     reference = CalciumPlaneData(roi_masks=masks)

@@ -525,7 +525,10 @@ def install_shifted_overlap_cost_patch() -> PairwiseCostMethod:
     """
 
     original_method = CalciumPlaneData.build_pairwise_cost_matrix
-    if getattr(original_method, "_bayescatrack_shifted_overlap_patch", False):
+    if _pairwise_method_chain_has_patch(
+        original_method,
+        "_bayescatrack_shifted_overlap_patch",
+    ):
         return original_method
 
     def _patched_pairwise_cost(
@@ -544,6 +547,22 @@ def install_shifted_overlap_cost_patch() -> PairwiseCostMethod:
     setattr(_patched_pairwise_cost, "_bayescatrack_original", original_method)
     CalciumPlaneData.build_pairwise_cost_matrix = _patched_pairwise_cost  # type: ignore[method-assign]
     return original_method
+
+
+def _pairwise_method_chain_has_patch(method: Any, marker: str) -> bool:
+    """Return whether a pairwise-cost wrapper chain contains ``marker``."""
+
+    seen: set[int] = set()
+    current: Any = method
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            return True
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _ensure_finite_cost_matrix(

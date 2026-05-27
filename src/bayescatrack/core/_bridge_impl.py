@@ -173,10 +173,12 @@ class CalciumPlaneData:
         if self.n_rois == 0:
             return np.zeros((0,), dtype=float)
 
-        flat_masks = np.asarray(self.roi_masks, dtype=float).reshape(self.n_rois, -1)
+        flat_masks = _finite_positive_mask_array(self.roi_masks).reshape(
+            self.n_rois, -1
+        )
         if weighted:
             return np.sum(flat_masks, axis=1)
-        return np.sum(flat_masks > 0.0, axis=1, dtype=float)
+        return np.count_nonzero(flat_masks > 0.0, axis=1).astype(float)
 
     def pairwise_centroid_distances(
         self,
@@ -404,12 +406,13 @@ class CalciumPlaneData:
 
         coords = np.zeros((2, self.n_rois), dtype=float)
         for roi_index, mask in enumerate(self.roi_masks):
-            row_coords, col_coords = np.nonzero(mask)
+            mask_array = _finite_positive_mask_array(mask)
+            row_coords, col_coords = np.nonzero(mask_array > 0.0)
             if row_coords.size == 0:
                 raise ValueError(f"ROI {roi_index} has an empty mask")
 
             if weighted:
-                weights = np.asarray(mask[row_coords, col_coords], dtype=float)
+                weights = np.asarray(mask_array[row_coords, col_coords], dtype=float)
             else:
                 weights = np.ones(row_coords.shape[0], dtype=float)
 
@@ -445,9 +448,10 @@ class CalciumPlaneData:
         centroids = self.centroids(order=order, weighted=weighted)
 
         for roi_index, mask in enumerate(self.roi_masks):
-            row_coords, col_coords = np.nonzero(mask)
+            mask_array = _finite_positive_mask_array(mask)
+            row_coords, col_coords = np.nonzero(mask_array > 0.0)
             if weighted:
-                weights = np.asarray(mask[row_coords, col_coords], dtype=float)
+                weights = np.asarray(mask_array[row_coords, col_coords], dtype=float)
             else:
                 weights = np.ones(row_coords.shape[0], dtype=float)
 
@@ -1433,6 +1437,12 @@ def _nonnegative_mask_array(masks: np.ndarray) -> np.ndarray:
     return np.nan_to_num(np.maximum(mask_array, 0.0), nan=0.0, posinf=1.0e6, neginf=0.0)
 
 
+def _finite_positive_mask_array(masks: np.ndarray) -> np.ndarray:
+    mask_array = np.asarray(masks, dtype=float)
+    finite_positive = np.isfinite(mask_array) & (mask_array > 0.0)
+    return np.where(finite_positive, mask_array, 0.0)
+
+
 def _pairwise_sparse_mask_min_sum(
     reference_masks: np.ndarray, measurement_masks: np.ndarray
 ) -> np.ndarray:
@@ -1652,7 +1662,7 @@ def _mask_l2_norms(masks: np.ndarray) -> np.ndarray:
     mask_array = np.asarray(masks)
     norms = np.zeros(mask_array.shape[0], dtype=float)
     for roi_index, mask in enumerate(mask_array):
-        mask_values = np.asarray(mask, dtype=float)
+        mask_values = _finite_positive_mask_array(mask)
         norms[roi_index] = float(np.linalg.norm(mask_values.ravel()))
     return norms
 
@@ -1663,11 +1673,13 @@ def _pairwise_mask_cosine_similarity(
     *,
     similarity_epsilon: float,
 ) -> np.ndarray:
+    reference_array = _finite_positive_mask_array(reference_masks)
+    measurement_array = _finite_positive_mask_array(measurement_masks)
     numerator = _pairwise_sparse_mask_dot(
-        reference_masks, measurement_masks, binary=False
+        reference_array, measurement_array, binary=False
     )
-    denom_reference = _mask_l2_norms(reference_masks)
-    denom_measurement = _mask_l2_norms(measurement_masks)
+    denom_reference = _mask_l2_norms(reference_array)
+    denom_measurement = _mask_l2_norms(measurement_array)
     denominator = np.maximum(
         denom_reference[:, None] * denom_measurement[None, :],
         similarity_epsilon,
@@ -1713,6 +1725,29 @@ def _pairwise_cell_probability_cost(
     cost = np.zeros(cost_shape, dtype=float)
     cost[available] = raw_cost[available]
     return cost, available.astype(float)
+
+
+def _roi_feature_dimension_scale(
+    reference_values: np.ndarray,
+    measurement_values: np.ndarray,
+    *,
+    scale_epsilon: float,
+) -> float:
+    pooled_feature = np.concatenate(
+        [reference_values.reshape(-1), measurement_values.reshape(-1)]
+    )
+    pooled_feature = pooled_feature[np.isfinite(pooled_feature)]
+    if pooled_feature.size == 0:
+        return 1.0
+    if pooled_feature.size >= 4:
+        q25, q75 = np.percentile(pooled_feature, [25.0, 75.0])
+        robust_scale = float((q75 - q25) / 1.349)
+        if np.isfinite(robust_scale) and robust_scale >= scale_epsilon:
+            return robust_scale
+    standard_scale = float(np.std(pooled_feature))
+    if np.isfinite(standard_scale) and standard_scale >= scale_epsilon:
+        return standard_scale
+    return 1.0
 
 
 # pylint: disable=too-many-locals
@@ -1766,22 +1801,19 @@ def _pairwise_roi_feature_distance(
                 f"{measurement_feature.shape[1]}"
             )
 
-        pooled_feature = np.concatenate(
-            [reference_feature.reshape(-1), measurement_feature.reshape(-1)]
-        )
-        pooled_feature = pooled_feature[np.isfinite(pooled_feature)]
-        if pooled_feature.size == 0:
-            continue
-        feature_scale = float(np.std(pooled_feature))
-        if feature_scale < scale_epsilon:
-            feature_scale = 1.0
-
         for dim_index in range(reference_feature.shape[1]):
             reference_values = reference_feature[:, dim_index]
             measurement_values = measurement_feature[:, dim_index]
             valid = (
                 np.isfinite(reference_values)[:, None]
                 & np.isfinite(measurement_values)[None, :]
+            )
+            if not np.any(valid):
+                continue
+            feature_scale = _roi_feature_dimension_scale(
+                reference_values,
+                measurement_values,
+                scale_epsilon=scale_epsilon,
             )
             diff = np.zeros_like(feature_distance)
             diff[valid] = (
