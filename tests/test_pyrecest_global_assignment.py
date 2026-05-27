@@ -66,6 +66,18 @@ def test_roi_aware_shifted_cost_kwargs_replace_overlap_terms():
     assert kwargs["shifted_iou_shift_penalty_weight"] == 0.25
 
 
+def test_roi_aware_local_cost_kwargs_enable_local_evidence_terms():
+    kwargs = global_assignment.roi_aware_local_cost_kwargs()
+
+    assert kwargs["soft_iou"] is True
+    assert kwargs["local_evidence_components"] is True
+    assert kwargs["weighted_dice_weight"] > 0.0
+    assert kwargs["overlap_fraction_weight"] > 0.0
+    assert kwargs["distance_transform_weight"] > 0.0
+    assert kwargs["neighbor_constellation_weight"] > 0.0
+    assert kwargs["centroid_rank_weight"] > 0.0
+
+
 def test_registered_shifted_iou_cost_kwargs_reject_negative_radius():
     with pytest.raises(ValueError, match="shifted_iou_radius"):
         global_assignment.registered_shifted_iou_cost_kwargs(shifted_iou_radius=-1)

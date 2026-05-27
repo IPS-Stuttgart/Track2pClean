@@ -1,14 +1,16 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import numpy as np
 import numpy.testing as npt
 import pytest
 from bayescatrack.fov_registration import (
+    apply_image_translation,
     apply_integer_image_translation,
     apply_subpixel_image_translation,
     apply_subpixel_roi_mask_translation,
     build_fov_registered_consecutive_session_association_bundles,
     build_fov_registered_session_pair_association_bundle,
+    estimate_fov_shift,
     estimate_integer_fov_shift,
     estimate_subpixel_fov_shift,
     register_measurement_plane_by_fov_translation,
@@ -70,6 +72,30 @@ def test_estimate_subpixel_fov_shift_refines_fractional_translation():
     assert refined_correlation > 0.99
 
 
+def test_estimate_fov_shift_compat_refines_fractional_translation():
+    grid_y, grid_x = np.indices((64, 65), dtype=float)
+    reference_fov = (
+        np.exp(-((grid_y - 18.3) ** 2 + (grid_x - 16.7) ** 2) / (2.0 * 2.1**2))
+        + 0.7 * np.exp(-((grid_y - 43.2) ** 2 + (grid_x - 45.5) ** 2) / (2.0 * 3.3**2))
+        + 0.3 * np.exp(-((grid_y - 32.5) ** 2 + (grid_x - 23.1) ** 2) / (2.0 * 1.5**2))
+    )
+    measurement_shift_yx = np.array([1.4, -2.25], dtype=float)
+    measurement_fov = apply_subpixel_image_translation(
+        reference_fov,
+        measurement_shift_yx,
+        interpolation_order=3,
+    )
+
+    shift_yx, peak_correlation = estimate_fov_shift(
+        reference_fov,
+        measurement_fov,
+        subtract_mean=False,
+    )
+
+    npt.assert_allclose(shift_yx, -measurement_shift_yx, atol=0.05)
+    assert peak_correlation > 0.99
+
+
 def test_estimate_integer_fov_shift_rejects_degenerate_fovs():
     with pytest.raises(ValueError, match="spatial variation"):
         estimate_integer_fov_shift(np.ones((8, 9)), np.ones((8, 9)))
@@ -86,6 +112,17 @@ def test_apply_integer_image_translation_crops_to_smaller_output_shape():
     )
 
     npt.assert_array_equal(translated, np.array([[-1, -1, -1], [1, 2, 3]]))
+
+
+def test_apply_image_translation_accepts_fractional_shift():
+    image = np.zeros((5, 5), dtype=float)
+    image[2, 2] = 1.0
+
+    translated = apply_image_translation(image, np.array([0.5, -0.5]))
+
+    assert translated.shape == image.shape
+    assert translated.dtype.kind == "f"
+    npt.assert_allclose(np.sum(translated), 1.0)
 
 
 def test_register_measurement_plane_by_fov_translation_subpixel_aligns_fractional_shift(

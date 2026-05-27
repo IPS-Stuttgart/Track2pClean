@@ -29,6 +29,7 @@ ASSOCIATION_COST_CHOICES: tuple[str, ...] = (
     "registered-soft-iou",
     "registered-shifted-iou",
     "roi-aware",
+    "roi-aware-local",
     "roi-aware-shifted",
     "calibrated",
 )
@@ -42,6 +43,7 @@ REGISTRATION_QA_COST_CHOICES: tuple[str, ...] = (
     "registered-soft-iou",
     "registered-shifted-iou",
     "roi-aware",
+    "roi-aware-local",
     "roi-aware-shifted",
     "calibrated",
 )

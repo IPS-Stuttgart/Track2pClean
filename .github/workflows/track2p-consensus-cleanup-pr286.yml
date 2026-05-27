@@ -113,65 +113,34 @@ jobs:
             --component-output "$OUT/track2p_policy_component_cleanup_components.csv" \
             --component-format csv
 
-          poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
-            --data "$DATA" \
-            --reference "$REF" \
-            --reference-kind manual-gt \
-            --input-format suite2p \
-            --threshold-method min \
-            --transform-type affine \
-            --base-iou-distance-threshold 12 \
-            --stability-iou-distance-thresholds 10,12,14 \
-            --cell-probability-threshold 0.5 \
-            --consensus-mode risk-and-stability \
-            --split-risk-threshold 1.5 \
-            --min-side-observations 2 \
-            --max-splits-per-component 2 \
-            --no-apply-splits \
-            --output "$OUT/consensus_cleanup_no_apply.csv" \
-            --format csv \
-            --component-output "$OUT/consensus_cleanup_no_apply_components.csv" \
-            --component-format csv
+          run_consensus() {
+            local mode="$1"
+            local apply_flag="$2"
+            local output_stem="$3"
+            poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
+              --data "$DATA" \
+              --reference "$REF" \
+              --reference-kind manual-gt \
+              --input-format suite2p \
+              --threshold-method min \
+              --transform-type affine \
+              --base-iou-distance-threshold 12 \
+              --stability-iou-distance-thresholds 10,12,14 \
+              --cell-probability-threshold 0.5 \
+              --consensus-mode "$mode" \
+              --split-risk-threshold 1.5 \
+              --min-side-observations 2 \
+              --max-splits-per-component 2 \
+              "$apply_flag" \
+              --output "$OUT/${output_stem}.csv" \
+              --format csv \
+              --component-output "$OUT/${output_stem}_components.csv" \
+              --component-format csv
+          }
 
-          poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
-            --data "$DATA" \
-            --reference "$REF" \
-            --reference-kind manual-gt \
-            --input-format suite2p \
-            --threshold-method min \
-            --transform-type affine \
-            --base-iou-distance-threshold 12 \
-            --stability-iou-distance-thresholds 10,12,14 \
-            --cell-probability-threshold 0.5 \
-            --consensus-mode risk-and-stability \
-            --split-risk-threshold 1.5 \
-            --min-side-observations 2 \
-            --max-splits-per-component 2 \
-            --apply-splits \
-            --output "$OUT/consensus_cleanup_default.csv" \
-            --format csv \
-            --component-output "$OUT/consensus_cleanup_default_components.csv" \
-            --component-format csv
-
-          poetry run python -m bayescatrack benchmark track2p-policy-consensus-cleanup \
-            --data "$DATA" \
-            --reference "$REF" \
-            --reference-kind manual-gt \
-            --input-format suite2p \
-            --threshold-method min \
-            --transform-type affine \
-            --base-iou-distance-threshold 12 \
-            --stability-iou-distance-thresholds 10,12,14 \
-            --cell-probability-threshold 0.5 \
-            --consensus-mode risk-or-stability \
-            --split-risk-threshold 1.5 \
-            --min-side-observations 2 \
-            --max-splits-per-component 2 \
-            --apply-splits \
-            --output "$OUT/consensus_cleanup_risk_or_stability.csv" \
-            --format csv \
-            --component-output "$OUT/consensus_cleanup_risk_or_stability_components.csv" \
-            --component-format csv
+          run_consensus risk-and-stability --no-apply-splits consensus_cleanup_no_apply
+          run_consensus risk-and-stability --apply-splits consensus_cleanup_default
+          run_consensus risk-or-stability --apply-splits consensus_cleanup_risk_or_stability
 
           poetry run python -m bayescatrack benchmark compare \
             "$OUT/track2p_policy_d12.csv" \

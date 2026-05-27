@@ -1,7 +1,7 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 import numpy as np
 from scipy import ndimage, optimize
@@ -31,6 +31,9 @@ class FovRegisteredSessionPairBundle:
     association_bundle: SessionAssociationBundle
 
 
+MaskInterpolation = Literal["nearest", "bilinear"]
+
+
 @dataclass(frozen=True)
 class _FovAssociationOptions:
     subtract_mean: bool = True
@@ -43,6 +46,7 @@ class _FovAssociationOptions:
     subpixel: bool = False
     subpixel_refinement_radius: float = 1.0
     subpixel_interpolation_order: int = 1
+    mask_interpolation: MaskInterpolation = "bilinear"
 
     def registration_kwargs(self) -> dict[str, Any]:
         return {
@@ -50,15 +54,20 @@ class _FovAssociationOptions:
             "subpixel": self.subpixel,
             "subpixel_refinement_radius": self.subpixel_refinement_radius,
             "subpixel_interpolation_order": self.subpixel_interpolation_order,
+            "mask_interpolation": self.mask_interpolation,
         }
 
     def association_kwargs(self) -> dict[str, Any]:
+        pairwise_cost_kwargs = self.pairwise_cost_kwargs
+        if self.subpixel and self.mask_interpolation == "bilinear":
+            pairwise_cost_kwargs = dict(pairwise_cost_kwargs or {})
+            pairwise_cost_kwargs.setdefault("soft_iou", True)
         return {
             "order": self.order,
             "weighted_centroids": self.weighted_centroids,
             "velocity_variance": self.velocity_variance,
             "regularization": self.regularization,
-            "pairwise_cost_kwargs": self.pairwise_cost_kwargs,
+            "pairwise_cost_kwargs": pairwise_cost_kwargs,
             "return_pairwise_components": self.return_pairwise_components,
         }
 
@@ -74,24 +83,38 @@ _FOV_ASSOCIATION_OPTION_DEFAULTS: dict[str, Any] = {
     "subpixel": False,
     "subpixel_refinement_radius": 1.0,
     "subpixel_interpolation_order": 1,
+    "mask_interpolation": "bilinear",
 }
 
 
 def _fov_association_options_from_kwargs(
     bundle_kwargs: Mapping[str, Any],
 ) -> _FovAssociationOptions:
+    normalized_kwargs = dict(bundle_kwargs)
+    if "subpixel_refinement" in normalized_kwargs:
+        subpixel_refinement_value = normalized_kwargs.pop("subpixel_refinement")
+        if subpixel_refinement_value is not None:
+            subpixel_refinement = bool(subpixel_refinement_value)
+            if (
+                "subpixel" in normalized_kwargs
+                and bool(normalized_kwargs["subpixel"]) != subpixel_refinement
+            ):
+                raise ValueError("subpixel and subpixel_refinement disagree")
+            normalized_kwargs["subpixel"] = subpixel_refinement
     unexpected_names = sorted(
-        set(bundle_kwargs).difference(_FOV_ASSOCIATION_OPTION_DEFAULTS)
+        set(normalized_kwargs).difference(_FOV_ASSOCIATION_OPTION_DEFAULTS)
     )
     if unexpected_names:
         joined_names = ", ".join(unexpected_names)
         raise TypeError(f"Unexpected FOV registration option(s): {joined_names}")
-    return _FovAssociationOptions(
+    options = _FovAssociationOptions(
         **{
             **_FOV_ASSOCIATION_OPTION_DEFAULTS,
-            **bundle_kwargs,
+            **normalized_kwargs,
         }
     )
+    _validate_mask_interpolation(options.mask_interpolation)
+    return options
 
 
 def _prepare_fov_phase_correlation_inputs(
@@ -213,6 +236,30 @@ def estimate_subpixel_fov_shift(
         initial_shift_yx=integer_shift,
         refinement_radius=refinement_radius,
         interpolation_order=interpolation_order,
+    )
+
+
+def estimate_fov_shift(
+    reference_fov: np.ndarray,
+    measurement_fov: np.ndarray,
+    *,
+    subtract_mean: bool = True,
+    subpixel_refinement: bool = True,
+    subpixel_refinement_radius: float = 1.0,
+) -> tuple[np.ndarray, float]:
+    """Return the FOV shift, preserving the older subpixel-refinement API."""
+
+    if subpixel_refinement:
+        return estimate_subpixel_fov_shift(
+            reference_fov,
+            measurement_fov,
+            subtract_mean=subtract_mean,
+            refinement_radius=subpixel_refinement_radius,
+        )
+    return estimate_integer_fov_shift(
+        reference_fov,
+        measurement_fov,
+        subtract_mean=subtract_mean,
     )
 
 
@@ -342,6 +389,16 @@ def _validate_subpixel_interpolation_order(interpolation_order: int) -> int:
     return order
 
 
+def _validate_mask_interpolation(interpolation: str) -> None:
+    if interpolation not in {"nearest", "bilinear"}:
+        raise ValueError("mask_interpolation must be either 'nearest' or 'bilinear'")
+
+
+def _interpolation_order_from_mask_interpolation(interpolation: str) -> int:
+    _validate_mask_interpolation(interpolation)
+    return 0 if interpolation == "nearest" else 1
+
+
 def apply_subpixel_image_translation(
     image: np.ndarray,
     shift_yx: Sequence[float] | np.ndarray,
@@ -375,6 +432,25 @@ def apply_subpixel_image_translation(
             prefilter=interpolation_order > 1,
         ),
         dtype=float,
+    )
+
+
+def apply_image_translation(
+    image: np.ndarray,
+    shift_yx: Sequence[float] | np.ndarray,
+    *,
+    output_shape: tuple[int, int] | None = None,
+    fill_value: float | bool = 0.0,
+    interpolation: MaskInterpolation = "bilinear",
+) -> np.ndarray:
+    """Translate one 2-D image, accepting the older interpolation names."""
+
+    return apply_subpixel_image_translation(
+        image,
+        shift_yx,
+        output_shape=output_shape,
+        fill_value=float(fill_value),
+        interpolation_order=_interpolation_order_from_mask_interpolation(interpolation),
     )
 
 
@@ -429,14 +505,33 @@ def apply_subpixel_roi_mask_translation(
     return translated
 
 
+def apply_roi_mask_translation(
+    roi_masks: np.ndarray,
+    shift_yx: Sequence[float] | np.ndarray,
+    *,
+    output_shape: tuple[int, int] | None = None,
+    interpolation: MaskInterpolation = "bilinear",
+) -> np.ndarray:
+    """Translate an ROI-mask stack, accepting the older interpolation names."""
+
+    return apply_subpixel_roi_mask_translation(
+        roi_masks,
+        shift_yx,
+        output_shape=output_shape,
+        interpolation_order=_interpolation_order_from_mask_interpolation(interpolation),
+    )
+
+
 def register_measurement_plane_by_fov_translation(
     reference_plane: CalciumPlaneData,
     measurement_plane: CalciumPlaneData,
     *,
     subtract_mean: bool = True,
     subpixel: bool = False,
+    subpixel_refinement: bool | None = None,
     subpixel_refinement_radius: float = 1.0,
     subpixel_interpolation_order: int = 1,
+    mask_interpolation: MaskInterpolation = "bilinear",
 ) -> FovTranslationRegistration:
     """Align ``measurement_plane`` to ``reference_plane`` using FOV phase correlation."""
 
@@ -444,6 +539,11 @@ def register_measurement_plane_by_fov_translation(
         raise ValueError(
             "Both planes must provide fov images for FOV-based registration"
         )
+    if subpixel_refinement is not None:
+        subpixel = bool(subpixel_refinement)
+    mask_interpolation_order = _interpolation_order_from_mask_interpolation(
+        mask_interpolation
+    )
     try:
         if subpixel:
             shift_yx, peak_correlation = estimate_subpixel_fov_shift(
@@ -471,7 +571,7 @@ def register_measurement_plane_by_fov_translation(
             measurement_plane.roi_masks,
             shift_yx,
             output_shape=reference_plane.image_shape,
-            interpolation_order=subpixel_interpolation_order,
+            interpolation_order=mask_interpolation_order,
         )
         registered_fov = apply_subpixel_image_translation(
             measurement_plane.fov,
@@ -518,6 +618,8 @@ def register_measurement_plane_by_fov_translation(
                 "fov_registration_subpixel_interpolation_order": int(
                     subpixel_interpolation_order
                 ),
+                "fov_registration_subpixel_refinement": True,
+                "fov_registration_mask_interpolation": mask_interpolation,
             }
         )
     registered_plane = measurement_plane.with_replaced_masks(
@@ -557,8 +659,10 @@ def build_fov_registered_session_pair_association_bundle(
     pairwise_cost_kwargs: Mapping[str, Any] | None = None,
     return_pairwise_components: bool = True,
     subpixel: bool = False,
+    subpixel_refinement: bool | None = None,
     subpixel_refinement_radius: float = 1.0,
     subpixel_interpolation_order: int = 1,
+    mask_interpolation: MaskInterpolation = "bilinear",
 ) -> FovRegisteredSessionPairBundle:
     """Register the later session by FOV, then build the standard association bundle."""
 
@@ -572,8 +676,10 @@ def build_fov_registered_session_pair_association_bundle(
             "pairwise_cost_kwargs": pairwise_cost_kwargs,
             "return_pairwise_components": return_pairwise_components,
             "subpixel": subpixel,
+            "subpixel_refinement": subpixel_refinement,
             "subpixel_refinement_radius": subpixel_refinement_radius,
             "subpixel_interpolation_order": subpixel_interpolation_order,
+            "mask_interpolation": mask_interpolation,
         }
     )
     registration = register_measurement_plane_by_fov_translation(

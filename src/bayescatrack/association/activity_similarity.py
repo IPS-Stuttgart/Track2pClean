@@ -219,17 +219,11 @@ def _trace_correlation_components(
     if n_timepoints <= 0:
         return _neutral_similarity_components(prefix, shape)
 
-    reference_unit, reference_valid = _row_normalized_trace_vectors(
+    correlations, available = _pairwise_trace_correlations(
         reference_matrix[:, :n_timepoints],
-        similarity_epsilon=similarity_epsilon,
-    )
-    measurement_unit, measurement_valid = _row_normalized_trace_vectors(
         measurement_matrix[:, :n_timepoints],
         similarity_epsilon=similarity_epsilon,
     )
-
-    correlations = np.clip(reference_unit @ measurement_unit.T, -1.0, 1.0)
-    available = reference_valid[:, None] & measurement_valid[None, :]
     similarity = np.where(available, 0.5 * (correlations + 1.0), 0.0)
     cost = np.where(available, 1.0 - similarity, 0.5)
 
@@ -248,6 +242,58 @@ def _as_trace_matrix(traces: Any) -> np.ndarray | None:
     if trace_matrix.ndim != 2:
         return None
     return trace_matrix
+
+
+def _pairwise_trace_correlations(
+    reference_matrix: np.ndarray,
+    measurement_matrix: np.ndarray,
+    *,
+    similarity_epsilon: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return Pearson correlations using each pair's finite sample overlap.
+
+    Calcium-imaging traces can contain isolated NaNs after preprocessing or
+    trimming.  Treating one missing sample as making the entire ROI unusable
+    discards otherwise informative activity evidence.  This routine computes the
+    correlation from the finite time points shared by each candidate pair and
+    exposes an availability mask for pairs with enough non-constant overlap.
+    """
+
+    reference_finite = np.isfinite(reference_matrix)
+    measurement_finite = np.isfinite(measurement_matrix)
+    reference_values = np.where(reference_finite, reference_matrix, 0.0)
+    measurement_values = np.where(measurement_finite, measurement_matrix, 0.0)
+
+    reference_available = reference_finite.astype(float)
+    measurement_available = measurement_finite.astype(float)
+    overlap_counts = reference_available @ measurement_available.T
+    safe_counts = np.maximum(overlap_counts, 1.0)
+
+    reference_sums = reference_values @ measurement_available.T
+    measurement_sums = reference_available @ measurement_values.T
+    cross_sums = reference_values @ measurement_values.T
+    reference_square_sums = (reference_values**2) @ measurement_available.T
+    measurement_square_sums = reference_available @ (measurement_values**2).T
+
+    reference_sum_squares = reference_square_sums - (reference_sums**2 / safe_counts)
+    measurement_sum_squares = measurement_square_sums - (
+        measurement_sums**2 / safe_counts
+    )
+    covariance_sums = cross_sums - (reference_sums * measurement_sums / safe_counts)
+
+    reference_sum_squares = np.maximum(reference_sum_squares, 0.0)
+    measurement_sum_squares = np.maximum(measurement_sum_squares, 0.0)
+    denominator = np.sqrt(reference_sum_squares * measurement_sum_squares)
+
+    min_sum_squares = similarity_epsilon**2
+    available = (
+        (overlap_counts >= 2.0)
+        & (reference_sum_squares > min_sum_squares)
+        & (measurement_sum_squares > min_sum_squares)
+    )
+    correlations = np.zeros_like(covariance_sums, dtype=float)
+    correlations[available] = covariance_sums[available] / denominator[available]
+    return np.clip(correlations, -1.0, 1.0), available
 
 
 def _row_normalized_trace_vectors(

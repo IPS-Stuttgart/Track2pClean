@@ -91,6 +91,7 @@ AssociationCost = Literal[
     "registered-soft-iou",
     "registered-shifted-iou",
     "roi-aware",
+    "roi-aware-local",
     "roi-aware-shifted",
     "calibrated",
 ]
@@ -189,6 +190,63 @@ def roi_aware_cost_kwargs() -> dict[str, float]:
     """Return the default BayesCaTrack ROI-aware cost configuration."""
 
     return {}
+
+
+def roi_aware_local_cost_kwargs(
+    *,
+    weighted_dice_weight: float = 1.0,
+    overlap_fraction_weight: float = 0.5,
+    distance_transform_weight: float = 0.5,
+    image_patch_weight: float = 0.15,
+    neighbor_constellation_weight: float = 0.25,
+    centroid_rank_weight: float = 0.25,
+    patch_radius: int = 8,
+    neighbor_k: int = 8,
+) -> dict[str, float | int | bool]:
+    """Return ROI-aware kwargs enriched with local image/neighborhood evidence.
+
+    The preset keeps the existing ROI-aware centroid, IoU, mask-cosine, area,
+    ROI-stat, and cell-probability terms, then adds local evidence that helps
+    resolve dense-field swaps and residual registration errors: weighted Dice,
+    overlap containment, symmetric mask-distance, local FOV patch similarity,
+    neighbor-constellation consistency, and mutual centroid-rank pressure.
+
+    ``soft_iou`` is enabled so weighted Suite2p ``lam`` masks contribute to the
+    base overlap term while boolean masks retain the same binary IoU behavior.
+    """
+
+    for weight_name, weight_value in {
+        "weighted_dice_weight": weighted_dice_weight,
+        "overlap_fraction_weight": overlap_fraction_weight,
+        "distance_transform_weight": distance_transform_weight,
+        "image_patch_weight": image_patch_weight,
+        "neighbor_constellation_weight": neighbor_constellation_weight,
+        "centroid_rank_weight": centroid_rank_weight,
+    }.items():
+        if weight_value < 0.0:
+            raise ValueError(f"{weight_name} must be non-negative")
+    if patch_radius < 0:
+        raise ValueError("patch_radius must be non-negative")
+    if neighbor_k < 1:
+        raise ValueError("neighbor_k must be at least 1")
+
+    kwargs: dict[str, float | int | bool] = dict(roi_aware_cost_kwargs())
+    kwargs.update(
+        {
+            "soft_iou": True,
+            "local_evidence_components": True,
+            "weighted_dice_weight": float(weighted_dice_weight),
+            "overlap_fraction_weight": float(overlap_fraction_weight),
+            "distance_transform_weight": float(distance_transform_weight),
+            "image_patch_weight": float(image_patch_weight),
+            "neighbor_constellation_weight": float(neighbor_constellation_weight),
+            "centroid_rank_weight": float(centroid_rank_weight),
+            "patch_radius": int(patch_radius),
+            "neighbor_k": int(neighbor_k),
+            "normalize_weighted_overlap": True,
+        }
+    )
+    return kwargs
 
 
 def roi_aware_shifted_cost_kwargs(
@@ -768,6 +826,8 @@ def _cost_kwargs_for_method(cost: AssociationCost) -> dict[str, Any]:
         return registered_soft_iou_cost_kwargs()
     if cost == "registered-shifted-iou":
         return registered_shifted_iou_cost_kwargs()
+    if cost == "roi-aware-local":
+        return roi_aware_local_cost_kwargs()
     if cost == "roi-aware-shifted":
         return roi_aware_shifted_cost_kwargs()
     if cost in {"roi-aware", "calibrated"}:

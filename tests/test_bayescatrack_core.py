@@ -39,6 +39,72 @@ def test_calcium_plane_data_builds_measurements_and_state_moments():
     assert covariances.shape == (4, 4, 1)
 
 
+def test_mask_geometry_ignores_non_finite_and_negative_weights():
+    roi_masks: np.ndarray = np.zeros((1, 3, 3), dtype=float)
+    roi_masks[0, 0, 0] = 1.0
+    roi_masks[0, 0, 2] = np.nan
+    roi_masks[0, 2, 0] = -5.0
+    plane = CalciumPlaneData(roi_masks=roi_masks)
+
+    npt.assert_allclose(plane.roi_areas(weighted=False), np.array([1.0]))
+    npt.assert_allclose(plane.roi_areas(weighted=True), np.array([1.0]))
+    npt.assert_allclose(
+        plane.centroids(order="xy", weighted=False),
+        np.array([[0.0], [0.0]]),
+    )
+    npt.assert_allclose(
+        plane.centroids(order="xy", weighted=True),
+        np.array([[0.0], [0.0]]),
+    )
+
+
+def test_roi_feature_cost_scales_multi_dimensional_features_per_dimension():
+    reference_masks = np.zeros((1, 5, 5), dtype=bool)
+    reference_masks[0, 1:3, 1:3] = True
+    measurement_masks = np.repeat(reference_masks, 2, axis=0)
+    reference = CalciumPlaneData(
+        roi_masks=reference_masks,
+        roi_features={
+            "shape_embedding": np.array(
+                [
+                    [0.0, 0.0],
+                ],
+                dtype=float,
+            )
+        },
+    )
+    measurement = CalciumPlaneData(
+        roi_masks=measurement_masks,
+        roi_features={
+            "shape_embedding": np.array(
+                [
+                    [0.2, 0.0],
+                    [0.0, 2000.0],
+                ],
+                dtype=float,
+            )
+        },
+    )
+
+    _, components = reference.build_pairwise_cost_matrix(
+        measurement,
+        centroid_weight=0.0,
+        iou_weight=0.0,
+        mask_cosine_weight=0.0,
+        area_weight=0.0,
+        roi_feature_weight=1.0,
+        feature_names=("shape_embedding",),
+        cell_probability_weight=0.0,
+        return_components=True,
+    )
+
+    feature_cost = components["roi_feature_cost"]
+    assert feature_cost.shape == (1, 2)
+    assert np.all(np.isfinite(feature_cost))
+    assert feature_cost[0, 0] > 0.25 * feature_cost[0, 1]
+    assert feature_cost[0, 1] > 0.25 * feature_cost[0, 0]
+
+
 def test_local_image_and_weighted_mask_evidence_components_rank_diagonal_pairs():
     image_shape = (12, 12)
     reference_masks: np.ndarray = np.zeros((2, *image_shape), dtype=float)
@@ -99,6 +165,35 @@ def test_local_image_and_weighted_mask_evidence_components_rank_diagonal_pairs()
     )
     assert features.shape == (2, 2, len(LOCAL_EVIDENCE_ASSOCIATION_FEATURES))
     assert features[0, 0, 0] < features[0, 1, 0]
+
+
+def test_image_patch_weight_is_neutral_without_fov():
+    roi_masks: np.ndarray = np.zeros((1, 5, 5), dtype=bool)
+    roi_masks[0, 2:4, 2:4] = True
+    reference = CalciumPlaneData(roi_masks=roi_masks)
+    measurement = CalciumPlaneData(roi_masks=roi_masks.copy())
+    base_kwargs = {
+        "centroid_weight": 0.0,
+        "iou_weight": 0.0,
+        "mask_cosine_weight": 0.0,
+        "area_weight": 0.0,
+        "roi_feature_weight": 0.0,
+        "cell_probability_weight": 0.0,
+    }
+
+    base_cost = reference.build_pairwise_cost_matrix(measurement, **base_kwargs)
+    # pylint: disable=unexpected-keyword-arg
+    patch_cost, components = reference.build_pairwise_cost_matrix(
+        measurement,
+        image_patch_weight=1.0,
+        local_evidence_components=True,
+        return_components=True,
+        **base_kwargs,
+    )
+
+    npt.assert_allclose(patch_cost, base_cost + 0.5)
+    npt.assert_allclose(components["image_patch_cost"], np.full((1, 1), 0.5))
+    npt.assert_allclose(components["image_patch_valid"], np.zeros((1, 1)))
 
 
 def test_local_evidence_calibration_feature_preset_enables_components():

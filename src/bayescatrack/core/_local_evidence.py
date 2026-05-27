@@ -170,6 +170,10 @@ def install_local_evidence_pairwise_features(calcium_plane_cls: type[Any]) -> No
                     similarity_epsilon=similarity_epsilon,
                 )
             )
+            # Missing or uninformative FOV patches carry no pair-specific
+            # evidence.  Use 0.5 (the neutral midpoint of the [0, 1] cost
+            # range) so that absent evidence neither rewards nor penalises an
+            # assignment edge.
             image_patch_cost = np.where(
                 image_patch_valid,
                 0.5 * (1.0 - np.clip(image_patch_correlation, -1.0, 1.0)),
