@@ -118,8 +118,7 @@ def test_fov_affine_fit_downweights_low_confidence_tile_outlier():
         dtype=float,
     )
     reference_xy = (
-        measurement_xy @ expected_matrix[:, :2].T
-        + expected_matrix[:, 2][None, :]
+        measurement_xy @ expected_matrix[:, :2].T + expected_matrix[:, 2][None, :]
     )
     reference_xy[-1] = np.asarray([-30.0, 45.0], dtype=float)
 

@@ -190,9 +190,7 @@ def _add_local_rescue_edges(
     if row_top_k > 0:
         _add_axis_top_k_rescue_edges(mask, iou, top_k=row_top_k, floor=floor, axis=1)
     if column_top_k > 0:
-        _add_axis_top_k_rescue_edges(
-            mask, iou, top_k=column_top_k, floor=floor, axis=0
-        )
+        _add_axis_top_k_rescue_edges(mask, iou, top_k=column_top_k, floor=floor, axis=0)
 
 
 def _add_axis_top_k_rescue_edges(
