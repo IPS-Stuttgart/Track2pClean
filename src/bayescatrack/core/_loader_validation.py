@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 
 _TRANSIENT_LOAD_EXCEPTIONS = (
-    FileNotError,
+    FileNotFoundError,
     OSError,
     KeyError,
     IndexError,
