@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import Counter
 
 import numpy as np
-
 from bayescatrack.association.ensemble_tracking import (
     consensus_track_rows,
     track_matrix_edge_counter,

@@ -348,9 +348,9 @@ def supervised_pairwise_mask_from_reference(
     """
 
     loaded_reference_indices = np.asarray(reference_roi_indices, dtype=int).reshape(-1)
-    loaded_measurement_indices = np.asarray(
-        measurement_roi_indices, dtype=int
-    ).reshape(-1)
+    loaded_measurement_indices = np.asarray(measurement_roi_indices, dtype=int).reshape(
+        -1
+    )
     filtered_reference = reference.filtered_indices(curated_only=curated_only)
 
     annotated_reference_rois = _present_reference_roi_set(

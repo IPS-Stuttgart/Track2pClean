@@ -101,7 +101,9 @@ def _roi_index_or_none(value: object) -> int | None:
         try:
             roi_index = int(stripped, 10)
         except ValueError as exc:
-            raise ValueError(f"track matrix contains non-integer ROI index: {value!r}") from exc
+            raise ValueError(
+                f"track matrix contains non-integer ROI index: {value!r}"
+            ) from exc
     elif isinstance(value, (bool, np.bool_)):
         raise ValueError(f"track matrix contains boolean ROI index: {value!r}")
     elif isinstance(value, (int, np.integer)):
@@ -116,7 +118,9 @@ def _roi_index_or_none(value: object) -> int | None:
         try:
             roi_index = int(value)  # type: ignore[arg-type]
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"track matrix contains non-integer ROI index: {value!r}") from exc
+            raise ValueError(
+                f"track matrix contains non-integer ROI index: {value!r}"
+            ) from exc
     if roi_index < 0:
         return None
     return roi_index

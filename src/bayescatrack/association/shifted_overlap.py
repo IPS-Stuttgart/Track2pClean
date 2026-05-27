@@ -358,10 +358,12 @@ def _pairwise_shifted_mask_cosine_similarity(
 ) -> np.ndarray:
     """Return shifted cosine while preserving original measurement norms."""
 
-    numerator = _bridge_impl._pairwise_sparse_mask_dot(  # pylint: disable=protected-access
-        reference_masks,
-        shifted_measurement_masks,
-        binary=False,
+    numerator = (
+        _bridge_impl._pairwise_sparse_mask_dot(  # pylint: disable=protected-access
+            reference_masks,
+            shifted_measurement_masks,
+            binary=False,
+        )
     )
     denom_reference = _bridge_impl._mask_l2_norms(  # pylint: disable=protected-access
         reference_masks

@@ -47,10 +47,8 @@ def test_estimate_subpixel_fov_shift_refines_fractional_translation():
     grid_y, grid_x = np.indices((64, 65), dtype=float)
     reference_fov = (
         np.exp(-((grid_y - 18.3) ** 2 + (grid_x - 16.7) ** 2) / (2.0 * 2.1**2))
-        + 0.7
-        * np.exp(-((grid_y - 43.2) ** 2 + (grid_x - 45.5) ** 2) / (2.0 * 3.3**2))
-        + 0.3
-        * np.exp(-((grid_y - 32.5) ** 2 + (grid_x - 23.1) ** 2) / (2.0 * 1.5**2))
+        + 0.7 * np.exp(-((grid_y - 43.2) ** 2 + (grid_x - 45.5) ** 2) / (2.0 * 3.3**2))
+        + 0.3 * np.exp(-((grid_y - 32.5) ** 2 + (grid_x - 23.1) ** 2) / (2.0 * 1.5**2))
     )
     measurement_shift = np.array([1.4, -2.25], dtype=float)
     measurement_fov = apply_subpixel_image_translation(
