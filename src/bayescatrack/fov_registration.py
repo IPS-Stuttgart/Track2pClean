@@ -267,7 +267,9 @@ def _refine_shift_by_normalized_correlation(
     return initial_shift_yx, initial_score
 
 
-def _normalized_fov_correlation(reference: np.ndarray, measurement: np.ndarray) -> float:
+def _normalized_fov_correlation(
+    reference: np.ndarray, measurement: np.ndarray
+) -> float:
     reference = np.asarray(reference, dtype=float)
     measurement = np.asarray(measurement, dtype=float)
     reference_centered = reference - float(np.mean(reference))
@@ -334,7 +336,9 @@ def apply_integer_image_translation(
 def _validate_subpixel_interpolation_order(interpolation_order: int) -> int:
     order = int(interpolation_order)
     if order != interpolation_order or order < 0 or order > 5:
-        raise ValueError("subpixel interpolation order must be an integer between 0 and 5")
+        raise ValueError(
+            "subpixel interpolation order must be an integer between 0 and 5"
+        )
     return order
 
 
