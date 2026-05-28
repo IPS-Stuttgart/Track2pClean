@@ -4,8 +4,9 @@ The raw gap-rescue policy can admit many direct skip links.  Those links are
 useful when they repair an isolated missing adjacent continuation, but they are
 risky when they are completely isolated from the adjacent-session graph.  This
 runner keeps a direct skip link only when the skipped interval has adjacent
-support at either endpoint, then uses the existing lookahead gap propagation and
-weakest-bridge component cleanup.
+support at either endpoint, rejects two-step links whose one-step endpoint
+support is mutually inconsistent, then uses the existing lookahead gap
+propagation and weakest-bridge component cleanup.
 """
 
 from __future__ import annotations
@@ -69,6 +70,7 @@ TRACK2P_POLICY_SUPPORTED_GAP_COMPONENT_CLEANUP_METHOD = (
     "track2p-policy-supported-gap-component-cleanup"
 )
 TRACK2P_POLICY_SUPPORTED_GAP_DEFAULT_MIN_BRIDGE_SUPPORT = 1
+TRACK2P_POLICY_SUPPORTED_GAP_DEFAULT_REJECT_CONFLICTING_BRIDGES = True
 
 
 def emulate_track2p_supported_gap_tracks(
@@ -79,6 +81,9 @@ def emulate_track2p_supported_gap_tracks(
     iou_distance_threshold: float = TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
     max_gap: int = TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_MAX_GAP,
     min_bridge_support: int = TRACK2P_POLICY_SUPPORTED_GAP_DEFAULT_MIN_BRIDGE_SUPPORT,
+    reject_conflicting_bridge_support: bool = (
+        TRACK2P_POLICY_SUPPORTED_GAP_DEFAULT_REJECT_CONFLICTING_BRIDGES
+    ),
 ) -> np.ndarray:
     """Return tracks from direct gap links with adjacent endpoint support.
 
@@ -88,8 +93,12 @@ def emulate_track2p_supported_gap_tracks(
     vote when the target ROI has an accepted incoming adjacent link from the
     interval.  Requiring one vote removes fully isolated direct skip matches;
     requiring two votes keeps only links supported at both endpoints.
-    """
 
+    By default, two-step links are also rejected when the source-side one-step
+    continuation and target-side one-step predecessor point to different
+    intermediate ROIs.  Such a link would merge two mutually inconsistent
+    adjacent chains and was a common high-risk failure mode in gap-rescue rows.
+    """
     sessions = tuple(sessions)
     max_gap = int(max_gap)
     min_bridge_support = int(min_bridge_support)
@@ -113,6 +122,7 @@ def emulate_track2p_supported_gap_tracks(
         links_by_gap,
         max_gap=max_gap,
         min_bridge_support=min_bridge_support,
+        reject_conflicting_bridge_support=reject_conflicting_bridge_support,
     )
     return tracks_from_gap_links(sessions, supported_links, max_gap=max_gap)
 
@@ -122,9 +132,11 @@ def filter_gap_links_by_bridge_support(
     *,
     max_gap: int,
     min_bridge_support: int = TRACK2P_POLICY_SUPPORTED_GAP_DEFAULT_MIN_BRIDGE_SUPPORT,
+    reject_conflicting_bridge_support: bool = (
+        TRACK2P_POLICY_SUPPORTED_GAP_DEFAULT_REJECT_CONFLICTING_BRIDGES
+    ),
 ) -> dict[tuple[int, int], np.ndarray]:
-    """Drop direct skip links that lack adjacent endpoint support."""
-
+    """Drop direct skip links that lack consistent adjacent endpoint support."""
     max_gap = int(max_gap)
     min_bridge_support = int(min_bridge_support)
     if max_gap < 1:
@@ -145,14 +157,17 @@ def filter_gap_links_by_bridge_support(
         kept = [
             (int(source_roi), int(target_roi))
             for source_roi, target_roi in links
-            if _bridge_support_count(
+            if _is_supported_gap_link(
                 links_by_gap,
                 source_session=int(source_session),
                 step=int(step),
                 source_roi=int(source_roi),
                 target_roi=int(target_roi),
+                min_bridge_support=min_bridge_support,
+                reject_conflicting_bridge_support=(
+                    reject_conflicting_bridge_support
+                ),
             )
-            >= min_bridge_support
         ]
         filtered[(source_session, step)] = _link_matrix(kept)
     return filtered
@@ -167,11 +182,13 @@ def run_track2p_policy_supported_gap_component_cleanup(
     cell_probability_threshold: float | None = None,
     max_gap: int | None = None,
     min_bridge_support: int = TRACK2P_POLICY_SUPPORTED_GAP_DEFAULT_MIN_BRIDGE_SUPPORT,
+    reject_conflicting_bridge_support: bool = (
+        TRACK2P_POLICY_SUPPORTED_GAP_DEFAULT_REJECT_CONFLICTING_BRIDGES
+    ),
     cleanup_config: ComponentCleanupConfig | None = None,
     apply_splits: bool = True,
 ) -> ComponentAuditOutput:
     """Run support-gated gap rescue and split high-risk component bridges."""
-
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -216,6 +233,9 @@ def run_track2p_policy_supported_gap_component_cleanup(
                 iou_distance_threshold=float(iou_distance_threshold),
                 max_gap=int(policy_config.max_gap),
                 min_bridge_support=min_bridge_support,
+                reject_conflicting_bridge_support=(
+                    reject_conflicting_bridge_support
+                ),
             )
         )
         diagnostic_prediction = emulate_track2p_pruned_tracks(
@@ -261,6 +281,7 @@ def run_track2p_policy_supported_gap_component_cleanup(
             cleanup_config=cleanup_config,
             max_gap=int(policy_config.max_gap),
             min_bridge_support=min_bridge_support,
+            reject_conflicting_bridge_support=reject_conflicting_bridge_support,
             cell_probability_threshold=float(policy_config.cell_probability_threshold),
             transform_type=policy_config.transform_type,
             apply_splits=apply_splits,
@@ -292,7 +313,12 @@ def run_track2p_policy_supported_gap_component_cleanup(
                     "transform_type": str(policy_config.transform_type),
                     "max_gap": int(policy_config.max_gap),
                     "min_bridge_support": int(min_bridge_support),
-                    "cleanup_method": TRACK2P_POLICY_SUPPORTED_GAP_COMPONENT_CLEANUP_METHOD,
+                    "reject_conflicting_bridge_support": int(
+                        reject_conflicting_bridge_support
+                    ),
+                    "cleanup_method": (
+                        TRACK2P_POLICY_SUPPORTED_GAP_COMPONENT_CLEANUP_METHOD
+                    ),
                 },
             )
         )
@@ -301,7 +327,6 @@ def run_track2p_policy_supported_gap_component_cleanup(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the command-line parser for supported-gap component cleanup."""
-
     parser = argparse.ArgumentParser(
         prog=(
             "python -m "
@@ -357,6 +382,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--reject-conflicting-bridge-support",
+        action=argparse.BooleanOptionalAction,
+        default=TRACK2P_POLICY_SUPPORTED_GAP_DEFAULT_REJECT_CONFLICTING_BRIDGES,
+        help=(
+            "Reject two-step skip links whose one-step endpoint supports imply "
+            "different intermediate ROIs."
+        ),
+    )
+    parser.add_argument(
         "--apply-splits", action=argparse.BooleanOptionalAction, default=True
     )
     parser.add_argument(
@@ -396,7 +430,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     """Run the Track2p-policy supported-gap component-cleanup CLI."""
-
     args = build_arg_parser().parse_args(argv)
     cleanup_config = ComponentCleanupConfig(
         threshold_margin_scale=args.threshold_margin_scale,
@@ -437,6 +470,9 @@ def main(argv: list[str] | None = None) -> int:
         cell_probability_threshold=float(args.cell_probability_threshold),
         max_gap=int(args.max_gap),
         min_bridge_support=int(args.min_bridge_support),
+        reject_conflicting_bridge_support=bool(
+            args.reject_conflicting_bridge_support
+        ),
         cleanup_config=cleanup_config,
         apply_splits=bool(args.apply_splits),
     )
@@ -456,6 +492,38 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _is_supported_gap_link(
+    links_by_gap: Mapping[tuple[int, int], np.ndarray],
+    *,
+    source_session: int,
+    step: int,
+    source_roi: int,
+    target_roi: int,
+    min_bridge_support: int,
+    reject_conflicting_bridge_support: bool,
+) -> bool:
+    if (
+        _bridge_support_count(
+            links_by_gap,
+            source_session=source_session,
+            step=step,
+            source_roi=source_roi,
+            target_roi=target_roi,
+        )
+        < min_bridge_support
+    ):
+        return False
+    if reject_conflicting_bridge_support and _has_conflicting_bridge_support(
+        links_by_gap,
+        source_session=source_session,
+        step=step,
+        source_roi=source_roi,
+        target_roi=target_roi,
+    ):
+        return False
+    return True
+
+
 def _bridge_support_count(
     links_by_gap: Mapping[tuple[int, int], np.ndarray],
     *,
@@ -467,15 +535,75 @@ def _bridge_support_count(
     if int(step) <= 1:
         return 2
     support = 0
-    left_links = _as_link_matrix(links_by_gap.get((int(source_session), 1)))
-    if left_links.size and np.any(left_links[:, 0] == int(source_roi)):
+    if _left_bridge_support_rois(
+        links_by_gap,
+        source_session=source_session,
+        source_roi=source_roi,
+    ):
         support += 1
-    right_links = _as_link_matrix(
-        links_by_gap.get((int(source_session) + int(step) - 1, 1))
-    )
-    if right_links.size and np.any(right_links[:, 1] == int(target_roi)):
+    if _right_bridge_support_rois(
+        links_by_gap,
+        target_session=source_session + step,
+        target_roi=target_roi,
+    ):
         support += 1
     return support
+
+
+def _has_conflicting_bridge_support(
+    links_by_gap: Mapping[tuple[int, int], np.ndarray],
+    *,
+    source_session: int,
+    step: int,
+    source_roi: int,
+    target_roi: int,
+) -> bool:
+    """Return true when two-step endpoint supports imply different middle ROIs."""
+    if int(step) != 2:
+        return False
+    left_rois = _left_bridge_support_rois(
+        links_by_gap,
+        source_session=source_session,
+        source_roi=source_roi,
+    )
+    right_rois = _right_bridge_support_rois(
+        links_by_gap,
+        target_session=source_session + step,
+        target_roi=target_roi,
+    )
+    return bool(left_rois and right_rois and left_rois.isdisjoint(right_rois))
+
+
+def _left_bridge_support_rois(
+    links_by_gap: Mapping[tuple[int, int], np.ndarray],
+    *,
+    source_session: int,
+    source_roi: int,
+) -> set[int]:
+    left_links = _as_link_matrix(links_by_gap.get((int(source_session), 1)))
+    if left_links.size == 0:
+        return set()
+    return {
+        int(target_roi)
+        for link_source_roi, target_roi in left_links
+        if int(link_source_roi) == int(source_roi)
+    }
+
+
+def _right_bridge_support_rois(
+    links_by_gap: Mapping[tuple[int, int], np.ndarray],
+    *,
+    target_session: int,
+    target_roi: int,
+) -> set[int]:
+    right_links = _as_link_matrix(links_by_gap.get((int(target_session) - 1, 1)))
+    if right_links.size == 0:
+        return set()
+    return {
+        int(source_roi)
+        for source_roi, link_target_roi in right_links
+        if int(link_target_roi) == int(target_roi)
+    }
 
 
 def _as_link_matrix(value: np.ndarray | None) -> np.ndarray:
@@ -503,6 +631,7 @@ def _with_scores_metadata(
     cleanup_config: ComponentCleanupConfig,
     max_gap: int,
     min_bridge_support: int,
+    reject_conflicting_bridge_support: bool,
     cell_probability_threshold: float,
     transform_type: str,
     apply_splits: bool,
@@ -523,6 +652,9 @@ def _with_scores_metadata(
         "track2p_policy_transform_type": str(transform_type),
         "track2p_policy_max_gap": int(max_gap),
         "track2p_policy_min_bridge_support": int(min_bridge_support),
+        "track2p_policy_reject_conflicting_bridge_support": int(
+            reject_conflicting_bridge_support
+        ),
         "track2p_component_apply_splits": int(apply_splits),
         "track2p_component_candidate_splits": candidate_splits,
         "track2p_component_applied_splits": applied_splits,
