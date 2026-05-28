@@ -59,6 +59,20 @@ def test_gap_component_cleanup_is_registered():
     )
 
 
+def test_strict_gated_gap_cleanup_is_registered():
+    canonical = cli._BENCHMARK_ALIASES["track2p-strict-gated-gap-cleanup"]
+
+    assert canonical == "track2p-policy-strict-gated-gap-cleanup"
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-component-strict-gated-gap-cleanup"]
+        == canonical
+    )
+    assert cli._BENCHMARK_ALIASES["track2p-component-strict-gap-cleanup"] == canonical
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_strict_gated_gap_cleanup"
+    )
+
+
 def test_gap_edge_audit_is_registered():
     canonical = cli._BENCHMARK_ALIASES["track2p-gap-edge-audit"]
 

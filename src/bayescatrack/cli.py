@@ -94,6 +94,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run Track2p-policy gap rescue plus weakest-bridge component cleanup",
     ),
     (
+        "track2p-policy-strict-gated-gap-cleanup",
+        "bayescatrack.experiments.track2p_policy_strict_gated_gap_cleanup",
+        "Run component cleanup plus strictly gated gap-rescue candidates",
+    ),
+    (
         "track2p-policy-gap-edge-audit",
         "bayescatrack.experiments.track2p_policy_gap_edge_audit",
         "Audit gap-rescue candidate edges absent from component cleanup",
@@ -270,6 +275,15 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-gap-rescue-component-cleanup": ("track2p-policy-gap-component-cleanup"),
     "track2p-policy-gap-rescue-component-cleanup": (
         "track2p-policy-gap-component-cleanup"
+    ),
+    "track2p-strict-gated-gap-cleanup": (
+        "track2p-policy-strict-gated-gap-cleanup"
+    ),
+    "track2p-component-strict-gated-gap-cleanup": (
+        "track2p-policy-strict-gated-gap-cleanup"
+    ),
+    "track2p-component-strict-gap-cleanup": (
+        "track2p-policy-strict-gated-gap-cleanup"
     ),
     "track2p-gap-edge-audit": "track2p-policy-gap-edge-audit",
     "track2p-gap-rescue-edge-audit": "track2p-policy-gap-edge-audit",
