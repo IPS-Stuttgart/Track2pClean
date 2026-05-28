@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -25,16 +27,23 @@ class CentroidCandidatePrefilterConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if self.max_distance is not None and float(self.max_distance) < 0.0:
-            raise ValueError("max_distance must be non-negative when provided")
+        if self.max_distance is not None:
+            object.__setattr__(
+                self,
+                "max_distance",
+                _finite_nonnegative_float(self.max_distance, name="max_distance"),
+            )
         for name, value in {
             "row_top_k": self.row_top_k,
             "column_top_k": self.column_top_k,
         }.items():
-            if value is not None and int(value) < 1:
-                raise ValueError(f"{name} must be at least 1 when provided")
-        if float(self.large_cost) <= 0.0:
-            raise ValueError("large_cost must be strictly positive")
+            if value is not None:
+                object.__setattr__(self, name, _positive_int(value, name=name))
+        object.__setattr__(
+            self,
+            "large_cost",
+            _finite_positive_float(self.large_cost, name="large_cost"),
+        )
 
 
 def centroid_candidate_mask(
@@ -64,10 +73,10 @@ def centroid_candidate_mask(
         mask &= distances <= float(cfg.max_distance)
 
     if cfg.row_top_k is not None:
-        mask &= _top_k_mask(distances, axis=1, top_k=int(cfg.row_top_k))
+        mask &= _top_k_mask(distances, axis=1, top_k=cfg.row_top_k)
 
     if cfg.column_top_k is not None:
-        mask &= _top_k_mask(distances, axis=0, top_k=int(cfg.column_top_k))
+        mask &= _top_k_mask(distances, axis=0, top_k=cfg.column_top_k)
 
     if cfg.include_diagonal_when_square and mask.shape[0] == mask.shape[1]:
         np.fill_diagonal(mask, True)
@@ -89,9 +98,8 @@ def apply_candidate_mask(
         raise ValueError(
             f"candidate_mask shape {mask.shape} does not match cost matrix shape {costs.shape}"
         )
-    if large_cost <= 0.0:
-        raise ValueError("large_cost must be strictly positive")
-    return np.where(mask, costs, float(large_cost))
+    large_cost = _finite_positive_float(large_cost, name="large_cost")
+    return np.where(mask, costs, large_cost)
 
 
 def candidate_edges_from_mask(
@@ -124,8 +132,7 @@ def _pairwise_distances(reference: np.ndarray, measurement: np.ndarray) -> np.nd
 
 
 def _top_k_mask(distances: np.ndarray, *, axis: int, top_k: int) -> np.ndarray:
-    if top_k < 1:
-        raise ValueError("top_k must be at least 1")
+    top_k = _positive_int(top_k, name="top_k")
     distances = np.asarray(distances, dtype=float)
     if distances.size == 0:
         return np.zeros(distances.shape, dtype=bool)
@@ -140,7 +147,7 @@ def _row_top_k_mask(distances: np.ndarray, *, top_k: int) -> np.ndarray:
     mask = np.zeros(distances.shape, dtype=bool)
     if distances.shape[1] == 0:
         return mask
-    k = min(int(top_k), distances.shape[1])
+    k = min(_positive_int(top_k, name="top_k"), distances.shape[1])
     for row_index, row in enumerate(distances):
         finite_columns = np.flatnonzero(np.isfinite(row))
         if finite_columns.size == 0:
@@ -152,3 +159,45 @@ def _row_top_k_mask(distances: np.ndarray, *, top_k: int) -> np.ndarray:
             selected = finite_columns[np.argpartition(finite_costs, k - 1)[:k]]
         mask[row_index, selected] = True
     return mask
+
+
+def _positive_int(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric_value = float(stripped)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(numeric_value)
+    else:
+        try:
+            integer_value = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    if integer_value < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return int(integer_value)
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    numeric_value = float(value)
+    if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return numeric_value
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    numeric_value = float(value)
+    if not np.isfinite(numeric_value) or numeric_value <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return numeric_value
