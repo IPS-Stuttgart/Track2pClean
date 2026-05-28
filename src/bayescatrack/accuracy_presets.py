@@ -60,8 +60,8 @@ def build_track2p_accuracy_presets(
 
     These presets are meant as the next benchmark candidates after the plain
     registered-IoU/global-assignment baseline.  They emphasize recall-preserving
-    candidate generation followed by conservative structural penalties, which is
-    usually preferable when optimizing complete-track F1.
+    candidate generation followed by conservative rank-aware structural
+    penalties, which is usually preferable when optimizing complete-track F1.
     """
 
     base = Track2pBenchmarkConfig(
@@ -132,6 +132,8 @@ def build_track2p_accuracy_presets(
             "session_gap_weight": 0.25,
             "cell_probability_weight": 0.50,
             "registration_empty_roi_weight": 8.0,
+            "reciprocal_rank_weight": 0.15,
+            "reciprocal_rank_cap": 0.75,
         },
         higher_order_consistency_config={
             "triplet_weight": 0.30,
@@ -170,8 +172,8 @@ def build_track2p_accuracy_presets(
             name="roi-aware-shifted-pruned",
             description=(
                 "ROI-aware shifted-overlap costs with high-recall row/column "
-                "candidate pruning, mutual-top-k Track2p-policy relief, dynamic "
-                "edge priors, activity tie-breaking, and higher-order consistency."
+                "candidate pruning, mutual-top-k Track2p-policy relief, rank-aware "
+                "dynamic edge priors, activity tie-breaking, and higher-order consistency."
             ),
             config=pruned_roi_aware,
         ),
