@@ -23,8 +23,8 @@ def balanced_binary_gap_sample_weights(
     """Return inverse-frequency weights balanced jointly by label and session gap.
 
     Track2p-style calibration pools adjacent-session and skip-session association
-    examples.  If one gap dominates the candidate set, a plain binary class
-    balance can still leave the model under-trained on rarer skip edges.  This
+    examples. If one gap dominates the candidate set, a plain binary class
+    balance can still leave the model under-trained on rarer skip edges. This
     helper equalizes the total training weight of each observed
     ``(binary_label, session_gap)`` group while keeping the overall mean weight
     equal to one.
@@ -38,11 +38,11 @@ def balanced_binary_gap_sample_weights(
     feature_names:
         Names corresponding to the last feature axis.
     gap_feature_name:
-        Feature plane that contains the positive session gap.  The calibrated
+        Feature plane that contains the positive session gap. The calibrated
         default feature set contains ``"session_gap"``.
     missing_gap:
-        Policy when ``gap_feature_name`` is absent.  ``"binary"`` falls back to
-        ordinary binary inverse-frequency weights.  ``"raise"`` raises a
+        Policy when ``gap_feature_name`` is absent. ``"binary"`` falls back to
+        ordinary binary inverse-frequency weights. ``"raise"`` raises a
         ``ValueError``.
     """
 
@@ -58,7 +58,7 @@ def balanced_binary_gap_sample_weights(
         raise ValueError("feature_names length must match features.shape[-1]")
     if gap_feature_name not in names:
         if missing_gap == "binary":
-            return balanced_binary_sample_weights(label_array)
+            return balanced_binary_sample_weights(label_array).reshape(label_array.shape)
         if missing_gap == "raise":
             raise ValueError(f"gap feature {gap_feature_name!r} is not present")
         raise ValueError("missing_gap must be either 'binary' or 'raise'")
