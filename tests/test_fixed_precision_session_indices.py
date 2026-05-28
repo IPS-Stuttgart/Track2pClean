@@ -35,3 +35,17 @@ def test_fixed_precision_accepts_integer_like_session_strings() -> None:
 
     assert scores["complete_tracks_at_fixed_precision_0_5"] == 2
     assert scores["complete_track_recall_at_fixed_precision_0_5"] == pytest.approx(1.0)
+
+
+def test_fixed_precision_excludes_incomplete_predictions() -> None:
+    scores = score_complete_tracks_at_fixed_precision(
+        np.asarray([[0, 1, 2], [3, -1, 5]], dtype=object),
+        np.asarray([[0, 1, 2], [3, 4, 5]], dtype=object),
+        target_precisions=(0.9,),
+        track_scores=(0.4, 0.9),
+    )
+
+    assert scores["complete_tracks_at_fixed_precision_0_9"] == 1
+    assert scores["complete_track_predictions_at_fixed_precision_0_9"] == 1
+    assert scores["complete_track_precision_at_fixed_precision_0_9"] == pytest.approx(1.0)
+    assert scores["complete_track_recall_at_fixed_precision_0_9"] == pytest.approx(0.5)
