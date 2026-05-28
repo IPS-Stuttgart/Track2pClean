@@ -59,6 +59,16 @@ def test_gap_component_cleanup_is_registered():
     )
 
 
+def test_gap_edge_audit_is_registered():
+    canonical = cli._BENCHMARK_ALIASES["track2p-gap-edge-audit"]
+
+    assert canonical == "track2p-policy-gap-edge-audit"
+    assert cli._BENCHMARK_ALIASES["track2p-gap-rescue-edge-audit"] == canonical
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_gap_edge_audit"
+    )
+
+
 def test_gap_consensus_cleanup_is_registered():
     canonical = cli._BENCHMARK_ALIASES["track2p-gap-consensus-cleanup"]
 
