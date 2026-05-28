@@ -6,6 +6,9 @@ from . import cli as _cli
 from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
+from ._strict_config_validation import (
+    install_strict_config_validation as _install_strict_config_validation,
+)
 from .core import bridge as _bridge
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
@@ -28,5 +31,6 @@ summarize_subject = _bridge.summarize_subject
 
 _install_soft_overlap_costs()
 _install_advanced_roi_components()
+_install_strict_config_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
