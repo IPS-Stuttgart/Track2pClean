@@ -56,7 +56,6 @@ def install_strict_config_validation() -> None:
         False,
     ):
         return
-
     original_candidate_mask = _advanced_roi_components.candidate_mask_from_cost_matrix
     original_mask_shape_descriptors = _advanced_roi_components.mask_shape_descriptors
     setattr(
@@ -158,6 +157,8 @@ def _positive_int(value: Any, *, name: str) -> int:
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite non-negative value")
     numeric_value = float(value)
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{name} must be a finite non-negative value")
@@ -165,6 +166,8 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
 
 
 def _finite_positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite positive value")
     numeric_value = float(value)
     if not np.isfinite(numeric_value) or numeric_value <= 0.0:
         raise ValueError(f"{name} must be a finite positive value")
