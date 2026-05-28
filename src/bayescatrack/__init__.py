@@ -3,11 +3,11 @@
 # pylint: disable=duplicate-code
 
 from . import cli as _cli
-from .advanced_roi_components import (
-    install_advanced_roi_components as _install_advanced_roi_components,
-)
 from ._strict_config_validation import (
     install_strict_config_validation as _install_strict_config_validation,
+)
+from .advanced_roi_components import (
+    install_advanced_roi_components as _install_advanced_roi_components,
 )
 from .core import bridge as _bridge
 from .soft_overlap_costs import (

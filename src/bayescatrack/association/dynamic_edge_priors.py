@@ -185,11 +185,15 @@ def _dense_axis_ranks(costs: np.ndarray, *, axis: int, large_cost: float) -> np.
         return ranks
     if axis == 1:
         for row_index in range(costs.shape[0]):
-            ranks[row_index, :] = _dense_vector_ranks(costs[row_index, :], large_cost=large_cost)
+            ranks[row_index, :] = _dense_vector_ranks(
+                costs[row_index, :], large_cost=large_cost
+            )
         return ranks
     if axis == 0:
         for column_index in range(costs.shape[1]):
-            ranks[:, column_index] = _dense_vector_ranks(costs[:, column_index], large_cost=large_cost)
+            ranks[:, column_index] = _dense_vector_ranks(
+                costs[:, column_index], large_cost=large_cost
+            )
         return ranks
     raise ValueError("axis must be 0 or 1")
 

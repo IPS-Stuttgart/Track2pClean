@@ -47,5 +47,7 @@ def test_fixed_precision_excludes_incomplete_predictions() -> None:
 
     assert scores["complete_tracks_at_fixed_precision_0_9"] == 1
     assert scores["complete_track_predictions_at_fixed_precision_0_9"] == 1
-    assert scores["complete_track_precision_at_fixed_precision_0_9"] == pytest.approx(1.0)
+    assert scores["complete_track_precision_at_fixed_precision_0_9"] == pytest.approx(
+        1.0
+    )
     assert scores["complete_track_recall_at_fixed_precision_0_9"] == pytest.approx(0.5)
