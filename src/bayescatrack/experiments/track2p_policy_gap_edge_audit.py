@@ -426,7 +426,9 @@ def _candidate_edge_contexts(
                     target_chain_length=target_chain_length,
                     upstream_support=upstream_support,
                     downstream_support=downstream_support,
-                    triplet_support=int(upstream_support > 0 and downstream_support > 0),
+                    triplet_support=int(
+                        upstream_support > 0 and downstream_support > 0
+                    ),
                     component_status_after=component_status,
                     creates_complete_track_fp=creates_complete_fp,
                 )
@@ -563,7 +565,9 @@ def _accepted_pair_features(
             area_ratio=float(area_ratios[row, column]),
             row_rank=_rank_descending(iou[row, :], selected_index=int(column)),
             column_rank=_rank_descending(iou[:, column], selected_index=int(row)),
-            row_margin=_margin_against_competitor(iou[row, :], selected_index=int(column)),
+            row_margin=_margin_against_competitor(
+                iou[row, :], selected_index=int(column)
+            ),
             column_margin=_margin_against_competitor(
                 iou[:, column], selected_index=int(row)
             ),
