@@ -1,4 +1,4 @@
-﻿"""BayesCaTrack command line entry point."""
+"""BayesCaTrack command line entry point."""
 
 from __future__ import annotations
 
@@ -97,6 +97,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "track2p-policy-gap-consensus-cleanup",
         "bayescatrack.experiments.track2p_policy_gap_consensus_cleanup",
         "Run Track2p-policy gap rescue plus conservative consensus cleanup",
+    ),
+    (
+        "track2p-policy-gap-consensus-sweep",
+        "bayescatrack.experiments.track2p_policy_gap_consensus_sweep",
+        "Sweep Track2p-policy gap-rescue consensus cleanup operating points",
     ),
     (
         "track2p-shifted-iou",
@@ -261,6 +266,8 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-gap-consensus-cleanup": "track2p-policy-gap-consensus-cleanup",
     "track2p-gap-rescue-consensus-cleanup": "track2p-policy-gap-consensus-cleanup",
     "track2p-component-gap-consensus-cleanup": "track2p-policy-gap-consensus-cleanup",
+    "track2p-gap-consensus-sweep": "track2p-policy-gap-consensus-sweep",
+    "track2p-gap-rescue-consensus-sweep": "track2p-policy-gap-consensus-sweep",
     "track2p-teacher-diagnostics": "track2p-teacher-debug",
     "audit-manual-gt-roi-index-space": "audit-manual-gt-rois",
 }
