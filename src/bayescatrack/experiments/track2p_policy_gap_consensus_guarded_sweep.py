@@ -9,6 +9,7 @@ lets the sweep avoid gap-rescue false positives when complete-track F1 is tied.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from collections.abc import Sequence
 from typing import Any
@@ -67,7 +68,7 @@ def run_track2p_policy_gap_consensus_guarded_sweep(
     )
 
 
-def build_arg_parser():
+def build_arg_parser() -> argparse.ArgumentParser:
     """Build a CLI parser that advertises the guarded max-gap default."""
 
     parser = _build_sweep_arg_parser()
@@ -98,7 +99,8 @@ def _has_option(args: Sequence[str], option: str) -> bool:
     return any(arg == option or arg.startswith(prefix) for arg in args)
 
 
-def _set_option_default(parser, option: str, value: str) -> None:
+def _set_option_default(parser: argparse.ArgumentParser, option: str, value: str) -> None:
+    # pylint: disable=protected-access
     action = parser._option_string_actions.get(option)
     if action is None:  # pragma: no cover - defensive against upstream parser changes
         raise RuntimeError(f"could not find parser option {option!r}")
