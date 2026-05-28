@@ -84,28 +84,45 @@ def apply_dynamic_edge_priors(
     if cfg is None:
         return costs
 
+    valid_edge_mask = _valid_edge_mask(costs, large_cost=cfg.large_cost)
+
     if cfg.edge_quality_bias:
-        costs += float(cfg.edge_quality_bias)
+        _add_to_valid_edges(costs, float(cfg.edge_quality_bias), valid_edge_mask)
     if cfg.session_gap_weight:
-        costs += cfg.session_gap_weight * max(float(session_gap) - 1.0, 0.0)
+        _add_to_valid_edges(
+            costs,
+            cfg.session_gap_weight * max(float(session_gap) - 1.0, 0.0),
+            valid_edge_mask,
+        )
     if cfg.cell_probability_weight:
-        costs += cfg.cell_probability_weight * _component(
-            pairwise_components,
-            "cell_probability_cost",
-            costs.shape,
+        _add_to_valid_edges(
+            costs,
+            cfg.cell_probability_weight
+            * _component(
+                pairwise_components,
+                "cell_probability_cost",
+                costs.shape,
+            ),
+            valid_edge_mask,
         )
     if cfg.area_ratio_weight:
-        costs += cfg.area_ratio_weight * _component(
-            pairwise_components,
-            "area_ratio_cost",
-            costs.shape,
+        _add_to_valid_edges(
+            costs,
+            cfg.area_ratio_weight
+            * _component(
+                pairwise_components,
+                "area_ratio_cost",
+                costs.shape,
+            ),
+            valid_edge_mask,
         )
     if cfg.activity_missing_weight:
         missing = _activity_missing_component(pairwise_components, costs.shape)
-        costs += cfg.activity_missing_weight * missing
+        _add_to_valid_edges(costs, cfg.activity_missing_weight * missing, valid_edge_mask)
     if cfg.registration_empty_roi_weight and empty_registered_rois is not None:
         empty = _column_mask_for_cost_shape(empty_registered_rois, costs.shape)
-        costs[:, empty] += cfg.registration_empty_roi_weight
+        empty_columns = np.broadcast_to(empty[None, :], costs.shape)
+        costs[valid_edge_mask & empty_columns] += cfg.registration_empty_roi_weight
     if cfg.reciprocal_rank_weight:
         costs += _reciprocal_rank_penalty(
             costs,
@@ -114,12 +131,34 @@ def apply_dynamic_edge_priors(
             large_cost=cfg.large_cost,
         )
 
-    return np.nan_to_num(
+    adjusted = np.nan_to_num(
         costs,
         nan=cfg.large_cost,
         posinf=cfg.large_cost,
         neginf=cfg.large_cost,
     )
+    adjusted[~valid_edge_mask] = cfg.large_cost
+    return adjusted
+
+
+def _valid_edge_mask(costs: np.ndarray, *, large_cost: float) -> np.ndarray:
+    return np.isfinite(costs) & (costs < float(large_cost))
+
+
+def _add_to_valid_edges(
+    costs: np.ndarray,
+    increment: float | np.ndarray,
+    valid_edge_mask: np.ndarray,
+) -> None:
+    if np.isscalar(increment):
+        costs[valid_edge_mask] += float(increment)
+        return
+
+    values = np.asarray(increment, dtype=float)
+    if values.shape != costs.shape:
+        raise ValueError("edge-prior increment must be scalar or match cost shape")
+    values = np.nan_to_num(values, nan=0.0, posinf=0.0, neginf=0.0)
+    costs[valid_edge_mask] += values[valid_edge_mask]
 
 
 def _component(
