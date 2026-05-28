@@ -10,6 +10,7 @@ import numpy as np
 from .complete_track_scores import complete_track_set, normalize_track_matrix
 
 DEFAULT_COMPLETE_TRACK_FIXED_PRECISIONS = (0.9, 0.95, 0.99)
+_MISSING_OBSERVATION_STRINGS = frozenset({"", "none", "nan", "null"})
 
 __all__ = (
     "DEFAULT_COMPLETE_TRACK_FIXED_PRECISIONS",
@@ -112,14 +113,73 @@ def _scored_complete_track_dict(
 ) -> dict[tuple[int, ...], float]:
     scored_tracks: dict[tuple[int, ...], float] = {}
     for row, score in zip(matrix, track_scores, strict=True):
-        values = [row[session_idx] for session_idx in selected_sessions]
-        if not all(value is not None for value in values):
+        track = _complete_track_tuple(row, selected_sessions)
+        if track is None:
             continue
-        track = tuple(int(value) for value in values)
         previous_score = scored_tracks.get(track)
         if previous_score is None or score > previous_score:
             scored_tracks[track] = float(score)
     return scored_tracks
+
+
+def _complete_track_tuple(
+    row: np.ndarray,
+    selected_sessions: Sequence[int],
+) -> tuple[int, ...] | None:
+    roi_values: list[int] = []
+    for session_idx in selected_sessions:
+        roi_index = _roi_index_or_none(row[session_idx])
+        if roi_index is None:
+            return None
+        roi_values.append(roi_index)
+    return tuple(roi_values)
+
+
+def _roi_index_or_none(value: object) -> int | None:
+    if _is_missing_observation(value):
+        return None
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(
+            f"track matrix contains boolean ROI index: {value!r}; "
+            "ROI observations must be integer-like or missing"
+        )
+    if isinstance(value, (int, np.integer)):
+        roi_index = int(value)
+        return roi_index if roi_index >= 0 else None
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if not np.isfinite(numeric) or numeric < 0.0:
+            return None
+        if numeric.is_integer():
+            return int(numeric)
+        raise ValueError(
+            f"track matrix contains non-integer ROI index: {value!r}; "
+            "ROI observations must be integer-like or missing"
+        )
+    if isinstance(value, str):
+        text = value.strip()
+        if text.lower() in _MISSING_OBSERVATION_STRINGS:
+            return None
+        try:
+            roi_index = int(text, 10)
+        except ValueError as exc:
+            raise ValueError(
+                f"track matrix contains non-integer ROI index: {value!r}; "
+                "ROI observations must be integer-like or missing"
+            ) from exc
+        return roi_index if roi_index >= 0 else None
+    raise ValueError(
+        f"track matrix contains non-integer ROI index: {value!r}; "
+        "ROI observations must be integer-like or missing"
+    )
+
+
+def _is_missing_observation(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() in _MISSING_OBSERVATION_STRINGS
+    return isinstance(value, (float, np.floating)) and np.isnan(value)
 
 
 def _score_array_for_track_matrix(
