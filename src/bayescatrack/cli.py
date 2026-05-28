@@ -109,6 +109,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Sweep Track2p-policy gap-rescue consensus cleanup operating points",
     ),
     (
+        "track2p-policy-gap-consensus-guarded-sweep",
+        "bayescatrack.experiments.track2p_policy_gap_consensus_guarded_sweep",
+        "Sweep guarded gap-consensus cleanup while keeping adjacent-only as a candidate",
+    ),
+    (
         "track2p-shifted-iou",
         "bayescatrack.experiments.track2p_shifted_iou_benchmark",
         "Track2p global-assignment ablation with residual shifted-IoU costs",
@@ -273,6 +278,11 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-gap-consensus-cleanup": "track2p-policy-gap-consensus-cleanup",
     "track2p-gap-consensus-sweep": "track2p-policy-gap-consensus-sweep",
     "track2p-gap-rescue-consensus-sweep": "track2p-policy-gap-consensus-sweep",
+    "track2p-gap-consensus-guarded-sweep": "track2p-policy-gap-consensus-guarded-sweep",
+    "track2p-guarded-gap-consensus-sweep": "track2p-policy-gap-consensus-guarded-sweep",
+    "track2p-gap-rescue-consensus-guarded-sweep": (
+        "track2p-policy-gap-consensus-guarded-sweep"
+    ),
     "track2p-teacher-diagnostics": "track2p-teacher-debug",
     "audit-manual-gt-roi-index-space": "audit-manual-gt-rois",
 }
