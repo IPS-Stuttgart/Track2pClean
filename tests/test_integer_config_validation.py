@@ -42,6 +42,8 @@ def test_track2p_policy_top_k_rejects_bool_fractional_and_nonfinite_values(
         Track2pPolicyPriorConfig(row_top_k=bad_top_k)
     with pytest.raises(ValueError, match="column_top_k"):
         Track2pPolicyPriorConfig(column_top_k=bad_top_k)
+    with pytest.raises(ValueError, match="mutual_top_k"):
+        Track2pPolicyPriorConfig(mutual_top_k=bad_top_k)
 
 
 @pytest.mark.parametrize("bad_max_gap", [True, False, 0, -1, 1.5, "1.5", np.nan])
@@ -57,9 +59,11 @@ def test_track2p_policy_accepts_integer_like_top_k_and_gap_values(
     config = Track2pPolicyPriorConfig(
         row_top_k=integer_like_value,
         column_top_k=integer_like_value,
+        mutual_top_k=integer_like_value,
         max_gap=integer_like_value,
     )
 
     assert config.row_top_k == 1
     assert config.column_top_k == 1
+    assert config.mutual_top_k == 1
     assert config.max_gap == 1

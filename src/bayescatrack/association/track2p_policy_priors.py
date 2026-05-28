@@ -72,6 +72,7 @@ class Track2pPolicyPriorConfig:
     consecutive_only: bool = False
     row_top_k: int = 0
     column_top_k: int = 0
+    mutual_top_k: int = 0
     rescue_min_iou: float = 0.0
     rescue_margin: float = 0.0
     large_cost: float = 1.0e6
@@ -105,6 +106,11 @@ class Track2pPolicyPriorConfig:
             self,
             "column_top_k",
             _nonnegative_int(self.column_top_k, name="column_top_k"),
+        )
+        object.__setattr__(
+            self,
+            "mutual_top_k",
+            _nonnegative_int(self.mutual_top_k, name="mutual_top_k"),
         )
         if not 0.0 <= float(self.rescue_min_iou) <= 1.0:
             raise ValueError("rescue_min_iou must lie in [0, 1]")
@@ -197,6 +203,7 @@ def track2p_policy_edge_mask(
         threshold=threshold,
         row_top_k=cfg.row_top_k,
         column_top_k=cfg.column_top_k,
+        mutual_top_k=cfg.mutual_top_k,
         rescue_min_iou=float(cfg.rescue_min_iou),
         rescue_margin=float(cfg.rescue_margin),
     )
@@ -232,10 +239,11 @@ def _add_local_rescue_edges(
     threshold: float,
     row_top_k: int,
     column_top_k: int,
+    mutual_top_k: int,
     rescue_min_iou: float,
     rescue_margin: float,
 ) -> None:
-    if row_top_k <= 0 and column_top_k <= 0:
+    if row_top_k <= 0 and column_top_k <= 0 and mutual_top_k <= 0:
         return
     if not np.isfinite(threshold):
         return
@@ -244,6 +252,8 @@ def _add_local_rescue_edges(
         _add_axis_top_k_rescue_edges(mask, iou, top_k=row_top_k, floor=floor, axis=1)
     if column_top_k > 0:
         _add_axis_top_k_rescue_edges(mask, iou, top_k=column_top_k, floor=floor, axis=0)
+    if mutual_top_k > 0:
+        _add_mutual_top_k_rescue_edges(mask, iou, top_k=mutual_top_k, floor=floor)
 
 
 def _add_axis_top_k_rescue_edges(
@@ -265,6 +275,35 @@ def _add_axis_top_k_rescue_edges(
             mask[rows, column_index] = True
         return
     raise ValueError("axis must be 0 or 1")
+
+
+def _add_mutual_top_k_rescue_edges(
+    mask: np.ndarray,
+    iou: np.ndarray,
+    *,
+    top_k: int,
+    floor: float,
+) -> None:
+    """Add edges that are simultaneously row-top-k and column-top-k.
+
+    Unlike the one-sided row/column rescue modes, this is a high-precision local
+    evidence prior: an edge must be among the best finite IoU candidates for the
+    source ROI and for the target ROI. This is useful for Track2p-style policies
+    where correct links frequently sit just below a global threshold but remain
+    locally reciprocal, while split/merge clutter often appears only one-sided.
+    """
+
+    row_supported = np.zeros(iou.shape, dtype=bool)
+    column_supported = np.zeros(iou.shape, dtype=bool)
+    _add_axis_top_k_rescue_edges(row_supported, iou, top_k=top_k, floor=floor, axis=1)
+    _add_axis_top_k_rescue_edges(
+        column_supported,
+        iou,
+        top_k=top_k,
+        floor=floor,
+        axis=0,
+    )
+    mask[row_supported & column_supported] = True
 
 
 def _top_k_above_floor(values: np.ndarray, *, top_k: int, floor: float) -> np.ndarray:
