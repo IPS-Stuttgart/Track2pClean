@@ -28,12 +28,11 @@ from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
 )
 from bayescatrack.experiments.track2p_policy_component_sweep import (
+    NO_SPLIT_COMPONENT_CANDIDATE,
     ComponentCleanupSweepConfig,
     ComponentCleanupSweepOutput,
     ComponentSweepObjective,
-    NO_SPLIT_COMPONENT_CANDIDATE,
 )
-
 
 DEFAULT_COMPLETE_TRACK_F1_FLOOR_DELTA = 0.0
 
@@ -72,8 +71,7 @@ def rerank_component_sweep_output(
     best_candidate = str(ranked[0]["approach"])
     ranks = {str(row["approach"]): int(row["component_sweep_rank"]) for row in ranked}
     objectives = {
-        str(row["approach"]): float(row["component_sweep_objective"])
-        for row in ranked
+        str(row["approach"]): float(row["component_sweep_objective"]) for row in ranked
     }
     safety_metadata = {str(row["approach"]): _safety_metadata(row) for row in ranked}
     annotated_rows = []
