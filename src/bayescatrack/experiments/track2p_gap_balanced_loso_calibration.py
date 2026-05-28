@@ -7,7 +7,6 @@ import csv
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -37,6 +36,7 @@ from bayescatrack.experiments.track2p_configurable_loso_calibration import (
     _class_weight_label,
     _collect_examples,
     _config_from_args,
+    _config_with_pairwise_kwargs_for_features,
     _fit_model,
     _hard_negative_options,
     _hard_negative_scores,
@@ -79,6 +79,7 @@ def run_track2p_gap_balanced_loso_calibration(
             "LOSO calibration requires method='global-assignment' and cost='calibrated'"
         )
     feature_names = _resolved_feature_names(config, feature_names)
+    config = _config_with_pairwise_kwargs_for_features(config, feature_names)
     subjects = _load_subjects(config)
     model_kind = _validate_calibration_model_kind(model_kind)
     model_kwargs = _model_kwargs(model_kind, model_kwargs)
