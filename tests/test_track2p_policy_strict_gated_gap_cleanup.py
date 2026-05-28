@@ -117,6 +117,64 @@ def test_strict_gap_feature_subset_computes_only_requested_pairs(monkeypatch) ->
     assert calls == [((10, 11), (30, 31), 24.0)]
     assert set(output) == {(0, 2, 10, 30)}
 
+def test_strict_gated_gap_edge_candidates_uses_component_cleanup_source(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(strict_gap, "_cell_probability", lambda _session, _roi: 0.85)
+    base = np.asarray([[853, -1, -1], [999, -1, -1]], dtype=int)
+
+    candidates = strict_gap.strict_gated_gap_edge_candidates(
+        base,
+        sessions=(object(), object(), object()),
+        feature_index={
+            (0, 2, 853, 554): _feature(),
+            (0, 2, 777, 555): _feature(),
+        },
+        gate_config=strict_gap.StrictGapGateConfig(),
+        seed_rois={853, 999},
+    )
+
+    assert candidates == (
+        strict_gap.StrictGapCandidate(
+            edge=(0, 2, 853, 554),
+            candidate_track_id=0,
+            accepted=True,
+            reason="accepted",
+        ),
+    )
+
+
+def test_apply_strict_gated_gap_edges_inserts_target_observation() -> None:
+    base = np.asarray([[853, -1, -1]], dtype=int)
+    candidates = (
+        strict_gap.StrictGapCandidate(
+            edge=(0, 2, 853, 554),
+            candidate_track_id=0,
+            accepted=True,
+            reason="accepted",
+        ),
+    )
+
+    output = strict_gap.apply_strict_gated_gap_edges(base, candidates)
+
+    np.testing.assert_array_equal(output, [[853, -1, 554]])
+
+
+def test_apply_strict_gated_gap_edges_rejects_duplicate_target() -> None:
+    base = np.asarray([[853, -1, -1], [999, -1, 554]], dtype=int)
+    candidates = (
+        strict_gap.StrictGapCandidate(
+            edge=(0, 2, 853, 554),
+            candidate_track_id=0,
+            accepted=True,
+            reason="accepted",
+        ),
+    )
+
+    output = strict_gap.apply_strict_gated_gap_edges(base, candidates)
+
+    np.testing.assert_array_equal(output, base)
+
 
 def test_apply_strict_gated_gap_candidates_merges_suffix_observation() -> None:
     base = np.asarray([[853, -1, -1]], dtype=int)
