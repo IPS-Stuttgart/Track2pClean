@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import operator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -47,12 +47,6 @@ class CandidatePruningConfig:
         )
 
 
-_ORIGINAL_CANDIDATE_MASK_FROM_COST_MATRIX = (
-    _advanced_roi_components.candidate_mask_from_cost_matrix
-)
-_ORIGINAL_MASK_SHAPE_DESCRIPTORS = _advanced_roi_components.mask_shape_descriptors
-
-
 def install_strict_config_validation() -> None:
     """Install idempotent strict validation hooks for advanced components."""
 
@@ -62,6 +56,19 @@ def install_strict_config_validation() -> None:
         False,
     ):
         return
+
+    original_candidate_mask = _advanced_roi_components.candidate_mask_from_cost_matrix
+    original_mask_shape_descriptors = _advanced_roi_components.mask_shape_descriptors
+    setattr(
+        candidate_mask_from_cost_matrix,
+        "_bayescatrack_strict_config_original",
+        original_candidate_mask,
+    )
+    setattr(
+        mask_shape_descriptors,
+        "_bayescatrack_strict_config_original",
+        original_mask_shape_descriptors,
+    )
 
     _advanced_roi_components.CandidatePruningConfig = CandidatePruningConfig
     _advanced_roi_components.candidate_mask_from_cost_matrix = (
@@ -90,7 +97,11 @@ def candidate_mask_from_cost_matrix(
     if gate_margin is not None:
         gate_margin = _finite_nonnegative_float(gate_margin, name="gate_margin")
     large_cost = _finite_positive_float(large_cost, name="large_cost")
-    return _ORIGINAL_CANDIDATE_MASK_FROM_COST_MATRIX(
+    original = _original_function(
+        candidate_mask_from_cost_matrix,
+        "candidate_mask_from_cost_matrix",
+    )
+    return original(
         cost_matrix,
         top_k=top_k,
         include_columns=include_columns,
@@ -105,7 +116,15 @@ def mask_shape_descriptors(
     """Return per-ROI shape descriptors after validating ``radial_bins``."""
 
     radial_bins = _positive_int(radial_bins, name="radial_bins")
-    return _ORIGINAL_MASK_SHAPE_DESCRIPTORS(masks, radial_bins=radial_bins)
+    original = _original_function(mask_shape_descriptors, "mask_shape_descriptors")
+    return original(masks, radial_bins=radial_bins)
+
+
+def _original_function(wrapper: Callable[..., Any], name: str) -> Callable[..., Any]:
+    original = getattr(wrapper, "_bayescatrack_strict_config_original", None)
+    if original is None:
+        raise RuntimeError(f"strict config validation wrapper '{name}' is not installed")
+    return original
 
 
 def _positive_int(value: Any, *, name: str) -> int:
