@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
-
-from bayescatrack.experiments import track2p_policy_strict_gated_gap_cleanup as strict_gap
+from bayescatrack.experiments import (
+    track2p_policy_strict_gated_gap_cleanup as strict_gap,
+)
 from bayescatrack.experiments.track2p_policy_gap_edge_audit import GapEdgeFeature
 
 
