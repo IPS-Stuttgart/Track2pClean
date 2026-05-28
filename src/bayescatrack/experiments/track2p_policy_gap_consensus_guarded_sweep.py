@@ -25,8 +25,14 @@ from bayescatrack.experiments.track2p_policy_gap_consensus_cleanup import (
 from bayescatrack.experiments.track2p_policy_gap_consensus_sweep import (
     GapConsensusSweepConfig,
     GapConsensusSweepOutput,
+)
+from bayescatrack.experiments.track2p_policy_gap_consensus_sweep import (
     build_arg_parser as _build_sweep_arg_parser,
+)
+from bayescatrack.experiments.track2p_policy_gap_consensus_sweep import (
     main as _sweep_main,
+)
+from bayescatrack.experiments.track2p_policy_gap_consensus_sweep import (
     run_track2p_policy_gap_consensus_sweep,
 )
 
@@ -99,7 +105,9 @@ def _has_option(args: Sequence[str], option: str) -> bool:
     return any(arg == option or arg.startswith(prefix) for arg in args)
 
 
-def _set_option_default(parser: argparse.ArgumentParser, option: str, value: str) -> None:
+def _set_option_default(
+    parser: argparse.ArgumentParser, option: str, value: str
+) -> None:
     # pylint: disable=protected-access
     action = parser._option_string_actions.get(option)
     if action is None:  # pragma: no cover - defensive against upstream parser changes

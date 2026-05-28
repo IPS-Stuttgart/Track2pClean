@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bayescatrack.experiments import track2p_policy_gap_consensus_guarded_sweep as guarded
+from bayescatrack.experiments import (
+    track2p_policy_gap_consensus_guarded_sweep as guarded,
+)
 from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
 
 
