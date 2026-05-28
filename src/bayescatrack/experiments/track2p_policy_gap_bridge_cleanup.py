@@ -136,10 +136,12 @@ def run_track2p_policy_gap_bridge_cleanup(
         reference_tracks = _reference_matrix(
             reference, curated_only=policy_config.curated_only
         )
-        predicted_eval, _reference_eval, evaluated_track_ids = _evaluated_prediction_rows(
-            predicted_full,
-            reference_tracks,
-            config=policy_config,
+        predicted_eval, _reference_eval, evaluated_track_ids = (
+            _evaluated_prediction_rows(
+                predicted_full,
+                reference_tracks,
+                config=policy_config,
+            )
         )
         diagnostic_by_edge = gap_link_diagnostics_by_suite2p_edge(
             sessions,

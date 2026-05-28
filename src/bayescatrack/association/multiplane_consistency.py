@@ -41,8 +41,16 @@ def shared_registration_reliability(
         return 0.0
     rmse = np.asarray([quality.registration_rmse for quality in qualities], dtype=float)
     valid = np.asarray([quality.valid_fraction for quality in qualities], dtype=float)
-    rmse_score = 1.0 / (1.0 + max(float(np.nanmean(np.maximum(rmse, 0.0))), 0.0))
-    valid_score = float(np.nanmean(np.clip(valid, 0.0, 1.0)))
+
+    finite_rmse = np.maximum(rmse[np.isfinite(rmse)], 0.0)
+    if finite_rmse.size == 0:
+        return 0.0
+    rmse_score = 1.0 / (1.0 + float(np.mean(finite_rmse)))
+
+    finite_valid = np.clip(valid[np.isfinite(valid)], 0.0, 1.0)
+    if finite_valid.size == 0:
+        return 0.0
+    valid_score = float(np.mean(finite_valid))
     return float(np.clip(rmse_score * valid_score, 0.0, 1.0))
 
 

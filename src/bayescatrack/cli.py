@@ -292,9 +292,7 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     ),
     "track2p-gap-bridge-cleanup": "track2p-policy-gap-bridge-cleanup",
     "track2p-gap-rescue-bridge-cleanup": "track2p-policy-gap-bridge-cleanup",
-    "track2p-policy-gap-rescue-bridge-cleanup": (
-        "track2p-policy-gap-bridge-cleanup"
-    ),
+    "track2p-policy-gap-rescue-bridge-cleanup": ("track2p-policy-gap-bridge-cleanup"),
     "track2p-gap-edge-audit": "track2p-policy-gap-edge-audit",
     "track2p-gap-rescue-edge-audit": "track2p-policy-gap-edge-audit",
     "track2p-gap-consensus-cleanup": "track2p-policy-gap-consensus-cleanup",

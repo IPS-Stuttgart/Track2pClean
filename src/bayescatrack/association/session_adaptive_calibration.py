@@ -105,7 +105,10 @@ def session_context_from_planes(
             np.clip(
                 _first_scalar(
                     metadata,
-                    ("valid_fraction", "nonrigid_registration_inverse_warp_valid_fraction"),
+                    (
+                        "valid_fraction",
+                        "nonrigid_registration_inverse_warp_valid_fraction",
+                    ),
                     default=1.0,
                 ),
                 0.0,

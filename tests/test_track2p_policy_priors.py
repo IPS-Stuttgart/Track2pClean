@@ -149,6 +149,44 @@ def test_policy_prior_penalizes_non_policy_edges_when_no_policy_edge_survives() 
     np.testing.assert_allclose(adjusted, np.asarray([[1.5, 2.5]], dtype=float))
 
 
+def test_policy_prior_does_not_resurrect_gated_policy_edges() -> None:
+    costs = np.asarray(
+        [
+            [np.inf, 4.0],
+            [1.0e6, 3.0],
+        ],
+        dtype=float,
+    )
+    components = {
+        "iou": np.asarray(
+            [
+                [0.95, 0.00],
+                [0.00, 0.95],
+            ],
+            dtype=float,
+        )
+    }
+
+    adjusted = apply_track2p_policy_edge_prior(
+        costs,
+        components,
+        session_gap=1,
+        config=Track2pPolicyPriorConfig(
+            threshold_method="min",
+            relief=0.5,
+            accepted_cost_cap=1.0,
+            non_policy_penalty=0.25,
+            min_cost=0.0,
+            large_cost=1.0e6,
+        ),
+    )
+
+    assert np.isposinf(adjusted[0, 0])
+    np.testing.assert_allclose(adjusted[1, 0], 1.0e6)
+    np.testing.assert_allclose(adjusted[1, 1], 0.5)
+    np.testing.assert_allclose(adjusted[0, 1], 4.25)
+
+
 def test_policy_prior_respects_gap_restrictions() -> None:
     costs = np.asarray([[5.0]], dtype=float)
     components = {"iou": np.asarray([[0.95]], dtype=float)}
