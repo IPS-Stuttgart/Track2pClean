@@ -1,0 +1,103 @@
+name: Track2p gap edge audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      data_root:
+        description: "Track2p lightweight data root"
+        required: true
+        default: "/home/florianpfaff/codex-runs/BayesCaTrack/results/policy_dp/data_lightweight"
+      reference_root:
+        description: "Manual-GT reference root"
+        required: true
+        default: "/home/florianpfaff/codex-runs/BayesCaTrack/results/policy_dp/data_lightweight"
+      output_root:
+        description: "Output root. If unwritable, the workflow falls back to RUNNER_TEMP."
+        required: true
+        default: "/home/github-runner/actions-runner/_work/bayescatrack-results"
+
+jobs:
+  gap-edge-audit:
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Prepare output directory
+        id: prep
+        shell: bash
+        run: |
+          set -euo pipefail
+          REQUESTED_ROOT="${{ inputs.output_root }}"
+          if mkdir -p "$REQUESTED_ROOT" 2>/dev/null && touch "$REQUESTED_ROOT/.write_test" 2>/dev/null; then
+            rm -f "$REQUESTED_ROOT/.write_test"
+            OUT_ROOT="$REQUESTED_ROOT"
+          else
+            OUT_ROOT="${RUNNER_TEMP:-$PWD}/bayescatrack-results"
+            mkdir -p "$OUT_ROOT"
+            echo "Requested output root is not writable: $REQUESTED_ROOT" >&2
+            echo "Falling back to: $OUT_ROOT" >&2
+          fi
+          OUT="$OUT_ROOT/gap_edge_audit_$(date +%Y%m%d_%H%M%S)"
+          mkdir -p "$OUT"
+          echo "out=$OUT" >> "$GITHUB_OUTPUT"
+          git rev-parse HEAD | tee "$OUT/git_sha.txt"
+          git status --short | tee "$OUT/git_status_before.txt"
+
+      - name: Install package with Poetry
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install poetry
+          poetry env use "$(which python)"
+          poetry install --with dev --extras track2p --no-interaction --no-ansi > "${{ steps.prep.outputs.out }}/poetry_install.log" 2>&1
+          poetry run python -m pip freeze > "${{ steps.prep.outputs.out }}/pip_freeze.txt"
+
+      - name: Run gap-edge delta audit
+        shell: bash
+        env:
+          DATA: ${{ inputs.data_root }}
+          REF: ${{ inputs.reference_root }}
+          OUT: ${{ steps.prep.outputs.out }}
+        run: |
+          set -euo pipefail
+          poetry run python -m pytest \
+            tests/test_component_sweep_cli_registration.py \
+            tests/test_track2p_policy_gap_component_cleanup.py \
+            -q > "$OUT/pytest.log" 2>&1
+
+          poetry run python -m bayescatrack benchmark track2p-policy-gap-edge-audit \
+            --data "$DATA" \
+            --reference "$REF" \
+            --reference-kind manual-gt \
+            --input-format suite2p \
+            --threshold-method min \
+            --transform-type affine \
+            --iou-distance-threshold 12 \
+            --cell-probability-threshold 0.5 \
+            --max-gap 2 \
+            --base-prediction component-cleanup \
+            --candidate-prediction gap-component-no-apply \
+            --output "$OUT/gap_edge_delta_audit.csv" \
+            --summary-output "$OUT/gap_edge_delta_summary.csv" \
+            --format csv
+
+          git status --short | tee "$OUT/git_status_after.txt"
+          echo 0 > "$OUT/exit_status.txt"
+          cat "$OUT/gap_edge_delta_summary.csv"
+
+      - name: Upload audit artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: track2p-gap-edge-audit
+          path: ${{ steps.prep.outputs.out }}
