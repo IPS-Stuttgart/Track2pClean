@@ -11,7 +11,7 @@ from bayescatrack.experiments.track2p_policy_supported_gap_component_cleanup imp
 def test_supported_gap_filter_keeps_adjacent_links_and_supported_skip() -> None:
     links_by_gap = {
         (0, 1): np.asarray([[0, 2]], dtype=int),
-        (1, 1): np.asarray([[7, 3]], dtype=int),
+        (1, 1): np.asarray([[2, 3]], dtype=int),
         (0, 2): np.asarray([[0, 3], [1, 4]], dtype=int),
     }
 
@@ -20,14 +20,14 @@ def test_supported_gap_filter_keeps_adjacent_links_and_supported_skip() -> None:
     )
 
     np.testing.assert_array_equal(filtered[(0, 1)], [[0, 2]])
-    np.testing.assert_array_equal(filtered[(1, 1)], [[7, 3]])
+    np.testing.assert_array_equal(filtered[(1, 1)], [[2, 3]])
     np.testing.assert_array_equal(filtered[(0, 2)], [[0, 3]])
 
 
 def test_supported_gap_filter_can_require_both_endpoint_support() -> None:
     links_by_gap = {
         (0, 1): np.asarray([[0, 2], [1, 5]], dtype=int),
-        (1, 1): np.asarray([[8, 3]], dtype=int),
+        (1, 1): np.asarray([[2, 3]], dtype=int),
         (0, 2): np.asarray([[0, 3], [1, 4]], dtype=int),
     }
 
