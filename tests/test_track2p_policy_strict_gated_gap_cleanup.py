@@ -69,6 +69,54 @@ def test_strict_gap_gate_rejects_weak_feature(monkeypatch) -> None:
     assert "area-ratio" in reason
 
 
+def test_delta_gap_candidate_occurrences_returns_only_baseline_delta() -> None:
+    base = np.asarray([[1, -1, 3]], dtype=int)
+    candidate = np.asarray([[1, -1, 3], [1, -1, 4]], dtype=int)
+
+    occurrences = strict_gap._delta_gap_candidate_occurrences(
+        base,
+        candidate,
+        max_gap=2,
+        seed_rois={1},
+        seed_session=0,
+    )
+
+    assert occurrences == (((0, 2, 1, 4), 1),)
+
+
+def test_strict_gap_feature_subset_computes_only_requested_pairs(monkeypatch) -> None:
+    calls: list[tuple[tuple[int, ...], tuple[int, ...], float]] = []
+
+    def fake_roi_indices(session):
+        return np.asarray(session, dtype=int)
+
+    def fake_accepted_pair_features(reference_session, moving_session, **kwargs):
+        calls.append(
+            (
+                tuple(int(value) for value in reference_session),
+                tuple(int(value) for value in moving_session),
+                float(kwargs["iou_distance_threshold"]),
+            )
+        )
+        return {(0, 0): _feature(), (1, 1): _feature(area_ratio=0.50)}
+
+    monkeypatch.setattr(strict_gap, "_roi_indices", fake_roi_indices)
+    monkeypatch.setattr(
+        strict_gap, "_accepted_pair_features", fake_accepted_pair_features
+    )
+
+    output = strict_gap.strict_gap_feature_subset(
+        (np.asarray([10, 11]), np.asarray([20]), np.asarray([30, 31])),
+        edges={(0, 2, 10, 30)},
+        transform_type="affine",
+        threshold_method="min",
+        iou_distance_threshold=12.0,
+    )
+
+    assert calls == [((10, 11), (30, 31), 24.0)]
+    assert set(output) == {(0, 2, 10, 30)}
+
+
 def test_apply_strict_gated_gap_candidates_merges_suffix_observation() -> None:
     base = np.asarray([[853, -1, -1]], dtype=int)
     candidate_tracks = np.asarray([[853, -1, 554]], dtype=int)
