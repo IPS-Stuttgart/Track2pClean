@@ -11,6 +11,7 @@ from .complete_track_scores import complete_track_set, normalize_track_matrix
 
 DEFAULT_COMPLETE_TRACK_FIXED_PRECISIONS = (0.9, 0.95, 0.99)
 _MISSING_OBSERVATION_STRINGS = frozenset({"", "none", "nan", "null"})
+ScoredCompleteTrack = tuple[tuple[int, ...], float]
 
 __all__ = (
     "DEFAULT_COMPLETE_TRACK_FIXED_PRECISIONS",
@@ -53,7 +54,7 @@ def score_complete_tracks_at_fixed_precision(
         return {}
 
     scores = _score_array_for_track_matrix(predicted_matrix, track_scores)
-    predicted = _scored_complete_track_dict(predicted_matrix, scores, selected_sessions)
+    predicted = _scored_complete_tracks(predicted_matrix, scores, selected_sessions)
     reference = complete_track_set(reference_matrix, session_indices=selected_sessions)
 
     diagnostics: dict[str, float | int] = {}
@@ -79,26 +80,28 @@ def score_complete_tracks_at_fixed_precision(
 
 
 def _best_operating_point(
-    predicted: dict[tuple[int, ...], float],
+    predicted: Sequence[ScoredCompleteTrack],
     reference: set[tuple[int, ...]],
     *,
     target_precision: float,
 ) -> tuple[int, int, float, float, float]:
     best_rank = (0, 1.0, 0, 0)
     best_result = (0, 0, 1.0, 0.0, float("inf"))
-    for threshold in sorted(set(predicted.values()), reverse=True):
-        retained = {track for track, score in predicted.items() if score >= threshold}
-        true_positives = len(retained.intersection(reference))
-        false_positives = len(retained.difference(reference))
-        false_negatives = len(reference.difference(retained))
-        precision = _safe_ratio(true_positives, true_positives + false_positives)
+    for threshold in sorted({score for _, score in predicted}, reverse=True):
+        retained = [track for track, score in predicted if score >= threshold]
+        retained_unique = set(retained)
+        true_positives = len(retained_unique.intersection(reference))
+        predictions = len(retained)
+        false_positives = predictions - true_positives
+        false_negatives = len(reference.difference(retained_unique))
+        precision = _safe_ratio(true_positives, predictions)
         recall = _safe_ratio(true_positives, true_positives + false_negatives)
-        rank = (true_positives, precision, -false_positives, len(retained))
+        rank = (true_positives, precision, -false_positives, predictions)
         if precision >= target_precision and rank > best_rank:
             best_rank = rank
             best_result = (
                 true_positives,
-                len(retained),
+                predictions,
                 precision,
                 recall,
                 float(threshold),
@@ -106,19 +109,16 @@ def _best_operating_point(
     return best_result
 
 
-def _scored_complete_track_dict(
+def _scored_complete_tracks(
     matrix: np.ndarray,
     track_scores: np.ndarray,
     selected_sessions: Sequence[int],
-) -> dict[tuple[int, ...], float]:
-    scored_tracks: dict[tuple[int, ...], float] = {}
+) -> list[ScoredCompleteTrack]:
+    scored_tracks: list[ScoredCompleteTrack] = []
     for row, score in zip(matrix, track_scores, strict=True):
         track = _complete_track_tuple(row, selected_sessions)
-        if track is None:
-            continue
-        previous_score = scored_tracks.get(track)
-        if previous_score is None or score > previous_score:
-            scored_tracks[track] = float(score)
+        if track is not None:
+            scored_tracks.append((track, float(score)))
     return scored_tracks
 
 
