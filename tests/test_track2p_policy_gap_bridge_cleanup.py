@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
     _mark_applied_splits,

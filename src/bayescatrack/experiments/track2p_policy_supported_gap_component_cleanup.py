@@ -177,9 +177,7 @@ def run_track2p_policy_supported_gap_component_cleanup(
         transform_type=transform_type,
         cell_probability_threshold=cell_probability_threshold,
         max_gap=(
-            TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_MAX_GAP
-            if max_gap is None
-            else max_gap
+            TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_MAX_GAP if max_gap is None else max_gap
         ),
     )
     if int(policy_config.max_gap) < 1:
@@ -340,7 +338,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument(
         "--max-gap",
         type=int,

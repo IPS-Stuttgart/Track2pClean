@@ -170,9 +170,7 @@ def apply_track2p_policy_edge_prior(
         )
     if cfg.relief > 0.0:
         costs[policy_candidates] -= float(cfg.relief)
-    costs[policy_candidates] = np.maximum(
-        costs[policy_candidates], float(cfg.min_cost)
-    )
+    costs[policy_candidates] = np.maximum(costs[policy_candidates], float(cfg.min_cost))
     return costs
 
 
