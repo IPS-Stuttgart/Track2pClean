@@ -47,7 +47,10 @@ class DynamicEdgePriorConfig:
             if reciprocal_rank_cap < 0.0 or not np.isfinite(reciprocal_rank_cap):
                 raise ValueError("reciprocal_rank_cap must be finite and non-negative")
             object.__setattr__(self, "reciprocal_rank_cap", reciprocal_rank_cap)
-        object.__setattr__(self, "edge_quality_bias", float(self.edge_quality_bias))
+        edge_quality_bias = float(self.edge_quality_bias)
+        if not np.isfinite(edge_quality_bias):
+            raise ValueError("edge_quality_bias must be finite")
+        object.__setattr__(self, "edge_quality_bias", edge_quality_bias)
         large_cost = float(self.large_cost)
         if not np.isfinite(large_cost) or large_cost <= 0.0:
             raise ValueError("large_cost must be finite and positive")
