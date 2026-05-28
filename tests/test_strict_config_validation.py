@@ -71,7 +71,17 @@ def test_advanced_candidate_top_k_accepts_integer_like_values(integer_like):
         ),
         (
             CentroidCandidatePrefilterConfig,
+            {"max_distance": True},
+            "max_distance must be a finite non-negative value",
+        ),
+        (
+            CentroidCandidatePrefilterConfig,
             {"large_cost": np.inf},
+            "large_cost must be a finite positive value",
+        ),
+        (
+            CentroidCandidatePrefilterConfig,
+            {"large_cost": True},
             "large_cost must be a finite positive value",
         ),
         (
@@ -81,23 +91,49 @@ def test_advanced_candidate_top_k_accepts_integer_like_values(integer_like):
         ),
         (
             CandidatePruningConfig,
+            {"gate_margin": False},
+            "gate_margin must be a finite non-negative value",
+        ),
+        (
+            CandidatePruningConfig,
             {"large_cost": np.inf},
+            "large_cost must be a finite positive value",
+        ),
+        (
+            CandidatePruningConfig,
+            {"large_cost": True},
             "large_cost must be a finite positive value",
         ),
     ],
 )
-def test_candidate_configs_reject_nonfinite_numeric_values(factory, kwargs, message):
+def test_candidate_configs_reject_bad_float_values(factory, kwargs, message):
     with pytest.raises(ValueError, match=message):
         factory(**kwargs)
 
 
-@pytest.mark.parametrize("bad_large_cost", [np.nan, np.inf, 0.0, -1.0])
+@pytest.mark.parametrize("bad_large_cost", [True, False, np.nan, np.inf, 0.0, -1.0])
 def test_apply_candidate_mask_rejects_invalid_large_cost(bad_large_cost):
     with pytest.raises(ValueError, match="large_cost must be a finite positive value"):
         apply_candidate_mask(
             np.zeros((1, 1), dtype=float),
             np.ones((1, 1), dtype=bool),
             large_cost=bad_large_cost,
+        )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"gate_margin": False}, "gate_margin must be a finite non-negative value"),
+        ({"large_cost": True}, "large_cost must be a finite positive value"),
+    ],
+)
+def test_candidate_mask_from_cost_matrix_rejects_boolean_float_values(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        candidate_mask_from_cost_matrix(
+            np.zeros((2, 2), dtype=float),
+            top_k=1,
+            **kwargs,
         )
 
 
