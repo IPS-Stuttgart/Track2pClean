@@ -26,6 +26,10 @@ class DynamicEdgePriorConfig:
     registration_empty_roi_weight: float = 0.0
     reciprocal_rank_weight: float = 0.0
     reciprocal_rank_cap: float | None = None
+    mutual_best_relief: float = 0.0
+    mutual_best_min_margin: float = 0.0
+    mutual_best_cost_cap: float | None = None
+    mutual_best_min_cost: float | None = None
     edge_quality_bias: float = 0.0
     large_cost: float = 1.0e6
 
@@ -37,6 +41,8 @@ class DynamicEdgePriorConfig:
             "activity_missing_weight",
             "registration_empty_roi_weight",
             "reciprocal_rank_weight",
+            "mutual_best_relief",
+            "mutual_best_min_margin",
         ):
             value = float(getattr(self, name))
             if value < 0.0 or not np.isfinite(value):
@@ -47,6 +53,16 @@ class DynamicEdgePriorConfig:
             if reciprocal_rank_cap < 0.0 or not np.isfinite(reciprocal_rank_cap):
                 raise ValueError("reciprocal_rank_cap must be finite and non-negative")
             object.__setattr__(self, "reciprocal_rank_cap", reciprocal_rank_cap)
+        if self.mutual_best_cost_cap is not None:
+            mutual_best_cost_cap = float(self.mutual_best_cost_cap)
+            if mutual_best_cost_cap < 0.0 or not np.isfinite(mutual_best_cost_cap):
+                raise ValueError("mutual_best_cost_cap must be finite and non-negative")
+            object.__setattr__(self, "mutual_best_cost_cap", mutual_best_cost_cap)
+        if self.mutual_best_min_cost is not None:
+            mutual_best_min_cost = float(self.mutual_best_min_cost)
+            if not np.isfinite(mutual_best_min_cost):
+                raise ValueError("mutual_best_min_cost must be finite when provided")
+            object.__setattr__(self, "mutual_best_min_cost", mutual_best_min_cost)
         object.__setattr__(self, "edge_quality_bias", float(self.edge_quality_bias))
         large_cost = float(self.large_cost)
         if not np.isfinite(large_cost) or large_cost <= 0.0:
@@ -110,6 +126,20 @@ def apply_dynamic_edge_priors(
             cap=cfg.reciprocal_rank_cap,
             large_cost=cfg.large_cost,
         )
+    if cfg.mutual_best_relief:
+        mutual_best = _mutual_best_margin_mask(
+            costs,
+            min_margin=cfg.mutual_best_min_margin,
+            cost_cap=cfg.mutual_best_cost_cap,
+            large_cost=cfg.large_cost,
+        )
+        if np.any(mutual_best):
+            costs[mutual_best] -= cfg.mutual_best_relief
+            if cfg.mutual_best_min_cost is not None:
+                costs[mutual_best] = np.maximum(
+                    costs[mutual_best],
+                    cfg.mutual_best_min_cost,
+                )
 
     return np.nan_to_num(
         costs,
@@ -177,6 +207,82 @@ def _reciprocal_rank_penalty(
     if cap is not None:
         penalty[finite] = np.minimum(penalty[finite], float(cap))
     return penalty
+
+
+def _mutual_best_margin_mask(
+    costs: np.ndarray,
+    *,
+    min_margin: float,
+    cost_cap: float | None,
+    large_cost: float,
+) -> np.ndarray:
+    """Return reciprocal unique-best edges separated from the nearest alternative."""
+
+    if costs.size == 0:
+        return np.zeros_like(costs, dtype=bool)
+    row_best, row_margin = _unique_axis_best_margins(costs, axis=1, large_cost=large_cost)
+    column_best, column_margin = _unique_axis_best_margins(
+        costs,
+        axis=0,
+        large_cost=large_cost,
+    )
+    margin = np.minimum(row_margin, column_margin)
+    mutual_best = row_best & column_best & (margin >= float(min_margin))
+    if cost_cap is not None:
+        mutual_best &= costs <= float(cost_cap)
+    return mutual_best
+
+
+def _unique_axis_best_margins(
+    costs: np.ndarray,
+    *,
+    axis: int,
+    large_cost: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    best = np.zeros(costs.shape, dtype=bool)
+    margins = np.full(costs.shape, -np.inf, dtype=float)
+    if axis == 1:
+        for row_index in range(costs.shape[0]):
+            best_column, margin = _unique_best_index_and_margin(
+                costs[row_index, :],
+                large_cost=large_cost,
+            )
+            if best_column is not None:
+                best[row_index, best_column] = True
+                margins[row_index, best_column] = margin
+        return best, margins
+    if axis == 0:
+        for column_index in range(costs.shape[1]):
+            best_row, margin = _unique_best_index_and_margin(
+                costs[:, column_index],
+                large_cost=large_cost,
+            )
+            if best_row is not None:
+                best[best_row, column_index] = True
+                margins[best_row, column_index] = margin
+        return best, margins
+    raise ValueError("axis must be 0 or 1")
+
+
+def _unique_best_index_and_margin(
+    values: np.ndarray,
+    *,
+    large_cost: float,
+) -> tuple[int | None, float]:
+    vector = np.asarray(values, dtype=float).reshape(-1)
+    valid_indices = np.flatnonzero(np.isfinite(vector) & (vector < large_cost))
+    if valid_indices.size == 0:
+        return None, -np.inf
+    valid_values = vector[valid_indices]
+    order = np.argsort(valid_values, kind="stable")
+    best_index = int(valid_indices[order[0]])
+    best_value = float(valid_values[order[0]])
+    if order.size == 1:
+        return best_index, np.inf
+    second_best_value = float(valid_values[order[1]])
+    if second_best_value <= best_value:
+        return None, -np.inf
+    return best_index, second_best_value - best_value
 
 
 def _dense_axis_ranks(costs: np.ndarray, *, axis: int, large_cost: float) -> np.ndarray:
