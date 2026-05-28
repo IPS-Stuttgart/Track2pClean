@@ -164,9 +164,7 @@ def filter_gap_links_by_bridge_support(
                 source_roi=int(source_roi),
                 target_roi=int(target_roi),
                 min_bridge_support=min_bridge_support,
-                reject_conflicting_bridge_support=(
-                    reject_conflicting_bridge_support
-                ),
+                reject_conflicting_bridge_support=(reject_conflicting_bridge_support),
             )
         ]
         filtered[(source_session, step)] = _link_matrix(kept)
@@ -233,9 +231,7 @@ def run_track2p_policy_supported_gap_component_cleanup(
                 iou_distance_threshold=float(iou_distance_threshold),
                 max_gap=int(policy_config.max_gap),
                 min_bridge_support=min_bridge_support,
-                reject_conflicting_bridge_support=(
-                    reject_conflicting_bridge_support
-                ),
+                reject_conflicting_bridge_support=(reject_conflicting_bridge_support),
             )
         )
         diagnostic_prediction = emulate_track2p_pruned_tracks(
@@ -470,9 +466,7 @@ def main(argv: list[str] | None = None) -> int:
         cell_probability_threshold=float(args.cell_probability_threshold),
         max_gap=int(args.max_gap),
         min_bridge_support=int(args.min_bridge_support),
-        reject_conflicting_bridge_support=bool(
-            args.reject_conflicting_bridge_support
-        ),
+        reject_conflicting_bridge_support=bool(args.reject_conflicting_bridge_support),
         cleanup_config=cleanup_config,
         apply_splits=bool(args.apply_splits),
     )

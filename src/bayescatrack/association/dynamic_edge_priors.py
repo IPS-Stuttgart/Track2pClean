@@ -118,7 +118,9 @@ def apply_dynamic_edge_priors(
         )
     if cfg.activity_missing_weight:
         missing = _activity_missing_component(pairwise_components, costs.shape)
-        _add_to_valid_edges(costs, cfg.activity_missing_weight * missing, valid_edge_mask)
+        _add_to_valid_edges(
+            costs, cfg.activity_missing_weight * missing, valid_edge_mask
+        )
     if cfg.registration_empty_roi_weight and empty_registered_rois is not None:
         empty = _column_mask_for_cost_shape(empty_registered_rois, costs.shape)
         empty_columns = np.broadcast_to(empty[None, :], costs.shape)
