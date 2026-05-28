@@ -21,8 +21,7 @@ def test_guarded_gap_consensus_aliases_resolve_to_registered_command() -> None:
     assert cli._BENCHMARK_ALIASES["track2p-gap-consensus-guarded-sweep"] == expected
     assert cli._BENCHMARK_ALIASES["track2p-guarded-gap-consensus-sweep"] == expected
     assert (
-        cli._BENCHMARK_ALIASES["track2p-gap-rescue-consensus-guarded-sweep"]
-        == expected
+        cli._BENCHMARK_ALIASES["track2p-gap-rescue-consensus-guarded-sweep"] == expected
     )
     assert expected in cli._BENCHMARK_COMMANDS
 
