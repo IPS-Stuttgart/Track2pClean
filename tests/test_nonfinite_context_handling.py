@@ -3,7 +3,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
-
 from bayescatrack.association.multiplane_consistency import (
     PlaneRegistrationQuality,
     apply_multiplane_quality_penalty,
