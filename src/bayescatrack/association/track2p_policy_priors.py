@@ -160,16 +160,19 @@ def apply_track2p_policy_edge_prior(
     finite = np.isfinite(costs) & (costs < float(cfg.large_cost))
     if cfg.non_policy_penalty > 0.0:
         costs[finite & ~policy_mask] += float(cfg.non_policy_penalty)
-    if not np.any(policy_mask):
+    adjustable_policy_mask = policy_mask & finite
+    if not np.any(adjustable_policy_mask):
         return costs
 
     if cfg.accepted_cost_cap is not None:
-        costs[policy_mask] = np.minimum(
-            costs[policy_mask], float(cfg.accepted_cost_cap)
+        costs[adjustable_policy_mask] = np.minimum(
+            costs[adjustable_policy_mask], float(cfg.accepted_cost_cap)
         )
     if cfg.relief > 0.0:
-        costs[policy_mask] -= float(cfg.relief)
-    costs[policy_mask] = np.maximum(costs[policy_mask], float(cfg.min_cost))
+        costs[adjustable_policy_mask] -= float(cfg.relief)
+    costs[adjustable_policy_mask] = np.maximum(
+        costs[adjustable_policy_mask], float(cfg.min_cost)
+    )
     return costs
 
 
