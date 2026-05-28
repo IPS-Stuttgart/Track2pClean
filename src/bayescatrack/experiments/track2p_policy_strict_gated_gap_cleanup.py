@@ -180,14 +180,18 @@ def run_track2p_policy_strict_gated_gap_cleanup(
             feature_index=feature_index,
             gate_config=gate_config,
             max_gap=int(policy_config.max_gap),
-            seed_rois=_seed_rois(reference_tracks, seed_session=policy_config.seed_session),
+            seed_rois=_seed_rois(
+                reference_tracks, seed_session=policy_config.seed_session
+            ),
             seed_session=policy_config.seed_session,
         )
-        cleaned, applied_candidate_indices = _apply_strict_gated_gap_candidates_with_report(
-            base_full,
-            candidate_full,
-            candidates,
-            seed_session=policy_config.seed_session,
+        cleaned, applied_candidate_indices = (
+            _apply_strict_gated_gap_candidates_with_report(
+                base_full,
+                candidate_full,
+                candidates,
+                seed_session=policy_config.seed_session,
+            )
         )
         scores = _score_prediction_against_reference(
             cleaned, reference, config=policy_config
@@ -494,8 +498,12 @@ def _candidate_rows(
                 "column_margin": _feature_value(feature, "column_margin"),
                 "centroid_distance": _feature_value(feature, "centroid_distance"),
                 "area_ratio": _feature_value(feature, "area_ratio"),
-                "cell_probability_a": _cell_probability(sessions[session_a], int(roi_a)),
-                "cell_probability_b": _cell_probability(sessions[session_b], int(roi_b)),
+                "cell_probability_a": _cell_probability(
+                    sessions[session_a], int(roi_a)
+                ),
+                "cell_probability_b": _cell_probability(
+                    sessions[session_b], int(roi_b)
+                ),
                 "gate_gap_length": int(gate_config.gap_length),
                 "gate_min_area_ratio": float(gate_config.min_area_ratio),
                 "gate_min_cell_probability": float(gate_config.min_cell_probability),
@@ -570,9 +578,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument("--max-gap", type=int, default=STRICT_GATED_GAP_DEFAULT_MAX_GAP)
-    parser.add_argument("--gate-gap-length", type=int, default=StrictGapGateConfig().gap_length)
+    parser.add_argument(
+        "--gate-gap-length", type=int, default=StrictGapGateConfig().gap_length
+    )
     parser.add_argument(
         "--gate-min-area-ratio",
         type=float,
@@ -703,9 +715,7 @@ def _seed_rois(track_matrix: np.ndarray, *, seed_session: int) -> set[int]:
     return {int(row[seed_session]) for row in matrix if row[seed_session] >= 0}
 
 
-def _valid_seed(
-    row: np.ndarray, seed_rois: set[int], *, seed_session: int
-) -> bool:
+def _valid_seed(row: np.ndarray, seed_rois: set[int], *, seed_session: int) -> bool:
     return bool(
         0 <= seed_session < row.size
         and row[seed_session] >= 0
