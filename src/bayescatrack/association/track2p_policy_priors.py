@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -12,6 +13,49 @@ from scipy.optimize import linear_sum_assignment
 PolicyThresholdMethod = Literal["otsu", "min"]
 SessionEdge = tuple[int, int]
 AUTO_IOU_COMPONENTS = ("iou_for_cost", "shifted_iou", "iou")
+
+
+def _integer_like(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer, not boolean")
+
+    try:
+        return int(operator.index(value))
+    except TypeError:
+        pass
+
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric_value = float(text)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    elif isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+    else:
+        raise ValueError(f"{name} must be an integer")
+
+    if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+        raise ValueError(f"{name} must be an integer")
+    return int(numeric_value)
+
+
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    integer_value = _integer_like(value, name=name)
+    if integer_value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return integer_value
+
+
+def _optional_positive_int(value: Any | None, *, name: str) -> int | None:
+    if value is None:
+        return None
+    integer_value = _integer_like(value, name=name)
+    if integer_value < 1:
+        raise ValueError(f"{name} must be at least 1 when provided")
+    return integer_value
 
 
 @dataclass(frozen=True)
@@ -48,14 +92,26 @@ class Track2pPolicyPriorConfig:
             raise ValueError("accepted_cost_cap must be finite when provided")
         if not np.isfinite(float(self.min_cost)):
             raise ValueError("min_cost must be finite")
-        if self.max_gap is not None and int(self.max_gap) < 1:
-            raise ValueError("max_gap must be at least 1 when provided")
-        if int(self.row_top_k) < 0:
-            raise ValueError("row_top_k must be non-negative")
-        if int(self.column_top_k) < 0:
-            raise ValueError("column_top_k must be non-negative")
-        if int(self.mutual_top_k) < 0:
-            raise ValueError("mutual_top_k must be non-negative")
+        object.__setattr__(
+            self,
+            "max_gap",
+            _optional_positive_int(self.max_gap, name="max_gap"),
+        )
+        object.__setattr__(
+            self,
+            "row_top_k",
+            _nonnegative_int(self.row_top_k, name="row_top_k"),
+        )
+        object.__setattr__(
+            self,
+            "column_top_k",
+            _nonnegative_int(self.column_top_k, name="column_top_k"),
+        )
+        object.__setattr__(
+            self,
+            "mutual_top_k",
+            _nonnegative_int(self.mutual_top_k, name="mutual_top_k"),
+        )
         if not 0.0 <= float(self.rescue_min_iou) <= 1.0:
             raise ValueError("rescue_min_iou must lie in [0, 1]")
         if float(self.large_cost) <= 0.0 or not np.isfinite(float(self.large_cost)):
