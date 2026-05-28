@@ -123,7 +123,9 @@ def mask_shape_descriptors(
 def _original_function(wrapper: Callable[..., Any], name: str) -> Callable[..., Any]:
     original = getattr(wrapper, "_bayescatrack_strict_config_original", None)
     if original is None:
-        raise RuntimeError(f"strict config validation wrapper '{name}' is not installed")
+        raise RuntimeError(
+            f"strict config validation wrapper '{name}' is not installed"
+        )
     return original
 
 
