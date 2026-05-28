@@ -6,6 +6,9 @@ from . import cli as _cli
 from ._strict_config_validation import (
     install_strict_config_validation as _install_strict_config_validation,
 )
+from ._suite2p_validation import (
+    install_suite2p_stat_validation as _install_suite2p_stat_validation,
+)
 from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
@@ -13,6 +16,8 @@ from .core import bridge as _bridge
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
 )
+
+_install_suite2p_stat_validation(_bridge)
 
 CalciumPlaneData = _bridge.CalciumPlaneData
 SessionAssociationBundle = _bridge.SessionAssociationBundle
