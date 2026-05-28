@@ -190,6 +190,8 @@ def _positive_int(value: Any, *, name: str) -> int:
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite non-negative value")
     numeric_value = float(value)
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{name} must be a finite non-negative value")
@@ -197,6 +199,8 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
 
 
 def _finite_positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite positive value")
     numeric_value = float(value)
     if not np.isfinite(numeric_value) or numeric_value <= 0.0:
         raise ValueError(f"{name} must be a finite positive value")
