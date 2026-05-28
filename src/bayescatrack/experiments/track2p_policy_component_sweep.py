@@ -44,6 +44,8 @@ COMPONENT_SWEEP_OBJECTIVES = (
     "complete_track_f1_macro",
 )
 
+NO_SPLIT_COMPONENT_CANDIDATE = "component-cleanup-00-no-split"
+
 
 @dataclass(frozen=True)
 class ComponentCleanupSweepConfig:
@@ -53,6 +55,8 @@ class ComponentCleanupSweepConfig:
     split_penalties: tuple[float, ...] = (0.0, 0.25, 0.5)
     min_side_observations: tuple[int, ...] = (2,)
     require_complete_track_options: tuple[bool, ...] = (True, False)
+    include_baseline: bool = True
+    pairwise_f1_floor_delta: float | None = 0.0
     base_cleanup: ComponentCleanupConfig = field(default_factory=ComponentCleanupConfig)
     objective: ComponentSweepObjective = "complete_track_f1_micro"
     best_only: bool = False
@@ -74,12 +78,21 @@ class ComponentCleanupSweepConfig:
             raise ValueError(
                 "objective must be one of: " + ", ".join(COMPONENT_SWEEP_OBJECTIVES)
             )
+        pairwise_f1_floor_delta = (
+            None
+            if self.pairwise_f1_floor_delta is None
+            else _finite_value(
+                self.pairwise_f1_floor_delta, name="pairwise_f1_floor_delta"
+            )
+        )
         object.__setattr__(self, "split_risk_thresholds", split_risk_thresholds)
         object.__setattr__(self, "split_penalties", split_penalties)
         object.__setattr__(self, "min_side_observations", min_side_observations)
         object.__setattr__(
             self, "require_complete_track_options", require_complete_track_options
         )
+        object.__setattr__(self, "include_baseline", bool(self.include_baseline))
+        object.__setattr__(self, "pairwise_f1_floor_delta", pairwise_f1_floor_delta)
 
 
 @dataclass(frozen=True)
@@ -111,6 +124,24 @@ def run_track2p_policy_component_sweep(
     sweep_config = sweep_config or ComponentCleanupSweepConfig()
     candidate_rows: list[tuple[str, ComponentCleanupConfig, list[dict[str, Any]]]] = []
     aggregate_input: list[dict[str, str]] = []
+    if sweep_config.include_baseline:
+        output = run_track2p_policy_component_audit(
+            config,
+            threshold_method=threshold_method,
+            iou_distance_threshold=iou_distance_threshold,
+            transform_type=transform_type,
+            cell_probability_threshold=cell_probability_threshold,
+            cleanup_config=sweep_config.base_cleanup,
+            apply_splits=False,
+        )
+        rows = [result.to_dict() for result in output.results]
+        candidate_rows.append(
+            (NO_SPLIT_COMPONENT_CANDIDATE, sweep_config.base_cleanup, rows)
+        )
+        aggregate_input.extend(
+            _aggregate_input_rows(NO_SPLIT_COMPONENT_CANDIDATE, rows)
+        )
+
     for index, cleanup_config in enumerate(_cleanup_grid(sweep_config), start=1):
         candidate = _candidate_name(index, cleanup_config)
         output = run_track2p_policy_component_audit(
@@ -126,8 +157,11 @@ def run_track2p_policy_component_sweep(
         candidate_rows.append((candidate, cleanup_config, rows))
         aggregate_input.extend(_aggregate_input_rows(candidate, rows))
 
+    aggregate = aggregate_rows(aggregate_input)
     ranked = _rank_aggregates(
-        aggregate_rows(aggregate_input), objective=sweep_config.objective
+        aggregate,
+        objective=sweep_config.objective,
+        pairwise_f1_floor=_pairwise_f1_floor(aggregate, sweep_config),
     )
     best_candidate = str(ranked[0]["approach"])
     ranks = {str(row["approach"]): int(row["component_sweep_rank"]) for row in ranked}
@@ -207,6 +241,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Write only subject rows for the selected best candidate.",
     )
+    parser.add_argument(
+        "--include-baseline",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Include a no-split Track2p-policy baseline in the sweep so the "
+            "selected cleanup cannot be worse than doing nothing under the "
+            "chosen aggregate objective."
+        ),
+    )
+    parser.add_argument(
+        "--pairwise-f1-floor-delta",
+        type=float,
+        default=0.0,
+        help=(
+            "Minimum allowed pairwise micro-F1 relative to the no-split baseline. "
+            "Use a negative value to permit a small pairwise drop."
+        ),
+    )
     return parser
 
 
@@ -242,6 +295,8 @@ def main(argv: list[str] | None = None) -> int:
         "base_cleanup": base_cleanup,
         "objective": cast(ComponentSweepObjective, args.objective),
         "best_only": bool(args.best_only),
+        "include_baseline": bool(args.include_baseline),
+        "pairwise_f1_floor_delta": args.pairwise_f1_floor_delta,
     }
     if args.require_complete_track_options is not None:
         sweep_kwargs["require_complete_track_options"] = _bool_tuple_arg(
@@ -313,6 +368,16 @@ def _finite_nonnegative_tuple(values: Sequence[Any], *, name: str) -> tuple[floa
     if not normalized:
         raise ValueError(f"{name} must not be empty")
     return normalized
+
+
+def _finite_value(value: Any, *, name: str) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} entries must be finite values") from exc
+    if not math.isfinite(numeric):
+        raise ValueError(f"{name} entries must be finite values")
+    return numeric
 
 
 def _finite_nonnegative_value(value: Any, *, name: str) -> float:
@@ -407,18 +472,31 @@ def _rank_aggregates(
     rows: Sequence[dict[str, float | int | str]],
     *,
     objective: ComponentSweepObjective,
+    pairwise_f1_floor: float | None = None,
 ) -> list[dict[str, float | int | str]]:
-    enriched = [
-        {
-            **row,
-            "component_sweep_objective": _objective_value(row, objective),
-            "component_sweep_objective_name": objective,
-        }
-        for row in rows
-    ]
+    enriched = []
+    for row in rows:
+        approach = str(row["approach"])
+        floor_feasible = (
+            pairwise_f1_floor is None
+            or approach == NO_SPLIT_COMPONENT_CANDIDATE
+            or float(row["pairwise_f1_micro"]) >= pairwise_f1_floor - 1e-12
+        )
+        enriched.append(
+            {
+                **row,
+                "component_sweep_objective": _objective_value(row, objective),
+                "component_sweep_objective_name": objective,
+                "component_sweep_pairwise_f1_floor": (
+                    "" if pairwise_f1_floor is None else float(pairwise_f1_floor)
+                ),
+                "component_sweep_pairwise_floor_feasible": int(floor_feasible),
+            }
+        )
     ranked = sorted(
         enriched,
         key=lambda row: (
+            -int(row["component_sweep_pairwise_floor_feasible"]),
             -float(row["component_sweep_objective"]),
             -float(row["complete_track_f1_micro"]),
             -float(row["pairwise_f1_micro"]),
@@ -429,6 +507,21 @@ def _rank_aggregates(
         {**row, "component_sweep_rank": rank}
         for rank, row in enumerate(ranked, start=1)
     ]
+
+
+def _pairwise_f1_floor(
+    rows: Sequence[dict[str, float | int | str]],
+    config: ComponentCleanupSweepConfig,
+) -> float | None:
+    if not config.include_baseline or config.pairwise_f1_floor_delta is None:
+        return None
+    baseline = next(
+        (row for row in rows if str(row["approach"]) == NO_SPLIT_COMPONENT_CANDIDATE),
+        None,
+    )
+    if baseline is None:
+        return None
+    return float(baseline["pairwise_f1_micro"]) + float(config.pairwise_f1_floor_delta)
 
 
 def _objective_value(

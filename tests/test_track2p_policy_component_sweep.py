@@ -46,6 +46,7 @@ def test_component_cleanup_sweep_marks_best_candidate(monkeypatch) -> None:
             require_complete_track_options=(True,),
             objective="complete_track_f1_micro",
             best_only=False,
+            include_baseline=False,
         ),
     )
 
@@ -76,6 +77,7 @@ def test_component_cleanup_sweep_best_only_filters_rows(monkeypatch) -> None:
             split_penalties=(0.0, 0.5),
             require_complete_track_options=(True,),
             best_only=True,
+            include_baseline=False,
         ),
     )
 
@@ -121,6 +123,78 @@ def test_component_cleanup_sweep_config_canonicalizes_valid_grid_entries() -> No
     assert config.require_complete_track_options == (True, False, True, False)
 
 
+def test_component_cleanup_sweep_includes_no_split_baseline_by_default(
+    monkeypatch,
+) -> None:
+    calls = []
+
+    def fake_component_audit(config, *, cleanup_config, apply_splits, **kwargs):
+        calls.append(apply_splits)
+        counts = (10, 0, 0) if not apply_splits else (8, 2, 2)
+        return _sweep_output(counts, counts)
+
+    monkeypatch.setattr(
+        "bayescatrack.experiments.track2p_policy_component_sweep."
+        "run_track2p_policy_component_audit",
+        fake_component_audit,
+    )
+
+    output = run_track2p_policy_component_sweep(
+        Track2pBenchmarkConfig(data=Path("unused"), method="global-assignment"),
+        sweep_config=ComponentCleanupSweepConfig(
+            split_risk_thresholds=(1.5,),
+            split_penalties=(0.25,),
+            require_complete_track_options=(True,),
+        ),
+    )
+
+    assert calls == [False, True]
+    assert output.best_candidate == "component-cleanup-00-no-split"
+    assert output.aggregate_rows[0]["component_sweep_pairwise_floor_feasible"] == 1
+
+
+def test_component_cleanup_sweep_pairwise_floor_rejects_fp_heavy_cleanup(
+    monkeypatch,
+) -> None:
+    def fake_component_audit(config, *, cleanup_config, apply_splits, **kwargs):
+        if not apply_splits:
+            return _sweep_output(
+                pairwise_counts=(10, 0, 0),
+                complete_counts=(8, 2, 2),
+            )
+        return _sweep_output(
+            pairwise_counts=(8, 12, 0),
+            complete_counts=(9, 1, 1),
+        )
+
+    monkeypatch.setattr(
+        "bayescatrack.experiments.track2p_policy_component_sweep."
+        "run_track2p_policy_component_audit",
+        fake_component_audit,
+    )
+
+    output = run_track2p_policy_component_sweep(
+        Track2pBenchmarkConfig(data=Path("unused"), method="global-assignment"),
+        sweep_config=ComponentCleanupSweepConfig(
+            split_risk_thresholds=(1.5,),
+            split_penalties=(0.25,),
+            require_complete_track_options=(True,),
+            objective="complete_track_f1_micro",
+        ),
+    )
+
+    assert output.best_candidate == "component-cleanup-00-no-split"
+    aggregate_by_candidate = {
+        str(row["approach"]): row for row in output.aggregate_rows
+    }
+    assert (
+        aggregate_by_candidate[
+            "component-cleanup-01-risk1.5-penalty0.25-side2-complete"
+        ]["component_sweep_pairwise_floor_feasible"]
+        == 0
+    )
+
+
 def test_component_cleanup_sweep_can_select_partial_track_guard(monkeypatch) -> None:
     calls = []
 
@@ -145,6 +219,7 @@ def test_component_cleanup_sweep_can_select_partial_track_guard(monkeypatch) -> 
             split_penalties=(0.25,),
             require_complete_track_options=(True, False),
             objective="complete_track_f1_micro",
+            include_baseline=False,
         ),
     )
 
