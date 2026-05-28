@@ -2,10 +2,16 @@
 
 The plain Track2p-policy runner can conservatively continue a seed track across
 an isolated missing adjacent link when ``max_gap > 1``. The component-cleanup
-runner can split false complete tracks at weak bridges. This module combines the
-two operations in a distinct benchmark row: first run gap-rescue Track2p-policy
-propagation, then apply the existing weakest-bridge cleanup to the resulting
+runner can split false bridges in the resulting track matrix. This module
+combines the two operations in a distinct benchmark row: first run gap-rescue
+Track2p-policy propagation, then apply weakest-bridge cleanup to the resulting
 track matrix.
+
+Unlike the adjacent-only component-cleanup row, this gap-rescue row defaults to
+allowing incomplete-track splits and one-observation side fragments. That makes
+the cleanup operational on gap-rescued rows such as ``[seed, -1, suffix, ...]``
+instead of silently protecting the false suffix whenever the rescued bridge is
+weak.
 """
 
 from __future__ import annotations
@@ -43,18 +49,20 @@ from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
     _evaluated_prediction_rows,
     _mark_applied_splits,
-    _no_prune_config,
     _normalize_int_track_matrix,
     apply_weakest_bridge_splits,
     component_audit_rows,
     write_component_rows,
 )
 from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
+    Track2pPolicyPruneConfig,
     emulate_track2p_pruned_tracks,
 )
 
 TRACK2P_POLICY_GAP_COMPONENT_CLEANUP_METHOD = "track2p-policy-gap-component-cleanup"
 TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_MAX_GAP = 2
+TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_MIN_SIDE_OBSERVATIONS = 1
+TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_REQUIRE_COMPLETE_TRACK = False
 
 
 def run_track2p_policy_gap_component_cleanup(
@@ -84,7 +92,7 @@ def run_track2p_policy_gap_component_cleanup(
             f"No Track2p-style subject directories found under {policy_config.data}"
         )
 
-    cleanup_config = cleanup_config or ComponentCleanupConfig()
+    cleanup_config = cleanup_config or _default_gap_cleanup_config()
     results: list[SubjectBenchmarkResult] = []
     component_rows: list[dict[str, float | int | str]] = []
     for subject_dir in subject_dirs:
@@ -96,7 +104,8 @@ def run_track2p_policy_gap_component_cleanup(
         )
         if reference.source != GROUND_TRUTH_REFERENCE_SOURCE:
             raise ValueError(
-                "Track2p-policy gap component cleanup requires independent manual GT references"
+                "Track2p-policy gap component cleanup requires independent "
+                "manual GT references"
             )
         sessions = _load_subject_sessions(subject_dir, policy_config)
         _validate_reference_roi_indices(reference, sessions)
@@ -188,6 +197,26 @@ def run_track2p_policy_gap_component_cleanup(
     return ComponentAuditOutput(tuple(results), tuple(component_rows))
 
 
+def _default_gap_cleanup_config() -> ComponentCleanupConfig:
+    """Return cleanup defaults tuned for gap-rescue rows.
+
+    Gap rescue can produce useful but incomplete rows. Requiring a complete row or
+    at least two observations on both sides prevents the cleanup from removing a
+    weak false suffix after a single seed observation. The gap-specific benchmark
+    row therefore uses more permissive side-length defaults while keeping the
+    existing risk threshold and scoring metadata intact.
+    """
+
+    return ComponentCleanupConfig(
+        min_side_observations=(
+            TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_MIN_SIDE_OBSERVATIONS
+        ),
+        require_complete_track=(
+            TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_REQUIRE_COMPLETE_TRACK
+        ),
+    )
+
+
 def _with_scores_metadata(
     scores: Mapping[str, float | int | str],
     *,
@@ -235,7 +264,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="bayescatrack benchmark track2p-policy-gap-component-cleanup",
         description=(
-            "Run Track2p-policy gap rescue followed by weakest-bridge component cleanup."
+            "Run Track2p-policy gap rescue followed by weakest-bridge "
+            "component cleanup."
         ),
     )
     parser.add_argument("--data", type=Path, required=True)
@@ -280,7 +310,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--apply-splits", action=argparse.BooleanOptionalAction, default=True
     )
     parser.add_argument(
-        "--require-complete-track", action=argparse.BooleanOptionalAction, default=True
+        "--require-complete-track",
+        action=argparse.BooleanOptionalAction,
+        default=TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_REQUIRE_COMPLETE_TRACK,
+        help=(
+            "Only split components observed in every session. Defaults to false "
+            "for gap-rescue cleanup so weak incomplete rescued suffixes can be "
+            "removed."
+        ),
     )
     parser.add_argument("--threshold-margin-scale", type=float, default=0.10)
     parser.add_argument("--competition-margin-scale", type=float, default=0.20)
@@ -288,7 +325,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--centroid-distance-scale", type=float, default=4.0)
     parser.add_argument("--split-risk-threshold", type=float, default=1.50)
     parser.add_argument("--split-penalty", type=float, default=0.25)
-    parser.add_argument("--min-side-observations", type=int, default=2)
+    parser.add_argument(
+        "--min-side-observations",
+        type=int,
+        default=TRACK2P_POLICY_GAP_COMPONENT_DEFAULT_MIN_SIDE_OBSERVATIONS,
+        help=(
+            "Minimum observations retained on both sides of a split. Defaults "
+            "to one for gap-rescue cleanup so a seed-only left fragment can "
+            "shed a weak false suffix."
+        ),
+    )
     parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,
@@ -333,7 +379,9 @@ def main(argv: list[str] | None = None) -> int:
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
         transform_type=args.transform_type,
         max_gap=args.max_gap,
-        allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
+        allow_track2p_as_reference_for_smoke_test=(
+            args.allow_track2p_as_reference_for_smoke_test
+        ),
         include_behavior=args.include_behavior,
         include_non_cells=False,
         cell_probability_threshold=args.cell_probability_threshold,
@@ -365,6 +413,17 @@ def main(argv: list[str] | None = None) -> int:
             output_format=cast(Literal["csv", "json"], args.component_format),
         )
     return 0
+
+
+def _no_prune_config() -> Track2pPolicyPruneConfig:
+    """Return a pruning config that keeps every threshold-accepted policy edge."""
+
+    return Track2pPolicyPruneConfig(
+        threshold_margin=0.0,
+        competition_margin=0.0,
+        min_area_ratio=0.0,
+        centroid_distance=float("inf"),
+    )
 
 
 def _with_metadata(
