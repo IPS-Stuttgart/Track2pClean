@@ -138,7 +138,7 @@ def test_policy_prior_does_not_resurrect_gated_policy_edges() -> None:
         "iou": np.asarray(
             [
                 [0.95, 0.00],
-                [0.00, 0.90],
+                [0.00, 0.95],
             ],
             dtype=float,
         )
@@ -149,7 +149,7 @@ def test_policy_prior_does_not_resurrect_gated_policy_edges() -> None:
         components,
         session_gap=1,
         config=Track2pPolicyPriorConfig(
-            threshold_method="otsu",
+            threshold_method="min",
             relief=0.5,
             accepted_cost_cap=1.0,
             non_policy_penalty=0.25,
