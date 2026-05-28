@@ -5,9 +5,15 @@ from pathlib import Path
 
 import pytest
 from bayescatrack.experiments import track2p_policy_gap_consensus_sweep as sweep_module
-from bayescatrack.experiments.track2p_benchmark import SubjectBenchmarkResult, Track2pBenchmarkConfig
+from bayescatrack.experiments.track2p_benchmark import (
+    SubjectBenchmarkResult,
+    Track2pBenchmarkConfig,
+)
 from bayescatrack.experiments.track2p_policy_component_audit import ComponentAuditOutput
-from bayescatrack.experiments.track2p_policy_gap_consensus_sweep import GapConsensusSweepConfig, run_track2p_policy_gap_consensus_sweep
+from bayescatrack.experiments.track2p_policy_gap_consensus_sweep import (
+    GapConsensusSweepConfig,
+    run_track2p_policy_gap_consensus_sweep,
+)
 
 
 def test_gap_consensus_sweep_marks_best_candidate(monkeypatch) -> None:
@@ -19,7 +25,9 @@ def test_gap_consensus_sweep_marks_best_candidate(monkeypatch) -> None:
         counts = (tp, 10 - tp, 10 - tp)
         return _sweep_output(counts, counts)
 
-    monkeypatch.setattr(sweep_module, "run_track2p_policy_gap_consensus_cleanup", fake_gap_consensus)
+    monkeypatch.setattr(
+        sweep_module, "run_track2p_policy_gap_consensus_cleanup", fake_gap_consensus
+    )
 
     output = run_track2p_policy_gap_consensus_sweep(
         Track2pBenchmarkConfig(data=Path("unused"), method="global-assignment"),
@@ -36,7 +44,9 @@ def test_gap_consensus_sweep_marks_best_candidate(monkeypatch) -> None:
     assert len(calls) == 2
     assert "base14" in output.best_candidate
     assert [row["gap_consensus_sweep_rank"] for row in output.aggregate_rows] == [1, 2]
-    assert output.best_rows()[0]["gap_consensus_sweep_base_iou_distance_threshold"] == 14.0
+    assert (
+        output.best_rows()[0]["gap_consensus_sweep_base_iou_distance_threshold"] == 14.0
+    )
     assert output.best_rows()[0]["gap_consensus_sweep_max_gap"] == 2
 
 
@@ -46,7 +56,9 @@ def test_gap_consensus_sweep_best_only_filters_rows(monkeypatch) -> None:
         counts = (tp, 10 - tp, 10 - tp)
         return _sweep_output(counts, counts)
 
-    monkeypatch.setattr(sweep_module, "run_track2p_policy_gap_consensus_cleanup", fake_gap_consensus)
+    monkeypatch.setattr(
+        sweep_module, "run_track2p_policy_gap_consensus_cleanup", fake_gap_consensus
+    )
 
     output = run_track2p_policy_gap_consensus_sweep(
         Track2pBenchmarkConfig(data=Path("unused"), method="global-assignment"),
@@ -78,12 +90,16 @@ def test_gap_consensus_sweep_best_only_filters_rows(monkeypatch) -> None:
         ({"min_support_fraction": 0.0}, "lie in"),
     ],
 )
-def test_gap_consensus_sweep_config_rejects_invalid_grid_entries(kwargs, message) -> None:
+def test_gap_consensus_sweep_config_rejects_invalid_grid_entries(
+    kwargs, message
+) -> None:
     with pytest.raises(ValueError, match=message):
         GapConsensusSweepConfig(**kwargs)
 
 
-def _sweep_output(pairwise_counts: tuple[int, int, int], complete_counts: tuple[int, int, int]) -> ComponentAuditOutput:
+def _sweep_output(
+    pairwise_counts: tuple[int, int, int], complete_counts: tuple[int, int, int]
+) -> ComponentAuditOutput:
     return ComponentAuditOutput(
         (
             SubjectBenchmarkResult(

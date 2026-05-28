@@ -5,8 +5,8 @@ from bayescatrack.experiments.track2p_policy_component_pareto_sweep import (
     rerank_component_sweep_output,
 )
 from bayescatrack.experiments.track2p_policy_component_sweep import (
-    ComponentCleanupSweepOutput,
     NO_SPLIT_COMPONENT_CANDIDATE,
+    ComponentCleanupSweepOutput,
 )
 
 
@@ -80,7 +80,9 @@ def test_pareto_sweep_rerank_updates_subject_rows() -> None:
     reranked = rerank_component_sweep_output(output)
 
     assert reranked.best_candidate == "component-cleanup-safe"
-    assert reranked.best_rows()[0]["component_sweep_candidate"] == "component-cleanup-safe"
+    assert (
+        reranked.best_rows()[0]["component_sweep_candidate"] == "component-cleanup-safe"
+    )
     assert reranked.best_rows()[0]["component_pareto_best"] == 1
 
 
