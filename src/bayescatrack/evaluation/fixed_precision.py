@@ -144,13 +144,42 @@ def _resolve_session_indices(
         return list(range(num_sessions))
     selected: list[int] = []
     for candidate in session_indices:
-        session_idx = int(candidate)
+        session_idx = _coerce_session_index(candidate)
         if session_idx < 0 or session_idx >= num_sessions:
             raise IndexError(
                 f"session index {session_idx} out of bounds for {num_sessions} sessions"
             )
         selected.append(session_idx)
     return selected
+
+
+def _coerce_session_index(value: object) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(
+            f"session_indices contains boolean session index: {value!r}; "
+            "Session indices must be integer-like"
+        )
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        if np.isfinite(value) and float(value).is_integer():
+            return int(value)
+        raise ValueError(
+            f"session_indices contains non-integer session index: {value!r}; "
+            "Session indices must be integer-like"
+        )
+    if isinstance(value, str):
+        try:
+            return int(value.strip(), 10)
+        except ValueError as exc:
+            raise ValueError(
+                f"session_indices contains non-integer session index: {value!r}; "
+                "Session indices must be integer-like"
+            ) from exc
+    raise ValueError(
+        f"session_indices contains non-integer session index: {value!r}; "
+        "Session indices must be integer-like"
+    )
 
 
 def _validate_target_precisions(
