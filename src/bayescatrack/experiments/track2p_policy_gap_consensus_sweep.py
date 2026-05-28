@@ -10,46 +10,19 @@ from itertools import product
 from typing import Any, Literal, cast
 
 from bayescatrack.experiments.benchmark_comparison import aggregate_rows
-from bayescatrack.experiments.track2p_benchmark import (
-    OutputFormat,
-    Track2pBenchmarkConfig,
-    write_results,
-)
-from bayescatrack.experiments.track2p_policy_benchmark import (
-    TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
-    TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
-    TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE,
-    ThresholdMethod,
-)
-from bayescatrack.experiments.track2p_policy_component_audit import (
-    ComponentCleanupConfig,
-)
-from bayescatrack.experiments.track2p_policy_consensus_cleanup import (
-    CONSENSUS_MODES,
-    ConsensusCleanupConfig,
-    ConsensusMode,
-)
+from bayescatrack.experiments.track2p_benchmark import OutputFormat, Track2pBenchmarkConfig, write_results
+from bayescatrack.experiments.track2p_policy_benchmark import TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD, ThresholdMethod
+from bayescatrack.experiments.track2p_policy_component_audit import ComponentCleanupConfig
+from bayescatrack.experiments.track2p_policy_consensus_cleanup import CONSENSUS_MODES, ConsensusCleanupConfig, ConsensusMode
 from bayescatrack.experiments.track2p_policy_gap_consensus_cleanup import (
     TRACK2P_POLICY_GAP_CONSENSUS_DEFAULT_MAX_GAP,
     build_arg_parser as _build_gap_consensus_parser,
     run_track2p_policy_gap_consensus_cleanup,
 )
-from bayescatrack.experiments.track2p_policy_stability_cleanup import (
-    StabilityCleanupConfig,
-)
+from bayescatrack.experiments.track2p_policy_stability_cleanup import StabilityCleanupConfig
 
-GapConsensusSweepObjective = Literal[
-    "complete_track_f1_micro",
-    "pairwise_f1_micro",
-    "mean_micro_f1",
-    "complete_track_f1_macro",
-]
-GAP_CONSENSUS_SWEEP_OBJECTIVES = (
-    "complete_track_f1_micro",
-    "pairwise_f1_micro",
-    "mean_micro_f1",
-    "complete_track_f1_macro",
-)
+GapConsensusSweepObjective = Literal["complete_track_f1_micro", "pairwise_f1_micro", "mean_micro_f1", "complete_track_f1_macro"]
+GAP_CONSENSUS_SWEEP_OBJECTIVES = ("complete_track_f1_micro", "pairwise_f1_micro", "mean_micro_f1", "complete_track_f1_macro")
 
 
 @dataclass(frozen=True)
@@ -72,54 +45,18 @@ class GapConsensusSweepConfig:
     best_only: bool = False
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "base_iou_distance_thresholds",
-            _finite_nonnegative_tuple(self.base_iou_distance_thresholds, name="base_iou_distance_thresholds"),
-        )
-        object.__setattr__(
-            self,
-            "split_risk_thresholds",
-            _finite_nonnegative_tuple(self.split_risk_thresholds, name="split_risk_thresholds"),
-        )
-        object.__setattr__(
-            self,
-            "split_penalties",
-            _finite_nonnegative_tuple(self.split_penalties, name="split_penalties"),
-        )
-        object.__setattr__(
-            self,
-            "min_side_observations",
-            _positive_int_tuple(self.min_side_observations, name="min_side_observations"),
-        )
-        object.__setattr__(
-            self,
-            "require_complete_track_options",
-            _boolean_tuple(self.require_complete_track_options, name="require_complete_track_options"),
-        )
-        object.__setattr__(
-            self,
-            "max_splits_per_component",
-            _positive_int_tuple(self.max_splits_per_component, name="max_splits_per_component"),
-        )
+        object.__setattr__(self, "base_iou_distance_thresholds", _finite_nonnegative_tuple(self.base_iou_distance_thresholds, name="base_iou_distance_thresholds"))
+        object.__setattr__(self, "split_risk_thresholds", _finite_nonnegative_tuple(self.split_risk_thresholds, name="split_risk_thresholds"))
+        object.__setattr__(self, "split_penalties", _finite_nonnegative_tuple(self.split_penalties, name="split_penalties"))
+        object.__setattr__(self, "min_side_observations", _positive_int_tuple(self.min_side_observations, name="min_side_observations"))
+        object.__setattr__(self, "require_complete_track_options", _boolean_tuple(self.require_complete_track_options, name="require_complete_track_options"))
+        object.__setattr__(self, "max_splits_per_component", _positive_int_tuple(self.max_splits_per_component, name="max_splits_per_component"))
         object.__setattr__(self, "max_gaps", _positive_int_tuple(self.max_gaps, name="max_gaps"))
         object.__setattr__(self, "consensus_modes", _consensus_mode_tuple(self.consensus_modes))
-        object.__setattr__(
-            self,
-            "stability_iou_distance_thresholds",
-            _finite_nonnegative_tuple(self.stability_iou_distance_thresholds, name="stability_iou_distance_thresholds"),
-        )
-        object.__setattr__(
-            self,
-            "min_support_fraction",
-            _support_fraction_value(self.min_support_fraction, name="min_support_fraction"),
-        )
+        object.__setattr__(self, "stability_iou_distance_thresholds", _finite_nonnegative_tuple(self.stability_iou_distance_thresholds, name="stability_iou_distance_thresholds"))
+        object.__setattr__(self, "min_support_fraction", _support_fraction_value(self.min_support_fraction, name="min_support_fraction"))
         if self.min_support_votes is not None:
-            object.__setattr__(
-                self,
-                "min_support_votes",
-                _positive_int_value(self.min_support_votes, name="min_support_votes"),
-            )
+            object.__setattr__(self, "min_support_votes", _positive_int_value(self.min_support_votes, name="min_support_votes"))
         if str(self.objective) not in GAP_CONSENSUS_SWEEP_OBJECTIVES:
             raise ValueError("objective must be one of: " + ", ".join(GAP_CONSENSUS_SWEEP_OBJECTIVES))
 
@@ -286,13 +223,7 @@ def _cleanup_grid(config: GapConsensusSweepConfig) -> tuple[tuple[int, Consensus
         ),
         start=1,
     ):
-        component = replace(
-            config.base_component,
-            split_risk_threshold=float(risk),
-            split_penalty=float(penalty),
-            min_side_observations=int(min_side),
-            require_complete_track=bool(complete),
-        )
+        component = replace(config.base_component, split_risk_threshold=float(risk), split_penalty=float(penalty), min_side_observations=int(min_side), require_complete_track=bool(complete))
         stability = StabilityCleanupConfig(
             iou_distance_thresholds=config.stability_iou_distance_thresholds,
             base_iou_distance_threshold=float(base_iou),
@@ -300,12 +231,7 @@ def _cleanup_grid(config: GapConsensusSweepConfig) -> tuple[tuple[int, Consensus
             min_support_votes=config.min_support_votes,
             min_side_observations=int(min_side),
         )
-        cleanup = ConsensusCleanupConfig(
-            component=component,
-            stability=stability,
-            max_splits_per_component=int(max_splits),
-            mode=mode,
-        )
+        cleanup = ConsensusCleanupConfig(component=component, stability=stability, max_splits_per_component=int(max_splits), mode=mode)
         output.append((index, cleanup, int(max_gap)))
     return tuple(output)
 
