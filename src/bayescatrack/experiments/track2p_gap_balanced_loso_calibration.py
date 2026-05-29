@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import json
-import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -21,13 +19,12 @@ from bayescatrack.experiments.calibration_hard_negatives import (
     CandidateHardNegativeOptions,
 )
 from bayescatrack.experiments.track2p_benchmark import (
-    OutputFormat,
     ProgressReporter,
     SubjectBenchmarkResult,
     Track2pBenchmarkConfig,
     _maybe_refine_predicted_tracks,
     _score_prediction_against_reference,
-    format_benchmark_table,
+    _write_stdout,
     solve_configured_global_assignment,
     write_results,
 )
@@ -46,6 +43,8 @@ from bayescatrack.experiments.track2p_configurable_loso_calibration import (
     _resolved_calibration_feature_names,
     _resolved_feature_names,
     _validate_calibration_model_kind,
+)
+from bayescatrack.experiments.track2p_configurable_loso_calibration import (
     build_arg_parser as _configurable_arg_parser,
 )
 from bayescatrack.experiments.track2p_loso_calibration import (
@@ -55,6 +54,7 @@ from bayescatrack.experiments.track2p_loso_calibration import (
 )
 
 
+# jscpd:ignore-start
 # pylint: disable=too-many-arguments,too-many-locals
 def run_track2p_gap_balanced_loso_calibration(
     config: Track2pBenchmarkConfig,
@@ -173,8 +173,13 @@ def run_track2p_gap_balanced_loso_calibration(
             )
         )
     return LosoCalibrationResult(
-        folds=tuple(folds), feature_names=tuple(feature_names), max_gap=int(config.max_gap)
+        folds=tuple(folds),
+        feature_names=tuple(feature_names),
+        max_gap=int(config.max_gap),
     )
+
+
+# jscpd:ignore-end
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -188,6 +193,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# jscpd:ignore-start
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     config = _config_from_args(args)
@@ -209,38 +215,6 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _write_stdout(
-    rows: Sequence[dict[str, float | int | str]], output_format: OutputFormat
-) -> None:
-    if output_format == "json":
-        print(json.dumps(list(rows), indent=2))
-        return
-    if output_format == "csv":
-        writer = csv.DictWriter(sys.stdout, fieldnames=_csv_fieldnames(rows))
-        writer.writeheader()
-        writer.writerows(rows)
-        return
-    print(format_benchmark_table(rows))
-
-
-def _csv_fieldnames(rows: Sequence[dict[str, float | int | str]]) -> list[str]:
-    preferred = [
-        "subject",
-        "variant",
-        "method",
-        "pairwise_f1",
-        "complete_track_f1",
-        "training_examples",
-        "positive_examples",
-        "negative_examples",
-        "calibration_model",
-        "calibration_sample_weight_strategy",
-        "gap_balanced_weight_min",
-        "gap_balanced_weight_max",
-    ]
-    remaining = sorted({key for row in rows for key in row} - set(preferred))
-    return [key for key in preferred if any(key in row for row in rows)] + remaining
-
-
+# jscpd:ignore-end
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())

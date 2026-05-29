@@ -58,7 +58,9 @@ def balanced_binary_gap_sample_weights(
         raise ValueError("feature_names length must match features.shape[-1]")
     if gap_feature_name not in names:
         if missing_gap == "binary":
-            return balanced_binary_sample_weights(label_array).reshape(label_array.shape)
+            return balanced_binary_sample_weights(label_array).reshape(
+                label_array.shape
+            )
         if missing_gap == "raise":
             raise ValueError(f"gap feature {gap_feature_name!r} is not present")
         raise ValueError("missing_gap must be either 'binary' or 'raise'")
@@ -81,7 +83,9 @@ def balanced_binary_gap_sample_weights(
     return weights.reshape(label_array.shape)
 
 
-def _inverse_group_frequency_weights(labels: np.ndarray, gaps: np.ndarray) -> np.ndarray:
+def _inverse_group_frequency_weights(
+    labels: np.ndarray, gaps: np.ndarray
+) -> np.ndarray:
     labels = np.asarray(labels, dtype=bool).reshape(-1)
     gaps = np.asarray(gaps, dtype=float).reshape(-1)
     if labels.shape != gaps.shape:

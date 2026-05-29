@@ -8,20 +8,27 @@ from bayescatrack.experiments.calibration_gap_weights import (
 )
 
 
-def test_gap_balanced_weights_equalize_label_gap_group_mass():
-    labels = np.array([1, 0, 0, 0, 1, 1, 0], dtype=int)
-    gaps = np.array([1, 1, 1, 1, 2, 2, 2], dtype=float)
-    dummy_cost = np.arange(labels.size, dtype=float)
-    features = np.stack([dummy_cost, gaps], axis=-1)
-
-    weights = balanced_binary_gap_sample_weights(
+def _gap_balanced_weights(labels: np.ndarray, gaps: np.ndarray) -> np.ndarray:
+    features = np.stack([np.zeros_like(gaps, dtype=float), gaps], axis=-1)
+    return balanced_binary_gap_sample_weights(
         features,
         labels,
         ("dummy_cost", "session_gap"),
     )
 
+
+def _assert_normalized_shape(weights: np.ndarray, labels: np.ndarray) -> None:
     assert weights.shape == labels.shape
     assert np.isclose(float(np.sum(weights)), float(labels.size))
+
+
+def test_gap_balanced_weights_equalize_label_gap_group_mass():
+    labels = np.array([1, 0, 0, 0, 1, 1, 0], dtype=int)
+    gaps = np.array([1, 1, 1, 1, 2, 2, 2], dtype=float)
+
+    weights = _gap_balanced_weights(labels, gaps)
+
+    _assert_normalized_shape(weights, labels)
     group_masses = []
     for label in (0, 1):
         for gap in (1.0, 2.0):
@@ -33,16 +40,10 @@ def test_gap_balanced_weights_equalize_label_gap_group_mass():
 def test_gap_balanced_weights_support_pairwise_feature_tensors():
     labels = np.array([[1, 0], [0, 1]], dtype=int)
     gaps = np.array([[1, 1], [2, 2]], dtype=float)
-    features = np.stack([np.zeros_like(gaps), gaps], axis=-1)
 
-    weights = balanced_binary_gap_sample_weights(
-        features,
-        labels,
-        ("dummy_cost", "session_gap"),
-    )
+    weights = _gap_balanced_weights(labels, gaps)
 
-    assert weights.shape == labels.shape
-    assert np.isclose(float(np.sum(weights)), float(labels.size))
+    _assert_normalized_shape(weights, labels)
     assert np.isclose(float(np.sum(weights[(labels == 1) & (gaps == 1)])), 1.0)
     assert np.isclose(float(np.sum(weights[(labels == 0) & (gaps == 1)])), 1.0)
     assert np.isclose(float(np.sum(weights[(labels == 1) & (gaps == 2)])), 1.0)
