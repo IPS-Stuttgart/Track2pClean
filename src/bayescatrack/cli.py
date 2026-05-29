@@ -174,6 +174,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run configurable hard-negative LOSO calibrated global assignment",
     ),
     (
+        "track2p-gap-balanced-loso",
+        "bayescatrack.experiments.track2p_gap_balanced_loso_calibration",
+        "Run LOSO calibrated global assignment with gap-balanced sample weights",
+    ),
+    (
         "track2p-monotone-loso",
         "bayescatrack.experiments.track2p_monotone_loso_calibration",
         "Run LOSO calibrated global assignment with monotone ranking costs",

@@ -5,6 +5,7 @@
     ".pytest-tmp/**",
     "**/.pytest-tmp/**",
     "src/bayescatrack/experiments/track2p_policy_component_sweep.py",
+    "src/bayescatrack/experiments/track2p_gap_balanced_loso_calibration.py",
     "src/bayescatrack/experiments/track2p_policy_consensus_cleanup.py",
     "src/bayescatrack/experiments/track2p_policy_gap_consensus_cleanup.py",
     "src/bayescatrack/experiments/track2p_policy_gap_component_cleanup.py",
