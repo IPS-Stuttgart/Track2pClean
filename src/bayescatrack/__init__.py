@@ -3,6 +3,9 @@
 # pylint: disable=duplicate-code
 
 from . import cli as _cli
+from ._advanced_weight_validation import (
+    install_advanced_weight_validation as _install_advanced_weight_validation,
+)
 from ._strict_config_validation import (
     install_strict_config_validation as _install_strict_config_validation,
 )
@@ -36,6 +39,7 @@ summarize_subject = _bridge.summarize_subject
 
 _install_soft_overlap_costs()
 _install_advanced_roi_components()
+_install_advanced_weight_validation()
 _install_strict_config_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
