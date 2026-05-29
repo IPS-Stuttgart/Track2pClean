@@ -91,7 +91,7 @@ def apply_dynamic_edge_priors(
     if cfg.session_gap_weight:
         _add_to_valid_edges(
             costs,
-            cfg.session_gap_weight * max(float(session_gap) - 1.0, 0.0),
+            cfg.session_gap_weight * _validated_session_gap_offset(session_gap),
             valid_edge_mask,
         )
     if cfg.cell_probability_weight:
@@ -145,6 +145,15 @@ def apply_dynamic_edge_priors(
 
 def _valid_edge_mask(costs: np.ndarray, *, large_cost: float) -> np.ndarray:
     return np.isfinite(costs) & (costs < float(large_cost))
+
+
+def _validated_session_gap_offset(session_gap: int | float) -> float:
+    if isinstance(session_gap, (bool, np.bool_)):
+        raise ValueError("session_gap must be a finite value greater than or equal to 1")
+    gap = float(session_gap)
+    if not np.isfinite(gap) or gap < 1.0:
+        raise ValueError("session_gap must be a finite value greater than or equal to 1")
+    return gap - 1.0
 
 
 def _add_to_valid_edges(
