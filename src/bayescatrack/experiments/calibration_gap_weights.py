@@ -6,7 +6,6 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.experiments.calibration_hard_negatives import (
     balanced_binary_sample_weights,
 )

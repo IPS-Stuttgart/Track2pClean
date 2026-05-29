@@ -8,7 +8,6 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
-
 from bayescatrack.association.pyrecest_global_assignment import (
     tracks_to_suite2p_index_matrix,
 )
