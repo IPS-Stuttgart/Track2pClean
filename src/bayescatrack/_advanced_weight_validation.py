@@ -1,4 +1,4 @@
-"""Strict validation for advanced ROI pairwise-cost runtime knobs."""
+"""Strict validation for ROI pairwise-cost runtime knobs."""
 
 from __future__ import annotations
 
@@ -9,12 +9,26 @@ import numpy as np
 from .core.bridge import CalciumPlaneData
 
 _NONNEGATIVE_WEIGHT_KWARGS = (
+    "centroid_weight",
+    "iou_weight",
+    "mask_cosine_weight",
+    "area_weight",
+    "roi_feature_weight",
+    "cell_probability_weight",
     "radial_profile_weight",
     "orientation_weight",
     "eccentricity_weight",
     "compactness_weight",
     "border_proximity_weight",
     "ambiguity_margin_weight",
+)
+_POSITIVE_FLOAT_KWARGS = (
+    "large_cost",
+    "similarity_epsilon",
+)
+_OPTIONAL_POSITIVE_FLOAT_KWARGS = (
+    "centroid_scale",
+    "max_centroid_distance",
 )
 _BOOLEAN_KWARGS = (
     "shape_descriptor_components",
@@ -24,7 +38,7 @@ _BOOLEAN_KWARGS = (
 
 
 def install_advanced_weight_validation() -> None:
-    """Install idempotent validation around advanced pairwise-cost kwargs."""
+    """Install idempotent validation around pairwise-cost kwargs."""
 
     original = CalciumPlaneData.build_pairwise_cost_matrix
     if _pairwise_method_chain_has_patch(original, "_bayescatrack_advanced_weight_validation_patch"):
@@ -59,13 +73,15 @@ def _validated_advanced_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     for name in _NONNEGATIVE_WEIGHT_KWARGS:
         if name in validated:
             validated[name] = _finite_nonnegative_float(validated[name], name=name)
+    for name in _POSITIVE_FLOAT_KWARGS:
+        if name in validated:
+            validated[name] = _finite_positive_float(validated[name], name=name)
+    for name in _OPTIONAL_POSITIVE_FLOAT_KWARGS:
+        if name in validated and validated[name] is not None:
+            validated[name] = _finite_positive_float(validated[name], name=name)
     for name in _BOOLEAN_KWARGS:
         if name in validated:
             validated[name] = _strict_bool(validated[name], name=name)
-    if "large_cost" in validated:
-        validated["large_cost"] = _finite_positive_float(
-            validated["large_cost"], name="large_cost"
-        )
     return validated
 
 
