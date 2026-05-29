@@ -382,6 +382,7 @@ def _evaluate_strict_gap_candidates(
         )
     return tuple(decisions)
 
+
 def strict_gap_feature_index_for_gap_length(
     sessions: Sequence[Track2pSession],
     *,
@@ -464,6 +465,7 @@ def strict_gap_feature_subset(
             if edge in requested_edges:
                 output[edge] = feature
     return output
+
 
 def _source_track_id(
     track_matrix: np.ndarray,

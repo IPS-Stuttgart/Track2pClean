@@ -117,6 +117,7 @@ def test_strict_gap_feature_subset_computes_only_requested_pairs(monkeypatch) ->
     assert calls == [((10, 11), (30, 31), 24.0)]
     assert set(output) == {(0, 2, 10, 30)}
 
+
 def test_strict_gated_gap_edge_candidates_uses_component_cleanup_source(
     monkeypatch,
 ) -> None:
