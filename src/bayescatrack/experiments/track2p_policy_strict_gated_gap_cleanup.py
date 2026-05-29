@@ -36,7 +36,6 @@ from bayescatrack.experiments.track2p_benchmark import (
 )
 from bayescatrack.experiments.track2p_emulation_benchmark import (
     ThresholdMethod,
-    emulate_track2p_tracks,
 )
 from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
@@ -158,48 +157,27 @@ def run_track2p_policy_strict_gated_gap_cleanup(
             threshold_method=threshold_method,
             iou_distance_threshold=float(iou_distance_threshold),
         )
-        candidate_full = _normalize_int_track_matrix(
-            emulate_track2p_tracks(
-                sessions,
-                transform_type=policy_config.transform_type,
-                threshold_method=threshold_method,
-                iou_distance_threshold=float(iou_distance_threshold),
-                max_gap=int(policy_config.max_gap),
-            )
+        feature_index = strict_gap_feature_index_for_gap_length(
+            sessions,
+            gap_length=int(gate_config.gap_length),
+            transform_type=policy_config.transform_type,
+            threshold_method=threshold_method,
+            iou_distance_threshold=float(iou_distance_threshold),
         )
-        candidate_occurrences = _delta_gap_candidate_occurrences(
+        candidates = strict_gated_gap_edge_candidates(
             base_full,
-            candidate_full,
-            max_gap=int(policy_config.max_gap),
+            sessions=sessions,
+            feature_index=feature_index,
+            gate_config=gate_config,
             seed_rois=_seed_rois(
                 reference_tracks, seed_session=policy_config.seed_session
             ),
             seed_session=policy_config.seed_session,
         )
-        feature_index = strict_gap_feature_subset(
-            sessions,
-            edges={
-                edge
-                for edge, _track_id in candidate_occurrences
-                if int(edge[1]) - int(edge[0]) == int(gate_config.gap_length)
-            },
-            transform_type=policy_config.transform_type,
-            threshold_method=threshold_method,
-            iou_distance_threshold=float(iou_distance_threshold),
-        )
-        candidates = _evaluate_strict_gap_candidates(
-            candidate_occurrences,
-            sessions=sessions,
-            feature_index=feature_index,
-            gate_config=gate_config,
-        )
-        cleaned, applied_candidate_indices = (
-            _apply_strict_gated_gap_candidates_with_report(
-                base_full,
-                candidate_full,
-                candidates,
-                seed_session=policy_config.seed_session,
-            )
+        cleaned, applied_candidate_indices = _apply_strict_gated_gap_edges_with_report(
+            base_full,
+            candidates,
+            seed_session=policy_config.seed_session,
         )
         scores = _score_prediction_against_reference(
             cleaned, reference, config=policy_config
@@ -270,6 +248,56 @@ def run_track2p_policy_strict_gated_gap_cleanup(
             )
         )
     return ComponentAuditOutput(tuple(results), tuple(edge_rows))
+
+
+def strict_gated_gap_edge_candidates(
+    base_tracks: np.ndarray,
+    *,
+    sessions: Sequence[Track2pSession],
+    feature_index: Mapping[GapAuditEdge, GapEdgeFeature],
+    gate_config: StrictGapGateConfig,
+    seed_rois: set[int],
+    seed_session: int = 0,
+) -> tuple[StrictGapCandidate, ...]:
+    """Return direct gap-edge candidates absent from component cleanup."""
+
+    base_matrix = _normalize_int_track_matrix(base_tracks)
+    base_counts: Counter[GapAuditEdge] = Counter()
+    for row in base_matrix:
+        if _valid_seed(row, seed_rois, seed_session=seed_session):
+            base_counts.update(
+                _observed_neighbor_edges(row, max_gap=int(gate_config.gap_length))
+            )
+
+    decisions: list[StrictGapCandidate] = []
+    seen_edges: set[GapAuditEdge] = set()
+    for edge in sorted(feature_index):
+        if edge in seen_edges or base_counts.get(edge, 0) > 0:
+            continue
+        source_track_id = _source_track_id(
+            base_matrix,
+            edge,
+            seed_rois=seed_rois,
+            seed_session=seed_session,
+        )
+        if source_track_id is None:
+            continue
+        accepted, reason = strict_gap_gate_decision(
+            edge,
+            feature_index.get(edge),
+            sessions=sessions,
+            gate_config=gate_config,
+        )
+        decisions.append(
+            StrictGapCandidate(
+                edge=edge,
+                candidate_track_id=int(source_track_id),
+                accepted=accepted,
+                reason=reason,
+            )
+        )
+        seen_edges.add(edge)
+    return tuple(decisions)
 
 
 def strict_gated_gap_candidates(
@@ -354,6 +382,44 @@ def _evaluate_strict_gap_candidates(
         )
     return tuple(decisions)
 
+def strict_gap_feature_index_for_gap_length(
+    sessions: Sequence[Track2pSession],
+    *,
+    gap_length: int,
+    transform_type: str,
+    threshold_method: ThresholdMethod,
+    iou_distance_threshold: float,
+) -> dict[GapAuditEdge, GapEdgeFeature]:
+    """Compute accepted registered-IoU gap-link features for one gap length."""
+
+    sessions = tuple(sessions)
+    step = int(gap_length)
+    if step < 1:
+        raise ValueError("gap_length must be at least 1")
+    roi_indices_by_session = [_roi_indices(session) for session in sessions]
+    output: dict[GapAuditEdge, GapEdgeFeature] = {}
+    for session_a in range(max(0, len(sessions) - step)):
+        session_b = session_a + step
+        local_features = _accepted_pair_features(
+            sessions[session_a],
+            sessions[session_b],
+            transform_type=transform_type,
+            threshold_method=threshold_method,
+            iou_distance_threshold=float(iou_distance_threshold) * float(step),
+        )
+        source_indices = roi_indices_by_session[session_a]
+        target_indices = roi_indices_by_session[session_b]
+        for (local_a, local_b), feature in local_features.items():
+            output[
+                (
+                    int(session_a),
+                    int(session_b),
+                    int(source_indices[local_a]),
+                    int(target_indices[local_b]),
+                )
+            ] = feature
+    return output
+
 
 def strict_gap_feature_subset(
     sessions: Sequence[Track2pSession],
@@ -398,6 +464,21 @@ def strict_gap_feature_subset(
             if edge in requested_edges:
                 output[edge] = feature
     return output
+
+def _source_track_id(
+    track_matrix: np.ndarray,
+    edge: GapAuditEdge,
+    *,
+    seed_rois: set[int],
+    seed_session: int,
+) -> int | None:
+    session_a, _session_b, roi_a, _roi_b = edge
+    for track_id, row in enumerate(_normalize_int_track_matrix(track_matrix)):
+        if not _valid_seed(row, seed_rois, seed_session=seed_session):
+            continue
+        if int(row[session_a]) == int(roi_a):
+            return int(track_id)
+    return None
 
 
 def strict_gap_gate_decision(
@@ -452,6 +533,49 @@ def apply_strict_gated_gap_candidates(
     return output
 
 
+def apply_strict_gated_gap_edges(
+    base_tracks: np.ndarray,
+    candidates: Sequence[StrictGapCandidate],
+    *,
+    seed_session: int = 0,
+) -> np.ndarray:
+    """Insert accepted strict gap targets into component-cleanup tracks."""
+
+    output, _ = _apply_strict_gated_gap_edges_with_report(
+        base_tracks,
+        candidates,
+        seed_session=seed_session,
+    )
+    return output
+
+
+def _apply_strict_gated_gap_edges_with_report(
+    base_tracks: np.ndarray,
+    candidates: Sequence[StrictGapCandidate],
+    *,
+    seed_session: int = 0,
+) -> tuple[np.ndarray, frozenset[int]]:
+    """Insert accepted strict gap targets and report applied candidate indices."""
+
+    output = _normalize_int_track_matrix(base_tracks).copy()
+    observation_counts = _observation_counter(output)
+    applied: set[int] = set()
+    for candidate_index, candidate in enumerate(candidates):
+        if not candidate.accepted:
+            continue
+        updated = _merge_target_edge(
+            output,
+            candidate.edge,
+            track_id=int(candidate.candidate_track_id),
+            observation_counts=observation_counts,
+            seed_session=seed_session,
+        )
+        if updated is not output:
+            applied.add(int(candidate_index))
+        output = updated
+    return output, frozenset(applied)
+
+
 def _apply_strict_gated_gap_candidates_with_report(
     base_tracks: np.ndarray,
     candidate_tracks: np.ndarray,
@@ -482,6 +606,36 @@ def _apply_strict_gated_gap_candidates_with_report(
             applied.add(int(candidate_index))
         output = updated
     return output, frozenset(applied)
+
+
+def _merge_target_edge(
+    base_tracks: np.ndarray,
+    edge: GapAuditEdge,
+    *,
+    track_id: int,
+    observation_counts: Counter[tuple[int, int]],
+    seed_session: int,
+) -> np.ndarray:
+    session_a, session_b, roi_a, roi_b = edge
+    if not 0 <= int(track_id) < base_tracks.shape[0]:
+        return base_tracks
+    base_row = base_tracks[int(track_id)].copy()
+    if not _valid_seed_value(base_row, seed_session=seed_session):
+        return base_tracks
+    if int(base_row[session_a]) != int(roi_a):
+        return base_tracks
+    if int(base_row[session_b]) == int(roi_b):
+        return base_tracks
+    if int(base_row[session_b]) >= 0:
+        return base_tracks
+    if observation_counts.get((int(session_b), int(roi_b)), 0) > 0:
+        return base_tracks
+
+    base_row[session_b] = int(roi_b)
+    observation_counts[(int(session_b), int(roi_b))] += 1
+    output = base_tracks.copy()
+    output[int(track_id)] = base_row
+    return output
 
 
 def _merge_candidate_row(
