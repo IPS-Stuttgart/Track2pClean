@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.experiments.calibration_gap_weights import (
     balanced_binary_gap_sample_weights,
 )
