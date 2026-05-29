@@ -8,6 +8,7 @@ reference ROI, but exact-pixel IoU remains zero.
 
 from __future__ import annotations
 
+import operator
 from typing import Any
 
 import numpy as np
@@ -30,19 +31,37 @@ def registered_soft_iou_cost_kwargs(
     overlap by two soft overlap terms.
     """
 
+    similarity_epsilon = _finite_positive_float(
+        similarity_epsilon, name="similarity_epsilon"
+    )
+    soft_iou_radius = _nonnegative_int(soft_iou_radius, name="soft_iou_radius")
+    distance_transform_overlap_radius = _nonnegative_int(
+        distance_transform_overlap_radius,
+        name="distance_transform_overlap_radius",
+    )
+    distance_transform_overlap_weight = _finite_nonnegative_float(
+        distance_transform_overlap_weight,
+        name="distance_transform_overlap_weight",
+    )
+    if distance_transform_overlap_scale is not None:
+        distance_transform_overlap_scale = _finite_positive_float(
+            distance_transform_overlap_scale,
+            name="distance_transform_overlap_scale",
+        )
+
     return {
         "centroid_weight": 0.0,
         "iou_weight": 0.0,
         "soft_iou_weight": 1.0,
-        "soft_iou_radius": int(soft_iou_radius),
-        "distance_transform_overlap_weight": float(distance_transform_overlap_weight),
-        "distance_transform_overlap_radius": int(distance_transform_overlap_radius),
+        "soft_iou_radius": soft_iou_radius,
+        "distance_transform_overlap_weight": distance_transform_overlap_weight,
+        "distance_transform_overlap_radius": distance_transform_overlap_radius,
         "distance_transform_overlap_scale": distance_transform_overlap_scale,
         "mask_cosine_weight": 0.0,
         "area_weight": 0.0,
         "roi_feature_weight": 0.0,
         "cell_probability_weight": 0.0,
-        "similarity_epsilon": float(similarity_epsilon),
+        "similarity_epsilon": similarity_epsilon,
     }
 
 
@@ -58,15 +77,16 @@ def _pairwise_method_chain_has_patch(method: Any, marker: str) -> bool:
 
     seen: set[int] = set()
     current: Any = method
-    while current is not None:
+    while True:
+        if current is None:
+            return False
         current_id = id(current)
         if current_id in seen:
             return False
-        seen.add(current_id)
         if getattr(current, marker, False):
             return True
+        seen.add(current_id)
         current = getattr(current, "_bayescatrack_original", None)
-    return False
 
 
 def _install_cost_matrix_patch() -> None:
@@ -86,25 +106,34 @@ def _install_cost_matrix_patch() -> None:
         distance_transform_overlap_scale: float | None = None,
         **kwargs: Any,
     ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
-        soft_iou_weight = float(soft_iou_weight)
-        distance_transform_overlap_weight = float(distance_transform_overlap_weight)
-        soft_iou_radius = int(soft_iou_radius)
-        distance_transform_overlap_radius = int(distance_transform_overlap_radius)
-        if soft_iou_weight < 0.0:
-            raise ValueError("soft_iou_weight must be non-negative")
-        if distance_transform_overlap_weight < 0.0:
-            raise ValueError("distance_transform_overlap_weight must be non-negative")
-        if soft_iou_radius < 0:
-            raise ValueError("soft_iou_radius must be non-negative")
-        if distance_transform_overlap_radius < 0:
-            raise ValueError("distance_transform_overlap_radius must be non-negative")
-        if (
-            distance_transform_overlap_scale is not None
-            and distance_transform_overlap_scale <= 0.0
-        ):
-            raise ValueError(
-                "distance_transform_overlap_scale must be strictly positive when provided"
+        soft_iou_weight = _finite_nonnegative_float(
+            soft_iou_weight,
+            name="soft_iou_weight",
+        )
+        distance_transform_overlap_weight = _finite_nonnegative_float(
+            distance_transform_overlap_weight,
+            name="distance_transform_overlap_weight",
+        )
+        soft_iou_radius = _nonnegative_int(soft_iou_radius, name="soft_iou_radius")
+        distance_transform_overlap_radius = _nonnegative_int(
+            distance_transform_overlap_radius,
+            name="distance_transform_overlap_radius",
+        )
+        if distance_transform_overlap_scale is not None:
+            distance_transform_overlap_scale = _finite_positive_float(
+                distance_transform_overlap_scale,
+                name="distance_transform_overlap_scale",
             )
+        similarity_epsilon = _finite_positive_float(
+            kwargs.get("similarity_epsilon", 1.0e-6),
+            name="similarity_epsilon",
+        )
+        large_cost = _finite_positive_float(
+            kwargs.get("large_cost", 1.0e6),
+            name="large_cost",
+        )
+        kwargs["similarity_epsilon"] = similarity_epsilon
+        kwargs["large_cost"] = large_cost
 
         return_components = bool(kwargs.pop("return_components", False))
         needs_soft_components = return_components and (
@@ -130,9 +159,6 @@ def _install_cost_matrix_patch() -> None:
             **kwargs,
         )
         total_cost = np.asarray(base_cost, dtype=float).copy()
-        similarity_epsilon = float(kwargs.get("similarity_epsilon", 1.0e-6))
-        if similarity_epsilon <= 0.0:
-            raise ValueError("similarity_epsilon must be strictly positive")
 
         if soft_iou_weight > 0.0 or (return_components and soft_iou_radius > 0):
             soft_iou = _pairwise_dilated_iou_matrix(
@@ -167,7 +193,6 @@ def _install_cost_matrix_patch() -> None:
             distance_transform_overlap = np.zeros_like(total_cost)
             distance_transform_overlap_cost = np.zeros_like(total_cost)
 
-        large_cost = float(kwargs.get("large_cost", 1.0e6))
         total_cost = (
             _bridge_impl._ensure_finite_cost_matrix(  # pylint: disable=protected-access
                 total_cost,
@@ -243,8 +268,7 @@ def _pairwise_dilated_iou_matrix(
     *,
     radius: int,
 ) -> np.ndarray:
-    if radius < 0:
-        raise ValueError("radius must be non-negative")
+    radius = _nonnegative_int(radius, name="radius")
     if radius == 0:
         return _bridge_impl._pairwise_iou_matrix(  # pylint: disable=protected-access
             reference_masks,
@@ -263,8 +287,7 @@ def _pairwise_distance_transform_overlap_matrix(
     radius: int,
     distance_scale: float | None,
 ) -> np.ndarray:
-    if radius < 0:
-        raise ValueError("radius must be non-negative")
+    radius = _nonnegative_int(radius, name="radius")
     if radius == 0:
         return _bridge_impl._pairwise_iou_matrix(  # pylint: disable=protected-access
             reference_masks,
@@ -272,8 +295,8 @@ def _pairwise_distance_transform_overlap_matrix(
         )
     if distance_scale is None:
         distance_scale = max(float(radius) / 2.0, 1.0)
-    if distance_scale <= 0.0:
-        raise ValueError("distance_scale must be strictly positive")
+    else:
+        distance_scale = _finite_positive_float(distance_scale, name="distance_scale")
     reference_to_measurement = _pairwise_one_sided_distance_overlap(
         reference_masks,
         measurement_masks,
@@ -331,29 +354,66 @@ def _pairwise_one_sided_distance_overlap(
 
 
 def _dilate_binary_mask_stack(masks: np.ndarray, radius: int) -> np.ndarray:
-    if radius < 0:
-        raise ValueError("radius must be non-negative")
-    mask_array = np.asarray(masks) > 0
-    if radius == 0 or mask_array.size == 0:
-        return mask_array
-    padded = np.pad(
-        mask_array,
-        ((0, 0), (radius, radius), (radius, radius)),
-        mode="constant",
-        constant_values=False,
+    from bayescatrack.association.soft_overlap import dilate_mask_stack
+
+    radius = _nonnegative_int(radius, name="radius")
+    return dilate_mask_stack(masks, radius=radius)
+
+
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    numeric_candidate: Any
+    if isinstance(value, str):
+        numeric_candidate = value.strip()
+        if not numeric_candidate:
+            raise ValueError(f"{name} must be an integer")
+    elif isinstance(value, (float, np.floating)):
+        numeric_candidate = value
+    else:
+        try:
+            return _reject_negative_int(operator.index(value), name=name)
+        except TypeError:
+            try:
+                numeric_candidate = float(value)
+            except (TypeError, ValueError) as float_exc:
+                raise ValueError(f"{name} must be an integer") from float_exc
+    try:
+        numeric_value = float(numeric_candidate)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+        raise ValueError(f"{name} must be an integer")
+    return _reject_negative_int(int(numeric_value), name=name)
+
+
+def _reject_negative_int(integer_value: int, *, name: str) -> int:
+    if integer_value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return int(integer_value)
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=False)
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=True)
+
+
+def _finite_float(
+    value: Any, *, name: str, lower_bound: float, positive: bool
+) -> float:
+    qualifier = "positive" if positive else "non-negative"
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite {qualifier} value")
+    numeric_value = float(value)
+    violates_bound = (
+        numeric_value <= lower_bound if positive else numeric_value < lower_bound
     )
-    dilated = np.zeros_like(mask_array, dtype=bool)
-    height, width = mask_array.shape[1:]
-    for offset_y in range(-radius, radius + 1):
-        for offset_x in range(-radius, radius + 1):
-            if offset_y * offset_y + offset_x * offset_x > radius * radius:
-                continue
-            y_start = radius + offset_y
-            x_start = radius + offset_x
-            y_slice = slice(y_start, y_start + height)
-            x_slice = slice(x_start, x_start + width)
-            dilated |= padded[:, y_slice, x_slice]
-    return dilated
+    if not np.isfinite(numeric_value) or violates_bound:
+        raise ValueError(f"{name} must be a finite {qualifier} value")
+    return numeric_value
 
 
 __all__ = ["install_soft_overlap_costs", "registered_soft_iou_cost_kwargs"]
