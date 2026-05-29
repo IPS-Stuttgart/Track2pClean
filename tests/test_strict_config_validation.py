@@ -62,6 +62,43 @@ def test_advanced_candidate_top_k_accepts_integer_like_values(integer_like):
 
 
 @pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {"include_column_top_k": 1},
+            "include_column_top_k must be a boolean",
+        ),
+        (
+            {"include_column_top_k": "false"},
+            "include_column_top_k must be a boolean",
+        ),
+    ],
+)
+def test_advanced_candidate_config_rejects_non_boolean_column_flag(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        CandidatePruningConfig(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("include_columns", "message"),
+    [
+        (1, "include_columns must be a boolean"),
+        ("false", "include_columns must be a boolean"),
+    ],
+)
+def test_candidate_mask_from_cost_matrix_rejects_non_boolean_column_flag(
+    include_columns,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        candidate_mask_from_cost_matrix(
+            np.zeros((2, 2), dtype=float),
+            top_k=1,
+            include_columns=include_columns,
+        )
+
+
+@pytest.mark.parametrize(
     ("factory", "kwargs", "message"),
     [
         (
