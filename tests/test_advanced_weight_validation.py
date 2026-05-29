@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import CalciumPlaneData
 
 
@@ -15,15 +14,42 @@ def _single_roi_plane() -> CalciumPlaneData:
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
-        ({"radial_profile_weight": np.nan}, "radial_profile_weight must be a finite non-negative value"),
-        ({"orientation_weight": np.inf}, "orientation_weight must be a finite non-negative value"),
-        ({"eccentricity_weight": True}, "eccentricity_weight must be a finite non-negative value"),
-        ({"compactness_weight": -1.0}, "compactness_weight must be a finite non-negative value"),
-        ({"border_proximity_weight": np.nan}, "border_proximity_weight must be a finite non-negative value"),
-        ({"ambiguity_margin_weight": np.inf}, "ambiguity_margin_weight must be a finite non-negative value"),
-        ({"shape_descriptor_components": 1}, "shape_descriptor_components must be a boolean"),
-        ({"ambiguity_margin_components": "true"}, "ambiguity_margin_components must be a boolean"),
-        ({"candidate_include_column_top_k": 1}, "candidate_include_column_top_k must be a boolean"),
+        (
+            {"radial_profile_weight": np.nan},
+            "radial_profile_weight must be a finite non-negative value",
+        ),
+        (
+            {"orientation_weight": np.inf},
+            "orientation_weight must be a finite non-negative value",
+        ),
+        (
+            {"eccentricity_weight": True},
+            "eccentricity_weight must be a finite non-negative value",
+        ),
+        (
+            {"compactness_weight": -1.0},
+            "compactness_weight must be a finite non-negative value",
+        ),
+        (
+            {"border_proximity_weight": np.nan},
+            "border_proximity_weight must be a finite non-negative value",
+        ),
+        (
+            {"ambiguity_margin_weight": np.inf},
+            "ambiguity_margin_weight must be a finite non-negative value",
+        ),
+        (
+            {"shape_descriptor_components": 1},
+            "shape_descriptor_components must be a boolean",
+        ),
+        (
+            {"ambiguity_margin_components": "true"},
+            "ambiguity_margin_components must be a boolean",
+        ),
+        (
+            {"candidate_include_column_top_k": 1},
+            "candidate_include_column_top_k must be a boolean",
+        ),
         ({"large_cost": np.nan}, "large_cost must be a finite positive value"),
     ],
 )

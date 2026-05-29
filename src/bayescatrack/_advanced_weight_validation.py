@@ -27,7 +27,9 @@ def install_advanced_weight_validation() -> None:
     """Install idempotent validation around advanced pairwise-cost kwargs."""
 
     original = CalciumPlaneData.build_pairwise_cost_matrix
-    if _pairwise_method_chain_has_patch(original, "_bayescatrack_advanced_weight_validation_patch"):
+    if _pairwise_method_chain_has_patch(
+        original, "_bayescatrack_advanced_weight_validation_patch"
+    ):
         return
 
     def _build_pairwise_cost_matrix_with_advanced_weight_validation(

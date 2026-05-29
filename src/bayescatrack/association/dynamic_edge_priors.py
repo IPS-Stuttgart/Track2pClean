@@ -149,10 +149,14 @@ def _valid_edge_mask(costs: np.ndarray, *, large_cost: float) -> np.ndarray:
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:
     if isinstance(session_gap, (bool, np.bool_)):
-        raise ValueError("session_gap must be a finite value greater than or equal to 1")
+        raise ValueError(
+            "session_gap must be a finite value greater than or equal to 1"
+        )
     gap = float(session_gap)
     if not np.isfinite(gap) or gap < 1.0:
-        raise ValueError("session_gap must be a finite value greater than or equal to 1")
+        raise ValueError(
+            "session_gap must be a finite value greater than or equal to 1"
+        )
     return gap - 1.0
 
 
