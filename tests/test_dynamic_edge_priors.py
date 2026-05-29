@@ -147,6 +147,70 @@ def test_component_dynamic_priors_preserve_invalid_edges() -> None:
     assert adjusted[1, 0] == pytest.approx(1.0e6)
 
 
+def test_local_margin_prior_penalizes_ambiguous_best_edges() -> None:
+    costs = np.asarray(
+        [
+            [1.0, 1.2],
+            [1.3, 0.5],
+        ],
+        dtype=float,
+    )
+
+    adjusted = apply_dynamic_edge_priors(
+        costs,
+        {},
+        session_gap=1,
+        config=DynamicEdgePriorConfig(
+            local_margin_weight=2.0,
+            local_margin_target=0.5,
+        ),
+    )
+
+    # (0, 0) is locally best but only separated by 0.2 along its row.
+    assert adjusted[0, 0] == pytest.approx(1.0 + 2.0 * 0.3)
+    # (1, 1) is clearly separated by at least 0.7 and receives no penalty.
+    assert adjusted[1, 1] == pytest.approx(0.5)
+    # Non-best alternatives are handled by reciprocal-rank penalties, not margins.
+    assert adjusted[0, 1] == pytest.approx(1.2)
+    assert adjusted[1, 0] == pytest.approx(1.3)
+
+
+def test_local_margin_prior_can_be_capped_and_handles_ties() -> None:
+    costs = np.asarray([[1.0, 1.0, 2.0]], dtype=float)
+
+    adjusted = apply_dynamic_edge_priors(
+        costs,
+        {},
+        session_gap=1,
+        config=DynamicEdgePriorConfig(
+            local_margin_weight=10.0,
+            local_margin_target=1.0,
+            local_margin_cap=0.25,
+        ),
+    )
+
+    np.testing.assert_allclose(adjusted, np.asarray([[1.25, 1.25, 2.0]]))
+
+
+def test_local_margin_prior_preserves_gated_large_costs() -> None:
+    costs = np.asarray([[1.0, 1.0e6], [1.3, np.inf]], dtype=float)
+
+    adjusted = apply_dynamic_edge_priors(
+        costs,
+        {},
+        session_gap=1,
+        config=DynamicEdgePriorConfig(
+            local_margin_weight=2.0,
+            local_margin_target=0.5,
+            large_cost=1.0e6,
+        ),
+    )
+
+    assert adjusted[0, 0] == pytest.approx(1.0 + 2.0 * 0.2)
+    assert adjusted[0, 1] == pytest.approx(1.0e6)
+    assert adjusted[1, 1] == pytest.approx(1.0e6)
+
+
 def test_dynamic_edge_prior_config_validates_reciprocal_rank_knobs() -> None:
     with pytest.raises(ValueError, match="reciprocal_rank_weight"):
         DynamicEdgePriorConfig(reciprocal_rank_weight=-0.1)
@@ -157,3 +221,12 @@ def test_dynamic_edge_prior_config_validates_reciprocal_rank_knobs() -> None:
 def test_dynamic_edge_prior_config_validates_edge_quality_bias() -> None:
     with pytest.raises(ValueError, match="edge_quality_bias"):
         DynamicEdgePriorConfig(edge_quality_bias=float("nan"))
+
+
+def test_dynamic_edge_prior_config_validates_local_margin_knobs() -> None:
+    with pytest.raises(ValueError, match="local_margin_weight"):
+        DynamicEdgePriorConfig(local_margin_weight=-0.1)
+    with pytest.raises(ValueError, match="local_margin_target"):
+        DynamicEdgePriorConfig(local_margin_target=float("nan"))
+    with pytest.raises(ValueError, match="local_margin_cap"):
+        DynamicEdgePriorConfig(local_margin_cap=-0.1)
