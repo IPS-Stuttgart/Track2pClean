@@ -8,6 +8,7 @@ reference ROI, but exact-pixel IoU remains zero.
 
 from __future__ import annotations
 
+import operator
 from typing import Any
 
 import numpy as np
@@ -30,19 +31,37 @@ def registered_soft_iou_cost_kwargs(
     overlap by two soft overlap terms.
     """
 
+    similarity_epsilon = _finite_positive_float(
+        similarity_epsilon, name="similarity_epsilon"
+    )
+    soft_iou_radius = _nonnegative_int(soft_iou_radius, name="soft_iou_radius")
+    distance_transform_overlap_radius = _nonnegative_int(
+        distance_transform_overlap_radius,
+        name="distance_transform_overlap_radius",
+    )
+    distance_transform_overlap_weight = _finite_nonnegative_float(
+        distance_transform_overlap_weight,
+        name="distance_transform_overlap_weight",
+    )
+    if distance_transform_overlap_scale is not None:
+        distance_transform_overlap_scale = _finite_positive_float(
+            distance_transform_overlap_scale,
+            name="distance_transform_overlap_scale",
+        )
+
     return {
         "centroid_weight": 0.0,
         "iou_weight": 0.0,
         "soft_iou_weight": 1.0,
-        "soft_iou_radius": int(soft_iou_radius),
-        "distance_transform_overlap_weight": float(distance_transform_overlap_weight),
-        "distance_transform_overlap_radius": int(distance_transform_overlap_radius),
+        "soft_iou_radius": soft_iou_radius,
+        "distance_transform_overlap_weight": distance_transform_overlap_weight,
+        "distance_transform_overlap_radius": distance_transform_overlap_radius,
         "distance_transform_overlap_scale": distance_transform_overlap_scale,
         "mask_cosine_weight": 0.0,
         "area_weight": 0.0,
         "roi_feature_weight": 0.0,
         "cell_probability_weight": 0.0,
-        "similarity_epsilon": float(similarity_epsilon),
+        "similarity_epsilon": similarity_epsilon,
     }
 
 
@@ -86,25 +105,34 @@ def _install_cost_matrix_patch() -> None:
         distance_transform_overlap_scale: float | None = None,
         **kwargs: Any,
     ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
-        soft_iou_weight = float(soft_iou_weight)
-        distance_transform_overlap_weight = float(distance_transform_overlap_weight)
-        soft_iou_radius = int(soft_iou_radius)
-        distance_transform_overlap_radius = int(distance_transform_overlap_radius)
-        if soft_iou_weight < 0.0:
-            raise ValueError("soft_iou_weight must be non-negative")
-        if distance_transform_overlap_weight < 0.0:
-            raise ValueError("distance_transform_overlap_weight must be non-negative")
-        if soft_iou_radius < 0:
-            raise ValueError("soft_iou_radius must be non-negative")
-        if distance_transform_overlap_radius < 0:
-            raise ValueError("distance_transform_overlap_radius must be non-negative")
-        if (
-            distance_transform_overlap_scale is not None
-            and distance_transform_overlap_scale <= 0.0
-        ):
-            raise ValueError(
-                "distance_transform_overlap_scale must be strictly positive when provided"
+        soft_iou_weight = _finite_nonnegative_float(
+            soft_iou_weight,
+            name="soft_iou_weight",
+        )
+        distance_transform_overlap_weight = _finite_nonnegative_float(
+            distance_transform_overlap_weight,
+            name="distance_transform_overlap_weight",
+        )
+        soft_iou_radius = _nonnegative_int(soft_iou_radius, name="soft_iou_radius")
+        distance_transform_overlap_radius = _nonnegative_int(
+            distance_transform_overlap_radius,
+            name="distance_transform_overlap_radius",
+        )
+        if distance_transform_overlap_scale is not None:
+            distance_transform_overlap_scale = _finite_positive_float(
+                distance_transform_overlap_scale,
+                name="distance_transform_overlap_scale",
             )
+        similarity_epsilon = _finite_positive_float(
+            kwargs.get("similarity_epsilon", 1.0e-6),
+            name="similarity_epsilon",
+        )
+        large_cost = _finite_positive_float(
+            kwargs.get("large_cost", 1.0e6),
+            name="large_cost",
+        )
+        kwargs["similarity_epsilon"] = similarity_epsilon
+        kwargs["large_cost"] = large_cost
 
         return_components = bool(kwargs.pop("return_components", False))
         needs_soft_components = return_components and (
@@ -130,9 +158,6 @@ def _install_cost_matrix_patch() -> None:
             **kwargs,
         )
         total_cost = np.asarray(base_cost, dtype=float).copy()
-        similarity_epsilon = float(kwargs.get("similarity_epsilon", 1.0e-6))
-        if similarity_epsilon <= 0.0:
-            raise ValueError("similarity_epsilon must be strictly positive")
 
         if soft_iou_weight > 0.0 or (return_components and soft_iou_radius > 0):
             soft_iou = _pairwise_dilated_iou_matrix(
@@ -167,7 +192,6 @@ def _install_cost_matrix_patch() -> None:
             distance_transform_overlap = np.zeros_like(total_cost)
             distance_transform_overlap_cost = np.zeros_like(total_cost)
 
-        large_cost = float(kwargs.get("large_cost", 1.0e6))
         total_cost = (
             _bridge_impl._ensure_finite_cost_matrix(  # pylint: disable=protected-access
                 total_cost,
@@ -243,8 +267,7 @@ def _pairwise_dilated_iou_matrix(
     *,
     radius: int,
 ) -> np.ndarray:
-    if radius < 0:
-        raise ValueError("radius must be non-negative")
+    radius = _nonnegative_int(radius, name="radius")
     if radius == 0:
         return _bridge_impl._pairwise_iou_matrix(  # pylint: disable=protected-access
             reference_masks,
@@ -263,8 +286,7 @@ def _pairwise_distance_transform_overlap_matrix(
     radius: int,
     distance_scale: float | None,
 ) -> np.ndarray:
-    if radius < 0:
-        raise ValueError("radius must be non-negative")
+    radius = _nonnegative_int(radius, name="radius")
     if radius == 0:
         return _bridge_impl._pairwise_iou_matrix(  # pylint: disable=protected-access
             reference_masks,
@@ -272,8 +294,8 @@ def _pairwise_distance_transform_overlap_matrix(
         )
     if distance_scale is None:
         distance_scale = max(float(radius) / 2.0, 1.0)
-    if distance_scale <= 0.0:
-        raise ValueError("distance_scale must be strictly positive")
+    else:
+        distance_scale = _finite_positive_float(distance_scale, name="distance_scale")
     reference_to_measurement = _pairwise_one_sided_distance_overlap(
         reference_masks,
         measurement_masks,
@@ -331,8 +353,7 @@ def _pairwise_one_sided_distance_overlap(
 
 
 def _dilate_binary_mask_stack(masks: np.ndarray, radius: int) -> np.ndarray:
-    if radius < 0:
-        raise ValueError("radius must be non-negative")
+    radius = _nonnegative_int(radius, name="radius")
     mask_array = np.asarray(masks) > 0
     if radius == 0 or mask_array.size == 0:
         return mask_array
@@ -354,6 +375,52 @@ def _dilate_binary_mask_stack(masks: np.ndarray, radius: int) -> np.ndarray:
             x_slice = slice(x_start, x_start + width)
             dilated |= padded[:, y_slice, x_slice]
     return dilated
+
+
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric_value = float(stripped)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(numeric_value)
+    else:
+        try:
+            integer_value = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    if integer_value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return int(integer_value)
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite non-negative value")
+    numeric_value = float(value)
+    if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return numeric_value
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite positive value")
+    numeric_value = float(value)
+    if not np.isfinite(numeric_value) or numeric_value <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return numeric_value
 
 
 __all__ = ["install_soft_overlap_costs", "registered_soft_iou_cost_kwargs"]
