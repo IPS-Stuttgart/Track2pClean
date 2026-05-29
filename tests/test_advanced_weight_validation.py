@@ -14,25 +14,70 @@ def _single_roi_plane() -> CalciumPlaneData:
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
-        ({"centroid_weight": np.nan}, "centroid_weight must be a finite non-negative value"),
+        (
+            {"centroid_weight": np.nan},
+            "centroid_weight must be a finite non-negative value",
+        ),
         ({"iou_weight": np.inf}, "iou_weight must be a finite non-negative value"),
-        ({"mask_cosine_weight": True}, "mask_cosine_weight must be a finite non-negative value"),
+        (
+            {"mask_cosine_weight": True},
+            "mask_cosine_weight must be a finite non-negative value",
+        ),
         ({"area_weight": -1.0}, "area_weight must be a finite non-negative value"),
-        ({"roi_feature_weight": np.nan}, "roi_feature_weight must be a finite non-negative value"),
-        ({"cell_probability_weight": np.inf}, "cell_probability_weight must be a finite non-negative value"),
-        ({"radial_profile_weight": np.nan}, "radial_profile_weight must be a finite non-negative value"),
-        ({"orientation_weight": np.inf}, "orientation_weight must be a finite non-negative value"),
-        ({"eccentricity_weight": True}, "eccentricity_weight must be a finite non-negative value"),
-        ({"compactness_weight": -1.0}, "compactness_weight must be a finite non-negative value"),
-        ({"border_proximity_weight": np.nan}, "border_proximity_weight must be a finite non-negative value"),
-        ({"ambiguity_margin_weight": np.inf}, "ambiguity_margin_weight must be a finite non-negative value"),
-        ({"shape_descriptor_components": 1}, "shape_descriptor_components must be a boolean"),
-        ({"ambiguity_margin_components": "true"}, "ambiguity_margin_components must be a boolean"),
-        ({"candidate_include_column_top_k": 1}, "candidate_include_column_top_k must be a boolean"),
+        (
+            {"roi_feature_weight": np.nan},
+            "roi_feature_weight must be a finite non-negative value",
+        ),
+        (
+            {"cell_probability_weight": np.inf},
+            "cell_probability_weight must be a finite non-negative value",
+        ),
+        (
+            {"radial_profile_weight": np.nan},
+            "radial_profile_weight must be a finite non-negative value",
+        ),
+        (
+            {"orientation_weight": np.inf},
+            "orientation_weight must be a finite non-negative value",
+        ),
+        (
+            {"eccentricity_weight": True},
+            "eccentricity_weight must be a finite non-negative value",
+        ),
+        (
+            {"compactness_weight": -1.0},
+            "compactness_weight must be a finite non-negative value",
+        ),
+        (
+            {"border_proximity_weight": np.nan},
+            "border_proximity_weight must be a finite non-negative value",
+        ),
+        (
+            {"ambiguity_margin_weight": np.inf},
+            "ambiguity_margin_weight must be a finite non-negative value",
+        ),
+        (
+            {"shape_descriptor_components": 1},
+            "shape_descriptor_components must be a boolean",
+        ),
+        (
+            {"ambiguity_margin_components": "true"},
+            "ambiguity_margin_components must be a boolean",
+        ),
+        (
+            {"candidate_include_column_top_k": 1},
+            "candidate_include_column_top_k must be a boolean",
+        ),
         ({"large_cost": np.nan}, "large_cost must be a finite positive value"),
-        ({"similarity_epsilon": np.inf}, "similarity_epsilon must be a finite positive value"),
+        (
+            {"similarity_epsilon": np.inf},
+            "similarity_epsilon must be a finite positive value",
+        ),
         ({"centroid_scale": 0.0}, "centroid_scale must be a finite positive value"),
-        ({"max_centroid_distance": True}, "max_centroid_distance must be a finite positive value"),
+        (
+            {"max_centroid_distance": True},
+            "max_centroid_distance must be a finite positive value",
+        ),
     ],
 )
 def test_advanced_pairwise_runtime_knobs_reject_invalid_scalars(
