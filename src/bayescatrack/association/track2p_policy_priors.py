@@ -58,6 +58,42 @@ def _optional_positive_int(value: Any | None, *, name: str) -> int | None:
     return integer_value
 
 
+def _finite_float(
+    value: Any,
+    *,
+    name: str,
+    min_value: float | None = None,
+    max_value: float | None = None,
+    min_inclusive: bool = True,
+    max_inclusive: bool = True,
+) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite float, not boolean")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite float") from exc
+    if not np.isfinite(numeric_value):
+        raise ValueError(f"{name} must be finite")
+    if min_value is not None:
+        if min_inclusive:
+            invalid_min = numeric_value < min_value
+        else:
+            invalid_min = numeric_value <= min_value
+        if invalid_min:
+            comparator = "at least" if min_inclusive else "greater than"
+            raise ValueError(f"{name} must be {comparator} {min_value}")
+    if max_value is not None:
+        if max_inclusive:
+            invalid_max = numeric_value > max_value
+        else:
+            invalid_max = numeric_value >= max_value
+        if invalid_max:
+            comparator = "at most" if max_inclusive else "less than"
+            raise ValueError(f"{name} must be {comparator} {max_value}")
+    return numeric_value
+
+
 @dataclass(frozen=True)
 class Track2pPolicyPriorConfig:
     """Add a Track2p-like edge prior without reading Track2p output tracks."""
@@ -83,15 +119,22 @@ class Track2pPolicyPriorConfig:
         if not str(self.iou_component).strip():
             raise ValueError("iou_component must be a non-empty string")
         for name in ("relief", "non_policy_penalty", "rescue_margin"):
-            value = float(getattr(self, name))
-            if value < 0.0 or not np.isfinite(value):
-                raise ValueError(f"{name} must be a finite non-negative value")
-        if self.accepted_cost_cap is not None and not np.isfinite(
-            float(self.accepted_cost_cap)
-        ):
-            raise ValueError("accepted_cost_cap must be finite when provided")
-        if not np.isfinite(float(self.min_cost)):
-            raise ValueError("min_cost must be finite")
+            object.__setattr__(
+                self,
+                name,
+                _finite_float(getattr(self, name), name=name, min_value=0.0),
+            )
+        if self.accepted_cost_cap is not None:
+            object.__setattr__(
+                self,
+                "accepted_cost_cap",
+                _finite_float(self.accepted_cost_cap, name="accepted_cost_cap"),
+            )
+        object.__setattr__(
+            self,
+            "min_cost",
+            _finite_float(self.min_cost, name="min_cost"),
+        )
         object.__setattr__(
             self,
             "max_gap",
@@ -112,10 +155,26 @@ class Track2pPolicyPriorConfig:
             "mutual_top_k",
             _nonnegative_int(self.mutual_top_k, name="mutual_top_k"),
         )
-        if not 0.0 <= float(self.rescue_min_iou) <= 1.0:
-            raise ValueError("rescue_min_iou must lie in [0, 1]")
-        if float(self.large_cost) <= 0.0 or not np.isfinite(float(self.large_cost)):
-            raise ValueError("large_cost must be a finite positive value")
+        object.__setattr__(
+            self,
+            "rescue_min_iou",
+            _finite_float(
+                self.rescue_min_iou,
+                name="rescue_min_iou",
+                min_value=0.0,
+                max_value=1.0,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "large_cost",
+            _finite_float(
+                self.large_cost,
+                name="large_cost",
+                min_value=0.0,
+                min_inclusive=False,
+            ),
+        )
 
 
 def track2p_policy_prior_config_from_mapping(
