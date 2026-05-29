@@ -77,15 +77,16 @@ def _pairwise_method_chain_has_patch(method: Any, marker: str) -> bool:
 
     seen: set[int] = set()
     current: Any = method
-    while current is not None:
+    while True:
+        if current is None:
+            return False
         current_id = id(current)
         if current_id in seen:
             return False
-        seen.add(current_id)
         if getattr(current, marker, False):
             return True
+        seen.add(current_id)
         current = getattr(current, "_bayescatrack_original", None)
-    return False
 
 
 def _install_cost_matrix_patch() -> None:
@@ -353,73 +354,65 @@ def _pairwise_one_sided_distance_overlap(
 
 
 def _dilate_binary_mask_stack(masks: np.ndarray, radius: int) -> np.ndarray:
+    from bayescatrack.association.soft_overlap import dilate_mask_stack
+
     radius = _nonnegative_int(radius, name="radius")
-    mask_array = np.asarray(masks) > 0
-    if radius == 0 or mask_array.size == 0:
-        return mask_array
-    padded = np.pad(
-        mask_array,
-        ((0, 0), (radius, radius), (radius, radius)),
-        mode="constant",
-        constant_values=False,
-    )
-    dilated = np.zeros_like(mask_array, dtype=bool)
-    height, width = mask_array.shape[1:]
-    for offset_y in range(-radius, radius + 1):
-        for offset_x in range(-radius, radius + 1):
-            if offset_y * offset_y + offset_x * offset_x > radius * radius:
-                continue
-            y_start = radius + offset_y
-            x_start = radius + offset_x
-            y_slice = slice(y_start, y_start + height)
-            x_slice = slice(x_start, x_start + width)
-            dilated |= padded[:, y_slice, x_slice]
-    return dilated
+    return dilate_mask_stack(masks, radius=radius)
 
 
 def _nonnegative_int(value: Any, *, name: str) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be an integer")
-    if isinstance(value, (float, np.floating)):
-        if not np.isfinite(value) or not float(value).is_integer():
+    numeric_candidate: Any
+    if isinstance(value, str):
+        numeric_candidate = value.strip()
+        if not numeric_candidate:
             raise ValueError(f"{name} must be an integer")
-        integer_value = int(value)
-    elif isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError(f"{name} must be an integer")
-        try:
-            numeric_value = float(stripped)
-        except ValueError as exc:
-            raise ValueError(f"{name} must be an integer") from exc
-        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-            raise ValueError(f"{name} must be an integer")
-        integer_value = int(numeric_value)
+    elif isinstance(value, (float, np.floating)):
+        numeric_candidate = value
     else:
         try:
-            integer_value = operator.index(value)
-        except TypeError as exc:
-            raise ValueError(f"{name} must be an integer") from exc
+            return _reject_negative_int(operator.index(value), name=name)
+        except TypeError:
+            try:
+                numeric_candidate = float(value)
+            except (TypeError, ValueError) as float_exc:
+                raise ValueError(f"{name} must be an integer") from float_exc
+    try:
+        numeric_value = float(numeric_candidate)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+        raise ValueError(f"{name} must be an integer")
+    return _reject_negative_int(int(numeric_value), name=name)
+
+
+def _reject_negative_int(integer_value: int, *, name: str) -> int:
     if integer_value < 0:
         raise ValueError(f"{name} must be non-negative")
     return int(integer_value)
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite non-negative value")
-    numeric_value = float(value)
-    if not np.isfinite(numeric_value) or numeric_value < 0.0:
-        raise ValueError(f"{name} must be a finite non-negative value")
-    return numeric_value
+    return _finite_float(value, name=name, lower_bound=0.0, positive=False)
 
 
 def _finite_positive_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=True)
+
+
+def _finite_float(
+    value: Any, *, name: str, lower_bound: float, positive: bool
+) -> float:
+    qualifier = "positive" if positive else "non-negative"
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite positive value")
+        raise ValueError(f"{name} must be a finite {qualifier} value")
     numeric_value = float(value)
-    if not np.isfinite(numeric_value) or numeric_value <= 0.0:
-        raise ValueError(f"{name} must be a finite positive value")
+    violates_bound = (
+        numeric_value <= lower_bound if positive else numeric_value < lower_bound
+    )
+    if not np.isfinite(numeric_value) or violates_bound:
+        raise ValueError(f"{name} must be a finite {qualifier} value")
     return numeric_value
 
 
