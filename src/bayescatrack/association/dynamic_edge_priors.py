@@ -26,6 +26,9 @@ class DynamicEdgePriorConfig:
     registration_empty_roi_weight: float = 0.0
     reciprocal_rank_weight: float = 0.0
     reciprocal_rank_cap: float | None = None
+    local_margin_weight: float = 0.0
+    local_margin_target: float = 0.0
+    local_margin_cap: float | None = None
     edge_quality_bias: float = 0.0
     large_cost: float = 1.0e6
 
@@ -37,6 +40,8 @@ class DynamicEdgePriorConfig:
             "activity_missing_weight",
             "registration_empty_roi_weight",
             "reciprocal_rank_weight",
+            "local_margin_weight",
+            "local_margin_target",
         ):
             value = float(getattr(self, name))
             if value < 0.0 or not np.isfinite(value):
@@ -47,6 +52,11 @@ class DynamicEdgePriorConfig:
             if reciprocal_rank_cap < 0.0 or not np.isfinite(reciprocal_rank_cap):
                 raise ValueError("reciprocal_rank_cap must be finite and non-negative")
             object.__setattr__(self, "reciprocal_rank_cap", reciprocal_rank_cap)
+        if self.local_margin_cap is not None:
+            local_margin_cap = float(self.local_margin_cap)
+            if local_margin_cap < 0.0 or not np.isfinite(local_margin_cap):
+                raise ValueError("local_margin_cap must be finite and non-negative")
+            object.__setattr__(self, "local_margin_cap", local_margin_cap)
         edge_quality_bias = float(self.edge_quality_bias)
         if not np.isfinite(edge_quality_bias):
             raise ValueError("edge_quality_bias must be finite")
@@ -125,6 +135,14 @@ def apply_dynamic_edge_priors(
         empty = _column_mask_for_cost_shape(empty_registered_rois, costs.shape)
         empty_columns = np.broadcast_to(empty[None, :], costs.shape)
         costs[valid_edge_mask & empty_columns] += cfg.registration_empty_roi_weight
+    if cfg.local_margin_weight and cfg.local_margin_target:
+        costs += _local_margin_shortfall_penalty(
+            costs,
+            weight=cfg.local_margin_weight,
+            target_margin=cfg.local_margin_target,
+            cap=cfg.local_margin_cap,
+            large_cost=cfg.large_cost,
+        )
     if cfg.reciprocal_rank_weight:
         costs += _reciprocal_rank_penalty(
             costs,
@@ -205,6 +223,83 @@ def _activity_missing_component(
             return 1.0 - np.clip(np.nan_to_num(values, nan=0.0), 0.0, 1.0)
         return np.clip(np.nan_to_num(values, nan=0.0), 0.0, 1.0)
     return np.zeros(shape, dtype=float)
+
+
+def _local_margin_shortfall_penalty(
+    costs: np.ndarray,
+    *,
+    weight: float,
+    target_margin: float,
+    cap: float | None,
+    large_cost: float,
+) -> np.ndarray:
+    """Return penalties for locally best edges with weak separation.
+
+    Dense reciprocal rank penalizes non-competitive alternatives but leaves all
+    local best edges unchanged.  Ambiguous Track2p false continuations can still
+    be row/column best when the local field contains several almost-equal
+    candidates.  This prior adds a bounded shortfall penalty only when a valid
+    edge is best along the row or column and its nearest alternative is closer
+    than ``target_margin``.
+    """
+
+    if weight <= 0.0 or target_margin <= 0.0:
+        return np.zeros_like(costs, dtype=float)
+    row_margins = _best_axis_margins(costs, axis=1, large_cost=large_cost)
+    column_margins = _best_axis_margins(costs, axis=0, large_cost=large_cost)
+    local_margin = np.minimum(row_margins, column_margins)
+    finite = np.isfinite(local_margin)
+    penalty = np.zeros_like(costs, dtype=float)
+    if not np.any(finite):
+        return penalty
+    penalty[finite] = float(weight) * np.maximum(
+        float(target_margin) - local_margin[finite], 0.0
+    )
+    if cap is not None:
+        penalty[finite] = np.minimum(penalty[finite], float(cap))
+    return penalty
+
+
+def _best_axis_margins(costs: np.ndarray, *, axis: int, large_cost: float) -> np.ndarray:
+    margins = np.full(costs.shape, np.inf, dtype=float)
+    if costs.size == 0:
+        return margins
+    if axis == 1:
+        for row_index in range(costs.shape[0]):
+            margins[row_index, :] = _best_vector_margins(
+                costs[row_index, :], large_cost=large_cost
+            )
+        return margins
+    if axis == 0:
+        for column_index in range(costs.shape[1]):
+            margins[:, column_index] = _best_vector_margins(
+                costs[:, column_index], large_cost=large_cost
+            )
+        return margins
+    raise ValueError("axis must be 0 or 1")
+
+
+def _best_vector_margins(values: np.ndarray, *, large_cost: float) -> np.ndarray:
+    vector = np.asarray(values, dtype=float).reshape(-1)
+    margins = np.full(vector.shape, np.inf, dtype=float)
+    valid = np.isfinite(vector) & (vector < large_cost)
+    if not np.any(valid):
+        return margins.reshape(values.shape)
+    valid_values = vector[valid]
+    best = float(np.min(valid_values))
+    best_mask = valid & np.isclose(vector, best, rtol=1.0e-12, atol=1.0e-12)
+    if np.count_nonzero(valid) <= 1:
+        return margins.reshape(values.shape)
+    if np.count_nonzero(best_mask) > 1:
+        margins[best_mask] = 0.0
+        return margins.reshape(values.shape)
+    alternative_mask = ~np.isclose(valid_values, best, rtol=1.0e-12, atol=1.0e-12)
+    alternatives = valid_values[alternative_mask]
+    if alternatives.size == 0:
+        margins[best_mask] = 0.0
+    else:
+        margins[best_mask] = float(np.min(alternatives) - best)
+    return margins.reshape(values.shape)
 
 
 def _reciprocal_rank_penalty(
