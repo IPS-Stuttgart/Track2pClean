@@ -78,7 +78,9 @@ def test_drop_empty_registered_masks_removes_nonfinite_registered_rois():
     np.testing.assert_array_equal(filtered.neuropil_traces, plane.neuropil_traces[[1]])
     np.testing.assert_allclose(filtered.cell_probabilities, np.asarray([0.9]))
     np.testing.assert_allclose(filtered.roi_features["radius"], np.asarray([2.0]))
-    np.testing.assert_allclose(filtered.centroids(order="yx"), np.asarray([[1.0], [1.0]]))
+    np.testing.assert_allclose(
+        filtered.centroids(order="yx"), np.asarray([[1.0], [1.0]])
+    )
 
 
 def test_session_context_ignores_all_nonfinite_cell_probabilities():
