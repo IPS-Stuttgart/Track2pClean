@@ -17,25 +17,41 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
-
 from bayescatrack.experiments.track2p_benchmark import (
-    GROUND_TRUTH_REFERENCE_SOURCE, OutputFormat, SubjectBenchmarkResult,
-    Track2pBenchmarkConfig, _load_reference_for_subject,
-    _load_subject_sessions, _reference_matrix,
-    _score_prediction_against_reference, _validate_reference_for_benchmark,
-    _validate_reference_roi_indices, discover_subject_dirs, write_results)
+    GROUND_TRUTH_REFERENCE_SOURCE,
+    OutputFormat,
+    SubjectBenchmarkResult,
+    Track2pBenchmarkConfig,
+    _load_reference_for_subject,
+    _load_subject_sessions,
+    _reference_matrix,
+    _score_prediction_against_reference,
+    _validate_reference_for_benchmark,
+    _validate_reference_roi_indices,
+    discover_subject_dirs,
+    write_results,
+)
 from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
     TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
-    TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE, ThresholdMethod,
-    track2p_policy_config)
+    TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE,
+    ThresholdMethod,
+    track2p_policy_config,
+)
 from bayescatrack.experiments.track2p_policy_component_audit import (
-    ComponentAuditOutput, ComponentCleanupConfig, _evaluated_prediction_rows,
-    _no_prune_config, _normalize_int_track_matrix, apply_weakest_bridge_splits,
-    component_audit_rows, write_component_rows)
-from bayescatrack.experiments.track2p_policy_pruned_benchmark import \
-    emulate_track2p_pruned_tracks
+    ComponentAuditOutput,
+    ComponentCleanupConfig,
+    _evaluated_prediction_rows,
+    _no_prune_config,
+    _normalize_int_track_matrix,
+    apply_weakest_bridge_splits,
+    component_audit_rows,
+    write_component_rows,
+)
+from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
+    emulate_track2p_pruned_tracks,
+)
 
 TRACK2P_POLICY_CONFLICT_COMPONENT_CLEANUP_METHOD = (
     "track2p-policy-conflict-component-cleanup"
