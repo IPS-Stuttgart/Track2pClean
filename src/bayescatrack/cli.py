@@ -296,9 +296,7 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-residual-audit": "track2p-policy-component-residual-audit",
     "track2p-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
     "track2p-component-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
-    "track2p-teacher-adjacent-rescue": (
-        "track2p-policy-teacher-adjacent-rescue"
-    ),
+    "track2p-teacher-adjacent-rescue": ("track2p-policy-teacher-adjacent-rescue"),
     "track2p-component-teacher-adjacent-rescue": (
         "track2p-policy-teacher-adjacent-rescue"
     ),

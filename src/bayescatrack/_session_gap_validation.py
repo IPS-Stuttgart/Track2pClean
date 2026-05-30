@@ -85,8 +85,12 @@ def install_session_gap_validation() -> None:
         original_policy,
     )
 
-    _dynamic_edge_priors.apply_dynamic_edge_priors = apply_dynamic_edge_priors_with_session_gap_validation
-    _track2p_policy_priors.apply_track2p_policy_edge_prior = apply_track2p_policy_edge_prior_with_session_gap_validation
+    _dynamic_edge_priors.apply_dynamic_edge_priors = (
+        apply_dynamic_edge_priors_with_session_gap_validation
+    )
+    _track2p_policy_priors.apply_track2p_policy_edge_prior = (
+        apply_track2p_policy_edge_prior_with_session_gap_validation
+    )
     setattr(_dynamic_edge_priors, "_bayescatrack_session_gap_validation_patch", True)
     setattr(_track2p_policy_priors, "_bayescatrack_session_gap_validation_patch", True)
 

@@ -13,7 +13,9 @@ from bayescatrack.association.track2p_policy_priors import (
 
 
 @pytest.mark.parametrize("session_gap", [True, 0, 1.5, "2.5", float("nan")])
-def test_dynamic_edge_prior_rejects_non_integer_session_gaps(session_gap: object) -> None:
+def test_dynamic_edge_prior_rejects_non_integer_session_gaps(
+    session_gap: object,
+) -> None:
     with pytest.raises(ValueError, match="session_gap"):
         apply_dynamic_edge_priors(
             np.asarray([[1.0]], dtype=float),
@@ -35,7 +37,9 @@ def test_dynamic_edge_prior_accepts_integer_like_session_gap_strings() -> None:
 
 
 @pytest.mark.parametrize("session_gap", [True, 0, 1.5, "2.5", float("inf")])
-def test_track2p_policy_prior_rejects_non_integer_session_gaps(session_gap: object) -> None:
+def test_track2p_policy_prior_rejects_non_integer_session_gaps(
+    session_gap: object,
+) -> None:
     with pytest.raises(ValueError, match="session_gap"):
         apply_track2p_policy_edge_prior(
             np.asarray([[5.0]], dtype=float),

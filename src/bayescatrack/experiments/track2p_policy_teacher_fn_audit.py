@@ -362,8 +362,7 @@ def _simulate_adjacent_rescue(
         for row_index in target_rows
     )
     would_break_complete_tp = any(
-        _complete_track_status(output[row_index], reference_complete)
-        == "true_positive"
+        _complete_track_status(output[row_index], reference_complete) == "true_positive"
         for row_index in set(source_rows) | set(target_rows)
     )
     if duplicate_source or duplicate_target:
