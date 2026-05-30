@@ -11,8 +11,6 @@ metadata synchronized.
 
 from __future__ import annotations
 
-# pylint: disable=too-many-arguments,too-many-branches
-
 import operator
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -20,6 +18,11 @@ from typing import Any
 import numpy as np
 
 from . import pyrecest_global_assignment as _global_assignment
+
+# pylint: disable=too-many-arguments,too-many-branches
+
+
+
 
 SessionEdge = tuple[int, int]
 _PATCH_ATTR = "_bayescatrack_global_assignment_input_validation_patch"
@@ -115,7 +118,9 @@ def _normalize_session_edges(
         return tuple(sorted(pairwise_costs))
 
     normalized = tuple(
-        _normalize_session_edge(edge, session_count=session_count, context="session_edges")
+        _normalize_session_edge(
+            edge, session_count=session_count, context="session_edges"
+        )
         for edge in session_edges
     )
     if len(set(normalized)) != len(normalized):

@@ -5,7 +5,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-
 from bayescatrack.association import pyrecest_global_assignment as assignment
 
 
@@ -14,7 +13,9 @@ class _DummySolverResult:
     tracks: tuple[dict[int, int], ...] = ()
 
 
-def test_global_assignment_validates_and_normalizes_edge_metadata(monkeypatch: pytest.MonkeyPatch):
+def test_global_assignment_validates_and_normalizes_edge_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+):
     calls: dict[str, Any] = {}
 
     def fake_solver(
