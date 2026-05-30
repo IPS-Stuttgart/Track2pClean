@@ -2,15 +2,16 @@
 
 PyRecEst's global assignment solver consumes a mapping of pairwise cost matrices.
 BayesCaTrack additionally stores ``session_edges`` metadata in ``GlobalAssignmentRun``
-for diagnostics, exports, and downstream benchmark analysis.  If that metadata
+for diagnostics, exports, and downstream benchmark analysis. If that metadata
 advertises edges not present in the actual cost mapping, later diagnostics can
-report empty or shifted link-cost columns for edges that were never solved.  This
+report empty or shifted link-cost columns for edges that were never solved. This
 module installs an idempotent wrapper that keeps the solver inputs and returned
 metadata synchronized.
 """
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -122,7 +123,9 @@ def _normalize_session_edges(
     actual_edges = set(pairwise_costs)
     if configured_edges != actual_edges:
         missing_costs = tuple(edge for edge in normalized if edge not in actual_edges)
-        unlisted_costs = tuple(edge for edge in sorted(actual_edges) if edge not in configured_edges)
+        unlisted_costs = tuple(
+            edge for edge in sorted(actual_edges) if edge not in configured_edges
+        )
         details: list[str] = []
         if missing_costs:
             details.append(f"missing pairwise costs for {missing_costs!r}")
@@ -197,11 +200,9 @@ def _coerce_integer_like(value: Any, *, context: str, allow_zero: bool) -> int:
         integer_value = int(numeric_value)
     else:
         try:
-            integer_value = int(value)
-        except (TypeError, ValueError) as exc:
+            integer_value = operator.index(value)
+        except TypeError as exc:
             raise ValueError(f"{context} must be an integer") from exc
-        if integer_value != value:
-            raise ValueError(f"{context} must be an integer")
 
     minimum = 0 if allow_zero else 1
     if integer_value < minimum:
