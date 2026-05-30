@@ -12,10 +12,14 @@
     "src/bayescatrack/experiments/track2p_policy_gap_bridge_cleanup.py",
     "src/bayescatrack/experiments/track2p_policy_strict_gated_gap_cleanup.py",
     "src/bayescatrack/experiments/track2p_policy_confidence_ordered_strict_gap_cleanup.py",
+    "src/bayescatrack/experiments/track2p_policy_conflict_component_cleanup.py",
+    "src/bayescatrack/experiments/track2p_policy_transitive_strict_gap_cleanup.py",
     "tests/test_track2p_policy_component_sweep.py",
     "tests/test_track2p_policy_gap_consensus_cleanup.py",
     "tests/test_track2p_policy_gap_component_cleanup.py",
     "tests/test_track2p_policy_gap_bridge_cleanup.py",
-    "tests/test_track2p_policy_strict_gated_gap_cleanup.py"
+    "tests/test_track2p_policy_strict_gated_gap_cleanup.py",
+    "tests/test_track2p_policy_conflict_component_cleanup.py",
+    "tests/test_track2p_policy_transitive_strict_gap_cleanup.py"
   ]
 }

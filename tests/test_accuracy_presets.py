@@ -19,6 +19,7 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         "registered-shifted-iou-safe",
         "roi-aware-shifted-pruned",
         "roi-aware-shifted-consensus",
+        "track2p-stability-cleanup",
         "track2p-supported-gap-cleanup",
         "track2p-confidence-ordered-strict-gap-cleanup",
     ]
@@ -27,7 +28,7 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
     assert all(preset.config.include_non_cells for preset in presets[:3])
     assert all(preset.config.weighted_masks for preset in presets[:3])
 
-    shifted, pruned, consensus, supported_gap, confidence_gap = presets
+    shifted, pruned, consensus, stability, supported_gap, confidence_gap = presets
     assert shifted.config.cost == "registered-shifted-iou"
     assert shifted.config.higher_order_consistency_config is not None
     assert pruned.config.cost == "roi-aware-shifted"
@@ -40,6 +41,18 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
     assert pruned.config.activity_tie_breaker_weight > 0.0
     assert consensus.config.consensus_prior_config is not None
     assert consensus.config.consensus_prior_config["min_votes"] == 2
+    assert stability.runner == "stability-cleanup"
+    assert stability.config.transform_type == "affine"
+    assert stability.config.max_gap == 1
+    assert stability.config.include_non_cells is False
+    assert stability.config.weighted_masks is False
+    assert stability.runner_kwargs is not None
+    assert stability.runner_kwargs["threshold_method"] == "min"
+    cleanup_kwargs = stability.runner_kwargs["cleanup_config_kwargs"]
+    assert isinstance(cleanup_kwargs, dict)
+    assert cleanup_kwargs["base_iou_distance_threshold"] == 12.0
+    assert cleanup_kwargs["min_support_fraction"] == 2.0 / 3.0
+    assert cleanup_kwargs["min_side_observations"] == 2
     assert supported_gap.runner == "supported-gap-cleanup"
     assert supported_gap.config.transform_type == "affine"
     assert supported_gap.config.include_non_cells is False
@@ -71,9 +84,11 @@ def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
     assert rows[1]["candidate_pruning"] is True
     assert rows[1]["dynamic_edge_prior"] is True
     assert rows[2]["consensus_prior"] is True
-    assert rows[3]["runner"] == "supported-gap-cleanup"
-    assert rows[3]["supported_gap_cleanup"] is True
-    assert rows[3]["confidence_ordered_strict_gap_cleanup"] is False
-    assert rows[4]["runner"] == "confidence-ordered-strict-gap-cleanup"
-    assert rows[4]["supported_gap_cleanup"] is False
-    assert rows[4]["confidence_ordered_strict_gap_cleanup"] is True
+    assert rows[3]["runner"] == "stability-cleanup"
+    assert rows[3]["stability_cleanup"] is True
+    assert rows[4]["runner"] == "supported-gap-cleanup"
+    assert rows[4]["supported_gap_cleanup"] is True
+    assert rows[4]["confidence_ordered_strict_gap_cleanup"] is False
+    assert rows[5]["runner"] == "confidence-ordered-strict-gap-cleanup"
+    assert rows[5]["supported_gap_cleanup"] is False
+    assert rows[5]["confidence_ordered_strict_gap_cleanup"] is True
