@@ -32,8 +32,7 @@ def test_conflict_augmented_cleanup_marks_structural_conflict_split() -> None:
     assert abs(float(rows[0]["conflict_augmented_component_score"]) - 1.60) < 1e-12
 
 
-def test_conflict_augmented_cleanup_does_not_split_without_structural_evidence(
-) -> None:
+def test_conflict_augmented_cleanup_requires_structural_evidence() -> None:
     rows = mark_conflict_augmented_splits(
         [_component_row(component_score=1.10)],
         config=ConflictAugmentedCleanupConfig(
