@@ -21,13 +21,14 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         "roi-aware-shifted-consensus",
         "track2p-stability-cleanup",
         "track2p-supported-gap-cleanup",
+        "track2p-confidence-ordered-strict-gap-cleanup",
     ]
     assert all(preset.config.method == "global-assignment" for preset in presets)
     assert all(preset.config.reference_kind == "manual-gt" for preset in presets)
     assert all(preset.config.include_non_cells for preset in presets[:3])
     assert all(preset.config.weighted_masks for preset in presets[:3])
 
-    shifted, pruned, consensus, stability, supported_gap = presets
+    shifted, pruned, consensus, stability, supported_gap, confidence_gap = presets
     assert shifted.config.cost == "registered-shifted-iou"
     assert shifted.config.higher_order_consistency_config is not None
     assert pruned.config.cost == "roi-aware-shifted"
@@ -59,6 +60,15 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
     assert supported_gap.runner_kwargs is not None
     assert supported_gap.runner_kwargs["min_bridge_support"] == 1
     assert supported_gap.runner_kwargs["reject_conflicting_bridge_support"] is True
+    assert confidence_gap.runner == "confidence-ordered-strict-gap-cleanup"
+    assert confidence_gap.config is supported_gap.config
+    assert confidence_gap.runner_kwargs == {
+        "threshold_method": "min",
+        "iou_distance_threshold": 12.0,
+        "transform_type": "affine",
+        "cell_probability_threshold": 0.5,
+        "max_gap": 2,
+    }
 
 
 def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
@@ -78,3 +88,7 @@ def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
     assert rows[3]["stability_cleanup"] is True
     assert rows[4]["runner"] == "supported-gap-cleanup"
     assert rows[4]["supported_gap_cleanup"] is True
+    assert rows[4]["confidence_ordered_strict_gap_cleanup"] is False
+    assert rows[5]["runner"] == "confidence-ordered-strict-gap-cleanup"
+    assert rows[5]["supported_gap_cleanup"] is False
+    assert rows[5]["confidence_ordered_strict_gap_cleanup"] is True
