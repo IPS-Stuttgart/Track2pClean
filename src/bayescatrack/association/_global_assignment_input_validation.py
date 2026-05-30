@@ -11,6 +11,8 @@ metadata synchronized.
 
 from __future__ import annotations
 
+# pylint: disable=too-many-arguments,too-many-branches
+
 import operator
 from collections.abc import Mapping, Sequence
 from typing import Any
