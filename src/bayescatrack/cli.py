@@ -114,6 +114,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run component cleanup plus strictly gated gap-rescue candidates",
     ),
     (
+        "track2p-policy-confidence-ordered-strict-gated-gap-cleanup",
+        "bayescatrack.experiments.track2p_policy_confidence_ordered_strict_gap_cleanup",
+        "Run component cleanup plus confidence-ordered strictly gated gap rescue",
+    ),
+    (
         "track2p-policy-gap-bridge-cleanup",
         "bayescatrack.experiments.track2p_policy_gap_bridge_cleanup",
         "Run Track2p-policy gap rescue plus observed-bridge cleanup",
@@ -316,6 +321,21 @@ _BENCHMARK_ALIASES: dict[str, str] = {
         "track2p-policy-strict-gated-gap-cleanup"
     ),
     "track2p-component-strict-gap-cleanup": ("track2p-policy-strict-gated-gap-cleanup"),
+    "track2p-confidence-strict-gap-cleanup": (
+        "track2p-policy-confidence-ordered-strict-gated-gap-cleanup"
+    ),
+    "track2p-confidence-ordered-strict-gap-cleanup": (
+        "track2p-policy-confidence-ordered-strict-gated-gap-cleanup"
+    ),
+    "track2p-confidence-ordered-strict-gated-gap-cleanup": (
+        "track2p-policy-confidence-ordered-strict-gated-gap-cleanup"
+    ),
+    "track2p-component-confidence-strict-gap-cleanup": (
+        "track2p-policy-confidence-ordered-strict-gated-gap-cleanup"
+    ),
+    "track2p-policy-confidence-strict-gap-cleanup": (
+        "track2p-policy-confidence-ordered-strict-gated-gap-cleanup"
+    ),
     "track2p-gap-bridge-cleanup": "track2p-policy-gap-bridge-cleanup",
     "track2p-gap-rescue-bridge-cleanup": "track2p-policy-gap-bridge-cleanup",
     "track2p-policy-gap-rescue-bridge-cleanup": ("track2p-policy-gap-bridge-cleanup"),

@@ -446,10 +446,13 @@ def _conflict_augmented_extra_candidate(
         return False
     if base_score < float(config.min_base_risk):
         return False
-    if not _as_bool_int(row.get("is_complete_track")):
-        return False
 
     component_config = config.component_config
+    if not _as_bool_int(row.get("is_complete_track")) and bool(
+        component_config.require_complete_track
+    ):
+        return False
+
     split_index = _as_int(row.get("weakest_bridge_session_a"), default=-1)
     total_sessions = _as_int(
         row.get("total_sessions"),

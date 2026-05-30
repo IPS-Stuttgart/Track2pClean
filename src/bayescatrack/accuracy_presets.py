@@ -27,9 +27,13 @@ AccuracyPresetName = Literal[
     "roi-aware-shifted-consensus",
     "track2p-stability-cleanup",
     "track2p-supported-gap-cleanup",
+    "track2p-confidence-ordered-strict-gap-cleanup",
 ]
 AccuracyPresetRunner = Literal[
-    "benchmark", "stability-cleanup", "supported-gap-cleanup"
+    "benchmark",
+    "stability-cleanup",
+    "supported-gap-cleanup",
+    "confidence-ordered-strict-gap-cleanup",
 ]
 
 
@@ -190,6 +194,19 @@ def build_track2p_accuracy_presets(
         weighted_centroids=False,
         exclude_overlapping_pixels=False,
     )
+    confidence_gap_runner_kwargs = {
+        "threshold_method": "min",
+        "iou_distance_threshold": 12.0,
+        "transform_type": "affine",
+        "cell_probability_threshold": 0.5,
+        "max_gap": supported_gap_max_gap,
+        "cleanup_config_kwargs": {
+            "split_risk_threshold": 1.50,
+            "split_penalty": 0.25,
+            "min_side_observations": 2,
+            "require_complete_track": True,
+        },
+    }
 
     return (
         AccuracyPreset(
@@ -247,15 +264,22 @@ def build_track2p_accuracy_presets(
             config=supported_gap_cleanup,
             runner="supported-gap-cleanup",
             runner_kwargs={
-                "threshold_method": "min",
-                "iou_distance_threshold": 12.0,
-                "transform_type": "affine",
-                "cell_probability_threshold": 0.5,
-                "max_gap": supported_gap_max_gap,
+                **confidence_gap_runner_kwargs,
                 "min_bridge_support": 1,
                 "reject_conflicting_bridge_support": True,
                 "apply_splits": True,
             },
+        ),
+        AccuracyPreset(
+            name="track2p-confidence-ordered-strict-gap-cleanup",
+            description=(
+                "Component cleanup plus hard-gated gap rescue, applying accepted "
+                "gap candidates by descending gate slack so weak candidates do "
+                "not block stronger suffix merges."
+            ),
+            config=supported_gap_cleanup,
+            runner="confidence-ordered-strict-gap-cleanup",
+            runner_kwargs=confidence_gap_runner_kwargs,
         ),
     )
 
@@ -326,6 +350,31 @@ def _run_accuracy_preset(preset: AccuracyPreset) -> list[SubjectBenchmarkResult]
             **dict(preset.runner_kwargs or {}),
         )
         return list(output.results)
+    if preset.runner == "confidence-ordered-strict-gap-cleanup":
+        from bayescatrack.experiments import (
+            track2p_policy_confidence_ordered_strict_gap_cleanup as confidence_gap_cleanup,
+        )
+
+        runner_kwargs = dict(preset.runner_kwargs or {})
+        cleanup_kwargs = runner_kwargs.pop("cleanup_config_kwargs", None)
+        if cleanup_kwargs is not None:
+            if not isinstance(cleanup_kwargs, Mapping):
+                raise TypeError("cleanup_config_kwargs must be a mapping")
+            runner_kwargs["cleanup_config"] = (
+                confidence_gap_cleanup.ComponentCleanupConfig(**dict(cleanup_kwargs))
+            )
+        gate_kwargs = runner_kwargs.pop("gate_config_kwargs", None)
+        if gate_kwargs is not None:
+            if not isinstance(gate_kwargs, Mapping):
+                raise TypeError("gate_config_kwargs must be a mapping")
+            runner_kwargs["gate_config"] = confidence_gap_cleanup.StrictGapGateConfig(
+                **dict(gate_kwargs)
+            )
+        output = confidence_gap_cleanup.run_track2p_policy_confidence_ordered_strict_gated_gap_cleanup(
+            preset.config,
+            **runner_kwargs,
+        )
+        return list(output.results)
     raise ValueError(f"Unsupported accuracy preset runner: {preset.runner!r}")
 
 
@@ -356,6 +405,9 @@ def accuracy_preset_metadata(
                 "consensus_prior": cfg.consensus_prior_config is not None,
                 "stability_cleanup": preset.runner == "stability-cleanup",
                 "supported_gap_cleanup": preset.runner == "supported-gap-cleanup",
+                "confidence_ordered_strict_gap_cleanup": (
+                    preset.runner == "confidence-ordered-strict-gap-cleanup"
+                ),
             }
         )
     return tuple(rows)
