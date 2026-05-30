@@ -27,7 +27,7 @@ AccuracyPresetName = Literal[
     "roi-aware-shifted-consensus",
     "track2p-stability-cleanup",
     "track2p-supported-gap-cleanup",
-    "track2p-confidence-strict-gap-cleanup",
+    "track2p-confidence-ordered-strict-gap-cleanup",
 ]
 AccuracyPresetRunner = Literal[
     "benchmark",
@@ -194,10 +194,19 @@ def build_track2p_accuracy_presets(
         weighted_centroids=False,
         exclude_overlapping_pixels=False,
     )
-    confidence_strict_gap_cleanup = replace(
-        supported_gap_cleanup,
-        max_gap=supported_gap_max_gap,
-    )
+    confidence_gap_runner_kwargs = {
+        "threshold_method": "min",
+        "iou_distance_threshold": 12.0,
+        "transform_type": "affine",
+        "cell_probability_threshold": 0.5,
+        "max_gap": supported_gap_max_gap,
+        "cleanup_config_kwargs": {
+            "split_risk_threshold": 1.50,
+            "split_penalty": 0.25,
+            "min_side_observations": 2,
+            "require_complete_track": True,
+        },
+    }
 
     return (
         AccuracyPreset(
@@ -255,38 +264,22 @@ def build_track2p_accuracy_presets(
             config=supported_gap_cleanup,
             runner="supported-gap-cleanup",
             runner_kwargs={
-                "threshold_method": "min",
-                "iou_distance_threshold": 12.0,
-                "transform_type": "affine",
-                "cell_probability_threshold": 0.5,
-                "max_gap": supported_gap_max_gap,
+                **confidence_gap_runner_kwargs,
                 "min_bridge_support": 1,
                 "reject_conflicting_bridge_support": True,
                 "apply_splits": True,
             },
         ),
         AccuracyPreset(
-            name="track2p-confidence-strict-gap-cleanup",
+            name="track2p-confidence-ordered-strict-gap-cleanup",
             description=(
-                "Track2p-style affine/min-threshold policy with weakest-bridge "
-                "component cleanup and hard-gated gap rescue applied in descending "
-                "gate-confidence order."
+                "Component cleanup plus hard-gated gap rescue, applying accepted "
+                "gap candidates by descending gate slack so weak candidates do "
+                "not block stronger suffix merges."
             ),
-            config=confidence_strict_gap_cleanup,
+            config=supported_gap_cleanup,
             runner="confidence-ordered-strict-gap-cleanup",
-            runner_kwargs={
-                "threshold_method": "min",
-                "iou_distance_threshold": 12.0,
-                "transform_type": "affine",
-                "cell_probability_threshold": 0.5,
-                "max_gap": supported_gap_max_gap,
-                "cleanup_config_kwargs": {
-                    "split_risk_threshold": 1.50,
-                    "split_penalty": 0.25,
-                    "min_side_observations": 2,
-                    "require_complete_track": True,
-                },
-            },
+            runner_kwargs=confidence_gap_runner_kwargs,
         ),
     )
 
@@ -414,8 +407,9 @@ def accuracy_preset_metadata(
                 "consensus_prior": cfg.consensus_prior_config is not None,
                 "stability_cleanup": preset.runner == "stability-cleanup",
                 "supported_gap_cleanup": preset.runner == "supported-gap-cleanup",
-                "confidence_ordered_strict_gap_cleanup": preset.runner
-                == "confidence-ordered-strict-gap-cleanup",
+                "confidence_ordered_strict_gap_cleanup": (
+                    preset.runner == "confidence-ordered-strict-gap-cleanup"
+                ),
             }
         )
     return tuple(rows)

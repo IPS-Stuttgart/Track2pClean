@@ -26,7 +26,7 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         "roi-aware-shifted-consensus",
         "track2p-stability-cleanup",
         "track2p-supported-gap-cleanup",
-        "track2p-confidence-strict-gap-cleanup",
+        "track2p-confidence-ordered-strict-gap-cleanup",
     ]
     assert all(preset.config.method == "global-assignment" for preset in presets)
     assert all(preset.config.reference_kind == "manual-gt" for preset in presets)
@@ -66,6 +66,7 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
     assert supported_gap.runner_kwargs["min_bridge_support"] == 1
     assert supported_gap.runner_kwargs["reject_conflicting_bridge_support"] is True
     assert confidence_gap.runner == "confidence-ordered-strict-gap-cleanup"
+    assert confidence_gap.config is supported_gap.config
     assert confidence_gap.config.transform_type == "affine"
     assert confidence_gap.config.max_gap == supported_gap.config.max_gap
     assert confidence_gap.config.include_non_cells is False
@@ -96,7 +97,9 @@ def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
     assert rows[3]["stability_cleanup"] is True
     assert rows[4]["runner"] == "supported-gap-cleanup"
     assert rows[4]["supported_gap_cleanup"] is True
+    assert rows[4]["confidence_ordered_strict_gap_cleanup"] is False
     assert rows[5]["runner"] == "confidence-ordered-strict-gap-cleanup"
+    assert rows[5]["supported_gap_cleanup"] is False
     assert rows[5]["confidence_ordered_strict_gap_cleanup"] is True
 
 
@@ -130,7 +133,7 @@ def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -
         "build_track2p_accuracy_presets",
         lambda *args, **kwargs: (
             AccuracyPreset(
-                name="track2p-confidence-strict-gap-cleanup",
+                name="track2p-confidence-ordered-strict-gap-cleanup",
                 description="synthetic confidence strict gap preset",
                 config=build_track2p_accuracy_presets("/unused", progress=False)[-1].config,
                 runner="confidence-ordered-strict-gap-cleanup",
@@ -158,10 +161,14 @@ def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -
 
     output = run_track2p_accuracy_presets(
         "/data/track2p",
-        preset_names=cast(object, ("track2p-confidence-strict-gap-cleanup",)),
+        preset_names=cast(
+            object, ("track2p-confidence-ordered-strict-gap-cleanup",)
+        ),
     )
 
-    assert output == {"track2p-confidence-strict-gap-cleanup": [fake_result]}
+    assert output == {
+        "track2p-confidence-ordered-strict-gap-cleanup": [fake_result]
+    }
     assert len(calls) == 1
     _, kwargs = calls[0]
     assert kwargs["threshold_method"] == "min"
