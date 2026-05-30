@@ -448,9 +448,8 @@ def _conflict_augmented_extra_candidate(
         return False
 
     component_config = config.component_config
-    if (
-        not _as_bool_int(row.get("is_complete_track"))
-        and bool(component_config.require_complete_track)
+    if not _as_bool_int(row.get("is_complete_track")) and bool(
+        component_config.require_complete_track
     ):
         return False
 
