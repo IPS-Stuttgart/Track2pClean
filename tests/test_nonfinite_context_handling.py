@@ -3,10 +3,15 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
+from bayescatrack import CalciumPlaneData
 from bayescatrack.association.multiplane_consistency import (
     PlaneRegistrationQuality,
     apply_multiplane_quality_penalty,
     shared_registration_reliability,
+)
+from bayescatrack.association.registered_masks import (
+    drop_empty_registered_masks,
+    empty_registered_roi_mask,
 )
 from bayescatrack.association.session_adaptive_calibration import (
     SessionContext,
@@ -24,6 +29,56 @@ def _plane(cell_probabilities):
         traces=None,
         spike_traces=None,
     )
+
+
+def test_empty_registered_roi_mask_treats_nonfinite_and_nonpositive_masks_as_empty():
+    roi_masks = np.asarray(
+        [
+            [[np.nan, np.nan], [np.nan, np.nan]],
+            [[np.inf, np.inf], [np.inf, np.inf]],
+            [[-1.0, -2.0], [0.0, -3.0]],
+            [[0.0, 0.0], [0.0, 1.0]],
+        ],
+        dtype=float,
+    )
+    plane = CalciumPlaneData(roi_masks)
+
+    np.testing.assert_array_equal(
+        empty_registered_roi_mask(plane),
+        np.asarray([True, True, True, False]),
+    )
+
+
+def test_drop_empty_registered_masks_removes_nonfinite_registered_rois():
+    roi_masks = np.asarray(
+        [
+            [[np.nan, np.nan], [np.nan, np.nan]],
+            [[0.0, 0.0], [0.0, 1.0]],
+            [[np.inf, 0.0], [0.0, np.inf]],
+        ],
+        dtype=float,
+    )
+    plane = CalciumPlaneData(
+        roi_masks,
+        traces=np.arange(6, dtype=float).reshape(3, 2),
+        spike_traces=np.arange(6, 12, dtype=float).reshape(3, 2),
+        neuropil_traces=np.arange(12, 18, dtype=float).reshape(3, 2),
+        cell_probabilities=np.asarray([0.1, 0.9, 0.2]),
+        roi_indices=np.asarray([10, 11, 12]),
+        roi_features={"radius": np.asarray([1.0, 2.0, 3.0])},
+    )
+
+    filtered, empty_mask = drop_empty_registered_masks(plane)
+
+    np.testing.assert_array_equal(empty_mask, np.asarray([True, False, True]))
+    assert filtered.roi_masks.shape == (1, 2, 2)
+    np.testing.assert_array_equal(filtered.roi_indices, np.asarray([11]))
+    np.testing.assert_array_equal(filtered.traces, plane.traces[[1]])
+    np.testing.assert_array_equal(filtered.spike_traces, plane.spike_traces[[1]])
+    np.testing.assert_array_equal(filtered.neuropil_traces, plane.neuropil_traces[[1]])
+    np.testing.assert_allclose(filtered.cell_probabilities, np.asarray([0.9]))
+    np.testing.assert_allclose(filtered.roi_features["radius"], np.asarray([2.0]))
+    np.testing.assert_allclose(filtered.centroids(order="yx"), np.asarray([[1.0], [1.0]]))
 
 
 def test_session_context_ignores_all_nonfinite_cell_probabilities():
