@@ -260,7 +260,9 @@ def _local_margin_shortfall_penalty(
     return penalty
 
 
-def _best_axis_margins(costs: np.ndarray, *, axis: int, large_cost: float) -> np.ndarray:
+def _best_axis_margins(
+    costs: np.ndarray, *, axis: int, large_cost: float
+) -> np.ndarray:
     margins = np.full(costs.shape, np.inf, dtype=float)
     if costs.size == 0:
         return margins
