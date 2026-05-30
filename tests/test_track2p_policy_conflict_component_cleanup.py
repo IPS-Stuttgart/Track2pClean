@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from bayescatrack.experiments.track2p_policy_component_audit import \
-    ComponentCleanupConfig
+from bayescatrack.experiments.track2p_policy_component_audit import (
+    ComponentCleanupConfig,
+)
 from bayescatrack.experiments.track2p_policy_conflict_component_cleanup import (
-    ConflictAugmentedCleanupConfig, mark_conflict_augmented_splits)
+    ConflictAugmentedCleanupConfig,
+    mark_conflict_augmented_splits,
+)
 
 
 def test_conflict_augmented_cleanup_marks_structural_conflict_split() -> None:
