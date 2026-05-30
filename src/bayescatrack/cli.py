@@ -69,6 +69,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Audit Track2p-policy components and split weak bridges",
     ),
     (
+        "track2p-policy-component-residual-audit",
+        "bayescatrack.experiments.track2p_policy_component_residual_audit",
+        "Audit residual errors after Track2p-policy component cleanup",
+    ),
+    (
         "track2p-policy-component-sweep",
         "bayescatrack.experiments.track2p_policy_component_sweep",
         "Sweep Track2p-policy component-cleanup operating points",
@@ -272,6 +277,10 @@ _BENCHMARK_COMMANDS: dict[str, _BenchmarkCommand] = {
 
 _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-cleanup": "track2p-policy-component-audit",
+    "track2p-component-residual-audit": (
+        "track2p-policy-component-residual-audit"
+    ),
+    "track2p-residual-audit": "track2p-policy-component-residual-audit",
     "track2p-component-cleanup-sweep": "track2p-policy-component-sweep",
     "track2p-stability-cleanup": "track2p-policy-stability-cleanup",
     "track2p-multisplit-cleanup": "track2p-policy-multisplit-cleanup",
