@@ -16,12 +16,17 @@ def test_confidence_ordered_strict_gap_cleanup_is_registered() -> None:
         "bayescatrack.experiments.track2p_policy_confidence_ordered_strict_gap_cleanup"
     )
     assert "confidence-ordered" in command.help
+    assert cli._BENCHMARK_ALIASES["track2p-confidence-strict-gap-cleanup"] == canonical
     assert (
         cli._BENCHMARK_ALIASES["track2p-confidence-ordered-strict-gap-cleanup"]
         == canonical
     )
     assert (
         cli._BENCHMARK_ALIASES["track2p-confidence-ordered-strict-gated-gap-cleanup"]
+        == canonical
+    )
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-component-confidence-strict-gap-cleanup"]
         == canonical
     )
 

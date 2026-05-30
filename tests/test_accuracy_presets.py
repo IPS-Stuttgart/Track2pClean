@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 from bayescatrack.accuracy_presets import (
+    AccuracyPreset,
     accuracy_preset_metadata,
     build_track2p_accuracy_presets,
+    run_track2p_accuracy_presets,
 )
+from bayescatrack.experiments.track2p_benchmark import SubjectBenchmarkResult
 
 
 def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() -> None:
@@ -62,13 +67,17 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
     assert supported_gap.runner_kwargs["reject_conflicting_bridge_support"] is True
     assert confidence_gap.runner == "confidence-ordered-strict-gap-cleanup"
     assert confidence_gap.config is supported_gap.config
-    assert confidence_gap.runner_kwargs == {
-        "threshold_method": "min",
-        "iou_distance_threshold": 12.0,
-        "transform_type": "affine",
-        "cell_probability_threshold": 0.5,
-        "max_gap": 2,
-    }
+    assert confidence_gap.config.transform_type == "affine"
+    assert confidence_gap.config.max_gap == supported_gap.config.max_gap
+    assert confidence_gap.config.include_non_cells is False
+    assert confidence_gap.config.weighted_masks is False
+    assert confidence_gap.runner_kwargs is not None
+    assert confidence_gap.runner_kwargs["threshold_method"] == "min"
+    assert confidence_gap.runner_kwargs["iou_distance_threshold"] == 12.0
+    assert confidence_gap.runner_kwargs["max_gap"] == supported_gap.config.max_gap
+    confidence_cleanup_kwargs = confidence_gap.runner_kwargs["cleanup_config_kwargs"]
+    assert isinstance(confidence_cleanup_kwargs, dict)
+    assert confidence_cleanup_kwargs["require_complete_track"] is True
 
 
 def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
@@ -92,3 +101,76 @@ def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
     assert rows[5]["runner"] == "confidence-ordered-strict-gap-cleanup"
     assert rows[5]["supported_gap_cleanup"] is False
     assert rows[5]["confidence_ordered_strict_gap_cleanup"] is True
+
+
+def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -> None:
+    calls: list[tuple[object, dict[str, object]]] = []
+    fake_result = SubjectBenchmarkResult(
+        subject="jm_synthetic",
+        variant="confidence strict gap",
+        method="track2p-policy-confidence-ordered-strict-gated-gap-cleanup",
+        scores={},
+        n_sessions=2,
+        reference_source="manual_gt",
+    )
+
+    class FakeComponentCleanupConfig:
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+    class FakeStrictGapGateConfig:
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+    def fake_run(config: object, **kwargs: object) -> SimpleNamespace:
+        calls.append((config, dict(kwargs)))
+        return SimpleNamespace(results=(fake_result,))
+
+    from bayescatrack import accuracy_presets as module
+
+    monkeypatch.setattr(
+        module,
+        "build_track2p_accuracy_presets",
+        lambda *args, **kwargs: (
+            AccuracyPreset(
+                name="track2p-confidence-ordered-strict-gap-cleanup",
+                description="synthetic confidence strict gap preset",
+                config=build_track2p_accuracy_presets("/unused", progress=False)[
+                    -1
+                ].config,
+                runner="confidence-ordered-strict-gap-cleanup",
+                runner_kwargs={
+                    "threshold_method": "min",
+                    "cleanup_config_kwargs": {"split_risk_threshold": 1.25},
+                    "gate_config_kwargs": {"min_threshold_margin": 0.35},
+                },
+            ),
+        ),
+    )
+    fake_module = SimpleNamespace(
+        ComponentCleanupConfig=FakeComponentCleanupConfig,
+        StrictGapGateConfig=FakeStrictGapGateConfig,
+        run_track2p_policy_confidence_ordered_strict_gated_gap_cleanup=fake_run,
+    )
+    import bayescatrack.experiments
+
+    monkeypatch.setattr(
+        bayescatrack.experiments,
+        "track2p_policy_confidence_ordered_strict_gap_cleanup",
+        fake_module,
+        raising=False,
+    )
+
+    output = run_track2p_accuracy_presets(
+        "/data/track2p",
+        preset_names=cast(object, ("track2p-confidence-ordered-strict-gap-cleanup",)),
+    )
+
+    assert output == {"track2p-confidence-ordered-strict-gap-cleanup": [fake_result]}
+    assert len(calls) == 1
+    _, kwargs = calls[0]
+    assert kwargs["threshold_method"] == "min"
+    assert isinstance(kwargs["cleanup_config"], FakeComponentCleanupConfig)
+    assert kwargs["cleanup_config"].kwargs == {"split_risk_threshold": 1.25}
+    assert isinstance(kwargs["gate_config"], FakeStrictGapGateConfig)
+    assert kwargs["gate_config"].kwargs == {"min_threshold_margin": 0.35}

@@ -33,12 +33,13 @@ _PRESERVED_COMPONENT_NAMES = frozenset({"session_gap"})
 
 
 def empty_registered_roi_mask(plane: CalciumPlaneData) -> np.ndarray:
-    """Return a boolean mask selecting registered ROIs with no nonzero pixels."""
+    """Return a boolean mask selecting registered ROIs with no finite positive pixels."""
 
     roi_masks = np.asarray(plane.roi_masks)
     if roi_masks.ndim != 3:
         raise ValueError("roi_masks must have shape (n_roi, height, width)")
-    return ~np.any(roi_masks != 0, axis=(1, 2))
+    finite_positive = np.isfinite(roi_masks) & (roi_masks > 0.0)
+    return ~np.any(finite_positive, axis=(1, 2))
 
 
 def drop_empty_registered_masks(
