@@ -94,13 +94,13 @@ def install_session_gap_validation() -> None:
 def _positive_session_gap(value: Any) -> int:
     integer_value = _integer_like(value, name="session_gap")
     if integer_value < 1:
-        raise ValueError("session_gap must be at least 1")
+        raise ValueError("session_gap must be a finite value")
     return integer_value
 
 
 def _integer_like(value: Any, *, name: str) -> int:
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be an integer, not boolean")
+        raise ValueError(f"{name} must be a finite value")
 
     try:
         return int(operator.index(value))
@@ -120,7 +120,9 @@ def _integer_like(value: Any, *, name: str) -> int:
     else:
         raise ValueError(f"{name} must be an integer")
 
-    if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+    if not np.isfinite(numeric_value):
+        raise ValueError(f"{name} must be a finite value")
+    if not numeric_value.is_integer():
         raise ValueError(f"{name} must be an integer")
     return int(numeric_value)
 
