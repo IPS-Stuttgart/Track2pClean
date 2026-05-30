@@ -25,9 +25,12 @@ AccuracyPresetName = Literal[
     "registered-shifted-iou-safe",
     "roi-aware-shifted-pruned",
     "roi-aware-shifted-consensus",
+    "track2p-stability-cleanup",
     "track2p-supported-gap-cleanup",
 ]
-AccuracyPresetRunner = Literal["benchmark", "supported-gap-cleanup"]
+AccuracyPresetRunner = Literal[
+    "benchmark", "stability-cleanup", "supported-gap-cleanup"
+]
 
 
 @dataclass(frozen=True)
@@ -163,6 +166,18 @@ def build_track2p_accuracy_presets(
         },
     )
 
+    stability_cleanup = replace(
+        base,
+        transform_type="affine",
+        max_gap=1,
+        include_behavior=False,
+        include_non_cells=False,
+        cell_probability_threshold=0.5,
+        weighted_masks=False,
+        weighted_centroids=False,
+        exclude_overlapping_pixels=False,
+    )
+
     supported_gap_max_gap = max(2, int(max_gap))
     supported_gap_cleanup = replace(
         base,
@@ -202,6 +217,26 @@ def build_track2p_accuracy_presets(
                 "links independently recovered by multiple cost families."
             ),
             config=consensus,
+        ),
+        AccuracyPreset(
+            name="track2p-stability-cleanup",
+            description=(
+                "Track2p-policy affine/min-threshold row with prune-only "
+                "threshold-stability splitting for unstable adjacent bridges."
+            ),
+            config=stability_cleanup,
+            runner="stability-cleanup",
+            runner_kwargs={
+                "threshold_method": "min",
+                "transform_type": "affine",
+                "cell_probability_threshold": 0.5,
+                "cleanup_config_kwargs": {
+                    "iou_distance_thresholds": (10.0, 12.0, 14.0),
+                    "base_iou_distance_threshold": 12.0,
+                    "min_support_fraction": 2.0 / 3.0,
+                    "min_side_observations": 2,
+                },
+            },
         ),
         AccuracyPreset(
             name="track2p-supported-gap-cleanup",
@@ -259,6 +294,25 @@ def run_track2p_accuracy_presets(
 def _run_accuracy_preset(preset: AccuracyPreset) -> list[SubjectBenchmarkResult]:
     if preset.runner == "benchmark":
         return run_track2p_benchmark(preset.config)
+    if preset.runner == "stability-cleanup":
+        from bayescatrack.experiments import (
+            track2p_policy_stability_cleanup as stability_cleanup,
+        )
+
+        runner_kwargs = dict(preset.runner_kwargs or {})
+        cleanup_kwargs = runner_kwargs.pop("cleanup_config_kwargs", None)
+        if cleanup_kwargs is not None:
+            if not isinstance(cleanup_kwargs, Mapping):
+                raise TypeError("cleanup_config_kwargs must be a mapping")
+            runner_kwargs["cleanup_config"] = stability_cleanup.StabilityCleanupConfig(
+                **dict(cleanup_kwargs)
+            )
+        return list(
+            stability_cleanup.run_track2p_policy_stability_cleanup(
+                preset.config,
+                **runner_kwargs,
+            )
+        )
     if preset.runner == "supported-gap-cleanup":
         from bayescatrack.experiments import (
             track2p_policy_supported_gap_component_cleanup as supported_gap_cleanup,
@@ -300,6 +354,7 @@ def accuracy_preset_metadata(
                 "higher_order_consistency": cfg.higher_order_consistency_config
                 is not None,
                 "consensus_prior": cfg.consensus_prior_config is not None,
+                "stability_cleanup": preset.runner == "stability-cleanup",
                 "supported_gap_cleanup": preset.runner == "supported-gap-cleanup",
             }
         )

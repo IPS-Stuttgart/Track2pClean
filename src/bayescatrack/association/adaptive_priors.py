@@ -43,16 +43,13 @@ class AdaptiveEdgePriorConfig:
             if not np.isfinite(value) or value < 0.0:
                 raise ValueError(f"{name} must be finite and non-negative")
             object.__setattr__(self, name, value)
-        if not np.isfinite(self.large_cost) or self.large_cost <= 0.0:
-            raise ValueError("large_cost must be a positive finite value")
+        large_cost = _finite_positive_float(self.large_cost, name="large_cost")
+        object.__setattr__(self, "large_cost", large_cost)
         if self.learned_gap_costs is not None:
             object.__setattr__(
                 self,
                 "learned_gap_costs",
-                {
-                    int(key): float(value)
-                    for key, value in self.learned_gap_costs.items()
-                },
+                _validated_learned_gap_costs(self.learned_gap_costs),
             )
 
     @property
@@ -205,6 +202,47 @@ def _finite_costs(costs: np.ndarray, *, large_cost: float) -> np.ndarray:
     result[invalid] = large_cost
     result[result < 0.0] = 0.0
     return result
+
+
+def _validated_learned_gap_costs(
+    learned_gap_costs: Mapping[int, float],
+) -> dict[int, float]:
+    coerced: dict[int, float] = {}
+    for raw_gap, raw_cost in learned_gap_costs.items():
+        gap = _positive_int(raw_gap, name="learned_gap_costs key")
+        cost = _finite_nonnegative_float(raw_cost, name="learned_gap_costs value")
+        coerced[gap] = cost
+    return coerced
+
+
+def _positive_int(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a positive integer")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a positive integer") from exc
+    if not np.isfinite(numeric) or not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and non-negative")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a positive finite value")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric <= 0.0:
+        raise ValueError(f"{name} must be a positive finite value")
+    return numeric
 
 
 def _coerce_config(

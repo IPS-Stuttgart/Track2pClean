@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_component_residual_audit as audit
 

@@ -72,9 +72,7 @@ from scipy.optimize import linear_sum_assignment
 TRACK2P_POLICY_COMPONENT_RESIDUAL_AUDIT_METHOD = (
     "track2p-policy-component-residual-audit"
 )
-ResidualErrorType = Literal[
-    "pairwise_fp", "pairwise_fn", "complete_fp", "complete_fn"
-]
+ResidualErrorType = Literal["pairwise_fp", "pairwise_fn", "complete_fp", "complete_fn"]
 CompleteTrack = tuple[int, ...]
 
 
@@ -1018,11 +1016,15 @@ def _nearest_predicted_track_for_edge(edge: TrackEdge, predicted: np.ndarray) ->
     return _nearest_track_by_roi_overlap(edge[2:], predicted)
 
 
-def _nearest_reference_track_for_track(track: CompleteTrack, reference: np.ndarray) -> int:
+def _nearest_reference_track_for_track(
+    track: CompleteTrack, reference: np.ndarray
+) -> int:
     return _nearest_track_by_roi_overlap(track, reference)
 
 
-def _nearest_predicted_track_for_track(track: CompleteTrack, predicted: np.ndarray) -> int:
+def _nearest_predicted_track_for_track(
+    track: CompleteTrack, predicted: np.ndarray
+) -> int:
     return _nearest_track_by_roi_overlap(track, predicted)
 
 
@@ -1044,9 +1046,7 @@ def _consecutive_edges(row: np.ndarray) -> tuple[TrackEdge, ...]:
         source = row[session_index]
         target = row[session_index + 1]
         if source >= 0 and target >= 0:
-            edges.append(
-                (session_index, session_index + 1, int(source), int(target))
-            )
+            edges.append((session_index, session_index + 1, int(source), int(target)))
     return tuple(edges)
 
 
