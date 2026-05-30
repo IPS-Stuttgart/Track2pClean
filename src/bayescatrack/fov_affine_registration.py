@@ -5,7 +5,7 @@ from typing import Literal
 
 import numpy as np
 
-from . import CalciumPlaneData
+from .core.bridge import CalciumPlaneData
 from .fov_registration import estimate_integer_fov_shift
 
 
