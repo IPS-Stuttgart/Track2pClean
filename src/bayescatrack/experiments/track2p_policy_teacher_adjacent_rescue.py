@@ -60,9 +60,7 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     emulate_track2p_pruned_tracks,
 )
 
-TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_METHOD = (
-    "track2p-policy-teacher-adjacent-rescue"
-)
+TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_METHOD = "track2p-policy-teacher-adjacent-rescue"
 
 
 @dataclass(frozen=True)
@@ -271,9 +269,11 @@ def _try_apply_teacher_edge(
         return output, row
     source_row = int(source_rows[0])
     row["source_row"] = source_row
-    if seed_session < 0 or seed_session >= output.shape[1] or output[
-        source_row, seed_session
-    ] < 0:
+    if (
+        seed_session < 0
+        or seed_session >= output.shape[1]
+        or output[source_row, seed_session] < 0
+    ):
         row["reason"] = "source_not_seed_anchored"
         return output, row
     if output[source_row, session_b] >= 0:
@@ -382,9 +382,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
     parser.add_argument("--diagnostics-output", type=Path, default=None)
-    parser.add_argument(
-        "--diagnostics-format", choices=("csv", "json"), default="csv"
-    )
+    parser.add_argument("--diagnostics-format", choices=("csv", "json"), default="csv")
     return parser
 
 

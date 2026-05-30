@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_teacher_adjacent_rescue as rescue
 from bayescatrack.experiments import track2p_policy_teacher_fn_audit as audit
@@ -22,8 +21,7 @@ def test_teacher_adjacent_rescue_is_registered() -> None:
 
     assert canonical == "track2p-policy-teacher-adjacent-rescue"
     assert (
-        cli._BENCHMARK_ALIASES["track2p-component-teacher-adjacent-rescue"]
-        == canonical
+        cli._BENCHMARK_ALIASES["track2p-component-teacher-adjacent-rescue"] == canonical
     )
     assert cli._BENCHMARK_COMMANDS[canonical].module == (
         "bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue"
@@ -36,9 +34,9 @@ def test_track2p_supported_fn_edges_filter_teacher_only_misses() -> None:
     track2p = np.asarray([[1, 2, 3]], dtype=int)
     policy = np.asarray([[1, 2, -1]], dtype=int)
 
-    assert audit._track2p_supported_fn_edges(
-        predicted, reference, track2p, policy
-    ) == ((1, 2, 2, 3),)
+    assert audit._track2p_supported_fn_edges(predicted, reference, track2p, policy) == (
+        (1, 2, 2, 3),
+    )
 
 
 def test_track2p_supported_fn_edges_excludes_policy_supported_edges() -> None:
@@ -47,7 +45,9 @@ def test_track2p_supported_fn_edges_excludes_policy_supported_edges() -> None:
     track2p = np.asarray([[1, 2, 3]], dtype=int)
     policy = np.asarray([[1, 2, 3]], dtype=int)
 
-    assert audit._track2p_supported_fn_edges(predicted, reference, track2p, policy) == ()
+    assert (
+        audit._track2p_supported_fn_edges(predicted, reference, track2p, policy) == ()
+    )
 
 
 def test_simulate_adjacent_rescue_inserts_missing_target() -> None:
@@ -80,8 +80,18 @@ def test_simulate_adjacent_rescue_rejects_duplicate_target() -> None:
 
 
 def test_score_delta_columns_report_pairwise_effect() -> None:
-    baseline = {"pairwise_true_positives": 1, "pairwise_false_positives": 0, "pairwise_false_negatives": 1, "pairwise_f1": 2 / 3}
-    candidate = {"pairwise_true_positives": 2, "pairwise_false_positives": 0, "pairwise_false_negatives": 0, "pairwise_f1": 1.0}
+    baseline = {
+        "pairwise_true_positives": 1,
+        "pairwise_false_positives": 0,
+        "pairwise_false_negatives": 1,
+        "pairwise_f1": 2 / 3,
+    }
+    candidate = {
+        "pairwise_true_positives": 2,
+        "pairwise_false_positives": 0,
+        "pairwise_false_negatives": 0,
+        "pairwise_f1": 1.0,
+    }
 
     delta = audit._score_delta_columns(baseline, candidate, prefix="what_if_pairwise")
 
