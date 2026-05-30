@@ -277,9 +277,7 @@ _BENCHMARK_COMMANDS: dict[str, _BenchmarkCommand] = {
 
 _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-cleanup": "track2p-policy-component-audit",
-    "track2p-component-residual-audit": (
-        "track2p-policy-component-residual-audit"
-    ),
+    "track2p-component-residual-audit": ("track2p-policy-component-residual-audit"),
     "track2p-residual-audit": "track2p-policy-component-residual-audit",
     "track2p-component-cleanup-sweep": "track2p-policy-component-sweep",
     "track2p-stability-cleanup": "track2p-policy-stability-cleanup",
