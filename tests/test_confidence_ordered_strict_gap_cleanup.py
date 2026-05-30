@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.experiments import (
     track2p_policy_confidence_ordered_strict_gap_cleanup as mod,
 )
@@ -66,13 +65,15 @@ def test_confidence_ordered_merge_uses_stronger_accepted_candidate(monkeypatch) 
         feature_index=features,
         gate_config=StrictGapGateConfig(),
     )
-    output, applied = mod.apply_confidence_ordered_strict_gated_gap_candidates_with_report(
-        base,
-        proposed,
-        (first, second),
-        sessions=(None, None, None),
-        feature_index=features,
-        gate_config=StrictGapGateConfig(),
+    output, applied = (
+        mod.apply_confidence_ordered_strict_gated_gap_candidates_with_report(
+            base,
+            proposed,
+            (first, second),
+            sessions=(None, None, None),
+            feature_index=features,
+            gate_config=StrictGapGateConfig(),
+        )
     )
 
     assert order == (1, 0)
