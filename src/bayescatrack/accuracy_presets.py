@@ -28,12 +28,14 @@ AccuracyPresetName = Literal[
     "track2p-stability-cleanup",
     "track2p-supported-gap-cleanup",
     "track2p-confidence-ordered-strict-gap-cleanup",
+    "track2p-teacher-adjacent-rescue",
 ]
 AccuracyPresetRunner = Literal[
     "benchmark",
     "stability-cleanup",
     "supported-gap-cleanup",
     "confidence-ordered-strict-gap-cleanup",
+    "teacher-adjacent-rescue",
 ]
 
 
@@ -207,6 +209,19 @@ def build_track2p_accuracy_presets(
             "require_complete_track": True,
         },
     }
+    teacher_rescue_runner_kwargs = {
+        "threshold_method": "min",
+        "iou_distance_threshold": 12.0,
+        "transform_type": "affine",
+        "cell_probability_threshold": 0.5,
+        "allow_completing_rescue": False,
+        "cleanup_config_kwargs": {
+            "split_risk_threshold": 1.50,
+            "split_penalty": 0.25,
+            "min_side_observations": 2,
+            "require_complete_track": True,
+        },
+    }
 
     return (
         AccuracyPreset(
@@ -280,6 +295,17 @@ def build_track2p_accuracy_presets(
             config=supported_gap_cleanup,
             runner="confidence-ordered-strict-gap-cleanup",
             runner_kwargs=confidence_gap_runner_kwargs,
+        ),
+        AccuracyPreset(
+            name="track2p-teacher-adjacent-rescue",
+            description=(
+                "Component cleanup plus guarded adjacent Track2p-teacher rescue "
+                "for residual false-negative links, blocking rescue edges that "
+                "would complete otherwise incomplete rows."
+            ),
+            config=stability_cleanup,
+            runner="teacher-adjacent-rescue",
+            runner_kwargs=teacher_rescue_runner_kwargs,
         ),
     )
 
@@ -375,6 +401,24 @@ def _run_accuracy_preset(preset: AccuracyPreset) -> list[SubjectBenchmarkResult]
             **runner_kwargs,
         )
         return list(output.results)
+    if preset.runner == "teacher-adjacent-rescue":
+        from bayescatrack.experiments import (
+            track2p_policy_teacher_adjacent_rescue as teacher_rescue,
+        )
+
+        runner_kwargs = dict(preset.runner_kwargs or {})
+        cleanup_kwargs = runner_kwargs.pop("cleanup_config_kwargs", None)
+        if cleanup_kwargs is not None:
+            if not isinstance(cleanup_kwargs, Mapping):
+                raise TypeError("cleanup_config_kwargs must be a mapping")
+            runner_kwargs["cleanup_config"] = teacher_rescue.ComponentCleanupConfig(
+                **dict(cleanup_kwargs)
+            )
+        output = teacher_rescue.run_track2p_policy_teacher_adjacent_rescue(
+            preset.config,
+            **runner_kwargs,
+        )
+        return list(output.results)
     raise ValueError(f"Unsupported accuracy preset runner: {preset.runner!r}")
 
 
@@ -408,6 +452,7 @@ def accuracy_preset_metadata(
                 "confidence_ordered_strict_gap_cleanup": (
                     preset.runner == "confidence-ordered-strict-gap-cleanup"
                 ),
+                "teacher_adjacent_rescue": preset.runner == "teacher-adjacent-rescue",
             }
         )
     return tuple(rows)
