@@ -6,6 +6,9 @@ from . import cli as _cli
 from ._advanced_weight_validation import (
     install_advanced_weight_validation as _install_advanced_weight_validation,
 )
+from ._confidence_ordered_strict_gap_cli import (
+    install_confidence_ordered_strict_gap_cli as _install_confidence_ordered_strict_gap_cli,
+)
 from ._strict_config_validation import (
     install_strict_config_validation as _install_strict_config_validation,
 )
@@ -37,6 +40,7 @@ load_track2p_subject = _bridge.load_track2p_subject
 main = _cli.main
 summarize_subject = _bridge.summarize_subject
 
+_install_confidence_ordered_strict_gap_cli(_cli)
 _install_soft_overlap_costs()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
