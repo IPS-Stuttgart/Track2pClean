@@ -74,6 +74,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Audit residual errors after Track2p-policy component cleanup",
     ),
     (
+        "track2p-policy-seed-sensitivity-audit",
+        "bayescatrack.experiments.track2p_policy_seed_sensitivity_audit",
+        "Audit ComponentCleanup sensitivity to the seed-session choice",
+    ),
+    (
         "track2p-policy-teacher-fn-audit",
         "bayescatrack.experiments.track2p_policy_teacher_fn_audit",
         "Audit Track2p-supported false negatives after component cleanup",
@@ -294,6 +299,10 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-cleanup": "track2p-policy-component-audit",
     "track2p-component-residual-audit": ("track2p-policy-component-residual-audit"),
     "track2p-residual-audit": "track2p-policy-component-residual-audit",
+    "track2p-seed-sensitivity-audit": "track2p-policy-seed-sensitivity-audit",
+    "track2p-component-seed-sensitivity-audit": (
+        "track2p-policy-seed-sensitivity-audit"
+    ),
     "track2p-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
     "track2p-component-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
     "track2p-teacher-adjacent-rescue": (
