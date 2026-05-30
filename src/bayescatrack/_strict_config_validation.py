@@ -34,6 +34,11 @@ class CandidatePruningConfig:
                 "top_k_per_roi",
                 _positive_int(self.top_k_per_roi, name="top_k_per_roi"),
             )
+        object.__setattr__(
+            self,
+            "include_column_top_k",
+            _strict_bool(self.include_column_top_k, name="include_column_top_k"),
+        )
         if self.gate_margin is not None:
             object.__setattr__(
                 self,
@@ -93,6 +98,7 @@ def candidate_mask_from_cost_matrix(
 
     if top_k is not None:
         top_k = _positive_int(top_k, name="top_k")
+    include_columns = _strict_bool(include_columns, name="include_columns")
     if gate_margin is not None:
         gate_margin = _finite_nonnegative_float(gate_margin, name="gate_margin")
     large_cost = _finite_positive_float(large_cost, name="large_cost")
@@ -154,6 +160,12 @@ def _positive_int(value: Any, *, name: str) -> int:
     if integer_value < 1:
         raise ValueError(f"{name} must be at least 1")
     return int(integer_value)
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
