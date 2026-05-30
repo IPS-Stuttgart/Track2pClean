@@ -6,7 +6,7 @@ from typing import Any, Literal, Mapping, Sequence
 import numpy as np
 from scipy import ndimage, optimize
 
-from . import (
+from .core.bridge import (
     CalciumPlaneData,
     SessionAssociationBundle,
     Track2pSession,

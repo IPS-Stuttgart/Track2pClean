@@ -16,7 +16,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from . import load_track2p_subject
+from .core.bridge import load_track2p_subject
 
 _SESSION_NAME_PATTERN = re.compile(r"^(?P<session_date>\d{4}-\d{2}-\d{2})(?:_.+)?$")
 _PLANE_NAME_PATTERN = re.compile(r"^plane(?P<index>\d+)$")

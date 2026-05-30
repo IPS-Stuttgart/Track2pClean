@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any, Literal, Mapping, Sequence
 
 import numpy as np
-from bayescatrack import (
+from bayescatrack.core.bridge import (
     CalciumPlaneData,
     SessionAssociationBundle,
     Track2pSession,
