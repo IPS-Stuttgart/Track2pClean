@@ -45,7 +45,7 @@ def apply_transitive_strict_gated_gap_edges(
     """Iteratively insert accepted strict gap edges.
 
     Each round considers accepted gap edges whose source ROI is visible in the
-    current cleaned matrix.  The same hard gate, duplicate-edge suppression, and
+    current cleaned matrix. The same hard gate, duplicate-edge suppression, and
     ROI-observation conflict checks as the one-pass strict cleanup are retained.
     """
 
@@ -100,16 +100,19 @@ def apply_transitive_strict_gated_gap_edges_with_report(
 
         round_start = len(candidates)
         candidates.extend(round_candidates)
-        accepted = tuple(
-            candidate for candidate in round_candidates if bool(candidate.accepted)
+        accepted_pairs = tuple(
+            (candidate_index, candidate)
+            for candidate_index, candidate in enumerate(round_candidates)
+            if bool(candidate.accepted)
         )
-        accepted = tuple(
+        accepted_pairs = tuple(
             sorted(
-                accepted,
-                key=lambda candidate: _candidate_confidence(candidate, feature_index),
+                accepted_pairs,
+                key=lambda item: _candidate_confidence(item[1], feature_index),
                 reverse=True,
             )
         )
+        accepted = tuple(candidate for _candidate_index, candidate in accepted_pairs)
         updated, round_applied = _apply_strict_gated_gap_edges_with_report(
             output,
             accepted,
@@ -118,12 +121,7 @@ def apply_transitive_strict_gated_gap_edges_with_report(
         if not round_applied:
             break
 
-        accepted_to_global = {
-            accepted_index: round_start
-            + round_candidates.index(candidate)  # noqa: B909 - dataclass equality is intended
-            for accepted_index, candidate in enumerate(accepted)
-        }
-        applied.update(accepted_to_global[index] for index in round_applied)
+        applied.update(round_start + accepted_pairs[index][0] for index in round_applied)
         output = updated
 
     return output, tuple(candidates), frozenset(applied)
