@@ -350,8 +350,7 @@ def _run_accuracy_preset(preset: AccuracyPreset) -> list[SubjectBenchmarkResult]
         )
 
         run_confidence_cleanup = (
-            confidence_cleanup
-            .run_track2p_policy_confidence_ordered_strict_gated_gap_cleanup
+            confidence_cleanup.run_track2p_policy_confidence_ordered_strict_gated_gap_cleanup
         )
         output = run_confidence_cleanup(
             preset.config,
