@@ -15,6 +15,9 @@ from ._suite2p_validation import (
 from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
+from .association._global_assignment_input_validation import (
+    install_global_assignment_input_validation as _install_global_assignment_input_validation,
+)
 from .core import bridge as _bridge
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
@@ -41,5 +44,6 @@ _install_soft_overlap_costs()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
 _install_strict_config_validation()
+_install_global_assignment_input_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
