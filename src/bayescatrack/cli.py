@@ -74,6 +74,16 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Audit residual errors after Track2p-policy component cleanup",
     ),
     (
+        "track2p-policy-teacher-fn-audit",
+        "bayescatrack.experiments.track2p_policy_teacher_fn_audit",
+        "Audit Track2p-supported false negatives after component cleanup",
+    ),
+    (
+        "track2p-policy-teacher-adjacent-rescue",
+        "bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue",
+        "Run component cleanup plus seed-anchored Track2p adjacent rescue",
+    ),
+    (
         "track2p-policy-component-sweep",
         "bayescatrack.experiments.track2p_policy_component_sweep",
         "Sweep Track2p-policy component-cleanup operating points",
@@ -279,6 +289,14 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-cleanup": "track2p-policy-component-audit",
     "track2p-component-residual-audit": ("track2p-policy-component-residual-audit"),
     "track2p-residual-audit": "track2p-policy-component-residual-audit",
+    "track2p-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
+    "track2p-component-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
+    "track2p-teacher-adjacent-rescue": (
+        "track2p-policy-teacher-adjacent-rescue"
+    ),
+    "track2p-component-teacher-adjacent-rescue": (
+        "track2p-policy-teacher-adjacent-rescue"
+    ),
     "track2p-component-cleanup-sweep": "track2p-policy-component-sweep",
     "track2p-stability-cleanup": "track2p-policy-stability-cleanup",
     "track2p-multisplit-cleanup": "track2p-policy-multisplit-cleanup",
