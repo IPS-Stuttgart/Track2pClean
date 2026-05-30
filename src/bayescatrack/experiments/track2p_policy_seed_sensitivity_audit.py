@@ -14,8 +14,7 @@ import csv
 import json
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -56,9 +55,7 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     emulate_track2p_pruned_tracks,
 )
 
-TRACK2P_POLICY_SEED_SENSITIVITY_AUDIT_METHOD = (
-    "track2p-policy-seed-sensitivity-audit"
-)
+TRACK2P_POLICY_SEED_SENSITIVITY_AUDIT_METHOD = "track2p-policy-seed-sensitivity-audit"
 CompleteTrack = tuple[int, ...]
 
 
@@ -168,15 +165,9 @@ def run_track2p_policy_seed_sensitivity_audit(
                 {
                     "subject": subject_dir.name,
                     "seed_session": int(seed_session),
-                    "pairwise_true_positives": int(
-                        scores["pairwise_true_positives"]
-                    ),
-                    "pairwise_false_positives": int(
-                        scores["pairwise_false_positives"]
-                    ),
-                    "pairwise_false_negatives": int(
-                        scores["pairwise_false_negatives"]
-                    ),
+                    "pairwise_true_positives": int(scores["pairwise_true_positives"]),
+                    "pairwise_false_positives": int(scores["pairwise_false_positives"]),
+                    "pairwise_false_negatives": int(scores["pairwise_false_negatives"]),
                     "pairwise_f1_micro": float(scores["pairwise_f1"]),
                     "complete_track_true_positives": int(
                         scores["complete_track_true_positives"]
@@ -414,9 +405,7 @@ def _aggregate_seed_rows(
                     seed_rows, "evaluated_prediction_tracks"
                 ),
                 "threshold_method": str(seed_rows[0]["threshold_method"]),
-                "iou_distance_threshold": float(
-                    seed_rows[0]["iou_distance_threshold"]
-                ),
+                "iou_distance_threshold": float(seed_rows[0]["iou_distance_threshold"]),
                 "cell_probability_threshold": float(
                     seed_rows[0]["cell_probability_threshold"]
                 ),
@@ -454,9 +443,7 @@ def _resolved_seed_sessions(
         if seed_sessions.casefold() == "all":
             return tuple(range(int(n_sessions)))
         values = tuple(
-            int(value.strip())
-            for value in seed_sessions.split(",")
-            if value.strip()
+            int(value.strip()) for value in seed_sessions.split(",") if value.strip()
         )
     else:
         values = tuple(int(value) for value in seed_sessions)

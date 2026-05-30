@@ -1,5 +1,4 @@
 import numpy as np
-
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_seed_sensitivity_audit as audit
 
@@ -9,8 +8,7 @@ def test_seed_sensitivity_audit_is_registered() -> None:
 
     assert canonical == "track2p-policy-seed-sensitivity-audit"
     assert (
-        cli._BENCHMARK_ALIASES["track2p-component-seed-sensitivity-audit"]
-        == canonical
+        cli._BENCHMARK_ALIASES["track2p-component-seed-sensitivity-audit"] == canonical
     )
     assert cli._BENCHMARK_COMMANDS[canonical].module == (
         "bayescatrack.experiments.track2p_policy_seed_sensitivity_audit"
