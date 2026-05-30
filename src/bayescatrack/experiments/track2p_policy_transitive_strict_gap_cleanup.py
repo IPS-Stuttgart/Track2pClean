@@ -133,7 +133,9 @@ def run_track2p_policy_transitive_strict_gated_gap_cleanup(
             threshold_method=threshold_method,
             iou_distance_threshold=float(iou_distance_threshold),
         )
-        seed_rois = _seed_rois(reference_tracks, seed_session=policy_config.seed_session)
+        seed_rois = _seed_rois(
+            reference_tracks, seed_session=policy_config.seed_session
+        )
         cleaned, candidates, applied_candidate_indices = (
             apply_transitive_strict_gated_gap_edges_with_report(
                 base_full,
@@ -210,7 +212,9 @@ def run_track2p_policy_transitive_strict_gated_gap_cleanup(
                 gate_config=gate_config,
                 threshold_method=threshold_method,
                 iou_distance_threshold=float(iou_distance_threshold),
-                cell_probability_threshold=float(policy_config.cell_probability_threshold),
+                cell_probability_threshold=float(
+                    policy_config.cell_probability_threshold
+                ),
                 transform_type=policy_config.transform_type,
                 max_gap=int(policy_config.max_gap),
                 applied_candidate_indices=applied_candidate_indices,
@@ -308,7 +312,9 @@ def apply_transitive_strict_gated_gap_edges_with_report(
         if not round_applied:
             break
 
-        applied.update(round_start + accepted_pairs[index][0] for index in round_applied)
+        applied.update(
+            round_start + accepted_pairs[index][0] for index in round_applied
+        )
         output = updated
 
     return output, tuple(candidates), frozenset(applied)
@@ -390,7 +396,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument("--max-gap", type=int, default=STRICT_GATED_GAP_DEFAULT_MAX_GAP)
     parser.add_argument(
         "--gate-gap-length", type=int, default=StrictGapGateConfig().gap_length
