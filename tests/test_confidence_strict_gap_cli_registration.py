@@ -22,6 +22,10 @@ def test_confidence_ordered_strict_gap_cleanup_is_registered() -> None:
         == canonical
     )
     assert (
+        cli._BENCHMARK_ALIASES["track2p-confidence-ordered-strict-gated-gap-cleanup"]
+        == canonical
+    )
+    assert (
         cli._BENCHMARK_ALIASES["track2p-component-confidence-strict-gap-cleanup"]
         == canonical
     )
@@ -42,7 +46,7 @@ def test_confidence_ordered_strict_gap_cli_dispatches_to_module(monkeypatch) -> 
         cli.main(
             [
                 "benchmark",
-                "track2p-confidence-strict-gap-cleanup",
+                "track2p-confidence-ordered-strict-gap-cleanup",
                 "--data",
                 "unused",
             ]
