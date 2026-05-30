@@ -5,7 +5,9 @@ from __future__ import annotations
 from types import ModuleType
 
 _CANONICAL_BENCHMARK = "track2p-policy-confidence-ordered-strict-gated-gap-cleanup"
-_MODULE = "bayescatrack.experiments.track2p_policy_confidence_ordered_strict_gap_cleanup"
+_MODULE = (
+    "bayescatrack.experiments.track2p_policy_confidence_ordered_strict_gap_cleanup"
+)
 _HELP = "Run component cleanup plus confidence-ordered strictly gated gap rescue"
 _ALIASES = (
     "track2p-confidence-ordered-strict-gap-cleanup",
