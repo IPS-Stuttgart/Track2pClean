@@ -22,8 +22,6 @@ from . import pyrecest_global_assignment as _global_assignment
 # pylint: disable=too-many-arguments,too-many-branches
 
 
-
-
 SessionEdge = tuple[int, int]
 _PATCH_ATTR = "_bayescatrack_global_assignment_input_validation_patch"
 
