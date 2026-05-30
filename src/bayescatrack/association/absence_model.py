@@ -22,10 +22,19 @@ class AbsenceModelConfig:
     min_cost: float = 0.0
 
     def __post_init__(self) -> None:
-        if self.base_absence_cost < 0.0:
-            raise ValueError("base_absence_cost must be non-negative")
-        if self.min_cost < 0.0:
-            raise ValueError("min_cost must be non-negative")
+        for name in (
+            "base_absence_cost",
+            "out_of_fov_discount",
+            "low_cell_probability_discount",
+            "empty_registered_mask_discount",
+            "high_local_density_discount",
+            "trace_missing_discount",
+            "min_cost",
+        ):
+            value = float(getattr(self, name))
+            if not np.isfinite(value) or value < 0.0:
+                raise ValueError(f"{name} must be finite and non-negative")
+            object.__setattr__(self, name, value)
 
 
 def absence_model_config_from_mapping(
@@ -121,7 +130,7 @@ def gap_penalty_matrix(
         meas_cost = np.asarray(measurement_absence_costs, dtype=float).reshape(-1)
     if ref_cost.shape != (n_ref,) or meas_cost.shape != (n_meas,):
         raise ValueError("absence cost vectors must match plane ROI counts")
-    gap = max(float(session_gap) - 1.0, 0.0)
+    gap = _validated_session_gap_offset(session_gap)
     return gap * 0.5 * (ref_cost[:, None] + meas_cost[None, :])
 
 
@@ -173,6 +182,19 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
             float(np.max(cost_values)) if cost_values.size else float("nan")
         ),
     }
+
+
+def _validated_session_gap_offset(session_gap: int | float) -> float:
+    if isinstance(session_gap, (bool, np.bool_)):
+        raise ValueError(
+            "session_gap must be a finite value greater than or equal to 1"
+        )
+    gap = float(session_gap)
+    if not np.isfinite(gap) or gap < 1.0:
+        raise ValueError(
+            "session_gap must be a finite value greater than or equal to 1"
+        )
+    return gap - 1.0
 
 
 __all__ = (
