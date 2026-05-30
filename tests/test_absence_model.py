@@ -11,7 +11,9 @@ from bayescatrack.association.absence_model import (
 )
 
 
-def _plane(n_rois: int, *, cell_probabilities: np.ndarray | None = None) -> SimpleNamespace:
+def _plane(
+    n_rois: int, *, cell_probabilities: np.ndarray | None = None
+) -> SimpleNamespace:
     return SimpleNamespace(
         n_rois=n_rois,
         cell_probabilities=cell_probabilities,
