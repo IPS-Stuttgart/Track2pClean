@@ -135,7 +135,9 @@ def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -
             AccuracyPreset(
                 name="track2p-confidence-ordered-strict-gap-cleanup",
                 description="synthetic confidence strict gap preset",
-                config=build_track2p_accuracy_presets("/unused", progress=False)[-1].config,
+                config=build_track2p_accuracy_presets("/unused", progress=False)[
+                    -1
+                ].config,
                 runner="confidence-ordered-strict-gap-cleanup",
                 runner_kwargs={
                     "threshold_method": "min",
@@ -161,14 +163,10 @@ def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -
 
     output = run_track2p_accuracy_presets(
         "/data/track2p",
-        preset_names=cast(
-            object, ("track2p-confidence-ordered-strict-gap-cleanup",)
-        ),
+        preset_names=cast(object, ("track2p-confidence-ordered-strict-gap-cleanup",)),
     )
 
-    assert output == {
-        "track2p-confidence-ordered-strict-gap-cleanup": [fake_result]
-    }
+    assert output == {"track2p-confidence-ordered-strict-gap-cleanup": [fake_result]}
     assert len(calls) == 1
     _, kwargs = calls[0]
     assert kwargs["threshold_method"] == "min"

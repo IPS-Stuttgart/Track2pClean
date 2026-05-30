@@ -360,8 +360,8 @@ def _run_accuracy_preset(preset: AccuracyPreset) -> list[SubjectBenchmarkResult]
         if cleanup_kwargs is not None:
             if not isinstance(cleanup_kwargs, Mapping):
                 raise TypeError("cleanup_config_kwargs must be a mapping")
-            runner_kwargs["cleanup_config"] = confidence_gap_cleanup.ComponentCleanupConfig(
-                **dict(cleanup_kwargs)
+            runner_kwargs["cleanup_config"] = (
+                confidence_gap_cleanup.ComponentCleanupConfig(**dict(cleanup_kwargs))
             )
         gate_kwargs = runner_kwargs.pop("gate_config_kwargs", None)
         if gate_kwargs is not None:
@@ -370,11 +370,9 @@ def _run_accuracy_preset(preset: AccuracyPreset) -> list[SubjectBenchmarkResult]
             runner_kwargs["gate_config"] = confidence_gap_cleanup.StrictGapGateConfig(
                 **dict(gate_kwargs)
             )
-        output = (
-            confidence_gap_cleanup.run_track2p_policy_confidence_ordered_strict_gated_gap_cleanup(
-                preset.config,
-                **runner_kwargs,
-            )
+        output = confidence_gap_cleanup.run_track2p_policy_confidence_ordered_strict_gated_gap_cleanup(
+            preset.config,
+            **runner_kwargs,
         )
         return list(output.results)
     raise ValueError(f"Unsupported accuracy preset runner: {preset.runner!r}")
