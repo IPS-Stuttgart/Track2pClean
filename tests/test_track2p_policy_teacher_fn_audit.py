@@ -149,6 +149,50 @@ def test_teacher_adjacent_rescue_can_allow_complete_row() -> None:
     assert report.rows[0]["applied"] == 1
 
 
+def test_teacher_adjacent_rescue_backfills_missing_internal_source() -> None:
+    predicted = np.asarray([[10, -1, 12, -1]], dtype=int)
+    teacher = np.asarray([[-1, 11, 12, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, 12, -1]])
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_insert_source"
+
+
+def test_teacher_adjacent_rescue_can_disable_source_backfill() -> None:
+    predicted = np.asarray([[10, -1, 12, -1]], dtype=int)
+    teacher = np.asarray([[-1, 11, 12, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0, allow_source_backfill=False
+    )
+
+    np.testing.assert_array_equal(report.tracks, predicted)
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "missing_or_ambiguous_source"
+
+
+def test_teacher_adjacent_rescue_seed_backfill_is_opt_in() -> None:
+    predicted = np.asarray([[-1, 11, 12, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1, -1]], dtype=int)
+
+    default_report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0
+    )
+    np.testing.assert_array_equal(default_report.tracks, predicted)
+    assert default_report.rows[0]["reason"] == "target_not_seed_anchored"
+
+    opt_in_report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0, allow_seed_source_backfill=True
+    )
+    np.testing.assert_array_equal(opt_in_report.tracks, [[10, 11, 12, -1]])
+    assert opt_in_report.rows[0]["applied"] == 1
+    assert opt_in_report.rows[0]["reason"] == "accepted_insert_source"
+
+
 def test_teacher_adjacent_rescue_merges_compatible_fragments() -> None:
     predicted = np.asarray(
         [
@@ -166,6 +210,24 @@ def test_teacher_adjacent_rescue_merges_compatible_fragments() -> None:
     np.testing.assert_array_equal(report.tracks, [[10, 11, 12, 13, -1]])
     assert report.rows[0]["applied"] == 1
     assert report.rows[0]["reason"] == "accepted_merge_fragments"
+
+
+def test_teacher_adjacent_rescue_merges_fragments_from_reverse_edge_order() -> None:
+    predicted = np.asarray(
+        [
+            [10, 11, -1, -1, -1],
+            [10, -1, 12, 13, -1],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray([[10, -1, 12, 13, -1], [10, 11, 12, -1, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, 12, 13, -1]])
+    assert any(row["reason"] == "accepted_merge_fragments" for row in report.rows)
 
 
 def test_teacher_adjacent_rescue_can_disable_fragment_merges() -> None:
