@@ -324,9 +324,7 @@ _BENCHMARK_ALIASES: dict[str, str] = {
         "track2p-policy-teacher-adjacent-rescue"
     ),
     "track2p-teacher-veto-cleanup": "track2p-policy-teacher-veto-cleanup",
-    "track2p-component-teacher-veto-cleanup": (
-        "track2p-policy-teacher-veto-cleanup"
-    ),
+    "track2p-component-teacher-veto-cleanup": ("track2p-policy-teacher-veto-cleanup"),
     "track2p-component-cleanup-sweep": "track2p-policy-component-sweep",
     "track2p-stability-cleanup": "track2p-policy-stability-cleanup",
     "track2p-multisplit-cleanup": "track2p-policy-multisplit-cleanup",

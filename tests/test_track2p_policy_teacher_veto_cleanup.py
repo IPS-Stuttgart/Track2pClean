@@ -27,9 +27,7 @@ def test_teacher_veto_cleanup_is_registered() -> None:
     canonical = cli._BENCHMARK_ALIASES["track2p-teacher-veto-cleanup"]
 
     assert canonical == "track2p-policy-teacher-veto-cleanup"
-    assert (
-        cli._BENCHMARK_ALIASES["track2p-component-teacher-veto-cleanup"] == canonical
-    )
+    assert cli._BENCHMARK_ALIASES["track2p-component-teacher-veto-cleanup"] == canonical
     assert cli._BENCHMARK_COMMANDS[canonical].module == (
         "bayescatrack.experiments.track2p_policy_teacher_veto_cleanup"
     )
