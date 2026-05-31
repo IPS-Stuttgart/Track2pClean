@@ -75,8 +75,12 @@ class TeacherAdjacentRescueReport:
 
 
 def _resolve_source_backfill_alias(
-    allow_source_backfill: bool, allow_source_inserts: bool | None
+    allow_source_backfill: bool,
+    allow_source_inserts: bool | None,
+    allow_source_insertions: bool | None = None,
 ) -> bool:
+    if allow_source_insertions is not None:
+        return bool(allow_source_insertions)
     if allow_source_inserts is None:
         return bool(allow_source_backfill)
     return bool(allow_source_inserts)
@@ -93,6 +97,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     allow_completing_rescue: bool = False,
     allow_source_backfill: bool = True,
     allow_source_inserts: bool | None = None,
+    allow_source_insertions: bool | None = None,
     allow_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
 ) -> ComponentAuditOutput:
@@ -111,7 +116,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
 
     cleanup_config = cleanup_config or ComponentCleanupConfig()
     source_backfill_enabled = _resolve_source_backfill_alias(
-        allow_source_backfill, allow_source_inserts
+        allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
     results: list[SubjectBenchmarkResult] = []
     rescue_rows: list[dict[str, int | str]] = []
@@ -174,6 +179,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 source_backfill_enabled
             ),
             "track2p_teacher_adjacent_allow_source_inserts": int(
+                source_backfill_enabled
+            ),
+            "track2p_teacher_adjacent_allow_source_insertions": int(
                 source_backfill_enabled
             ),
             "track2p_teacher_adjacent_allow_seed_source_backfill": int(
@@ -250,6 +258,7 @@ def apply_teacher_adjacent_rescue_edges(
     allow_completing_rescue: bool = False,
     allow_source_backfill: bool = True,
     allow_source_inserts: bool | None = None,
+    allow_source_insertions: bool | None = None,
     allow_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
 ) -> TeacherAdjacentRescueReport:
@@ -264,7 +273,7 @@ def apply_teacher_adjacent_rescue_edges(
     output = _normalize_int_track_matrix(predicted_track_matrix)
     teacher = _normalize_int_track_matrix(teacher_track_matrix)
     source_backfill_enabled = _resolve_source_backfill_alias(
-        allow_source_backfill, allow_source_inserts
+        allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
     rows: list[dict[str, int | str]] = []
     for edge, count in sorted(track_edge_counter(teacher).items()):
@@ -297,12 +306,13 @@ def _try_apply_teacher_edge(
     allow_completing_rescue: bool = False,
     allow_source_backfill: bool = True,
     allow_source_inserts: bool | None = None,
+    allow_source_insertions: bool | None = None,
     allow_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
 ) -> tuple[np.ndarray, dict[str, int | str]]:
     output = np.asarray(predicted, dtype=int).copy()
     source_backfill_enabled = _resolve_source_backfill_alias(
-        allow_source_backfill, allow_source_inserts
+        allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
     session_a, session_b, roi_a, roi_b = edge
     row = {
@@ -531,6 +541,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-source-insertions",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Compatibility alias for --allow-source-backfill. When set, it "
+            "controls whether adjacent teacher edges can fill a missing source "
+            "ROI into a compatible target-side component."
+        ),
+    )
+    parser.add_argument(
         "--allow-seed-source-backfill",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -596,6 +616,7 @@ def main(argv: list[str] | None = None) -> int:
         allow_completing_rescue=args.allow_completing_rescue,
         allow_source_backfill=args.allow_source_backfill,
         allow_source_inserts=args.allow_source_inserts,
+        allow_source_insertions=args.allow_source_insertions,
         allow_seed_source_backfill=args.allow_seed_source_backfill,
         allow_fragment_merges=args.allow_fragment_merges,
     )
