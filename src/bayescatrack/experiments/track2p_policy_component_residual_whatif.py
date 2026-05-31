@@ -310,8 +310,7 @@ def _base_counts_from_args(args: argparse.Namespace) -> MicroCounts:
     if missing:
         joined = ", ".join(missing)
         raise ValueError(
-            "Provide --base-benchmark or explicit base counts. "
-            f"Missing: {joined}"
+            "Provide --base-benchmark or explicit base counts. " f"Missing: {joined}"
         )
     return MicroCounts(
         pairwise_tp=int(args.base_pairwise_tp),
