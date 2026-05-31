@@ -3,8 +3,10 @@
 This is a deliberately narrow Track2p-teacher hybrid ablation.  It starts from
 the frozen Track2pPolicy component-cleanup prediction and admits only adjacent
 Track2p teacher edges that can extend an already existing seed-anchored
-component without creating duplicate source/target observations or merging
-components.  It does not use manual GT labels to choose edges.
+component without creating duplicate source/target observations.  Teacher edges
+can also merge two compatible seed-anchored fragments when the merge has no
+ROI conflicts.  Completing a row remains disabled unless explicitly allowed.
+The command does not use manual GT labels to choose edges.
 """
 
 from __future__ import annotations
@@ -80,6 +82,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     cell_probability_threshold: float | None = None,
     cleanup_config: ComponentCleanupConfig | None = None,
     allow_completing_rescue: bool = False,
+    allow_fragment_merges: bool = True,
 ) -> ComponentAuditOutput:
     """Run component cleanup followed by strict adjacent Track2p teacher rescue."""
 
@@ -130,6 +133,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             teacher_full,
             seed_session=policy_config.seed_session,
             allow_completing_rescue=allow_completing_rescue,
+            allow_fragment_merges=allow_fragment_merges,
         )
         scores = _score_prediction_against_reference(
             rescue.tracks, reference, config=policy_config
@@ -148,6 +152,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
             "track2p_teacher_adjacent_applied": applied,
             "track2p_teacher_adjacent_allow_completing_rescue": int(
                 allow_completing_rescue
+            ),
+            "track2p_teacher_adjacent_allow_fragment_merges": int(
+                allow_fragment_merges
             ),
         }
         results.append(
@@ -215,8 +222,14 @@ def apply_teacher_adjacent_rescue_edges(
     *,
     seed_session: int = 0,
     allow_completing_rescue: bool = False,
+    allow_fragment_merges: bool = True,
 ) -> TeacherAdjacentRescueReport:
-    """Extend seed-anchored components with conflict-free adjacent teacher edges."""
+    """Extend seed-anchored components with conflict-free adjacent teacher edges.
+
+    When enabled, a teacher edge may also merge two compatible fragments if the
+    target ROI is already claimed by exactly one other row and the merged row has
+    no duplicate-session conflict.
+    """
 
     output = _normalize_int_track_matrix(predicted_track_matrix)
     teacher = _normalize_int_track_matrix(teacher_track_matrix)
@@ -230,6 +243,7 @@ def apply_teacher_adjacent_rescue_edges(
                 edge,
                 seed_session=seed_session,
                 allow_completing_rescue=allow_completing_rescue,
+                allow_fragment_merges=allow_fragment_merges,
             )
             rows.append(
                 {
@@ -246,6 +260,7 @@ def _try_apply_teacher_edge(
     *,
     seed_session: int,
     allow_completing_rescue: bool = False,
+    allow_fragment_merges: bool = True,
 ) -> tuple[np.ndarray, dict[str, int | str]]:
     output = np.asarray(predicted, dtype=int).copy()
     session_a, session_b, roi_a, roi_b = edge
@@ -280,8 +295,35 @@ def _try_apply_teacher_edge(
         row["reason"] = "source_has_target_conflict"
         return output, row
     if len(target_rows) > 0:
-        row["target_row"] = int(target_rows[0])
-        row["reason"] = "target_already_claimed"
+        if len(target_rows) != 1:
+            row["reason"] = "ambiguous_target_rows"
+            return output, row
+        target_row = int(target_rows[0])
+        row["target_row"] = target_row
+        if not allow_fragment_merges:
+            row["reason"] = "target_already_claimed"
+            return output, row
+        if target_row == source_row:
+            row["reason"] = "already_same_component"
+            return output, row
+        merged = _merge_rows_if_compatible(output[source_row], output[target_row])
+        if merged is None:
+            row["reason"] = "merge_conflict"
+            return output, row
+        if (
+            seed_session < 0
+            or seed_session >= merged.shape[0]
+            or merged[seed_session] < 0
+        ):
+            row["reason"] = "merged_not_seed_anchored"
+            return output, row
+        if not allow_completing_rescue and np.all(merged >= 0):
+            row["reason"] = "would_complete_track"
+            return output, row
+        output[source_row] = merged
+        output = np.delete(output, target_row, axis=0)
+        row["applied"] = 1
+        row["reason"] = "accepted_merge_fragments"
         return output, row
     candidate_row = output[source_row].copy()
     candidate_row[session_b] = roi_b
@@ -292,6 +334,13 @@ def _try_apply_teacher_edge(
     row["applied"] = 1
     row["reason"] = "accepted_insert_target"
     return output, row
+
+
+def _merge_rows_if_compatible(left: np.ndarray, right: np.ndarray) -> np.ndarray | None:
+    conflict = (left >= 0) & (right >= 0) & (left != right)
+    if np.any(conflict):
+        return None
+    return np.where(left >= 0, left, right)
 
 
 def write_rescue_rows(
@@ -377,6 +426,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-fragment-merges",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Allow adjacent Track2p teacher edges to merge two compatible "
+            "seed-anchored fragments instead of only inserting unclaimed targets."
+        ),
+    )
+    parser.add_argument(
         "--include-behavior", action=argparse.BooleanOptionalAction, default=False
     )
     parser.add_argument("--output", type=Path, default=None)
@@ -421,6 +479,7 @@ def main(argv: list[str] | None = None) -> int:
         cell_probability_threshold=args.cell_probability_threshold,
         cleanup_config=cleanup_config,
         allow_completing_rescue=args.allow_completing_rescue,
+        allow_fragment_merges=args.allow_fragment_merges,
     )
     rows = [result.to_dict() for result in output.results]
     if args.output is not None:
