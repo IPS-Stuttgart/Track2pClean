@@ -34,7 +34,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
                     "allow_completing_seed_source_backfill": True,
                     "allow_fragment_merges": True,
                     "min_component_observations": 2,
-                    "teacher_edge_order": "confidence",
+                    "teacher_edge_order": "dynamic-confidence",
                     "output": "results/teacher-rescue.csv",
                 }
             ],
@@ -58,7 +58,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
         is True
     )
     assert dict(run.runner_kwargs or {})["min_component_observations"] == 2
-    assert dict(run.runner_kwargs or {})["teacher_edge_order"] == "confidence"
+    assert dict(run.runner_kwargs or {})["teacher_edge_order"] == "dynamic-confidence"
 
 
 def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants():

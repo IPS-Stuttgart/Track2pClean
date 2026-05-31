@@ -255,6 +255,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_fragment_merges=manifest._bool_option(
             options, "allow_fragment_merges", default=True
         ),
+        teacher_edge_order=str(options.get("teacher_edge_order", "structural")),
         min_component_observations=int(options.get("min_component_observations", 1)),
     )
     return [result.to_dict() for result in output.results]
