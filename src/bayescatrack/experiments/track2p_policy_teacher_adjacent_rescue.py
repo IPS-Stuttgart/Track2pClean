@@ -74,6 +74,14 @@ class TeacherAdjacentRescueReport:
     rows: tuple[dict[str, int | str], ...]
 
 
+def _resolve_source_backfill_alias(
+    allow_source_backfill: bool, allow_source_inserts: bool | None
+) -> bool:
+    if allow_source_inserts is None:
+        return bool(allow_source_backfill)
+    return bool(allow_source_inserts)
+
+
 def run_track2p_policy_teacher_adjacent_rescue(
     config: Track2pBenchmarkConfig,
     *,
@@ -84,6 +92,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     cleanup_config: ComponentCleanupConfig | None = None,
     allow_completing_rescue: bool = False,
     allow_source_backfill: bool = True,
+    allow_source_inserts: bool | None = None,
     allow_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
 ) -> ComponentAuditOutput:
@@ -101,6 +110,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
         )
 
     cleanup_config = cleanup_config or ComponentCleanupConfig()
+    source_backfill_enabled = _resolve_source_backfill_alias(
+        allow_source_backfill, allow_source_inserts
+    )
     results: list[SubjectBenchmarkResult] = []
     rescue_rows: list[dict[str, int | str]] = []
     for subject_dir in subject_dirs:
@@ -136,7 +148,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             teacher_full,
             seed_session=policy_config.seed_session,
             allow_completing_rescue=allow_completing_rescue,
-            allow_source_backfill=allow_source_backfill,
+            allow_source_backfill=source_backfill_enabled,
             allow_seed_source_backfill=allow_seed_source_backfill,
             allow_fragment_merges=allow_fragment_merges,
         )
@@ -159,7 +171,10 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 allow_completing_rescue
             ),
             "track2p_teacher_adjacent_allow_source_backfill": int(
-                allow_source_backfill
+                source_backfill_enabled
+            ),
+            "track2p_teacher_adjacent_allow_source_inserts": int(
+                source_backfill_enabled
             ),
             "track2p_teacher_adjacent_allow_seed_source_backfill": int(
                 allow_seed_source_backfill
@@ -234,6 +249,7 @@ def apply_teacher_adjacent_rescue_edges(
     seed_session: int = 0,
     allow_completing_rescue: bool = False,
     allow_source_backfill: bool = True,
+    allow_source_inserts: bool | None = None,
     allow_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
 ) -> TeacherAdjacentRescueReport:
@@ -247,6 +263,9 @@ def apply_teacher_adjacent_rescue_edges(
 
     output = _normalize_int_track_matrix(predicted_track_matrix)
     teacher = _normalize_int_track_matrix(teacher_track_matrix)
+    source_backfill_enabled = _resolve_source_backfill_alias(
+        allow_source_backfill, allow_source_inserts
+    )
     rows: list[dict[str, int | str]] = []
     for edge, count in sorted(track_edge_counter(teacher).items()):
         for occurrence_index in range(int(count)):
@@ -257,7 +276,7 @@ def apply_teacher_adjacent_rescue_edges(
                 edge,
                 seed_session=seed_session,
                 allow_completing_rescue=allow_completing_rescue,
-                allow_source_backfill=allow_source_backfill,
+                allow_source_backfill=source_backfill_enabled,
                 allow_seed_source_backfill=allow_seed_source_backfill,
                 allow_fragment_merges=allow_fragment_merges,
             )
@@ -277,10 +296,14 @@ def _try_apply_teacher_edge(
     seed_session: int,
     allow_completing_rescue: bool = False,
     allow_source_backfill: bool = True,
+    allow_source_inserts: bool | None = None,
     allow_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
 ) -> tuple[np.ndarray, dict[str, int | str]]:
     output = np.asarray(predicted, dtype=int).copy()
+    source_backfill_enabled = _resolve_source_backfill_alias(
+        allow_source_backfill, allow_source_inserts
+    )
     session_a, session_b, roi_a, roi_b = edge
     row = {
         "session_a": int(session_a),
@@ -343,7 +366,7 @@ def _try_apply_teacher_edge(
         return output, row
 
     if source_row < 0 and target_row >= 0:
-        if not allow_source_backfill:
+        if not source_backfill_enabled:
             row["reason"] = "missing_or_ambiguous_source"
             return output, row
         target_seed_anchored = _row_is_seed_anchored(output[target_row], seed_session)
@@ -498,6 +521,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-source-inserts",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Compatibility alias for --allow-source-backfill. When set, it "
+            "controls whether adjacent teacher edges can backfill an unclaimed "
+            "source ROI into a component that already contains the target."
+        ),
+    )
+    parser.add_argument(
         "--allow-seed-source-backfill",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -562,6 +595,7 @@ def main(argv: list[str] | None = None) -> int:
         cleanup_config=cleanup_config,
         allow_completing_rescue=args.allow_completing_rescue,
         allow_source_backfill=args.allow_source_backfill,
+        allow_source_inserts=args.allow_source_inserts,
         allow_seed_source_backfill=args.allow_seed_source_backfill,
         allow_fragment_merges=args.allow_fragment_merges,
     )
