@@ -709,7 +709,9 @@ def main(
     result_rows = (
         result.result_rows
         if bool(args.aggregate_row)
-        else tuple(row for row in result.result_rows if str(row.get("subject")) != "ALL")
+        else tuple(
+            row for row in result.result_rows if str(row.get("subject")) != "ALL"
+        )
     )
     write_rows(result_rows, args.output, output_format=args.format)
     if args.candidate_output is not None:

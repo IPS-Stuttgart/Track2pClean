@@ -1,7 +1,9 @@
 import numpy as np
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_coherence_suffix_stitch as method
-from bayescatrack.experiments import track2p_policy_coherence_suffix_stitch_whatif as audit
+from bayescatrack.experiments import (
+    track2p_policy_coherence_suffix_stitch_whatif as audit,
+)
 from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import (
     _EdgeCandidate,
     _PathCandidate,
