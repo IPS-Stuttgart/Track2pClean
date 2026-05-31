@@ -200,9 +200,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             allow_completing_fragment_merges=allow_fragment_completion,
             allow_source_backfill=source_backfill_enabled,
             allow_seed_source_backfill=allow_seed_source_backfill,
-            allow_completing_seed_source_backfill=(
-                allow_seed_completion
-            ),
+            allow_completing_seed_source_backfill=(allow_seed_completion),
             allow_fragment_merges=allow_fragment_merges,
             edge_order=teacher_edge_order,
             edge_feature_index=edge_feature_index,
@@ -382,12 +380,19 @@ def apply_teacher_adjacent_rescue_edges(
 
     output = _normalize_int_track_matrix(predicted_track_matrix)
     teacher = _normalize_int_track_matrix(teacher_track_matrix)
-    teacher_complete_tracks = _complete_row_set(teacher)
+    allow_partial_teacher_completion = bool(
+        allow_teacher_supported_completion or allow_teacher_supported_completing_rescue
+    )
+    allow_exact_teacher_completion = bool(
+        allow_teacher_complete_row_rescue or allow_teacher_confirmed_completing_rescue
+    )
+    teacher_complete_tracks = (
+        _teacher_row_set(teacher)
+        if allow_partial_teacher_completion
+        else _complete_row_set(teacher)
+    )
     allow_teacher_supported_completion_enabled = bool(
-        allow_teacher_complete_row_rescue
-        or allow_teacher_supported_completion
-        or allow_teacher_supported_completing_rescue
-        or allow_teacher_confirmed_completing_rescue
+        allow_partial_teacher_completion or allow_exact_teacher_completion
     )
     allow_seed_completion = bool(
         allow_seed_completing_rescue or allow_completing_seed_source_backfill
@@ -412,9 +417,7 @@ def apply_teacher_adjacent_rescue_edges(
             allow_completing_fragment_merges=allow_fragment_completion,
             allow_source_backfill=source_backfill_enabled,
             allow_seed_source_backfill=allow_seed_source_backfill,
-            allow_completing_seed_source_backfill=(
-                allow_seed_completion
-            ),
+            allow_completing_seed_source_backfill=(allow_seed_completion),
             allow_fragment_merges=allow_fragment_merges,
         )
     edge_occurrences = _ordered_teacher_edge_occurrences(
@@ -452,9 +455,7 @@ def apply_teacher_adjacent_rescue_edges(
             allow_completing_fragment_merges=allow_fragment_completion,
             allow_source_backfill=source_backfill_enabled,
             allow_seed_source_backfill=allow_seed_source_backfill,
-            allow_completing_seed_source_backfill=(
-                allow_seed_completion
-            ),
+            allow_completing_seed_source_backfill=(allow_seed_completion),
             allow_fragment_merges=allow_fragment_merges,
         )
         rows.append(
@@ -518,12 +519,8 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                         allow_teacher_supported_completing_rescue
                     ),
                     teacher_complete_tracks=teacher_complete_tracks,
-                    allow_completing_source_backfill=(
-                        allow_completing_source_backfill
-                    ),
-                    allow_completing_fragment_merges=(
-                        allow_completing_fragment_merges
-                    ),
+                    allow_completing_source_backfill=(allow_completing_source_backfill),
+                    allow_completing_fragment_merges=(allow_completing_fragment_merges),
                     allow_source_backfill=allow_source_backfill,
                     allow_seed_source_backfill=allow_seed_source_backfill,
                     allow_completing_seed_source_backfill=(
@@ -631,12 +628,8 @@ def _ordered_teacher_edge_occurrences(
                         allow_teacher_supported_completing_rescue
                     ),
                     teacher_complete_tracks=teacher_complete_tracks,
-                    allow_completing_source_backfill=(
-                        allow_completing_source_backfill
-                    ),
-                    allow_completing_fragment_merges=(
-                        allow_completing_fragment_merges
-                    ),
+                    allow_completing_source_backfill=(allow_completing_source_backfill),
+                    allow_completing_fragment_merges=(allow_completing_fragment_merges),
                     allow_source_backfill=allow_source_backfill,
                     allow_seed_source_backfill=allow_seed_source_backfill,
                     allow_completing_seed_source_backfill=(
@@ -691,10 +684,7 @@ def _teacher_edge_structural_order_key(
                 and _row_is_seed_anchored(merged, seed_session)
                 and not _would_complete_track(
                     merged,
-                    bool(
-                        allow_completing_rescue
-                        or allow_completing_fragment_merges
-                    ),
+                    bool(allow_completing_rescue or allow_completing_fragment_merges),
                     allow_teacher_supported_completing_rescue=(
                         allow_teacher_supported_completing_rescue
                     ),
@@ -710,16 +700,17 @@ def _teacher_edge_structural_order_key(
         seed_source_backfill = bool(
             allow_seed_source_backfill and session_a == seed_session
         )
-        if allow_source_backfill and (target_seed_anchored or seed_source_backfill):
+        if allow_source_backfill and (
+            target_seed_anchored
+            or seed_source_backfill
+            or allow_teacher_supported_completing_rescue
+        ):
             candidate = predicted[target_row].copy()
             candidate[session_a] = roi_a
             allow_completion = bool(
                 allow_completing_rescue
                 or allow_completing_source_backfill
-                or (
-                    seed_source_backfill
-                    and allow_completing_seed_source_backfill
-                )
+                or (seed_source_backfill and allow_completing_seed_source_backfill)
             )
             if not _would_complete_track(
                 candidate,
@@ -771,9 +762,7 @@ def _teacher_edge_confidence_order_key(
     allow_completing_seed_source_backfill: bool,
     allow_fragment_merges: bool,
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
-) -> tuple[
-    int, int, int, float, float, float, float, float, float, int, int, int, int
-]:
+) -> tuple[int, int, int, float, float, float, float, float, float, int, int, int, int]:
     """Return a label-free confidence-aware order key for teacher edges."""
 
     structural = _teacher_edge_structural_order_key(
@@ -932,14 +921,22 @@ def _try_apply_teacher_edge(
         seed_source_backfill = bool(
             allow_seed_source_backfill and session_a == seed_session
         )
-        if not target_seed_anchored and not seed_source_backfill:
-            row["reason"] = "target_not_seed_anchored"
-            return output, row
         candidate_row = output[target_row].copy()
         candidate_row[session_a] = roi_a
-        row["teacher_complete_row_supported"] = int(
-            _teacher_complete_row_supported(candidate_row, teacher_complete_tracks)
+        teacher_completion_supported = _teacher_complete_row_supported(
+            candidate_row, teacher_complete_tracks
         )
+        row["teacher_complete_row_supported"] = int(teacher_completion_supported)
+        if (
+            not target_seed_anchored
+            and not seed_source_backfill
+            and not (
+                allow_teacher_supported_completing_rescue
+                and teacher_completion_supported
+            )
+        ):
+            row["reason"] = "target_not_seed_anchored"
+            return output, row
         allow_completion = bool(
             allow_completing_rescue
             or allow_completing_source_backfill
@@ -957,7 +954,15 @@ def _try_apply_teacher_edge(
             return output, row
         output[target_row, session_a] = roi_a
         row["applied"] = 1
-        row["reason"] = "accepted_insert_source"
+        row["reason"] = (
+            "accepted_merge_fragments"
+            if (
+                allow_teacher_supported_completing_rescue
+                and teacher_completion_supported
+                and not target_seed_anchored
+            )
+            else "accepted_insert_source"
+        )
         return output, row
 
     if source_row >= 0 and target_row >= 0:
@@ -1004,8 +1009,15 @@ def _row_is_seed_anchored(track_row: np.ndarray, seed_session: int) -> bool:
 def _teacher_complete_row_supported(
     track_row: np.ndarray, teacher_complete_tracks: frozenset[tuple[int, ...]]
 ) -> bool:
-    return bool(
-        np.all(track_row >= 0) and _row_tuple(track_row) in teacher_complete_tracks
+    if not np.all(track_row >= 0):
+        return False
+    candidate = _row_tuple(track_row)
+    return any(
+        all(
+            teacher_value < 0 or teacher_value == candidate[index]
+            for index, teacher_value in enumerate(teacher_row)
+        )
+        for teacher_row in teacher_complete_tracks
     )
 
 
@@ -1022,8 +1034,12 @@ def _would_complete_track(
         return False
     return not (
         allow_teacher_supported_completing_rescue
-        and _row_tuple(track_row) in teacher_complete_tracks
+        and _teacher_complete_row_supported(track_row, teacher_complete_tracks)
     )
+
+
+def _teacher_row_set(track_matrix: np.ndarray) -> frozenset[tuple[int, ...]]:
+    return frozenset(_row_tuple(row) for row in track_matrix)
 
 
 def _complete_row_set(track_matrix: np.ndarray) -> frozenset[tuple[int, ...]]:
@@ -1146,25 +1162,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--allow-completing-fragment-merge",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help=(
-            "Compatibility alias for --allow-completing-fragment-merges."
-        ),
+        help=("Compatibility alias for --allow-completing-fragment-merges."),
     )
     parser.add_argument(
         "--allow-teacher-complete-row-rescue",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help=(
-            "Compatibility alias for --allow-teacher-supported-completing-rescue."
-        ),
+        help=("Compatibility alias for --allow-teacher-supported-completing-rescue."),
     )
     parser.add_argument(
         "--allow-teacher-supported-completion",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help=(
-            "Compatibility alias for --allow-teacher-supported-completing-rescue."
-        ),
+        help=("Compatibility alias for --allow-teacher-supported-completing-rescue."),
     )
     parser.add_argument(
         "--allow-teacher-supported-completing-rescue",
@@ -1180,9 +1190,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--allow-teacher-confirmed-completing-rescue",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help=(
-            "Compatibility alias for --allow-teacher-supported-completing-rescue."
-        ),
+        help=("Compatibility alias for --allow-teacher-supported-completing-rescue."),
     )
     parser.add_argument(
         "--allow-source-backfill",
@@ -1228,9 +1236,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--allow-seed-completing-rescue",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help=(
-            "Compatibility alias for --allow-completing-seed-source-backfill."
-        ),
+        help=("Compatibility alias for --allow-completing-seed-source-backfill."),
     )
     parser.add_argument(
         "--allow-completing-seed-source-backfill",

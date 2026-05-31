@@ -566,7 +566,9 @@ def test_teacher_adjacent_rescue_can_allow_complete_fragment_merge_only() -> Non
     assert report.rows[0]["reason"] == "accepted_merge_fragments"
 
 
-def test_teacher_adjacent_rescue_accepts_singular_fragment_merge_completion_alias() -> None:
+def test_teacher_adjacent_rescue_accepts_singular_fragment_merge_completion_alias() -> (
+    None
+):
     predicted = np.asarray([[10, 11, -1], [10, -1, 12]], dtype=int)
     teacher = np.asarray([[10, 11, 12]], dtype=int)
 
