@@ -27,6 +27,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
                     "iou_distance_threshold": 12.0,
                     "cell_probability_threshold": 0.5,
                     "allow_completing_rescue": True,
+                    "allow_completing_fragment_merges": True,
                     "allow_source_backfill": True,
                     "allow_seed_source_backfill": True,
                     "allow_completing_seed_source_backfill": True,
@@ -45,6 +46,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
     assert run.config.include_non_cells is False
     assert run.config.weighted_masks is False
     assert dict(run.runner_kwargs or {})["allow_completing_rescue"] is True
+    assert dict(run.runner_kwargs or {})["allow_completing_fragment_merges"] is True
     assert (
         dict(run.runner_kwargs or {})["allow_completing_seed_source_backfill"] is True
     )
@@ -115,6 +117,7 @@ def test_teacher_rescue_runner_specific_fields_registered():
     fields = bm._runner_specific_fields("track2p-policy-teacher-adjacent-rescue")
 
     assert "allow_completing_rescue" in fields
+    assert "allow_completing_fragment_merges" in fields
     assert "allow_seed_source_backfill" in fields
     assert "allow_completing_seed_source_backfill" in fields
     assert "allow_fragment_merges" in fields

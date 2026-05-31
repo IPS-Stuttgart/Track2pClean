@@ -89,6 +89,7 @@ TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     (TRACK2P_POLICY_COMPONENT_FIELDS - {"apply_splits"})
     | {
         "allow_completing_rescue",
+        "allow_completing_fragment_merges",
         "allow_source_backfill",
         "allow_source_inserts",
         "allow_source_insertions",
@@ -1154,6 +1155,9 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
         cleanup_config=cleanup_config,
         allow_completing_rescue=_bool_option(
             options, "allow_completing_rescue", default=False
+        ),
+        allow_completing_fragment_merges=_bool_option(
+            options, "allow_completing_fragment_merges", default=False
         ),
         allow_source_backfill=_bool_option(
             options, "allow_source_backfill", default=True
