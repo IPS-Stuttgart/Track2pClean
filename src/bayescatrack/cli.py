@@ -89,6 +89,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Rank short suffix-stitch candidates from non-GT features",
     ),
     (
+        "track2p-policy-coherence-suffix-stitch-whatif",
+        "bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif",
+        "Run coherence-gated suffix-stitch what-if after ComponentCleanup",
+    ),
+    (
         "track2p-policy-teacher-fn-audit",
         "bayescatrack.experiments.track2p_policy_teacher_fn_audit",
         "Audit Track2p-supported false negatives after component cleanup",
@@ -327,6 +332,12 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     ),
     "track2p-component-suffix-stitch-ranking-audit": (
         "track2p-policy-suffix-stitch-ranking-audit"
+    ),
+    "track2p-coherence-suffix-stitch-whatif": (
+        "track2p-policy-coherence-suffix-stitch-whatif"
+    ),
+    "track2p-component-coherence-suffix-stitch-whatif": (
+        "track2p-policy-coherence-suffix-stitch-whatif"
     ),
     "track2p-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
     "track2p-component-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
