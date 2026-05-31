@@ -792,9 +792,7 @@ def _teacher_edge_confidence_order_key(
     allow_fragment_merges: bool,
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
     min_component_observations: int,
-) -> tuple[
-    int, int, int, float, float, float, float, float, float, int, int, int, int
-]:
+) -> tuple[int, int, int, float, float, float, float, float, float, int, int, int, int]:
     """Return a label-free confidence-aware order key for teacher edges."""
 
     structural = _teacher_edge_structural_order_key(
