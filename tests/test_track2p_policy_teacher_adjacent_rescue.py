@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
+from bayescatrack.experiments.track2p_policy_component_residual_audit import (
+    ResidualFeature,
+)
 from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     apply_teacher_adjacent_rescue_edges,
 )
@@ -229,3 +232,53 @@ def test_teacher_adjacent_rescue_teacher_complete_row_alias_reports_support() ->
     assert output.rows[-1]["applied"] == 1
     assert output.rows[-1]["reason"] == "accepted_insert_target"
     assert output.rows[-1]["teacher_complete_row_supported"] == 1
+
+
+def test_teacher_adjacent_rescue_dynamic_confidence_reorders_stale_slot_claims() -> None:
+    """Dynamic confidence should use local evidence before a slot is claimed.
+
+    Two teacher edges compete for the same target ROI. A purely structural order
+    would tie-break lexicographically and let the lower-confidence source claim
+    the target first. The dynamic-confidence order should instead apply the
+    stronger label-free registration edge, leaving the weaker edge rejected by the
+    target-source conflict.
+    """
+
+    predicted = np.asarray([[100, -1, -1], [200, -1, -1]], dtype=int)
+    teacher = np.asarray([[100, 10, -1], [200, 10, -1]], dtype=int)
+    edge_feature_index = {
+        (0, 1, 100, 10): ResidualFeature(
+            registered_iou=0.10,
+            centroid_distance=5.0,
+            area_ratio=0.50,
+            row_margin=0.0,
+            column_margin=0.0,
+            threshold_margin=0.0,
+            assigned_by_hungarian=0,
+        ),
+        (0, 1, 200, 10): ResidualFeature(
+            registered_iou=0.90,
+            centroid_distance=1.0,
+            area_ratio=0.95,
+            row_margin=0.4,
+            column_margin=0.4,
+            threshold_margin=0.5,
+            assigned_by_hungarian=1,
+        ),
+    }
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="dynamic-confidence",
+        edge_feature_index=edge_feature_index,
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[100, -1, -1], [200, 10, -1]])
+    assert output.rows[0]["roi_a"] == 200
+    assert output.rows[0]["applied"] == 1
+    assert output.rows[0]["reason"] == "accepted_insert_target"
+    assert output.rows[1]["roi_a"] == 100
+    assert output.rows[1]["applied"] == 0
+    assert output.rows[1]["reason"] == "target_has_source_conflict"

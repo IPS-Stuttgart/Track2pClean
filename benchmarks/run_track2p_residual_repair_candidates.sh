@@ -148,6 +148,13 @@ run_teacher_rescue teacher_adjacent_seed_source \
   --allow-seed-source-backfill \
   --allow-fragment-merges
 
+run_teacher_rescue teacher_adjacent_dynamic_confidence \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --no-allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-edge-order dynamic-confidence
+
 # Stricter label-free support gate: only rescue components that already contain
 # at least two observations.
 run_teacher_rescue teacher_adjacent_supported \
@@ -186,6 +193,7 @@ run_teacher_rescue teacher_adjacent_dynamic_completing_seed_source \
   --input TeacherAdjacentDynamicStructural="$OUT/teacher_adjacent_dynamic_structural.csv" \
   --input TeacherAdjacentConfidence="$OUT/teacher_adjacent_confidence.csv" \
   --input TeacherAdjacentSeedSource="$OUT/teacher_adjacent_seed_source.csv" \
+  --input TeacherAdjacentDynamicConfidence="$OUT/teacher_adjacent_dynamic_confidence.csv" \
   --input TeacherAdjacentSupported="$OUT/teacher_adjacent_supported.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
@@ -206,6 +214,7 @@ run_teacher_rescue teacher_adjacent_dynamic_completing_seed_source \
   --input TeacherAdjacentDynamicStructural="$OUT/teacher_adjacent_dynamic_structural.csv" \
   --input TeacherAdjacentConfidence="$OUT/teacher_adjacent_confidence.csv" \
   --input TeacherAdjacentSeedSource="$OUT/teacher_adjacent_seed_source.csv" \
+  --input TeacherAdjacentDynamicConfidence="$OUT/teacher_adjacent_dynamic_confidence.csv" \
   --input TeacherAdjacentSupported="$OUT/teacher_adjacent_supported.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \

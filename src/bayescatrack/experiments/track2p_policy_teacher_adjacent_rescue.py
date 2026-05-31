@@ -71,7 +71,11 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
 
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_METHOD = "track2p-policy-teacher-adjacent-rescue"
 TeacherEdgeOrder = Literal[
-    "lexicographic", "structural", "dynamic-structural", "confidence"
+    "lexicographic",
+    "structural",
+    "dynamic-structural",
+    "confidence",
+    "dynamic-confidence",
 ]
 
 
@@ -192,7 +196,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 threshold_method=threshold_method,
                 iou_distance_threshold=float(iou_distance_threshold),
             )
-            if teacher_edge_order == "confidence"
+            if teacher_edge_order in {"confidence", "dynamic-confidence"}
             else {}
         )
         rescue = apply_teacher_adjacent_rescue_edges(
@@ -384,14 +388,19 @@ def apply_teacher_adjacent_rescue_edges(
     insertions that would complete a row.
 
     Teacher edges are structurally ordered by default so edges that merge or
-    backfill already supported fragments are tried before plain forward
-    extensions. This avoids lexicographic ROI ordering consuming an empty slot
-    with a weaker teacher edge before a stronger bridge/backfill edge is tested.
-    The dynamic structural order recomputes that priority after every attempted
-    teacher edit, allowing a newly inserted source/target observation to promote
-    a now-available fragment merge before weaker stale candidates consume slots.
-    The ``confidence`` order keeps the same structural action classes, but breaks
-    ties with label-free local registration evidence.
+    backfill already supported fragments are tried before plain forward extensions.
+    This avoids lexicographic ROI ordering consuming an empty slot with a weaker
+    teacher edge before a stronger bridge/backfill edge is tested. The dynamic
+    structural order recomputes that priority after every attempted teacher edit,
+    allowing a newly inserted source/target observation to promote a now-available
+    fragment merge before weaker stale candidates consume slots. The
+    ``confidence`` order keeps the same structural action classes, but breaks ties
+    with label-free local registration evidence. ``dynamic-confidence`` combines
+    both ideas: it recomputes the structural priority after each attempted edit and
+    uses local registration evidence to break ties among currently eligible edits.
+    This is useful for residual teacher-rescue sweeps because a wrong early teacher
+    edge can claim the only open source/target slot and prevent a stronger edge
+    from being tested later.
     ``min_component_observations`` is a label-free support gate: teacher edits
     must touch at least one component with this many existing observations.
     """
@@ -424,7 +433,7 @@ def apply_teacher_adjacent_rescue_edges(
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
-    if edge_order == "dynamic-structural":
+    if edge_order in {"dynamic-structural", "dynamic-confidence"}:
         return _apply_teacher_adjacent_rescue_edges_dynamic(
             output,
             teacher,
@@ -441,6 +450,8 @@ def apply_teacher_adjacent_rescue_edges(
             allow_completing_seed_source_backfill=(allow_seed_completion),
             allow_fragment_merges=allow_fragment_merges,
             min_component_observations=min_component_observations,
+            edge_feature_index=edge_feature_index or {},
+            use_confidence_order=edge_order == "dynamic-confidence",
         )
     edge_occurrences = _ordered_teacher_edge_occurrences(
         output,
@@ -506,6 +517,8 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     allow_completing_seed_source_backfill: bool,
     allow_fragment_merges: bool,
     min_component_observations: int,
+    edge_feature_index: Mapping[TrackEdge, ResidualFeature],
+    use_confidence_order: bool,
 ) -> TeacherAdjacentRescueReport:
     """Apply teacher edits while recomputing structural priorities."""
 
@@ -534,27 +547,27 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
 
         edge, occurrence_index = min(
             pending,
-            key=lambda item: (
-                _teacher_edge_structural_order_key(
-                    output,
-                    item[0],
-                    seed_session=seed_session,
-                    allow_completing_rescue=allow_completing_rescue,
-                    allow_teacher_supported_completing_rescue=(
-                        allow_teacher_supported_completing_rescue
-                    ),
-                    teacher_complete_tracks=teacher_complete_tracks,
-                    allow_completing_source_backfill=(allow_completing_source_backfill),
-                    allow_completing_fragment_merges=(allow_completing_fragment_merges),
-                    allow_source_backfill=allow_source_backfill,
-                    allow_seed_source_backfill=allow_seed_source_backfill,
-                    allow_completing_seed_source_backfill=(
-                        allow_completing_seed_source_backfill
-                    ),
-                    allow_fragment_merges=allow_fragment_merges,
-                    min_component_observations=min_component_observations,
+            key=lambda item: _teacher_edge_dynamic_order_key(
+                output,
+                item[0],
+                seed_session=seed_session,
+                allow_completing_rescue=allow_completing_rescue,
+                allow_teacher_supported_completing_rescue=(
+                    allow_teacher_supported_completing_rescue
                 ),
-                item[1],
+                teacher_complete_tracks=teacher_complete_tracks,
+                allow_completing_source_backfill=allow_completing_source_backfill,
+                allow_completing_fragment_merges=allow_completing_fragment_merges,
+                allow_source_backfill=allow_source_backfill,
+                allow_seed_source_backfill=allow_seed_source_backfill,
+                allow_completing_seed_source_backfill=(
+                    allow_completing_seed_source_backfill
+                ),
+                allow_fragment_merges=allow_fragment_merges,
+                edge_feature_index=edge_feature_index,
+                min_component_observations=min_component_observations,
+                use_confidence_order=use_confidence_order,
+                occurrence_index=item[1],
             ),
         )
         attempted.add((edge, occurrence_index))
@@ -607,7 +620,7 @@ def _ordered_teacher_edge_occurrences(
     )
     if edge_order == "lexicographic":
         return occurrences
-    if edge_order == "dynamic-structural":
+    if edge_order in {"dynamic-structural", "dynamic-confidence"}:
         return occurrences
     if edge_order == "confidence":
         return tuple(
@@ -784,6 +797,73 @@ def _teacher_edge_structural_order_key(
         int(session_b),
         int(roi_a),
         int(roi_b),
+    )
+
+
+def _teacher_edge_dynamic_order_key(
+    predicted: np.ndarray,
+    edge: TrackEdge,
+    *,
+    seed_session: int,
+    allow_completing_rescue: bool,
+    allow_teacher_supported_completing_rescue: bool,
+    teacher_complete_tracks: frozenset[tuple[int, ...]],
+    allow_completing_source_backfill: bool,
+    allow_completing_fragment_merges: bool,
+    allow_source_backfill: bool,
+    allow_seed_source_backfill: bool,
+    allow_completing_seed_source_backfill: bool,
+    allow_fragment_merges: bool,
+    edge_feature_index: Mapping[TrackEdge, ResidualFeature],
+    min_component_observations: int,
+    use_confidence_order: bool,
+    occurrence_index: int,
+) -> tuple[Any, ...]:
+    """Return the dynamic rescue priority for one pending teacher edge."""
+
+    if use_confidence_order:
+        return (
+            _teacher_edge_confidence_order_key(
+                predicted,
+                edge,
+                seed_session=seed_session,
+                allow_completing_rescue=allow_completing_rescue,
+                allow_teacher_supported_completing_rescue=(
+                    allow_teacher_supported_completing_rescue
+                ),
+                teacher_complete_tracks=teacher_complete_tracks,
+                allow_completing_source_backfill=allow_completing_source_backfill,
+                allow_completing_fragment_merges=allow_completing_fragment_merges,
+                allow_source_backfill=allow_source_backfill,
+                allow_seed_source_backfill=allow_seed_source_backfill,
+                allow_completing_seed_source_backfill=(
+                    allow_completing_seed_source_backfill
+                ),
+                allow_fragment_merges=allow_fragment_merges,
+                edge_feature_index=edge_feature_index,
+                min_component_observations=min_component_observations,
+            ),
+            int(occurrence_index),
+        )
+    return (
+        _teacher_edge_structural_order_key(
+            predicted,
+            edge,
+            seed_session=seed_session,
+            allow_completing_rescue=allow_completing_rescue,
+            allow_teacher_supported_completing_rescue=(
+                allow_teacher_supported_completing_rescue
+            ),
+            teacher_complete_tracks=teacher_complete_tracks,
+            allow_completing_source_backfill=allow_completing_source_backfill,
+            allow_completing_fragment_merges=allow_completing_fragment_merges,
+            allow_source_backfill=allow_source_backfill,
+            allow_seed_source_backfill=allow_seed_source_backfill,
+            allow_completing_seed_source_backfill=allow_completing_seed_source_backfill,
+            allow_fragment_merges=allow_fragment_merges,
+            min_component_observations=min_component_observations,
+        ),
+        int(occurrence_index),
     )
 
 
@@ -1339,14 +1419,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--teacher-edge-order",
-        choices=("lexicographic", "structural", "dynamic-structural", "confidence"),
+        choices=(
+            "lexicographic",
+            "structural",
+            "dynamic-structural",
+            "confidence",
+            "dynamic-confidence",
+        ),
         default="structural",
         help=(
             "Order Track2p teacher candidate edges lexicographically or by a "
             "label-free structural priority that favors merges/backfills first. "
             "dynamic-structural recomputes that priority after each attempted "
-            "edit; confidence also uses local registration evidence to break "
-            "ties."
+            "edit; confidence uses local registration evidence to break ties; "
+            "dynamic-confidence does both."
         ),
     )
     parser.add_argument(
