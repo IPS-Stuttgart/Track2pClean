@@ -19,6 +19,7 @@
     "src/bayescatrack/experiments/track2p_policy_teacher_veto_cleanup.py",
     "src/bayescatrack/experiments/track2p_policy_seed_sensitivity_audit.py",
     "src/bayescatrack/experiments/track2p_policy_fragment_stitch_whatif.py",
+    "src/bayescatrack/experiments/track2p_policy_suffix_stitch_ranking_audit.py",
     "tests/test_track2p_policy_component_sweep.py",
     "tests/test_track2p_policy_gap_consensus_cleanup.py",
     "tests/test_track2p_policy_gap_component_cleanup.py",
@@ -27,6 +28,7 @@
     "tests/test_track2p_policy_conflict_component_cleanup.py",
     "tests/test_track2p_policy_transitive_strict_gap_cleanup.py",
     "tests/test_track2p_policy_fragment_stitch_whatif.py",
+    "tests/test_track2p_policy_suffix_stitch_ranking_audit.py",
     "tests/test_track2p_policy_teacher_veto_cleanup.py"
   ]
 }
