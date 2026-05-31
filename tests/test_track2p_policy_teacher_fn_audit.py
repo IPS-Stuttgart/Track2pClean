@@ -149,6 +149,57 @@ def test_teacher_adjacent_rescue_can_allow_complete_row() -> None:
     assert report.rows[0]["applied"] == 1
 
 
+def test_teacher_adjacent_rescue_merges_compatible_fragments() -> None:
+    predicted = np.asarray(
+        [
+            [10, 11, -1, -1, -1],
+            [10, -1, 12, 13, -1],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray([[10, 11, 12, 13, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, 12, 13, -1]])
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_merge_fragments"
+
+
+def test_teacher_adjacent_rescue_can_disable_fragment_merges() -> None:
+    predicted = np.asarray(
+        [
+            [10, 11, -1, -1, -1],
+            [10, -1, 12, 13, -1],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray([[10, 11, 12, 13, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0, allow_fragment_merges=False
+    )
+
+    np.testing.assert_array_equal(report.tracks, predicted)
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "target_already_claimed"
+
+
+def test_teacher_adjacent_rescue_rejects_complete_fragment_merge_by_default() -> None:
+    predicted = np.asarray([[10, 11, -1], [10, -1, 12]], dtype=int)
+    teacher = np.asarray([[10, 11, 12]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0
+    )
+
+    np.testing.assert_array_equal(report.tracks, predicted)
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "would_complete_track"
+
+
 def test_teacher_adjacent_rescue_rejects_seedless_partial_component() -> None:
     predicted = np.asarray([[-1, 11, -1]], dtype=int)
     teacher = np.asarray([[-1, 11, 12]], dtype=int)
