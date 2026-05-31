@@ -9,9 +9,13 @@ from . import (
 from ._calibration_feature_registry_integration import (
     install_calibration_feature_registry_integration,
 )
+from ._teacher_rescue_manifest_integration import (
+    install_teacher_rescue_manifest_integration,
+)
 
 _triplet_support_benchmark_integration.install_track2p_benchmark_triplet_support_integration()
 install_calibration_feature_registry_integration()
+install_teacher_rescue_manifest_integration()
 _cost_sweep_defaults.install_cost_sweep_suite2p_defaults()
 _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
 _diag_defaults.install_diagnostic_suite2p_defaults()
