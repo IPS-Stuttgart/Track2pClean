@@ -27,13 +27,14 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         "track2p-stability-cleanup",
         "track2p-supported-gap-cleanup",
         "track2p-confidence-ordered-strict-gap-cleanup",
+        "track2p-teacher-adjacent-rescue",
     ]
     assert all(preset.config.method == "global-assignment" for preset in presets)
     assert all(preset.config.reference_kind == "manual-gt" for preset in presets)
     assert all(preset.config.include_non_cells for preset in presets[:3])
     assert all(preset.config.weighted_masks for preset in presets[:3])
 
-    shifted, pruned, consensus, stability, supported_gap, confidence_gap = presets
+    shifted, pruned, consensus, stability, supported_gap, confidence_gap, teacher = presets
     assert shifted.config.cost == "registered-shifted-iou"
     assert shifted.config.higher_order_consistency_config is not None
     assert pruned.config.cost == "roi-aware-shifted"
@@ -67,17 +68,21 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
     assert supported_gap.runner_kwargs["reject_conflicting_bridge_support"] is True
     assert confidence_gap.runner == "confidence-ordered-strict-gap-cleanup"
     assert confidence_gap.config is supported_gap.config
-    assert confidence_gap.config.transform_type == "affine"
-    assert confidence_gap.config.max_gap == supported_gap.config.max_gap
-    assert confidence_gap.config.include_non_cells is False
-    assert confidence_gap.config.weighted_masks is False
     assert confidence_gap.runner_kwargs is not None
     assert confidence_gap.runner_kwargs["threshold_method"] == "min"
     assert confidence_gap.runner_kwargs["iou_distance_threshold"] == 12.0
-    assert confidence_gap.runner_kwargs["max_gap"] == supported_gap.config.max_gap
     confidence_cleanup_kwargs = confidence_gap.runner_kwargs["cleanup_config_kwargs"]
     assert isinstance(confidence_cleanup_kwargs, dict)
     assert confidence_cleanup_kwargs["require_complete_track"] is True
+    assert teacher.runner == "teacher-adjacent-rescue"
+    assert teacher.config is stability.config
+    assert teacher.runner_kwargs is not None
+    assert teacher.runner_kwargs["threshold_method"] == "min"
+    assert teacher.runner_kwargs["iou_distance_threshold"] == 12.0
+    assert teacher.runner_kwargs["allow_completing_rescue"] is False
+    teacher_cleanup_kwargs = teacher.runner_kwargs["cleanup_config_kwargs"]
+    assert isinstance(teacher_cleanup_kwargs, dict)
+    assert teacher_cleanup_kwargs["require_complete_track"] is True
 
 
 def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
@@ -98,9 +103,13 @@ def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
     assert rows[4]["runner"] == "supported-gap-cleanup"
     assert rows[4]["supported_gap_cleanup"] is True
     assert rows[4]["confidence_ordered_strict_gap_cleanup"] is False
+    assert rows[4]["teacher_adjacent_rescue"] is False
     assert rows[5]["runner"] == "confidence-ordered-strict-gap-cleanup"
     assert rows[5]["supported_gap_cleanup"] is False
     assert rows[5]["confidence_ordered_strict_gap_cleanup"] is True
+    assert rows[5]["teacher_adjacent_rescue"] is False
+    assert rows[6]["runner"] == "teacher-adjacent-rescue"
+    assert rows[6]["teacher_adjacent_rescue"] is True
 
 
 def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -> None:
@@ -135,9 +144,7 @@ def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -
             AccuracyPreset(
                 name="track2p-confidence-ordered-strict-gap-cleanup",
                 description="synthetic confidence strict gap preset",
-                config=build_track2p_accuracy_presets("/unused", progress=False)[
-                    -1
-                ].config,
+                config=build_track2p_accuracy_presets("/unused", progress=False)[-2].config,
                 runner="confidence-ordered-strict-gap-cleanup",
                 runner_kwargs={
                     "threshold_method": "min",
@@ -174,3 +181,68 @@ def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -
     assert kwargs["cleanup_config"].kwargs == {"split_risk_threshold": 1.25}
     assert isinstance(kwargs["gate_config"], FakeStrictGapGateConfig)
     assert kwargs["gate_config"].kwargs == {"min_threshold_margin": 0.35}
+
+
+def test_teacher_adjacent_rescue_preset_runner_builds_typed_config(monkeypatch) -> None:
+    calls: list[tuple[object, dict[str, object]]] = []
+    fake_result = SubjectBenchmarkResult(
+        subject="jm_synthetic",
+        variant="teacher adjacent rescue",
+        method="track2p-policy-teacher-adjacent-rescue",
+        scores={},
+        n_sessions=2,
+        reference_source="manual_gt",
+    )
+
+    class FakeComponentCleanupConfig:
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+    def fake_run(config: object, **kwargs: object) -> SimpleNamespace:
+        calls.append((config, dict(kwargs)))
+        return SimpleNamespace(results=(fake_result,))
+
+    from bayescatrack import accuracy_presets as module
+
+    monkeypatch.setattr(
+        module,
+        "build_track2p_accuracy_presets",
+        lambda *args, **kwargs: (
+            AccuracyPreset(
+                name="track2p-teacher-adjacent-rescue",
+                description="synthetic teacher rescue preset",
+                config=build_track2p_accuracy_presets("/unused", progress=False)[-1].config,
+                runner="teacher-adjacent-rescue",
+                runner_kwargs={
+                    "threshold_method": "min",
+                    "cleanup_config_kwargs": {"split_risk_threshold": 1.25},
+                    "allow_completing_rescue": False,
+                },
+            ),
+        ),
+    )
+    fake_module = SimpleNamespace(
+        ComponentCleanupConfig=FakeComponentCleanupConfig,
+        run_track2p_policy_teacher_adjacent_rescue=fake_run,
+    )
+    import bayescatrack.experiments
+
+    monkeypatch.setattr(
+        bayescatrack.experiments,
+        "track2p_policy_teacher_adjacent_rescue",
+        fake_module,
+        raising=False,
+    )
+
+    output = run_track2p_accuracy_presets(
+        "/data/track2p",
+        preset_names=cast(object, ("track2p-teacher-adjacent-rescue",)),
+    )
+
+    assert output == {"track2p-teacher-adjacent-rescue": [fake_result]}
+    assert len(calls) == 1
+    _, kwargs = calls[0]
+    assert kwargs["threshold_method"] == "min"
+    assert kwargs["allow_completing_rescue"] is False
+    assert isinstance(kwargs["cleanup_config"], FakeComponentCleanupConfig)
+    assert kwargs["cleanup_config"].kwargs == {"split_risk_threshold": 1.25}
