@@ -254,9 +254,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_fragment_merges=manifest._bool_option(
             options, "allow_fragment_merges", default=True
         ),
-        min_component_observations=int(
-            options.get("min_component_observations", 1)
-        ),
+        min_component_observations=int(options.get("min_component_observations", 1)),
     )
     return [result.to_dict() for result in output.results]
 
@@ -375,9 +373,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "allow_seed_source_backfill": allow_seed_source,
             "allow_completing_seed_source_backfill": allow_completing_seed_source,
             **(
-                {"min_component_observations": 2}
-                if name.endswith("-supported")
-                else {}
+                {"min_component_observations": 2} if name.endswith("-supported") else {}
             ),
             "output": f"{output_root}/{filename}",
         }

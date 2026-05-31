@@ -32,9 +32,7 @@ TRACK2P_POLICY_RUNNER = "track2p-policy"
 TRACK2P_POLICY_DP_RUNNER = "track2p-policy-dp"
 TRACK2P_POLICY_PRUNED_RUNNER = "track2p-policy-pruned"
 TRACK2P_POLICY_COMPONENT_RUNNER = "track2p-policy-component-audit"
-TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER = (
-    "track2p-policy-teacher-adjacent-rescue"
-)
+TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
 BenchmarkRunner = Literal[
     "track2p",
     "track2p-policy",
@@ -86,19 +84,18 @@ TRACK2P_POLICY_COMPONENT_FIELDS = TRACK2P_POLICY_FIELDS | {
     "area_ratio_weight",
 }
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
-    (TRACK2P_POLICY_COMPONENT_FIELDS - {"apply_splits"})
-    | {
-        "allow_completing_rescue",
-        "allow_teacher_supported_completing_rescue",
-        "allow_completing_fragment_merges",
-        "allow_source_backfill",
-        "allow_source_inserts",
-        "allow_source_insertions",
-        "allow_seed_source_backfill",
-        "allow_completing_seed_source_backfill",
-        "allow_fragment_merges",
-    }
-)
+    TRACK2P_POLICY_COMPONENT_FIELDS - {"apply_splits"}
+) | {
+    "allow_completing_rescue",
+    "allow_teacher_supported_completing_rescue",
+    "allow_completing_fragment_merges",
+    "allow_source_backfill",
+    "allow_source_inserts",
+    "allow_source_insertions",
+    "allow_seed_source_backfill",
+    "allow_completing_seed_source_backfill",
+    "allow_fragment_merges",
+}
 CONFIGURABLE_LOSO_FIELDS = {
     "feature_names",
     "sample_weight_strategy",
