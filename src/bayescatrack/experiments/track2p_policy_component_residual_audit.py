@@ -400,6 +400,7 @@ def _pairwise_residual_rows(
                     reason_bucket=_pairwise_fn_reason(
                         edge,
                         predicted=predicted,
+                        reference=reference,
                         policy_supported=policy_counts.get(edge, 0) > 0,
                         gap_supported=gap_counts.get(edge, 0) > 0,
                         component_cleanup_affected=(
@@ -943,6 +944,7 @@ def _pairwise_fn_reason(
     edge: TrackEdge,
     *,
     predicted: np.ndarray,
+    reference: np.ndarray,
     policy_supported: bool,
     gap_supported: bool,
     component_cleanup_affected: bool,
@@ -958,11 +960,34 @@ def _pairwise_fn_reason(
             return "wrong target selected"
         if row[session_b] == roi_b and row[session_a] >= 0 and row[session_a] != roi_a:
             return "duplicate target/source conflict"
-    if 0 <= seed_session < predicted.shape[1] and not np.any(
-        predicted[:, seed_session] == roi_a
+
+    # The source ROI of a residual edge can belong to any session.  A previous
+    # audit bucket checked that ROI against the seed-session column directly,
+    # which can falsely classify ordinary downstream missed edges as
+    # ``missing seed-session ROI`` when ``session_a != seed_session``.  Recover
+    # the seed ROI from the reference track containing this edge and test that
+    # seed ROI instead.
+    seed_roi = _reference_seed_roi_for_edge(
+        edge, reference, seed_session=seed_session
+    )
+    if (
+        seed_roi >= 0
+        and 0 <= seed_session < predicted.shape[1]
+        and not np.any(predicted[:, seed_session] == seed_roi)
     ):
         return "missing seed-session ROI"
     return "missed valid adjacent edge"
+
+
+def _reference_seed_roi_for_edge(
+    edge: TrackEdge, reference: np.ndarray, *, seed_session: int
+) -> int:
+    if seed_session < 0 or seed_session >= reference.shape[1]:
+        return -1
+    for row in reference:
+        if edge in set(_consecutive_edges(row)):
+            return int(row[seed_session])
+    return -1
 
 
 def _complete_fp_reason(track: CompleteTrack, reference: np.ndarray) -> str:

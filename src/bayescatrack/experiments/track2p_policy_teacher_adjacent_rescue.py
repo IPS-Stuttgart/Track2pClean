@@ -9,7 +9,9 @@ seed-anchored fragments when the edit has no ROI conflicts.  Completing a row by
 isolated insertion remains disabled unless explicitly allowed or unless the
 completed row is also present as a complete Track2p teacher row, while
 complete-row fragment merges can be enabled separately for a narrower
-stitch-only rescue. The command does not use manual GT labels to choose edges.
+stitch-only rescue. A compatibility seed-completing backfill opt-in allows only
+Track2p-supported source backfills that fill the seed-session ROI. The command
+does not use manual GT labels to choose edges.
 """
 
 from __future__ import annotations
@@ -113,6 +115,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     allow_source_inserts: bool | None = None,
     allow_source_insertions: bool | None = None,
     allow_seed_source_backfill: bool = False,
+    allow_seed_completing_backfill: bool = False,
     allow_seed_completing_rescue: bool = False,
     allow_completing_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
@@ -143,7 +146,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
         or allow_teacher_confirmed_completing_rescue
     )
     allow_seed_completion = bool(
-        allow_seed_completing_rescue or allow_completing_seed_source_backfill
+        allow_seed_completing_backfill
+        or allow_seed_completing_rescue
+        or allow_completing_seed_source_backfill
     )
     allow_fragment_completion = bool(
         allow_completing_fragment_merge or allow_completing_fragment_merges
@@ -265,6 +270,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
             "track2p_teacher_adjacent_allow_seed_completing_rescue": int(
                 allow_seed_completing_rescue
             ),
+            "track2p_teacher_adjacent_allow_seed_completing_backfill": int(
+                allow_seed_completing_backfill
+            ),
             "track2p_teacher_adjacent_allow_completing_seed_source_backfill": int(
                 allow_seed_completion
             ),
@@ -352,6 +360,7 @@ def apply_teacher_adjacent_rescue_edges(
     allow_source_inserts: bool | None = None,
     allow_source_insertions: bool | None = None,
     allow_seed_source_backfill: bool = False,
+    allow_seed_completing_backfill: bool = False,
     allow_seed_completing_rescue: bool = False,
     allow_completing_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
@@ -404,7 +413,9 @@ def apply_teacher_adjacent_rescue_edges(
         allow_partial_teacher_completion or allow_exact_teacher_completion
     )
     allow_seed_completion = bool(
-        allow_seed_completing_rescue or allow_completing_seed_source_backfill
+        allow_seed_completing_backfill
+        or allow_seed_completing_rescue
+        or allow_completing_seed_source_backfill
     )
     allow_fragment_completion = bool(
         allow_completing_fragment_merge or allow_completing_fragment_merges
@@ -1292,6 +1303,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=("Compatibility alias for --allow-completing-seed-source-backfill."),
     )
     parser.add_argument(
+        "--allow-seed-completing-backfill",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Compatibility alias for --allow-completing-seed-source-backfill."
+        ),
+    )
+    parser.add_argument(
         "--allow-completing-seed-source-backfill",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1392,6 +1411,7 @@ def main(argv: list[str] | None = None) -> int:
         allow_source_inserts=args.allow_source_inserts,
         allow_source_insertions=args.allow_source_insertions,
         allow_seed_source_backfill=args.allow_seed_source_backfill,
+        allow_seed_completing_backfill=args.allow_seed_completing_backfill,
         allow_seed_completing_rescue=args.allow_seed_completing_rescue,
         allow_completing_seed_source_backfill=(
             args.allow_completing_seed_source_backfill

@@ -69,6 +69,55 @@ def test_residual_error_rows_classify_missing_adjacent_edge() -> None:
     )
 
 
+def test_pairwise_fn_reason_uses_reference_seed_roi_not_source_roi() -> None:
+    predicted = np.asarray([[100, 11, -1]], dtype=int)
+    reference = np.asarray([[100, 11, 12]], dtype=int)
+
+    rows = audit.residual_error_rows(
+        predicted,
+        reference,
+        subject="subject-a",
+        seed_session=0,
+    )
+
+    fn_edge = next(row for row in rows if row["error_type"] == "pairwise_fn")
+    assert fn_edge["track_id_or_edge"] == "1:11->2:12"
+    assert fn_edge["reason_bucket"] == "missed valid adjacent edge"
+
+
+def test_pairwise_fn_reason_detects_missing_reference_seed_roi() -> None:
+    predicted = np.asarray([[999, 11, -1]], dtype=int)
+    reference = np.asarray([[100, 11, 12]], dtype=int)
+
+    rows = audit.residual_error_rows(
+        predicted,
+        reference,
+        subject="subject-a",
+        seed_session=0,
+    )
+
+    fn_edge = next(row for row in rows if row["error_type"] == "pairwise_fn")
+    assert fn_edge["track_id_or_edge"] == "1:11->2:12"
+    assert fn_edge["reason_bucket"] == "missing seed-session ROI"
+
+
+def test_reference_seed_roi_for_edge_ignores_non_reference_edges() -> None:
+    reference = np.asarray([[100, 11, 12]], dtype=int)
+
+    assert (
+        audit._reference_seed_roi_for_edge(
+            (1, 2, 11, 12), reference, seed_session=0
+        )
+        == 100
+    )
+    assert (
+        audit._reference_seed_roi_for_edge(
+            (1, 2, 11, 99), reference, seed_session=0
+        )
+        == -1
+    )
+
+
 def test_component_residual_parser_defaults_to_component_cleanup_row() -> None:
     args = audit.build_arg_parser().parse_args(
         ["--data", "track2p-root", "--output", "x.csv"]

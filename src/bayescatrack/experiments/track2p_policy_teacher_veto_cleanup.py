@@ -80,6 +80,7 @@ class TeacherVetoConfig:
     max_registered_iou: float | None = None
     allow_complete_track_veto: bool = False
     keep_right_fragment: bool = True
+    min_fragment_observations: int = 2
 
 
 @dataclass(frozen=True)
@@ -184,6 +185,9 @@ def run_track2p_policy_teacher_veto_cleanup(
             ),
             "track2p_teacher_veto_keep_right_fragment": int(
                 veto_config.keep_right_fragment
+            ),
+            "track2p_teacher_veto_min_fragment_observations": int(
+                veto_config.min_fragment_observations
             ),
         }
         results.append(
@@ -321,13 +325,25 @@ def _try_veto_edge(
     right = output[row_index].copy()
     left[session_b:] = -1
     right[:session_b] = -1
+    left_observations = int(np.sum(left >= 0))
+    right_observations = int(np.sum(right >= 0))
+    min_fragment_observations = max(1, int(config.min_fragment_observations))
+    if (
+        left_observations < min_fragment_observations
+        or right_observations < min_fragment_observations
+    ):
+        row["reason"] = "fragment_too_short"
+        row["left_observations"] = left_observations
+        row["right_observations"] = right_observations
+        return output, row
+
     output[row_index] = left
     if config.keep_right_fragment and np.any(right >= 0):
         output = np.vstack([output, right.reshape(1, -1)])
     row["applied"] = 1
     row["reason"] = "accepted_split_edge"
-    row["left_observations"] = int(np.sum(left >= 0))
-    row["right_observations"] = int(np.sum(right >= 0))
+    row["left_observations"] = left_observations
+    row["right_observations"] = right_observations
     return output, row
 
 
@@ -475,6 +491,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Keep the target-side fragment after a veto split for auditability.",
     )
     parser.add_argument(
+        "--min-veto-fragment-observations",
+        type=int,
+        default=2,
+        help=(
+            "Require both fragments created by a teacher-veto split to contain "
+            "at least this many observations."
+        ),
+    )
+    parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -508,6 +533,7 @@ def main(argv: list[str] | None = None) -> int:
         max_registered_iou=args.max_registered_iou,
         allow_complete_track_veto=bool(args.allow_complete_track_veto),
         keep_right_fragment=bool(args.keep_right_fragment),
+        min_fragment_observations=int(args.min_veto_fragment_observations),
     )
     config = Track2pBenchmarkConfig(
         data=args.data,
