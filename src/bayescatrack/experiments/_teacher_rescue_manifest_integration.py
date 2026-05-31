@@ -250,7 +250,7 @@ def _install_advanced_workbench_manifest_row() -> None:
     ) -> dict[str, Any]:
         manifest = original(*args, **kwargs)
         output_root = str(kwargs.get("output_root", "<OUTPUT_ROOT>"))
-        _append_teacher_rescue_run(manifest, output_root=output_root)
+        _append_teacher_rescue_runs(manifest, output_root=output_root)
         return manifest
 
     setattr(
@@ -263,15 +263,8 @@ def _install_advanced_workbench_manifest_row() -> None:
     )
 
 
-def _append_teacher_rescue_run(manifest: dict[str, Any], *, output_root: str) -> None:
-    runs = manifest.get("runs")
-    if not isinstance(runs, list):
-        return
-    name = "track2p-policy-teacher-adjacent-rescue"
-    if any(isinstance(run, Mapping) and run.get("name") == name for run in runs):
-        return
-    row = {
-        "name": name,
+def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...]:
+    base = {
         "runner": TEACHER_ADJACENT_RESCUE_RUNNER,
         "transform_type": "affine",
         "threshold_method": "min",
@@ -285,21 +278,68 @@ def _append_teacher_rescue_run(manifest: dict[str, Any], *, output_root: str) ->
         "split_risk_threshold": 1.50,
         "split_penalty": 0.25,
         "min_side_observations": 2,
-        "allow_completing_rescue": False,
         "allow_source_backfill": True,
-        "allow_seed_source_backfill": False,
         "allow_fragment_merges": True,
-        "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue.csv",
     }
-    insert_at = _insertion_index_after(runs, "track2p-policy-component-cleanup")
-    runs.insert(insert_at, row)
+    variants: tuple[tuple[str, bool, bool, str], ...] = (
+        (
+            "track2p-policy-teacher-adjacent-rescue",
+            False,
+            False,
+            "track2p_policy_teacher_adjacent_rescue.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-seed-source",
+            False,
+            True,
+            "track2p_policy_teacher_adjacent_rescue_seed_source.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-completing",
+            True,
+            False,
+            "track2p_policy_teacher_adjacent_rescue_completing.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-completing-seed-source",
+            True,
+            True,
+            "track2p_policy_teacher_adjacent_rescue_completing_seed_source.csv",
+        ),
+    )
+    return tuple(
+        {
+            **base,
+            "name": name,
+            "allow_completing_rescue": allow_completing,
+            "allow_seed_source_backfill": allow_seed_source,
+            "output": f"{output_root}/{filename}",
+        }
+        for name, allow_completing, allow_seed_source, filename in variants
+    )
+
+
+def _append_teacher_rescue_runs(manifest: dict[str, Any], *, output_root: str) -> None:
+    runs = manifest.get("runs")
+    if not isinstance(runs, list):
+        return
+    existing_names = {
+        run.get("name") for run in runs if isinstance(run, Mapping) and "name" in run
+    }
+    rows_to_insert = [
+        row
+        for row in _teacher_rescue_manifest_rows(output_root)
+        if row["name"] not in existing_names
+    ]
+    if rows_to_insert:
+        insert_at = _insertion_index_after(runs, "track2p-policy-component-cleanup")
+        runs[insert_at:insert_at] = rows_to_insert
     for comparison in manifest.get("comparisons", []):
         if isinstance(comparison, dict) and isinstance(comparison.get("inputs"), dict):
-            comparison["inputs"] = _insert_mapping_after(
+            comparison["inputs"] = _insert_mapping_after_many(
                 comparison["inputs"],
                 after_key="track2p-policy-component-cleanup",
-                key=name,
-                value=name,
+                items=((row["name"], row["name"]) for row in rows_to_insert),
             )
 
 
@@ -310,18 +350,23 @@ def _insertion_index_after(runs: list[Any], run_name: str) -> int:
     return len(runs)
 
 
-def _insert_mapping_after(
-    values: Mapping[str, Any], *, after_key: str, key: str, value: Any
+def _insert_mapping_after_many(
+    values: Mapping[str, Any], *, after_key: str, items: Any
 ) -> dict[str, Any]:
-    if key in values:
+    materialized_items = tuple(
+        (key, value) for key, value in items if key not in values
+    )
+    if not materialized_items:
         return dict(values)
     out: dict[str, Any] = {}
     inserted = False
     for current_key, current_value in values.items():
         out[current_key] = current_value
         if current_key == after_key:
-            out[key] = value
+            for key, value in materialized_items:
+                out[key] = value
             inserted = True
     if not inserted:
-        out[key] = value
+        for key, value in materialized_items:
+            out[key] = value
     return out
