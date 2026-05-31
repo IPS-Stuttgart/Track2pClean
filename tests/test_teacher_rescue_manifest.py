@@ -34,6 +34,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
                     "allow_completing_seed_source_backfill": True,
                     "allow_fragment_merges": True,
                     "min_component_observations": 2,
+                    "teacher_edge_order": "confidence",
                     "output": "results/teacher-rescue.csv",
                 }
             ],
@@ -57,6 +58,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
         is True
     )
     assert dict(run.runner_kwargs or {})["min_component_observations"] == 2
+    assert dict(run.runner_kwargs or {})["teacher_edge_order"] == "confidence"
 
 
 def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants():
@@ -72,6 +74,20 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
             "allow_teacher_supported_completing_rescue": False,
             "allow_seed_source_backfill": False,
             "allow_completing_seed_source_backfill": False,
+        },
+        "track2p-policy-teacher-adjacent-rescue-dynamic-structural": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "teacher_edge_order": "dynamic-structural",
+        },
+        "track2p-policy-teacher-adjacent-rescue-confidence": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "teacher_edge_order": "confidence",
         },
         "track2p-policy-teacher-adjacent-rescue-seed-source": {
             "allow_completing_rescue": False,
@@ -157,3 +173,4 @@ def test_teacher_rescue_runner_specific_fields_registered():
     assert "allow_completing_seed_source_backfill" in fields
     assert "allow_fragment_merges" in fields
     assert "min_component_observations" in fields
+    assert "teacher_edge_order" in fields
