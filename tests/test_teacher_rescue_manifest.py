@@ -228,8 +228,12 @@ def test_teacher_rescue_runner_specific_fields_registered():
     assert "teacher_edge_order" in fields
 
 
-def test_teacher_rescue_manifest_runner_passes_teacher_edge_order(monkeypatch, tmp_path):
-    from bayescatrack.experiments import _teacher_rescue_manifest_integration as integration
+def test_teacher_rescue_manifest_runner_passes_teacher_edge_order(
+    monkeypatch, tmp_path
+):
+    from bayescatrack.experiments import (
+        _teacher_rescue_manifest_integration as integration,
+    )
     from bayescatrack.experiments import (
         track2p_policy_teacher_adjacent_rescue as rescue_module,
     )
