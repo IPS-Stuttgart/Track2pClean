@@ -42,6 +42,7 @@ def test_teacher_veto_splits_weak_teacher_absent_edge() -> None:
         predicted,
         teacher,
         feature_index={edge: _weak_feature()},
+        config=veto.TeacherVetoConfig(min_fragment_observations=1),
     )
 
     assert report.rows[0]["applied"] == 1
@@ -61,6 +62,24 @@ def test_teacher_veto_keeps_teacher_supported_edge() -> None:
     )
 
     assert report.rows == ()
+    np.testing.assert_array_equal(report.tracks, predicted)
+
+
+def test_teacher_veto_rejects_short_fragment_by_default() -> None:
+    predicted = np.asarray([[10, 11, 12, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1, -1]], dtype=int)
+    edge = (1, 2, 11, 12)
+
+    report = veto.apply_teacher_veto_edges(
+        predicted,
+        teacher,
+        feature_index={edge: _weak_feature()},
+    )
+
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "fragment_too_short"
+    assert report.rows[0]["left_observations"] == 2
+    assert report.rows[0]["right_observations"] == 1
     np.testing.assert_array_equal(report.tracks, predicted)
 
 

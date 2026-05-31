@@ -95,6 +95,7 @@ TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     "allow_seed_source_backfill",
     "allow_completing_seed_source_backfill",
     "allow_fragment_merges",
+    "teacher_edge_order",
 }
 CONFIGURABLE_LOSO_FIELDS = {
     "feature_names",
