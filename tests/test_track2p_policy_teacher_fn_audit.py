@@ -118,6 +118,9 @@ def test_teacher_adjacent_parser_defaults_to_structural_order() -> None:
     assert args.teacher_edge_order == "structural"
     assert args.allow_completing_fragment_merges is False
     assert args.allow_completing_seed_source_backfill is False
+    assert args.allow_seed_completing_rescue is False
+    assert args.allow_teacher_complete_row_rescue is False
+    assert args.allow_teacher_supported_completion is False
     assert args.allow_teacher_supported_completing_rescue is False
     assert args.allow_teacher_confirmed_completing_rescue is False
 
@@ -184,6 +187,22 @@ def test_teacher_adjacent_rescue_allows_teacher_supported_complete_row() -> None
         teacher,
         seed_session=0,
         allow_teacher_supported_completing_rescue=True,
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, 12]])
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_insert_target"
+
+
+def test_teacher_adjacent_rescue_allows_teacher_supported_completion_alias() -> None:
+    predicted = np.asarray([[10, 11, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, 12]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_teacher_supported_completion=True,
     )
 
     np.testing.assert_array_equal(report.tracks, [[10, 11, 12]])
