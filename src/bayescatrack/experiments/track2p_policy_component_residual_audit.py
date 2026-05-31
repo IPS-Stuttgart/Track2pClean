@@ -334,7 +334,10 @@ def _pairwise_residual_rows(
     component_by_edge = _component_context_by_edge(predicted, contexts)
 
     rows: list[dict[str, float | int | str]] = []
-    for edge in sorted(set(predicted_counts) | set(reference_counts)):
+    for edge in sorted(
+        set(predicted_counts) | set(reference_counts),
+        key=lambda item: (item[0] == seed_session, item),
+    ):
         predicted_count = int(predicted_counts.get(edge, 0))
         reference_count = int(reference_counts.get(edge, 0))
         matched = min(predicted_count, reference_count)

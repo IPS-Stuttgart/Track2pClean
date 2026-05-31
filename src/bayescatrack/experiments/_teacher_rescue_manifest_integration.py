@@ -43,6 +43,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "allow_completing_seed_source_backfill",
     "allow_fragment_merges",
     "min_component_observations",
+    "teacher_edge_order",
 }
 
 
@@ -303,14 +304,33 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
         "allow_fragment_merges": True,
         "min_component_observations": 1,
     }
-    variants: tuple[tuple[str, bool, bool, bool, bool, str], ...] = (
+    variants: tuple[tuple[str, bool, bool, bool, bool, str | None, str], ...] = (
         (
             "track2p-policy-teacher-adjacent-rescue",
             False,
             False,
             False,
             False,
+            None,
             "track2p_policy_teacher_adjacent_rescue.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-dynamic-structural",
+            False,
+            False,
+            False,
+            False,
+            "dynamic-structural",
+            "track2p_policy_teacher_adjacent_rescue_dynamic_structural.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-confidence",
+            False,
+            False,
+            False,
+            False,
+            "confidence",
+            "track2p_policy_teacher_adjacent_rescue_confidence.csv",
         ),
         (
             "track2p-policy-teacher-adjacent-rescue-seed-source",
@@ -318,6 +338,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             True,
             False,
             False,
+            None,
             "track2p_policy_teacher_adjacent_rescue_seed_source.csv",
         ),
         (
@@ -326,6 +347,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             False,
             False,
             False,
+            None,
             "track2p_policy_teacher_adjacent_rescue_supported.csv",
         ),
         (
@@ -334,6 +356,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             False,
             False,
             True,
+            None,
             "track2p_policy_teacher_adjacent_rescue_teacher_completing.csv",
         ),
         (
@@ -342,6 +365,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             True,
             True,
             True,
+            None,
             "track2p_policy_teacher_adjacent_rescue_teacher_completing_seed_source.csv",
         ),
         (
@@ -350,6 +374,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             False,
             False,
             False,
+            None,
             "track2p_policy_teacher_adjacent_rescue_completing.csv",
         ),
         (
@@ -358,6 +383,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             True,
             True,
             False,
+            None,
             "track2p_policy_teacher_adjacent_rescue_completing_seed_source.csv",
         ),
     )
@@ -375,6 +401,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             **(
                 {"min_component_observations": 2} if name.endswith("-supported") else {}
             ),
+            **({"teacher_edge_order": teacher_edge_order} if teacher_edge_order else {}),
             "output": f"{output_root}/{filename}",
         }
         for (
@@ -383,6 +410,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             allow_seed_source,
             allow_completing_seed_source,
             allow_teacher_supported_completing,
+            teacher_edge_order,
             filename,
         ) in variants
     )
