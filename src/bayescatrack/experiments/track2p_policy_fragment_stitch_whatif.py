@@ -454,6 +454,7 @@ def _selected_complete_fp_count(predicted: np.ndarray, plan: _RepairPlan, refere
 
 
 def _global_counts(score_rows: Sequence[Mapping[str, float | int]]) -> dict[str, int]:
+    materialized_rows = tuple(score_rows)
     keys = (
         "pairwise_true_positives",
         "pairwise_false_positives",
@@ -462,7 +463,7 @@ def _global_counts(score_rows: Sequence[Mapping[str, float | int]]) -> dict[str,
         "complete_track_false_positives",
         "complete_track_false_negatives",
     )
-    return {key: int(sum(int(row[key]) for row in score_rows)) for key in keys}
+    return {key: int(sum(int(row[key]) for row in materialized_rows)) for key in keys}
 
 
 def _score_delta(
