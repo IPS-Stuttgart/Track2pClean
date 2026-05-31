@@ -27,6 +27,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
                     "iou_distance_threshold": 12.0,
                     "cell_probability_threshold": 0.5,
                     "allow_completing_rescue": True,
+                    "allow_teacher_supported_completing_rescue": True,
                     "allow_completing_fragment_merges": True,
                     "allow_source_backfill": True,
                     "allow_seed_source_backfill": True,
@@ -50,6 +51,10 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
     assert (
         dict(run.runner_kwargs or {})["allow_completing_seed_source_backfill"] is True
     )
+    assert (
+        dict(run.runner_kwargs or {})["allow_teacher_supported_completing_rescue"]
+        is True
+    )
 
 
 def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants():
@@ -62,21 +67,37 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
     expected = {
         "track2p-policy-teacher-adjacent-rescue": {
             "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
             "allow_seed_source_backfill": False,
             "allow_completing_seed_source_backfill": False,
         },
         "track2p-policy-teacher-adjacent-rescue-seed-source": {
             "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": False,
         },
+        "track2p-policy-teacher-adjacent-rescue-teacher-completing": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": True,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+        },
+        "track2p-policy-teacher-adjacent-rescue-teacher-completing-seed-source": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": True,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+        },
         "track2p-policy-teacher-adjacent-rescue-completing": {
             "allow_completing_rescue": True,
+            "allow_teacher_supported_completing_rescue": False,
             "allow_seed_source_backfill": False,
             "allow_completing_seed_source_backfill": False,
         },
         "track2p-policy-teacher-adjacent-rescue-completing-seed-source": {
             "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": True,
         },
@@ -117,6 +138,7 @@ def test_teacher_rescue_runner_specific_fields_registered():
     fields = bm._runner_specific_fields("track2p-policy-teacher-adjacent-rescue")
 
     assert "allow_completing_rescue" in fields
+    assert "allow_teacher_supported_completing_rescue" in fields
     assert "allow_completing_fragment_merges" in fields
     assert "allow_seed_source_backfill" in fields
     assert "allow_completing_seed_source_backfill" in fields

@@ -118,6 +118,7 @@ def test_teacher_adjacent_parser_defaults_to_structural_order() -> None:
     assert args.teacher_edge_order == "structural"
     assert args.allow_completing_fragment_merges is False
     assert args.allow_completing_seed_source_backfill is False
+    assert args.allow_teacher_supported_completing_rescue is False
 
 
 def test_teacher_adjacent_parser_accepts_dynamic_structural_order() -> None:
@@ -126,6 +127,14 @@ def test_teacher_adjacent_parser_accepts_dynamic_structural_order() -> None:
     )
 
     assert args.teacher_edge_order == "dynamic-structural"
+
+
+def test_teacher_adjacent_parser_accepts_confidence_order() -> None:
+    args = rescue.build_arg_parser().parse_args(
+        ["--data", "track2p-root", "--teacher-edge-order", "confidence"]
+    )
+
+    assert args.teacher_edge_order == "confidence"
 
 
 def test_teacher_adjacent_rescue_extends_seed_anchored_chain() -> None:
@@ -163,6 +172,22 @@ def test_teacher_adjacent_rescue_can_allow_complete_row() -> None:
 
     np.testing.assert_array_equal(report.tracks, [[10, 11, 12]])
     assert report.rows[0]["applied"] == 1
+
+
+def test_teacher_adjacent_rescue_allows_teacher_supported_complete_row() -> None:
+    predicted = np.asarray([[10, 11, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, 12]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_teacher_supported_completing_rescue=True,
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, 12]])
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_insert_target"
 
 
 def test_teacher_adjacent_rescue_backfills_missing_internal_source() -> None:
@@ -236,6 +261,17 @@ def test_teacher_adjacent_rescue_seed_backfill_still_rejects_complete_row() -> N
     np.testing.assert_array_equal(report.tracks, predicted)
     assert report.rows[0]["applied"] == 0
     assert report.rows[0]["reason"] == "would_complete_track"
+
+    teacher_supported = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_teacher_supported_completing_rescue=True,
+    )
+
+    np.testing.assert_array_equal(teacher_supported.tracks, [[10, 11, 12]])
+    assert teacher_supported.rows[0]["applied"] == 1
+    assert teacher_supported.rows[0]["reason"] == "accepted_merge_fragments"
 
 
 def test_teacher_adjacent_rescue_can_complete_seed_backfill_when_enabled() -> None:
@@ -319,6 +355,38 @@ def test_teacher_adjacent_rescue_dynamic_structural_recomputes_after_accept() ->
     assert any(
         row["reason"] == "accepted_merge_fragments" for row in dynamic_report.rows
     )
+
+
+def test_teacher_adjacent_rescue_confidence_order_prefers_stronger_edge() -> None:
+    predicted = np.asarray([[10, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1], [10, 12, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="confidence",
+        edge_feature_index={
+            (0, 1, 10, 11): rescue.ResidualFeature(
+                registered_iou=0.2,
+                centroid_distance=4.0,
+                area_ratio=0.7,
+                threshold_margin=0.05,
+            ),
+            (0, 1, 10, 12): rescue.ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+        },
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 12, -1]])
+    assert report.rows[0]["roi_b"] == 12
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[1]["reason"] == "source_has_target_conflict"
 
 
 def test_teacher_adjacent_rescue_merges_compatible_fragments() -> None:
