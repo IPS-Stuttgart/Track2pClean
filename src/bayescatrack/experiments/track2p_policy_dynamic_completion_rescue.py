@@ -3,7 +3,9 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 
-from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import main as _main
+from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+    main as _main,
+)
 
 _ARGS = (
     "--allow-completing-rescue",
