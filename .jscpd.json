@@ -34,6 +34,6 @@
         "tests/test_track2p_policy_teacher_veto_cleanup.py",
         "tests/test_benchmark_manifest_policy_teacher_adjacent_rescue_runner.py",
         "tests/test_teacher_rescue_manifest.py",
-        "tests/test_track2p_policy_teacher_fn_audit.py",
-    ],
+        "tests/test_track2p_policy_teacher_fn_audit.py"
+    ]
 }

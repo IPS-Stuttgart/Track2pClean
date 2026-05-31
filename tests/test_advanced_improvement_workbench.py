@@ -73,9 +73,16 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     assert teacher_rescue["runner"] == "track2p-policy-teacher-adjacent-rescue"
     assert teacher_rescue["allow_completing_rescue"] is False
     assert teacher_rescue["allow_source_backfill"] is True
-    assert teacher_rescue["allow_seed_source_backfill"] is True
-    assert teacher_rescue["allow_completing_seed_source_backfill"] is True
+    assert teacher_rescue["allow_seed_source_backfill"] is False
+    assert teacher_rescue["allow_completing_seed_source_backfill"] is False
     assert teacher_rescue["allow_fragment_merges"] is True
+
+    seed_source_rescue = next(
+        run
+        for run in manifest["runs"]
+        if run["name"] == "track2p-policy-teacher-adjacent-rescue-seed-source"
+    )
+    assert seed_source_rescue["allow_seed_source_backfill"] is True
 
 
 def test_track2p_result_improvement_manifest_adds_experimental_policy_dp_once():
