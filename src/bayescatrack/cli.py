@@ -74,6 +74,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Audit residual errors after Track2p-policy component cleanup",
     ),
     (
+        "track2p-policy-component-residual-whatif",
+        "bayescatrack.experiments.track2p_policy_component_residual_whatif",
+        "Rank oracle single-edit what-if repairs for ComponentCleanup residuals",
+    ),
+    (
         "track2p-policy-seed-sensitivity-audit",
         "bayescatrack.experiments.track2p_policy_seed_sensitivity_audit",
         "Audit ComponentCleanup sensitivity to the seed-session choice",
@@ -87,6 +92,16 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "track2p-policy-suffix-stitch-ranking-audit",
         "bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit",
         "Rank short suffix-stitch candidates from non-GT features",
+    ),
+    (
+        "track2p-policy-coherence-suffix-stitch-whatif",
+        "bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif",
+        "Run coherence-gated suffix-stitch what-if after ComponentCleanup",
+    ),
+    (
+        "track2p-policy-coherence-suffix-stitch",
+        "bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif",
+        "Run component cleanup plus coherence-gated suffix stitch",
     ),
     (
         "track2p-policy-teacher-fn-audit",
@@ -315,6 +330,10 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-residual-audit": ("track2p-policy-component-residual-audit"),
     "track2p-residual-audit": "track2p-policy-component-residual-audit",
     "track2p-seed-sensitivity-audit": "track2p-policy-seed-sensitivity-audit",
+    "track2p-component-residual-whatif": (
+        "track2p-policy-component-residual-whatif"
+    ),
+    "track2p-residual-whatif": "track2p-policy-component-residual-whatif",
     "track2p-component-seed-sensitivity-audit": (
         "track2p-policy-seed-sensitivity-audit"
     ),
@@ -327,6 +346,18 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     ),
     "track2p-component-suffix-stitch-ranking-audit": (
         "track2p-policy-suffix-stitch-ranking-audit"
+    ),
+    "track2p-coherence-suffix-stitch-whatif": (
+        "track2p-policy-coherence-suffix-stitch-whatif"
+    ),
+    "track2p-component-coherence-suffix-stitch-whatif": (
+        "track2p-policy-coherence-suffix-stitch-whatif"
+    ),
+    "track2p-coherence-suffix-stitch": (
+        "track2p-policy-coherence-suffix-stitch"
+    ),
+    "track2p-component-coherence-suffix-stitch": (
+        "track2p-policy-coherence-suffix-stitch"
     ),
     "track2p-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
     "track2p-component-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
