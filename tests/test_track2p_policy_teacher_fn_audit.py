@@ -533,8 +533,7 @@ def test_teacher_adjacent_rescue_dynamic_confidence_recomputes_with_features() -
     )
     np.testing.assert_array_equal(confidence_report.tracks, [[10, 11, 12, -1]])
     assert any(
-        row["reason"] == "accepted_merge_fragments"
-        for row in confidence_report.rows
+        row["reason"] == "accepted_merge_fragments" for row in confidence_report.rows
     )
 
 
