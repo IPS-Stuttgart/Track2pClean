@@ -29,6 +29,7 @@ def test_teacher_adjacent_rescue_inserts_missing_source_into_seed_anchored_row()
             "reason": "accepted_insert_source",
             "source_row": -1,
             "target_row": 0,
+            "teacher_complete_row_supported": 0,
             "occurrence_index": 0,
         },
     )
@@ -98,6 +99,23 @@ def test_teacher_adjacent_rescue_can_complete_seed_source_backfill() -> None:
     assert output.rows[0]["reason"] == "accepted_insert_source"
 
 
+def test_teacher_adjacent_rescue_accepts_seed_completion_alias() -> None:
+    predicted = np.asarray([[-1, 20, 30, 40]], dtype=int)
+    teacher = np.asarray([[100, 20, -1, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_seed_source_backfill=True,
+        allow_seed_completing_rescue=True,
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[100, 20, 30, 40]])
+    assert output.rows[0]["applied"] == 1
+    assert output.rows[0]["reason"] == "accepted_insert_source"
+
+
 def test_teacher_adjacent_rescue_allows_seed_anchored_fragment_merge_from_target() -> (
     None
 ):
@@ -113,3 +131,31 @@ def test_teacher_adjacent_rescue_allows_seed_anchored_fragment_merge_from_target
     np.testing.assert_array_equal(output.tracks, [[100, -1, 30, 40]])
     assert output.rows[0]["applied"] == 1
     assert output.rows[0]["reason"] == "accepted_merge_fragments"
+
+
+def test_teacher_adjacent_rescue_teacher_complete_row_alias_reports_support() -> None:
+    predicted = np.asarray([[100, 20, 30, -1]], dtype=int)
+    teacher = np.asarray([[100, 20, 30, 40]], dtype=int)
+
+    guarded = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+    )
+
+    np.testing.assert_array_equal(guarded.tracks, predicted)
+    assert guarded.rows[-1]["applied"] == 0
+    assert guarded.rows[-1]["reason"] == "would_complete_track"
+    assert guarded.rows[-1]["teacher_complete_row_supported"] == 1
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_teacher_complete_row_rescue=True,
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[100, 20, 30, 40]])
+    assert output.rows[-1]["applied"] == 1
+    assert output.rows[-1]["reason"] == "accepted_insert_target"
+    assert output.rows[-1]["teacher_complete_row_supported"] == 1
