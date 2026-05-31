@@ -233,6 +233,8 @@ def test_teacher_rescue_runner_specific_fields_registered():
     assert "allow_fragment_merges" in fields
     assert "min_component_observations" in fields
     assert "teacher_edge_order" in fields
+    assert "teacher_min_registered_iou" in fields
+    assert "teacher_require_hungarian" in fields
 
 
 def test_teacher_rescue_manifest_runner_passes_teacher_edge_order(
@@ -270,3 +272,48 @@ def test_teacher_rescue_manifest_runner_passes_teacher_edge_order(
 
     assert rows == [{"subject": "dummy"}]
     assert captured["teacher_edge_order"] == "confidence"
+
+
+def test_teacher_rescue_manifest_runner_passes_feature_gate(
+    monkeypatch, tmp_path
+):
+    from bayescatrack.experiments import (
+        _teacher_rescue_manifest_integration as integration,
+    )
+    from bayescatrack.experiments import (
+        track2p_policy_teacher_adjacent_rescue as rescue_module,
+    )
+    from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
+
+    captured = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {"subject": "dummy"}
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+
+    def fake_run(config, **kwargs):
+        captured.update(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        rescue_module, "run_track2p_policy_teacher_adjacent_rescue", fake_run
+    )
+    config = Track2pBenchmarkConfig(data=tmp_path, method="global-assignment")
+
+    rows = integration._run_track2p_policy_teacher_adjacent_rows(
+        config,
+        {
+            "teacher_min_registered_iou": 0.4,
+            "teacher_max_centroid_distance": 3.0,
+            "teacher_require_hungarian": True,
+        },
+    )
+
+    assert rows == [{"subject": "dummy"}]
+    gate = captured["teacher_feature_gate"]
+    assert gate.min_registered_iou == 0.4
+    assert gate.max_centroid_distance == 3.0
+    assert gate.require_hungarian is True
