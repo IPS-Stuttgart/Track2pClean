@@ -382,6 +382,32 @@ def track2p_result_improvement_manifest(
             "output": f"{output_root}/track2p_policy_component_cleanup.csv",
         },
         {
+            "name": "track2p-policy-teacher-adjacent-rescue",
+            "runner": "track2p-policy-teacher-adjacent-rescue",
+            "transform_type": "affine",
+            "threshold_method": "min",
+            "iou_distance_threshold": 12.0,
+            "cell_probability_threshold": 0.5,
+            "max_gap": 1,
+            "weighted_masks": False,
+            "weighted_centroids": False,
+            "exclude_overlapping_pixels": False,
+            **{
+                key: value
+                for key, value in track2p_policy_component_config.items()
+                if key != "apply_splits"
+            },
+            # This row tests the residual-audit hypothesis that remaining
+            # official FNs are better addressed by adjacent Track2p-supported
+            # edits and missing-seed backfills than by gap propagation.
+            "allow_completing_rescue": False,
+            "allow_source_backfill": True,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_fragment_merges": True,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue.csv",
+        },
+        {
             "name": "track2p-policy-dp",
             "runner": "track2p-policy-dp",
             "transform_type": "affine",

@@ -100,6 +100,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     allow_source_inserts: bool | None = None,
     allow_source_insertions: bool | None = None,
     allow_seed_source_backfill: bool = False,
+    allow_completing_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
     teacher_edge_order: TeacherEdgeOrder = "structural",
 ) -> ComponentAuditOutput:
@@ -157,6 +158,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
             allow_completing_rescue=allow_completing_rescue,
             allow_source_backfill=source_backfill_enabled,
             allow_seed_source_backfill=allow_seed_source_backfill,
+            allow_completing_seed_source_backfill=(
+                allow_completing_seed_source_backfill
+            ),
             allow_fragment_merges=allow_fragment_merges,
             edge_order=teacher_edge_order,
         )
@@ -189,6 +193,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
             ),
             "track2p_teacher_adjacent_allow_seed_source_backfill": int(
                 allow_seed_source_backfill
+            ),
+            "track2p_teacher_adjacent_allow_completing_seed_source_backfill": int(
+                allow_completing_seed_source_backfill
             ),
             "track2p_teacher_adjacent_allow_fragment_merges": int(
                 allow_fragment_merges
@@ -264,6 +271,7 @@ def apply_teacher_adjacent_rescue_edges(
     allow_source_inserts: bool | None = None,
     allow_source_insertions: bool | None = None,
     allow_seed_source_backfill: bool = False,
+    allow_completing_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
     edge_order: TeacherEdgeOrder = "structural",
 ) -> TeacherAdjacentRescueReport:
@@ -272,7 +280,8 @@ def apply_teacher_adjacent_rescue_edges(
     The operation is intentionally conservative: it can insert a missing target,
     insert a missing source into an already seed-anchored component, or merge two
     compatible seed-anchored fragments. It still rejects edits that would complete
-    a row unless ``allow_completing_rescue`` is explicitly enabled.
+    a row unless completion is explicitly enabled for the corresponding rescue
+    path.
 
     Teacher edges are structurally ordered by default so edges that merge or
     backfill already supported fragments are tried before plain forward
@@ -293,6 +302,7 @@ def apply_teacher_adjacent_rescue_edges(
         allow_completing_rescue=allow_completing_rescue,
         allow_source_backfill=source_backfill_enabled,
         allow_seed_source_backfill=allow_seed_source_backfill,
+        allow_completing_seed_source_backfill=allow_completing_seed_source_backfill,
         allow_fragment_merges=allow_fragment_merges,
     )
     rows: list[dict[str, int | str]] = []
@@ -306,6 +316,9 @@ def apply_teacher_adjacent_rescue_edges(
             allow_completing_rescue=allow_completing_rescue,
             allow_source_backfill=source_backfill_enabled,
             allow_seed_source_backfill=allow_seed_source_backfill,
+            allow_completing_seed_source_backfill=(
+                allow_completing_seed_source_backfill
+            ),
             allow_fragment_merges=allow_fragment_merges,
         )
         rows.append(
@@ -326,6 +339,7 @@ def _ordered_teacher_edge_occurrences(
     allow_completing_rescue: bool,
     allow_source_backfill: bool,
     allow_seed_source_backfill: bool,
+    allow_completing_seed_source_backfill: bool,
     allow_fragment_merges: bool,
 ) -> tuple[tuple[TrackEdge, int], ...]:
     occurrences = tuple(
@@ -348,6 +362,9 @@ def _ordered_teacher_edge_occurrences(
                     allow_completing_rescue=allow_completing_rescue,
                     allow_source_backfill=allow_source_backfill,
                     allow_seed_source_backfill=allow_seed_source_backfill,
+                    allow_completing_seed_source_backfill=(
+                        allow_completing_seed_source_backfill
+                    ),
                     allow_fragment_merges=allow_fragment_merges,
                 ),
                 item[1],
@@ -364,6 +381,7 @@ def _teacher_edge_structural_order_key(
     allow_completing_rescue: bool,
     allow_source_backfill: bool,
     allow_seed_source_backfill: bool,
+    allow_completing_seed_source_backfill: bool,
     allow_fragment_merges: bool,
 ) -> tuple[int, int, int, int, int, int]:
     """Rank Track2p teacher edits by expected structural value.
@@ -404,7 +422,10 @@ def _teacher_edge_structural_order_key(
         if allow_source_backfill and (target_seed_anchored or seed_source_backfill):
             candidate = predicted[target_row].copy()
             candidate[session_a] = roi_a
-            if not _would_complete_track(candidate, allow_completing_rescue):
+            allow_completion = allow_completing_rescue or (
+                seed_source_backfill and allow_completing_seed_source_backfill
+            )
+            if not _would_complete_track(candidate, allow_completion):
                 action_rank = 1
                 evidence = int(np.count_nonzero(candidate >= 0))
     elif source_row >= 0 and target_row < 0:
@@ -435,6 +456,7 @@ def _try_apply_teacher_edge(
     allow_source_inserts: bool | None = None,
     allow_source_insertions: bool | None = None,
     allow_seed_source_backfill: bool = False,
+    allow_completing_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
 ) -> tuple[np.ndarray, dict[str, int | str]]:
     output = np.asarray(predicted, dtype=int).copy()
@@ -515,7 +537,10 @@ def _try_apply_teacher_edge(
             return output, row
         candidate_row = output[target_row].copy()
         candidate_row[session_a] = roi_a
-        if _would_complete_track(candidate_row, allow_completing_rescue):
+        allow_completion = allow_completing_rescue or (
+            seed_source_backfill and allow_completing_seed_source_backfill
+        )
+        if _would_complete_track(candidate_row, allow_completion):
             row["reason"] = "would_complete_track"
             return output, row
         output[target_row, session_a] = roi_a
@@ -688,6 +713,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-completing-seed-source-backfill",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Allow a seed-session source backfill to complete a component. This "
+            "is narrower than --allow-completing-rescue and targets missing "
+            "seed-session residual errors without allowing arbitrary completed "
+            "teacher extensions."
+        ),
+    )
+    parser.add_argument(
         "--allow-fragment-merges",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -754,6 +790,9 @@ def main(argv: list[str] | None = None) -> int:
         allow_source_inserts=args.allow_source_inserts,
         allow_source_insertions=args.allow_source_insertions,
         allow_seed_source_backfill=args.allow_seed_source_backfill,
+        allow_completing_seed_source_backfill=(
+            args.allow_completing_seed_source_backfill
+        ),
         allow_fragment_merges=args.allow_fragment_merges,
         teacher_edge_order=cast(TeacherEdgeOrder, args.teacher_edge_order),
     )
