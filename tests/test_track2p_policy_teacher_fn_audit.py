@@ -125,6 +125,7 @@ def test_teacher_adjacent_parser_defaults_to_structural_order() -> None:
     assert args.allow_teacher_supported_completion is False
     assert args.allow_teacher_supported_completing_rescue is False
     assert args.allow_teacher_confirmed_completing_rescue is False
+    assert args.min_component_observations == 1
 
 
 def test_teacher_adjacent_parser_accepts_dynamic_structural_order() -> None:
