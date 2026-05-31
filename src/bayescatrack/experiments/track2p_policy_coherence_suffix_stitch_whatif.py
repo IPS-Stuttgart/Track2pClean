@@ -54,16 +54,18 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
 )
 from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import (
     _FeatureCache,
-    _PathCandidate,
     _max_attr,
     _mean_attr,
     _min_attr,
     _nanmin_default,
     _path_row,
+    _PathCandidate,
     _ranked_suffix_paths,
 )
 
-TRACK2P_POLICY_COHERENCE_SUFFIX_STITCH_WHATIF_METHOD = "track2p-policy-coherence-suffix-stitch-whatif"
+TRACK2P_POLICY_COHERENCE_SUFFIX_STITCH_WHATIF_METHOD = (
+    "track2p-policy-coherence-suffix-stitch-whatif"
+)
 TRACK2P_POLICY_COHERENCE_SUFFIX_STITCH_METHOD = "track2p-policy-coherence-suffix-stitch"
 
 
@@ -110,7 +112,9 @@ def run_track2p_policy_coherence_suffix_stitch_whatif(
     )
     subject_dirs = discover_subject_dirs(policy_config.data)
     if not subject_dirs:
-        raise ValueError(f"No Track2p-style subject directories found under {policy_config.data}")
+        raise ValueError(
+            f"No Track2p-style subject directories found under {policy_config.data}"
+        )
 
     cleanup_config = cleanup_config or ComponentCleanupConfig()
     gate = gate or CoherenceSuffixStitchGate()
@@ -144,10 +148,14 @@ def _subject_whatif_rows(
     edge_top_k: int,
     path_beam_width: int,
 ) -> tuple[dict[str, float | int | str], list[dict[str, float | int | str]]]:
-    reference = _load_reference_for_subject(subject_dir, data_root=config.data, config=config)
+    reference = _load_reference_for_subject(
+        subject_dir, data_root=config.data, config=config
+    )
     _validate_reference_for_benchmark(reference, subject_dir=subject_dir, config=config)
     if reference.source != GROUND_TRUTH_REFERENCE_SOURCE:
-        raise ValueError("Track2p-policy coherence suffix-stitch what-if requires independent manual GT references")
+        raise ValueError(
+            "Track2p-policy coherence suffix-stitch what-if requires independent manual GT references"
+        )
     sessions = _load_subject_sessions(subject_dir, config)
     _validate_reference_roi_indices(reference, sessions)
     reference_tracks = _reference_matrix(reference, curated_only=config.curated_only)
@@ -229,7 +237,9 @@ def _component_cleanup_eval(
         prune_config=_no_prune_config(),
     )
     policy_full = _normalize_int_track_matrix(prediction.tracks)
-    policy_eval, reference_eval, evaluated_track_ids = _evaluated_prediction_rows(policy_full, reference_tracks, config=config)
+    policy_eval, reference_eval, evaluated_track_ids = _evaluated_prediction_rows(
+        policy_full, reference_tracks, config=config
+    )
     audit_rows = component_audit_rows(
         policy_eval,
         reference_eval,
@@ -240,8 +250,12 @@ def _component_cleanup_eval(
         track_ids=evaluated_track_ids,
         seed_session=config.seed_session,
     )
-    cleaned_full = apply_weakest_bridge_splits(policy_full, _mark_applied_splits(audit_rows, apply_splits=True))
-    cleaned_eval, reference_eval, _ = _evaluated_prediction_rows(cleaned_full, reference_tracks, config=config)
+    cleaned_full = apply_weakest_bridge_splits(
+        policy_full, _mark_applied_splits(audit_rows, apply_splits=True)
+    )
+    cleaned_eval, reference_eval, _ = _evaluated_prediction_rows(
+        cleaned_full, reference_tracks, config=config
+    )
     return cleaned_eval, reference_eval
 
 
@@ -252,7 +266,11 @@ def _select_paths(
     *,
     gate: CoherenceSuffixStitchGate,
 ) -> tuple[_PathCandidate, ...]:
-    passing = [path for path in paths if _passes_coherence_gate(path, predicted, reference, gate=gate)]
+    passing = [
+        path
+        for path in paths
+        if _passes_coherence_gate(path, predicted, reference, gate=gate)
+    ]
     passing.sort(key=_coherence_sort_key)
     return tuple(passing[: int(gate.max_stitches_per_subject)])
 
@@ -286,7 +304,9 @@ def _passes_coherence_gate(
     )
 
 
-def _apply_suffix_paths(predicted: np.ndarray, selected: Sequence[_PathCandidate]) -> np.ndarray:
+def _apply_suffix_paths(
+    predicted: np.ndarray, selected: Sequence[_PathCandidate]
+) -> np.ndarray:
     output = np.asarray(predicted, dtype=int).copy()
     for path in selected:
         component_id = int(path.component_id)
@@ -309,14 +329,18 @@ def _candidate_row(
     selected: bool,
     gate: CoherenceSuffixStitchGate,
 ) -> dict[str, float | int | str]:
-    candidate_scores = dict(score_track_matrices(_apply_suffix_paths(predicted, (path,)), reference))
+    candidate_scores = dict(
+        score_track_matrices(_apply_suffix_paths(predicted, (path,)), reference)
+    )
     delta = _score_delta(baseline_scores, candidate_scores)
     base_row = _path_row(subject, path, predicted, reference)
     metrics = _path_metrics(path)
     base_row.update(
         {
             "selected_by_gate": int(selected),
-            "gate_pass": int(_passes_coherence_gate(path, predicted, reference, gate=gate)),
+            "gate_pass": int(
+                _passes_coherence_gate(path, predicted, reference, gate=gate)
+            ),
             "path_rank_under_existing_score": int(path.path_rank),
             "pairwise_tp_delta": int(delta["pairwise_true_positives"]),
             "pairwise_fp_delta": int(delta["pairwise_false_positives"]),
@@ -346,7 +370,9 @@ def _result_row(
 ) -> dict[str, float | int | str]:
     del gate
     delta = _score_delta(baseline, stitched)
-    selected_rows = [row for row in candidate_rows if int(row.get("selected_by_gate", 0)) > 0]
+    selected_rows = [
+        row for row in candidate_rows if int(row.get("selected_by_gate", 0)) > 0
+    ]
     pairwise_f1 = _f1_from_counts(
         stitched["pairwise_true_positives"],
         stitched["pairwise_false_positives"],
@@ -360,8 +386,12 @@ def _result_row(
     return {
         "subject": subject,
         "selected_paths": int(len(selected)),
-        "selected_gt_suffix_paths": int(sum(int(row.get("is_gt_suffix_path", 0)) for row in selected_rows)),
-        "selected_non_gt_suffix_paths": int(sum(1 - int(row.get("is_gt_suffix_path", 0)) for row in selected_rows)),
+        "selected_gt_suffix_paths": int(
+            sum(int(row.get("is_gt_suffix_path", 0)) for row in selected_rows)
+        ),
+        "selected_non_gt_suffix_paths": int(
+            sum(1 - int(row.get("is_gt_suffix_path", 0)) for row in selected_rows)
+        ),
         "candidate_paths": int(len(candidate_rows)),
         "pairwise_true_positives": int(stitched["pairwise_true_positives"]),
         "pairwise_false_positives": int(stitched["pairwise_false_positives"]),
@@ -369,8 +399,12 @@ def _result_row(
         "pairwise_f1": pairwise_f1,
         "pairwise_f1_micro": pairwise_f1,
         "complete_track_true_positives": int(stitched["complete_track_true_positives"]),
-        "complete_track_false_positives": int(stitched["complete_track_false_positives"]),
-        "complete_track_false_negatives": int(stitched["complete_track_false_negatives"]),
+        "complete_track_false_positives": int(
+            stitched["complete_track_false_positives"]
+        ),
+        "complete_track_false_negatives": int(
+            stitched["complete_track_false_negatives"]
+        ),
         "complete_track_f1": complete_track_f1,
         "complete_track_f1_micro": complete_track_f1,
         "pairwise_tp_delta": int(delta["pairwise_true_positives"]),
@@ -379,7 +413,9 @@ def _result_row(
         "complete_tp_delta": int(delta["complete_track_true_positives"]),
         "complete_fp_delta": int(delta["complete_track_false_positives"]),
         "complete_fn_delta": int(delta["complete_track_false_negatives"]),
-        "selected_candidate_paths": ";".join(str(row.get("candidate_path", "")) for row in selected_rows),
+        "selected_candidate_paths": ";".join(
+            str(row.get("candidate_path", "")) for row in selected_rows
+        ),
     }
 
 
@@ -422,13 +458,22 @@ def _aggregate_result_row(
         output["complete_track_false_negatives"],
     )
     output["complete_track_f1"] = output["complete_track_f1_micro"]
-    output["selected_candidate_paths"] = ";".join(str(row.get("selected_candidate_paths", "")) for row in rows if str(row.get("selected_candidate_paths", "")))
+    output["selected_candidate_paths"] = ";".join(
+        str(row.get("selected_candidate_paths", ""))
+        for row in rows
+        if str(row.get("selected_candidate_paths", ""))
+    )
     return output
 
 
 def _path_metrics(path: _PathCandidate) -> dict[str, float]:
     edges = path.edges
-    min_cell_probability = min(_nanmin_default((edge.cell_probability_a, edge.cell_probability_b), float("nan")) for edge in edges)
+    min_cell_probability = min(
+        _nanmin_default(
+            (edge.cell_probability_a, edge.cell_probability_b), float("nan")
+        )
+        for edge in edges
+    )
     return {
         "min_cell_probability": float(min_cell_probability),
         "min_area_ratio": float(_min_attr(edges, "area_ratio")),
@@ -455,19 +500,31 @@ def _would_reach_final_session(path: _PathCandidate, predicted: np.ndarray) -> b
     return bool(path.edges and path.edges[-1].edge[1] >= predicted.shape[1] - 1)
 
 
-def _target_slot_occupied(path: _PathCandidate, predicted: np.ndarray) -> tuple[bool, ...]:
+def _target_slot_occupied(
+    path: _PathCandidate, predicted: np.ndarray
+) -> tuple[bool, ...]:
     output: list[bool] = []
     component_id = int(path.component_id)
     if component_id < 0 or component_id >= predicted.shape[0]:
         return tuple(True for _edge in path.edges)
     for edge in path.edges:
         _session_a, session_b, _roi_a, roi_b = edge.edge
-        output.append(session_b >= predicted.shape[1] or (predicted[component_id, session_b] >= 0 and int(predicted[component_id, session_b]) != int(roi_b)))
+        output.append(
+            session_b >= predicted.shape[1]
+            or (
+                predicted[component_id, session_b] >= 0
+                and int(predicted[component_id, session_b]) != int(roi_b)
+            )
+        )
     return tuple(output)
 
 
 def _motion_consistency(edges: Sequence[Any]) -> float:
-    distances = [float(edge.centroid_distance) for edge in edges if np.isfinite(float(edge.centroid_distance))]
+    distances = [
+        float(edge.centroid_distance)
+        for edge in edges
+        if np.isfinite(float(edge.centroid_distance))
+    ]
     if len(distances) <= 1:
         return 1.0
     return float(1.0 / (1.0 + np.std(np.asarray(distances, dtype=float))))
@@ -507,7 +564,9 @@ def write_rows(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
-        output_path.write_text(json.dumps(list(rows), indent=2) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(list(rows), indent=2) + "\n", encoding="utf-8"
+        )
         return
     fieldnames = sorted({key for row in rows for key in row})
     with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -531,7 +590,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="manual-gt",
     )
     parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", choices=("auto", "suite2p", "npy"), default="suite2p")
+    parser.add_argument(
+        "--input-format", choices=("auto", "suite2p", "npy"), default="suite2p"
+    )
     parser.add_argument(
         "--threshold-method",
         choices=("otsu", "min"),
@@ -547,7 +608,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument("--split-risk-threshold", type=float, default=1.50)
     parser.add_argument("--split-penalty", type=float, default=0.25)
     parser.add_argument("--min-side-observations", type=int, default=2)
@@ -572,8 +635,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=True,
     )
     parser.add_argument("--seed-session", type=int, default=0)
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=False
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--candidate-output", type=Path, default=None)
     parser.add_argument(
@@ -646,7 +713,9 @@ def main(
     )
     write_rows(result_rows, args.output, output_format=args.format)
     if args.candidate_output is not None:
-        write_rows(result.candidate_rows, args.candidate_output, output_format=args.format)
+        write_rows(
+            result.candidate_rows, args.candidate_output, output_format=args.format
+        )
     return 0
 
 
