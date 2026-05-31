@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     apply_teacher_adjacent_rescue_edges,
 )
 
 
-def test_teacher_adjacent_rescue_inserts_missing_source_into_seed_anchored_row() -> None:
+def test_teacher_adjacent_rescue_inserts_missing_source_into_seed_anchored_row() -> (
+    None
+):
     predicted = np.asarray([[100, -1, -1, 40]], dtype=int)
     teacher = np.asarray([[100, -1, 30, 40]], dtype=int)
 
@@ -64,7 +65,9 @@ def test_teacher_adjacent_rescue_rejects_source_insertion_that_completes_row() -
     assert output.rows[0]["reason"] == "would_complete_track"
 
 
-def test_teacher_adjacent_rescue_allows_seed_anchored_fragment_merge_from_target() -> None:
+def test_teacher_adjacent_rescue_allows_seed_anchored_fragment_merge_from_target() -> (
+    None
+):
     predicted = np.asarray([[100, -1, 30, -1], [-1, -1, -1, 40]], dtype=int)
     teacher = np.asarray([[-1, -1, 30, 40]], dtype=int)
 
