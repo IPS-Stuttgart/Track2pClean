@@ -116,6 +116,7 @@ def test_teacher_adjacent_parser_defaults_to_structural_order() -> None:
     args = rescue.build_arg_parser().parse_args(["--data", "track2p-root"])
 
     assert args.teacher_edge_order == "structural"
+    assert args.allow_completing_seed_source_backfill is False
 
 
 def test_teacher_adjacent_rescue_extends_seed_anchored_chain() -> None:
@@ -210,6 +211,39 @@ def test_teacher_adjacent_rescue_seed_backfill_is_opt_in() -> None:
     np.testing.assert_array_equal(opt_in_report.tracks, [[10, 11, 12, -1]])
     assert opt_in_report.rows[0]["applied"] == 1
     assert opt_in_report.rows[0]["reason"] == "accepted_insert_source"
+
+
+def test_teacher_adjacent_rescue_seed_backfill_still_rejects_complete_row() -> None:
+    predicted = np.asarray([[-1, 11, 12]], dtype=int)
+    teacher = np.asarray([[10, 11, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_seed_source_backfill=True,
+    )
+
+    np.testing.assert_array_equal(report.tracks, predicted)
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "would_complete_track"
+
+
+def test_teacher_adjacent_rescue_can_complete_seed_backfill_when_enabled() -> None:
+    predicted = np.asarray([[-1, 11, 12]], dtype=int)
+    teacher = np.asarray([[10, 11, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_seed_source_backfill=True,
+        allow_completing_seed_source_backfill=True,
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, 12]])
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_insert_source"
 
 
 def test_teacher_adjacent_rescue_structural_order_prefers_source_backfill() -> None:

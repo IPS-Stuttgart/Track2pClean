@@ -37,6 +37,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "allow_source_backfill",
     "allow_source_inserts",
     "allow_seed_source_backfill",
+    "allow_completing_seed_source_backfill",
     "allow_fragment_merges",
 }
 
@@ -231,6 +232,9 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_seed_source_backfill=manifest._bool_option(
             options, "allow_seed_source_backfill", default=False
         ),
+        allow_completing_seed_source_backfill=manifest._bool_option(
+            options, "allow_completing_seed_source_backfill", default=False
+        ),
         allow_fragment_merges=manifest._bool_option(
             options, "allow_fragment_merges", default=True
         ),
@@ -281,9 +285,10 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
         "allow_source_backfill": True,
         "allow_fragment_merges": True,
     }
-    variants: tuple[tuple[str, bool, bool, str], ...] = (
+    variants: tuple[tuple[str, bool, bool, bool, str], ...] = (
         (
             "track2p-policy-teacher-adjacent-rescue",
+            False,
             False,
             False,
             "track2p_policy_teacher_adjacent_rescue.csv",
@@ -292,16 +297,19 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "track2p-policy-teacher-adjacent-rescue-seed-source",
             False,
             True,
+            False,
             "track2p_policy_teacher_adjacent_rescue_seed_source.csv",
         ),
         (
             "track2p-policy-teacher-adjacent-rescue-completing",
             True,
             False,
+            False,
             "track2p_policy_teacher_adjacent_rescue_completing.csv",
         ),
         (
             "track2p-policy-teacher-adjacent-rescue-completing-seed-source",
+            False,
             True,
             True,
             "track2p_policy_teacher_adjacent_rescue_completing_seed_source.csv",
@@ -313,9 +321,16 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "name": name,
             "allow_completing_rescue": allow_completing,
             "allow_seed_source_backfill": allow_seed_source,
+            "allow_completing_seed_source_backfill": allow_completing_seed_source,
             "output": f"{output_root}/{filename}",
         }
-        for name, allow_completing, allow_seed_source, filename in variants
+        for (
+            name,
+            allow_completing,
+            allow_seed_source,
+            allow_completing_seed_source,
+            filename,
+        ) in variants
     )
 
 

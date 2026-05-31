@@ -29,6 +29,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
                     "allow_completing_rescue": True,
                     "allow_source_backfill": True,
                     "allow_seed_source_backfill": True,
+                    "allow_completing_seed_source_backfill": True,
                     "allow_fragment_merges": True,
                     "output": "results/teacher-rescue.csv",
                 }
@@ -44,6 +45,9 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
     assert run.config.include_non_cells is False
     assert run.config.weighted_masks is False
     assert dict(run.runner_kwargs or {})["allow_completing_rescue"] is True
+    assert (
+        dict(run.runner_kwargs or {})["allow_completing_seed_source_backfill"] is True
+    )
 
 
 def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants():
@@ -57,18 +61,22 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
         "track2p-policy-teacher-adjacent-rescue": {
             "allow_completing_rescue": False,
             "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
         },
         "track2p-policy-teacher-adjacent-rescue-seed-source": {
             "allow_completing_rescue": False,
             "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": False,
         },
         "track2p-policy-teacher-adjacent-rescue-completing": {
             "allow_completing_rescue": True,
             "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
         },
         "track2p-policy-teacher-adjacent-rescue-completing-seed-source": {
-            "allow_completing_rescue": True,
+            "allow_completing_rescue": False,
             "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
         },
     }
     run_names = [run["name"] for run in manifest["runs"]]
@@ -79,7 +87,6 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
     assert run_names[component_index + 1 : component_index + 1 + len(expected)] == list(
         expected
     )
-
     runs_by_name = {run["name"]: run for run in manifest["runs"]}
     for name, flags in expected.items():
         teacher = runs_by_name[name]
@@ -109,4 +116,5 @@ def test_teacher_rescue_runner_specific_fields_registered():
 
     assert "allow_completing_rescue" in fields
     assert "allow_seed_source_backfill" in fields
+    assert "allow_completing_seed_source_backfill" in fields
     assert "allow_fragment_merges" in fields
