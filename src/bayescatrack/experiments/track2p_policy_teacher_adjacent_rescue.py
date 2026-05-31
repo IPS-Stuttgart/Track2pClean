@@ -1306,9 +1306,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--allow-seed-completing-backfill",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help=(
-            "Compatibility alias for --allow-completing-seed-source-backfill."
-        ),
+        help=("Compatibility alias for --allow-completing-seed-source-backfill."),
     )
     parser.add_argument(
         "--allow-completing-seed-source-backfill",

@@ -970,9 +970,7 @@ def _pairwise_fn_reason(
     # ``missing seed-session ROI`` when ``session_a != seed_session``.  Recover
     # the seed ROI from the reference track containing this edge and test that
     # seed ROI instead.
-    seed_roi = _reference_seed_roi_for_edge(
-        edge, reference, seed_session=seed_session
-    )
+    seed_roi = _reference_seed_roi_for_edge(edge, reference, seed_session=seed_session)
     if (
         seed_roi >= 0
         and 0 <= seed_session < predicted.shape[1]

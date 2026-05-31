@@ -401,7 +401,9 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             **(
                 {"min_component_observations": 2} if name.endswith("-supported") else {}
             ),
-            **({"teacher_edge_order": teacher_edge_order} if teacher_edge_order else {}),
+            **(
+                {"teacher_edge_order": teacher_edge_order} if teacher_edge_order else {}
+            ),
             "output": f"{output_root}/{filename}",
         }
         for (
