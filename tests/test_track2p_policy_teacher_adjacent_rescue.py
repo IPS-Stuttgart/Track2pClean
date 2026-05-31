@@ -234,7 +234,9 @@ def test_teacher_adjacent_rescue_teacher_complete_row_alias_reports_support() ->
     assert output.rows[-1]["teacher_complete_row_supported"] == 1
 
 
-def test_teacher_adjacent_rescue_dynamic_confidence_reorders_stale_slot_claims() -> None:
+def test_teacher_adjacent_rescue_dynamic_confidence_reorders_stale_slot_claims() -> (
+    None
+):
     """Dynamic confidence should use local evidence before a slot is claimed.
 
     Two teacher edges compete for the same target ROI. A purely structural order
