@@ -53,6 +53,8 @@ def test_policy_teacher_adjacent_rescue_runner_kwargs_are_runner_specific() -> N
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": True,
             "allow_fragment_merges": True,
+            "teacher_min_registered_iou": 0.4,
+            "teacher_require_hungarian": True,
         },
         "track2p-policy-teacher-adjacent-rescue",
     ) == {
@@ -69,4 +71,6 @@ def test_policy_teacher_adjacent_rescue_runner_kwargs_are_runner_specific() -> N
         "allow_seed_source_backfill": True,
         "allow_completing_seed_source_backfill": True,
         "allow_fragment_merges": True,
+        "teacher_min_registered_iou": 0.4,
+        "teacher_require_hungarian": True,
     }

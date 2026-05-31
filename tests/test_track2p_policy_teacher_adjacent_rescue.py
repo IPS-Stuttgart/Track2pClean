@@ -5,6 +5,7 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
     ResidualFeature,
 )
 from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+    TeacherEdgeFeatureGate,
     apply_teacher_adjacent_rescue_edges,
 )
 
@@ -284,3 +285,87 @@ def test_teacher_adjacent_rescue_dynamic_confidence_reorders_stale_slot_claims()
     assert output.rows[1]["roi_a"] == 100
     assert output.rows[1]["applied"] == 0
     assert output.rows[1]["reason"] == "target_has_source_conflict"
+
+
+def test_teacher_adjacent_rescue_feature_gate_rejects_weak_edge() -> None:
+    predicted = np.asarray([[10, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1], [10, 12, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="lexicographic",
+        edge_feature_index={
+            (0, 1, 10, 11): ResidualFeature(
+                registered_iou=0.2,
+                centroid_distance=1.0,
+                area_ratio=0.90,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+            (0, 1, 10, 12): ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+        },
+        feature_gate=TeacherEdgeFeatureGate(min_registered_iou=0.5),
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 12, -1]])
+    assert output.rows[0]["applied"] == 0
+    assert output.rows[0]["reason"] == "feature_gate_registered_iou"
+    assert output.rows[1]["applied"] == 1
+    assert output.rows[1]["reason"] == "accepted_insert_target"
+
+
+def test_teacher_adjacent_rescue_feature_gate_rejects_missing_features() -> None:
+    predicted = np.asarray([[10, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        feature_gate=TeacherEdgeFeatureGate(min_registered_iou=0.5),
+    )
+
+    np.testing.assert_array_equal(output.tracks, predicted)
+    assert output.rows[0]["applied"] == 0
+    assert output.rows[0]["reason"] == "feature_gate_missing"
+
+
+def test_teacher_adjacent_rescue_feature_gate_requires_hungarian() -> None:
+    predicted = np.asarray([[10, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1], [10, 12, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="lexicographic",
+        edge_feature_index={
+            (0, 1, 10, 11): ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                threshold_margin=0.30,
+                assigned_by_hungarian=0,
+            ),
+            (0, 1, 10, 12): ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+        },
+        feature_gate=TeacherEdgeFeatureGate(require_hungarian=True),
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 12, -1]])
+    assert output.rows[0]["reason"] == "feature_gate_hungarian"
+    assert output.rows[1]["reason"] == "accepted_insert_target"

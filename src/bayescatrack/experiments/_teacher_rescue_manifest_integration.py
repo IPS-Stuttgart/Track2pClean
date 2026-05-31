@@ -44,7 +44,31 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "allow_fragment_merges",
     "min_component_observations",
     "teacher_edge_order",
+    "teacher_min_registered_iou",
+    "teacher_min_threshold_margin",
+    "teacher_min_row_margin",
+    "teacher_min_column_margin",
+    "teacher_max_centroid_distance",
+    "teacher_min_area_ratio",
+    "teacher_require_hungarian",
+    "teacher_require_hungarian_assignment",
+    "teacher_gate_min_registered_iou",
+    "teacher_gate_min_threshold_margin",
+    "teacher_gate_min_row_margin",
+    "teacher_gate_min_column_margin",
+    "teacher_gate_max_centroid_distance",
+    "teacher_gate_min_area_ratio",
+    "teacher_gate_require_hungarian",
 }
+
+
+def _optional_float_option(
+    options: Mapping[str, Any], *names: str
+) -> float | None:
+    for name in names:
+        if name in options and options[name] not in {None, ""}:
+            return float(options[name])
+    return None
 
 
 def install_teacher_rescue_manifest_integration() -> None:
@@ -145,6 +169,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         ComponentCleanupConfig,
     )
     from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+        TeacherEdgeFeatureGate,
         TeacherEdgeOrder,
         run_track2p_policy_teacher_adjacent_rescue,
     )
@@ -220,6 +245,42 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_source_insertions = manifest._bool_option(
             options, "allow_source_insertions", default=True
         )
+    require_hungarian = False
+    for require_key in (
+        "teacher_require_hungarian",
+        "teacher_require_hungarian_assignment",
+        "teacher_gate_require_hungarian",
+    ):
+        if require_key in options:
+            require_hungarian = manifest._bool_option(
+                options, require_key, default=False
+            )
+            break
+    teacher_feature_gate = TeacherEdgeFeatureGate(
+        min_registered_iou=_optional_float_option(
+            options, "teacher_min_registered_iou", "teacher_gate_min_registered_iou"
+        ),
+        min_threshold_margin=_optional_float_option(
+            options, "teacher_min_threshold_margin", "teacher_gate_min_threshold_margin"
+        ),
+        min_row_margin=_optional_float_option(
+            options, "teacher_min_row_margin", "teacher_gate_min_row_margin"
+        ),
+        min_column_margin=_optional_float_option(
+            options, "teacher_min_column_margin", "teacher_gate_min_column_margin"
+        ),
+        max_centroid_distance=_optional_float_option(
+            options,
+            "teacher_max_centroid_distance",
+            "teacher_gate_max_centroid_distance",
+        ),
+        min_area_ratio=_optional_float_option(
+            options, "teacher_min_area_ratio", "teacher_gate_min_area_ratio"
+        ),
+        require_hungarian=require_hungarian,
+    )
+    if not teacher_feature_gate.enabled:
+        teacher_feature_gate = None
     output = run_track2p_policy_teacher_adjacent_rescue(
         config,
         threshold_method=manifest._policy_threshold_method(
@@ -260,6 +321,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
             TeacherEdgeOrder, str(options.get("teacher_edge_order", "structural"))
         ),
         min_component_observations=int(options.get("min_component_observations", 1)),
+        teacher_feature_gate=teacher_feature_gate,
     )
     return [result.to_dict() for result in output.results]
 
