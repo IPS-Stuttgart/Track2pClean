@@ -334,6 +334,15 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "track2p_policy_teacher_adjacent_rescue_confidence.csv",
         ),
         (
+            "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source",
+            False,
+            True,
+            True,
+            False,
+            "dynamic-confidence",
+            "track2p_policy_teacher_adjacent_rescue_dynamic_confidence_seed_source.csv",
+        ),
+        (
             "track2p-policy-teacher-adjacent-rescue-seed-source",
             False,
             True,

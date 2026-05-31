@@ -126,6 +126,7 @@ def test_teacher_adjacent_parser_defaults_to_structural_order() -> None:
     assert args.allow_teacher_supported_completing_rescue is False
     assert args.allow_teacher_confirmed_completing_rescue is False
     assert args.min_component_observations == 1
+    assert args.max_applied_edits is None
 
 
 def test_teacher_adjacent_parser_accepts_dynamic_structural_order() -> None:
@@ -152,6 +153,14 @@ def test_teacher_adjacent_parser_accepts_dynamic_confidence_order() -> None:
     assert args.teacher_edge_order == "dynamic-confidence"
 
 
+def test_teacher_adjacent_parser_accepts_max_applied_edits() -> None:
+    args = rescue.build_arg_parser().parse_args(
+        ["--data", "track2p-root", "--max-applied-edits", "1"]
+    )
+
+    assert args.max_applied_edits == 1
+
+
 def test_teacher_adjacent_rescue_extends_seed_anchored_chain() -> None:
     predicted = np.asarray([[10, -1, -1, 13, -1, -1]], dtype=int)
     teacher = np.asarray([[10, -1, -1, 13, 14, 15]], dtype=int)
@@ -162,6 +171,37 @@ def test_teacher_adjacent_rescue_extends_seed_anchored_chain() -> None:
 
     np.testing.assert_array_equal(report.tracks, [[10, -1, -1, 13, 14, 15]])
     assert [row["applied"] for row in report.rows] == [1, 1]
+
+
+def test_teacher_adjacent_rescue_caps_applied_edits() -> None:
+    predicted = np.asarray([[10, -1, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, 12, 13]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0, max_applied_edits=1
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, -1, -1]])
+    assert [row["applied"] for row in report.rows] == [1, 0, 0]
+    assert report.rows[1]["reason"] == "max_applied_edits_reached"
+    assert report.rows[2]["reason"] == "max_applied_edits_reached"
+
+
+def test_teacher_adjacent_dynamic_rescue_caps_applied_edits() -> None:
+    predicted = np.asarray([[10, -1, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, 12, 13]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="dynamic-structural",
+        max_applied_edits=1,
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, -1, -1]])
+    assert sum(int(row["applied"]) for row in report.rows) == 1
+    assert any(row["reason"] == "max_applied_edits_reached" for row in report.rows)
 
 
 def test_teacher_adjacent_rescue_rejects_complete_row_by_default() -> None:

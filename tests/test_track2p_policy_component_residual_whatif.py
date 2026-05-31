@@ -66,6 +66,75 @@ def test_residual_whatif_scores_pairwise_fn_and_fp_edits() -> None:
     assert fp_row["pairwise_f1_delta"] > 0
 
 
+def test_residual_whatif_bundle_rows_accumulate_same_support_family() -> None:
+    base = whatif.MicroCounts(
+        pairwise_tp=586,
+        pairwise_fp=26,
+        pairwise_fn=19,
+        complete_tp=56,
+        complete_fp=3,
+        complete_fn=4,
+    )
+    candidates = whatif.residual_whatif_rows(
+        [
+            {
+                "subject": "jm046",
+                "error_type": "pairwise_fn",
+                "track_id_or_edge": "1:10->2:11",
+                "reason_bucket": "Track2p-supported missed adjacent edge",
+                "is_track2p_supported": "1",
+                "is_policy_supported": "0",
+                "is_gap_rescue_supported": "0",
+                "is_component_cleanup_affected": "0",
+            },
+            {
+                "subject": "jm046",
+                "error_type": "pairwise_fn",
+                "track_id_or_edge": "2:11->3:12",
+                "reason_bucket": "Track2p-supported missed adjacent edge",
+                "is_track2p_supported": "1",
+                "is_policy_supported": "0",
+                "is_gap_rescue_supported": "0",
+                "is_component_cleanup_affected": "0",
+            },
+            {
+                "subject": "jm038",
+                "error_type": "pairwise_fp",
+                "track_id_or_edge": "3:12->4:13",
+                "reason_bucket": "Bayes-only false continuation",
+                "is_track2p_supported": "0",
+                "is_policy_supported": "1",
+                "is_gap_rescue_supported": "0",
+                "is_component_cleanup_affected": "1",
+            },
+        ],
+        base,
+    )
+
+    bundles = whatif.residual_whatif_bundle_rows(
+        candidates, base, max_bundle_size=2
+    )
+
+    bundle = next(
+        row
+        for row in bundles
+        if row["edit_type"] == "add_pairwise_fn_as_tp"
+        and row["support_bucket"] == "track2p"
+        and row["bundle_size"] == 2
+    )
+    single_fn = next(
+        row
+        for row in candidates
+        if row["edit_type"] == "add_pairwise_fn_as_tp"
+    )
+    assert bundle["new_pairwise_tp"] == 588
+    assert bundle["new_pairwise_fp"] == 26
+    assert bundle["new_pairwise_fn"] == 17
+    assert bundle["pairwise_tp_delta"] == 2
+    assert bundle["pairwise_fn_delta"] == -2
+    assert bundle["pairwise_f1_delta"] > single_fn["pairwise_f1_delta"]
+
+
 def test_load_base_counts_sums_subject_rows(tmp_path) -> None:
     path = tmp_path / "component_cleanup.csv"
     with path.open("w", encoding="utf-8", newline="") as handle:
