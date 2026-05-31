@@ -51,6 +51,34 @@ def test_teacher_adjacent_rescue_can_disable_source_insertions_alias() -> None:
     assert output.rows[0]["reason"] == "missing_or_ambiguous_source"
 
 
+def test_teacher_adjacent_rescue_can_require_component_support() -> None:
+    predicted = np.asarray([[100, -1, -1, -1]], dtype=int)
+    teacher = np.asarray([[100, 20, -1, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        min_component_observations=2,
+    )
+
+    np.testing.assert_array_equal(output.tracks, predicted)
+    assert output.rows == (
+        {
+            "session_a": 0,
+            "session_b": 1,
+            "roi_a": 100,
+            "roi_b": 20,
+            "applied": 0,
+            "reason": "insufficient_component_support",
+            "source_row": 0,
+            "target_row": -1,
+            "teacher_complete_row_supported": 0,
+            "occurrence_index": 0,
+        },
+    )
+
+
 def test_teacher_adjacent_rescue_rejects_source_insertion_that_completes_row() -> None:
     predicted = np.asarray([[100, 20, -1, 40]], dtype=int)
     teacher = np.asarray([[-1, -1, 30, 40]], dtype=int)

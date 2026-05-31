@@ -117,6 +117,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     allow_completing_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
     teacher_edge_order: TeacherEdgeOrder = "structural",
+    min_component_observations: int = 1,
 ) -> ComponentAuditOutput:
     """Run component cleanup followed by adjacent Track2p teacher rescue."""
 
@@ -147,6 +148,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     allow_fragment_completion = bool(
         allow_completing_fragment_merge or allow_completing_fragment_merges
     )
+    min_component_observations = max(1, int(min_component_observations))
     results: list[SubjectBenchmarkResult] = []
     rescue_rows: list[dict[str, int | str]] = []
     for subject_dir in subject_dirs:
@@ -206,6 +208,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             allow_fragment_merges=allow_fragment_merges,
             edge_order=teacher_edge_order,
             edge_feature_index=edge_feature_index,
+            min_component_observations=min_component_observations,
         )
         scores = _score_prediction_against_reference(
             rescue.tracks, reference, config=policy_config
@@ -271,6 +274,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 allow_fragment_merges
             ),
             "track2p_teacher_adjacent_edge_order": str(teacher_edge_order),
+            "track2p_teacher_adjacent_min_component_observations": int(
+                min_component_observations
+            ),
         }
         results.append(
             SubjectBenchmarkResult(
@@ -353,6 +359,7 @@ def apply_teacher_adjacent_rescue_edges(
     allow_fragment_merges: bool = True,
     edge_order: TeacherEdgeOrder = "structural",
     edge_feature_index: Mapping[TrackEdge, ResidualFeature] | None = None,
+    min_component_observations: int = 1,
 ) -> TeacherAdjacentRescueReport:
     """Apply conflict-free adjacent Track2p-teacher edits.
 
@@ -378,6 +385,8 @@ def apply_teacher_adjacent_rescue_edges(
     a now-available fragment merge before weaker stale candidates consume slots.
     The ``confidence`` order keeps the same structural action classes, but breaks
     ties with label-free local registration evidence.
+    ``min_component_observations`` is a label-free support gate: teacher edits
+    must touch at least one component with this many existing observations.
     """
 
     output = _normalize_int_track_matrix(predicted_track_matrix)
@@ -395,6 +404,7 @@ def apply_teacher_adjacent_rescue_edges(
     allow_fragment_completion = bool(
         allow_completing_fragment_merge or allow_completing_fragment_merges
     )
+    min_component_observations = max(1, int(min_component_observations))
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
@@ -416,6 +426,7 @@ def apply_teacher_adjacent_rescue_edges(
                 allow_seed_completion
             ),
             allow_fragment_merges=allow_fragment_merges,
+            min_component_observations=min_component_observations,
         )
     edge_occurrences = _ordered_teacher_edge_occurrences(
         output,
@@ -434,6 +445,7 @@ def apply_teacher_adjacent_rescue_edges(
         allow_completing_seed_source_backfill=allow_seed_completion,
         allow_fragment_merges=allow_fragment_merges,
         edge_feature_index=edge_feature_index or {},
+        min_component_observations=min_component_observations,
     )
     rows: list[dict[str, int | str]] = []
     for edge, occurrence_index in edge_occurrences:
@@ -456,6 +468,7 @@ def apply_teacher_adjacent_rescue_edges(
                 allow_seed_completion
             ),
             allow_fragment_merges=allow_fragment_merges,
+            min_component_observations=min_component_observations,
         )
         rows.append(
             {
@@ -480,6 +493,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     allow_seed_source_backfill: bool,
     allow_completing_seed_source_backfill: bool,
     allow_fragment_merges: bool,
+    min_component_observations: int,
 ) -> TeacherAdjacentRescueReport:
     """Apply teacher edits while recomputing structural priorities."""
 
@@ -530,6 +544,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                         allow_completing_seed_source_backfill
                     ),
                     allow_fragment_merges=allow_fragment_merges,
+                    min_component_observations=min_component_observations,
                 ),
                 item[1],
             ),
@@ -552,6 +567,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                 allow_completing_seed_source_backfill
             ),
             allow_fragment_merges=allow_fragment_merges,
+            min_component_observations=min_component_observations,
         )
         rows.append({**row, "occurrence_index": int(occurrence_index)})
 
@@ -574,6 +590,7 @@ def _ordered_teacher_edge_occurrences(
     allow_completing_seed_source_backfill: bool,
     allow_fragment_merges: bool,
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
+    min_component_observations: int,
 ) -> tuple[tuple[TrackEdge, int], ...]:
     occurrences = tuple(
         (edge, occurrence_index)
@@ -611,6 +628,7 @@ def _ordered_teacher_edge_occurrences(
                         ),
                         allow_fragment_merges=allow_fragment_merges,
                         edge_feature_index=edge_feature_index,
+                        min_component_observations=min_component_observations,
                     ),
                     item[1],
                 ),
@@ -643,6 +661,7 @@ def _ordered_teacher_edge_occurrences(
                         allow_completing_seed_source_backfill
                     ),
                     allow_fragment_merges=allow_fragment_merges,
+                    min_component_observations=min_component_observations,
                 ),
                 item[1],
             ),
@@ -664,6 +683,7 @@ def _teacher_edge_structural_order_key(
     allow_seed_source_backfill: bool,
     allow_completing_seed_source_backfill: bool,
     allow_fragment_merges: bool,
+    min_component_observations: int,
 ) -> tuple[int, int, int, int, int, int]:
     """Rank Track2p teacher edits by expected structural value.
 
@@ -678,6 +698,12 @@ def _teacher_edge_structural_order_key(
     target_rows = tuple(np.flatnonzero(predicted[:, session_b] == roi_b))
     source_row = int(source_rows[0]) if len(source_rows) == 1 else -1
     target_row = int(target_rows[0]) if len(target_rows) == 1 else -1
+    source_support = (
+        _component_observation_count(predicted[source_row]) if source_row >= 0 else 0
+    )
+    target_support = (
+        _component_observation_count(predicted[target_row]) if target_row >= 0 else 0
+    )
 
     action_rank = 9
     evidence = 0
@@ -689,6 +715,7 @@ def _teacher_edge_structural_order_key(
             if (
                 merged is not None
                 and _row_is_seed_anchored(merged, seed_session)
+                and max(source_support, target_support) >= min_component_observations
                 and not _would_complete_track(
                     merged,
                     bool(
@@ -713,6 +740,7 @@ def _teacher_edge_structural_order_key(
         if allow_source_backfill and (target_seed_anchored or seed_source_backfill):
             candidate = predicted[target_row].copy()
             candidate[session_a] = roi_a
+            has_target_support = target_support >= min_component_observations
             allow_completion = bool(
                 allow_completing_rescue
                 or allow_completing_source_backfill
@@ -721,7 +749,7 @@ def _teacher_edge_structural_order_key(
                     and allow_completing_seed_source_backfill
                 )
             )
-            if not _would_complete_track(
+            if has_target_support and not _would_complete_track(
                 candidate,
                 allow_completion,
                 allow_teacher_supported_completing_rescue=(
@@ -735,7 +763,8 @@ def _teacher_edge_structural_order_key(
         if _row_is_seed_anchored(predicted[source_row], seed_session):
             candidate = predicted[source_row].copy()
             candidate[session_b] = roi_b
-            if not _would_complete_track(
+            has_source_support = source_support >= min_component_observations
+            if has_source_support and not _would_complete_track(
                 candidate,
                 allow_completing_rescue,
                 allow_teacher_supported_completing_rescue=(
@@ -771,6 +800,7 @@ def _teacher_edge_confidence_order_key(
     allow_completing_seed_source_backfill: bool,
     allow_fragment_merges: bool,
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
+    min_component_observations: int,
 ) -> tuple[
     int, int, int, float, float, float, float, float, float, int, int, int, int
 ]:
@@ -791,6 +821,7 @@ def _teacher_edge_confidence_order_key(
         allow_seed_source_backfill=allow_seed_source_backfill,
         allow_completing_seed_source_backfill=allow_completing_seed_source_backfill,
         allow_fragment_merges=allow_fragment_merges,
+        min_component_observations=min_component_observations,
     )
     feature_key = _teacher_edge_feature_order_key(edge_feature_index.get(edge))
     return (
@@ -847,6 +878,7 @@ def _try_apply_teacher_edge(
     allow_seed_source_backfill: bool = False,
     allow_completing_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
+    min_component_observations: int = 1,
 ) -> tuple[np.ndarray, dict[str, int | str]]:
     output = np.asarray(predicted, dtype=int).copy()
     source_backfill_enabled = _resolve_source_backfill_alias(
@@ -904,6 +936,12 @@ def _try_apply_teacher_edge(
         if not _row_is_seed_anchored(output[source_row], seed_session):
             row["reason"] = "source_not_seed_anchored"
             return output, row
+        if (
+            _component_observation_count(output[source_row])
+            < min_component_observations
+        ):
+            row["reason"] = "insufficient_component_support"
+            return output, row
         candidate_row = output[source_row].copy()
         candidate_row[session_b] = roi_b
         row["teacher_complete_row_supported"] = int(
@@ -934,6 +972,12 @@ def _try_apply_teacher_edge(
         )
         if not target_seed_anchored and not seed_source_backfill:
             row["reason"] = "target_not_seed_anchored"
+            return output, row
+        if (
+            _component_observation_count(output[target_row])
+            < min_component_observations
+        ):
+            row["reason"] = "insufficient_component_support"
             return output, row
         candidate_row = output[target_row].copy()
         candidate_row[session_a] = roi_a
@@ -974,6 +1018,11 @@ def _try_apply_teacher_edge(
         if not _row_is_seed_anchored(merged, seed_session):
             row["reason"] = "merged_not_seed_anchored"
             return output, row
+        source_support = _component_observation_count(output[source_row])
+        target_support = _component_observation_count(output[target_row])
+        if max(source_support, target_support) < min_component_observations:
+            row["reason"] = "insufficient_component_support"
+            return output, row
         row["teacher_complete_row_supported"] = int(
             _teacher_complete_row_supported(merged, teacher_complete_tracks)
         )
@@ -999,6 +1048,10 @@ def _try_apply_teacher_edge(
 
 def _row_is_seed_anchored(track_row: np.ndarray, seed_session: int) -> bool:
     return 0 <= seed_session < track_row.shape[0] and int(track_row[seed_session]) >= 0
+
+
+def _component_observation_count(track_row: np.ndarray) -> int:
+    return int(np.count_nonzero(track_row >= 0))
 
 
 def _teacher_complete_row_supported(
@@ -1253,6 +1306,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--min-component-observations",
+        type=int,
+        default=1,
+        help=(
+            "Require the component receiving a teacher rescue edge to already "
+            "contain at least this many observations."
+        ),
+    )
+    parser.add_argument(
         "--teacher-edge-order",
         choices=("lexicographic", "structural", "dynamic-structural", "confidence"),
         default="structural",
@@ -1330,6 +1392,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         allow_fragment_merges=args.allow_fragment_merges,
         teacher_edge_order=cast(TeacherEdgeOrder, args.teacher_edge_order),
+        min_component_observations=args.min_component_observations,
     )
     rows = [result.to_dict() for result in output.results]
     if args.output is not None:

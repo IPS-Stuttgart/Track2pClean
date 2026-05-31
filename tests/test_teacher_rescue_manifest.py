@@ -33,6 +33,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
                     "allow_seed_source_backfill": True,
                     "allow_completing_seed_source_backfill": True,
                     "allow_fragment_merges": True,
+                    "min_component_observations": 2,
                     "output": "results/teacher-rescue.csv",
                 }
             ],
@@ -55,6 +56,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
         dict(run.runner_kwargs or {})["allow_teacher_supported_completing_rescue"]
         is True
     )
+    assert dict(run.runner_kwargs or {})["min_component_observations"] == 2
 
 
 def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants():
@@ -76,6 +78,13 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
             "allow_teacher_supported_completing_rescue": False,
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": False,
+        },
+        "track2p-policy-teacher-adjacent-rescue-supported": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "min_component_observations": 2,
         },
         "track2p-policy-teacher-adjacent-rescue-teacher-completing": {
             "allow_completing_rescue": False,
@@ -119,8 +128,12 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
         assert teacher["cell_probability_threshold"] == 0.5
         assert teacher["allow_source_backfill"] is True
         assert teacher["allow_fragment_merges"] is True
+        assert "min_component_observations" in teacher
         for flag, value in flags.items():
-            assert teacher[flag] is value
+            if isinstance(value, bool):
+                assert teacher[flag] is value
+            else:
+                assert teacher[flag] == value
 
     for comparison in manifest["comparisons"]:
         labels = list(comparison["inputs"])
@@ -143,3 +156,4 @@ def test_teacher_rescue_runner_specific_fields_registered():
     assert "allow_seed_source_backfill" in fields
     assert "allow_completing_seed_source_backfill" in fields
     assert "allow_fragment_merges" in fields
+    assert "min_component_observations" in fields
