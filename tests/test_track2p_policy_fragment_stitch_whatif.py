@@ -87,3 +87,26 @@ def test_score_delta_is_candidate_minus_baseline() -> None:
     assert delta["pairwise_false_negatives"] == -1
     assert delta["complete_track_true_positives"] == 1
     assert delta["complete_track_false_negatives"] == -2
+
+
+def test_global_counts_accepts_generator_input() -> None:
+    rows = (
+        {
+            "pairwise_true_positives": index,
+            "pairwise_false_positives": 1,
+            "pairwise_false_negatives": 2,
+            "complete_track_true_positives": 3,
+            "complete_track_false_positives": 4,
+            "complete_track_false_negatives": 5,
+        }
+        for index in (1, 2)
+    )
+
+    counts = audit._global_counts(rows)
+
+    assert counts["pairwise_true_positives"] == 3
+    assert counts["pairwise_false_positives"] == 2
+    assert counts["pairwise_false_negatives"] == 4
+    assert counts["complete_track_true_positives"] == 6
+    assert counts["complete_track_false_positives"] == 8
+    assert counts["complete_track_false_negatives"] == 10
