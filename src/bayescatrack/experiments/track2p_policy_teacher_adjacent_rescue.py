@@ -125,6 +125,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     allow_fragment_merges: bool = True,
     teacher_edge_order: TeacherEdgeOrder = "structural",
     min_component_observations: int = 1,
+    max_applied_edits: int | None = None,
 ) -> ComponentAuditOutput:
     """Run component cleanup followed by adjacent Track2p teacher rescue."""
 
@@ -216,6 +217,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             edge_order=teacher_edge_order,
             edge_feature_index=edge_feature_index,
             min_component_observations=min_component_observations,
+            max_applied_edits=max_applied_edits,
         )
         scores = _score_prediction_against_reference(
             rescue.tracks, reference, config=policy_config
@@ -286,6 +288,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
             "track2p_teacher_adjacent_edge_order": str(teacher_edge_order),
             "track2p_teacher_adjacent_min_component_observations": int(
                 min_component_observations
+            ),
+            "track2p_teacher_adjacent_max_applied_edits": (
+                -1 if max_applied_edits is None else int(max_applied_edits)
             ),
         }
         results.append(
@@ -371,6 +376,7 @@ def apply_teacher_adjacent_rescue_edges(
     edge_order: TeacherEdgeOrder = "structural",
     edge_feature_index: Mapping[TrackEdge, ResidualFeature] | None = None,
     min_component_observations: int = 1,
+    max_applied_edits: int | None = None,
 ) -> TeacherAdjacentRescueReport:
     """Apply conflict-free adjacent Track2p-teacher edits.
 
@@ -403,6 +409,10 @@ def apply_teacher_adjacent_rescue_edges(
     from being tested later.
     ``min_component_observations`` is a label-free support gate: teacher edits
     must touch at least one component with this many existing observations.
+
+    ``max_applied_edits`` caps the number of accepted teacher edits per subject.
+    This makes it possible to test the high-confidence first-edit regime without
+    admitting a long tail of Track2p-teacher edges after the best rescue.
     """
 
     output = _normalize_int_track_matrix(predicted_track_matrix)
@@ -430,6 +440,7 @@ def apply_teacher_adjacent_rescue_edges(
         allow_completing_fragment_merge or allow_completing_fragment_merges
     )
     min_component_observations = max(1, int(min_component_observations))
+    max_applied_edits = _normalized_max_applied_edits(max_applied_edits)
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
@@ -452,6 +463,7 @@ def apply_teacher_adjacent_rescue_edges(
             min_component_observations=min_component_observations,
             edge_feature_index=edge_feature_index or {},
             use_confidence_order=edge_order == "dynamic-confidence",
+            max_applied_edits=max_applied_edits,
         )
     edge_occurrences = _ordered_teacher_edge_occurrences(
         output,
@@ -473,8 +485,17 @@ def apply_teacher_adjacent_rescue_edges(
         min_component_observations=min_component_observations,
     )
     rows: list[dict[str, int | str]] = []
+    applied_count = 0
     for edge, occurrence_index in edge_occurrences:
         if track_edge_counter(output).get(edge, 0) > occurrence_index:
+            continue
+        if _max_applied_edits_reached(applied_count, max_applied_edits):
+            rows.append(
+                {
+                    **_teacher_edge_limit_row(edge),
+                    "occurrence_index": int(occurrence_index),
+                }
+            )
             continue
         output, row = _try_apply_teacher_edge(
             output,
@@ -493,6 +514,8 @@ def apply_teacher_adjacent_rescue_edges(
             allow_fragment_merges=allow_fragment_merges,
             min_component_observations=min_component_observations,
         )
+        if int(row.get("applied", 0)):
+            applied_count += 1
         rows.append(
             {
                 **row,
@@ -519,6 +542,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     min_component_observations: int,
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
     use_confidence_order: bool,
+    max_applied_edits: int | None,
 ) -> TeacherAdjacentRescueReport:
     """Apply teacher edits while recomputing structural priorities."""
 
@@ -530,6 +554,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     )
     attempted: set[tuple[TrackEdge, int]] = set()
     rows: list[dict[str, int | str]] = []
+    applied_count = 0
 
     while True:
         output_counts = track_edge_counter(output)
@@ -571,6 +596,14 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
             ),
         )
         attempted.add((edge, occurrence_index))
+        if _max_applied_edits_reached(applied_count, max_applied_edits):
+            rows.append(
+                {
+                    **_teacher_edge_limit_row(edge),
+                    "occurrence_index": int(occurrence_index),
+                }
+            )
+            continue
         output, row = _try_apply_teacher_edge(
             output,
             edge,
@@ -590,9 +623,41 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
             allow_fragment_merges=allow_fragment_merges,
             min_component_observations=min_component_observations,
         )
+        if int(row.get("applied", 0)):
+            applied_count += 1
         rows.append({**row, "occurrence_index": int(occurrence_index)})
 
     return TeacherAdjacentRescueReport(output, tuple(rows))
+
+
+def _normalized_max_applied_edits(max_applied_edits: int | None) -> int | None:
+    if max_applied_edits is None:
+        return None
+    return max(0, int(max_applied_edits))
+
+
+def _max_applied_edits_reached(
+    applied_count: int, max_applied_edits: int | None
+) -> bool:
+    return (
+        max_applied_edits is not None
+        and int(applied_count) >= int(max_applied_edits)
+    )
+
+
+def _teacher_edge_limit_row(edge: TrackEdge) -> dict[str, int | str]:
+    session_a, session_b, roi_a, roi_b = edge
+    return {
+        "session_a": int(session_a),
+        "session_b": int(session_b),
+        "roi_a": int(roi_a),
+        "roi_b": int(roi_b),
+        "applied": 0,
+        "reason": "max_applied_edits_reached",
+        "source_row": -1,
+        "target_row": -1,
+        "teacher_complete_row_supported": 0,
+    }
 
 
 def _ordered_teacher_edge_occurrences(
@@ -1418,6 +1483,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-applied-edits",
+        type=int,
+        default=None,
+        help=(
+            "Cap accepted teacher-rescue edits per subject. This tests the "
+            "highest-priority few-edit regime without admitting the full teacher "
+            "edge tail. Omit for no cap."
+        ),
+    )
+    parser.add_argument(
         "--teacher-edge-order",
         choices=(
             "lexicographic",
@@ -1503,6 +1578,7 @@ def main(argv: list[str] | None = None) -> int:
         allow_fragment_merges=args.allow_fragment_merges,
         teacher_edge_order=cast(TeacherEdgeOrder, args.teacher_edge_order),
         min_component_observations=args.min_component_observations,
+        max_applied_edits=args.max_applied_edits,
     )
     rows = [result.to_dict() for result in output.results]
     if args.output is not None:

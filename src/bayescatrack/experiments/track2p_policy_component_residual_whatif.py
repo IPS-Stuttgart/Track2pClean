@@ -13,6 +13,12 @@ family at a time:
 * recover one complete-track false negative;
 * remove one complete-track false positive.
 
+It can also aggregate same-support, same-reason candidates into cumulative
+oracle bundles. Those bundles are still label-aware diagnostics, but they make
+the next non-oracle implementation target much clearer: if a Track2p-supported
+FN family has enough cumulative upside, implement a teacher-rescue row; if a
+Bayes-only FP family dominates, implement a conservative veto row.
+
 The resulting table ranks the next implementation target by exact micro-F1
 delta and support bucket, e.g. Track2p-supported adjacent FNs versus Bayes-only
 FPs.  It is a searchlight for the next non-oracle method, not the method itself.
@@ -194,6 +200,101 @@ def residual_whatif_summary_rows(
     return summary
 
 
+def residual_whatif_bundle_rows(
+    candidate_rows: Sequence[Mapping[str, Any]],
+    base_counts: MicroCounts,
+    *,
+    max_bundle_size: int = 5,
+) -> list[dict[str, float | int | str]]:
+    """Return cumulative oracle bundles grouped by support and reason bucket.
+
+    Single-edit rows identify the best one-off official-score movement. The
+    next implementation decision, however, often depends on whether several
+    errors from the same support family move the metric enough to justify a new
+    non-oracle row. For example, one Track2p-supported adjacent FN may be too
+    small to prioritize, while three such FNs could plausibly close the pairwise
+    gap to Track2p.
+
+    The bundles remain diagnostic/oracle rows: they add the already-computed
+    per-candidate deltas without attempting to model edit interactions. Concrete
+    tracker variants still need their own conflict-aware benchmark row.
+    """
+
+    max_bundle_size = max(0, int(max_bundle_size))
+    if max_bundle_size == 0:
+        return []
+
+    groups: dict[tuple[str, str, str], list[Mapping[str, Any]]] = defaultdict(list)
+    for row in candidate_rows:
+        groups[
+            (
+                str(row.get("edit_type", "")),
+                str(row.get("support_bucket", "")),
+                str(row.get("reason_bucket", "")),
+            )
+        ].append(row)
+
+    bundles: list[dict[str, float | int | str]] = []
+    for (edit_type, support_bucket, reason_bucket), rows in groups.items():
+        ordered_rows = sorted(rows, key=_bundle_candidate_sort_key)
+        deltas = {
+            "pairwise_tp_delta": 0,
+            "pairwise_fp_delta": 0,
+            "pairwise_fn_delta": 0,
+            "complete_tp_delta": 0,
+            "complete_fp_delta": 0,
+            "complete_fn_delta": 0,
+        }
+        candidate_indices: list[str] = []
+        track_ids: list[str] = []
+        for bundle_size, row in enumerate(
+            ordered_rows[: min(max_bundle_size, len(ordered_rows))], start=1
+        ):
+            for key in deltas:
+                deltas[key] += _int_value(row.get(key, 0))
+            candidate_indices.append(str(row.get("candidate_index", "")))
+            track_ids.append(str(row.get("track_id_or_edge", "")))
+            edited = base_counts.apply(**deltas)
+            bundles.append(
+                {
+                    "bundle_index": int(len(bundles)),
+                    "edit_type": edit_type,
+                    "support_bucket": support_bucket,
+                    "reason_bucket": reason_bucket,
+                    "bundle_size": int(bundle_size),
+                    "candidate_indices": ";".join(candidate_indices),
+                    "track_id_or_edges": ";".join(track_ids),
+                    "base_pairwise_f1": base_counts.pairwise_f1,
+                    "new_pairwise_f1": edited.pairwise_f1,
+                    "pairwise_f1_delta": edited.pairwise_f1 - base_counts.pairwise_f1,
+                    "base_complete_track_f1": base_counts.complete_track_f1,
+                    "new_complete_track_f1": edited.complete_track_f1,
+                    "complete_track_f1_delta": (
+                        edited.complete_track_f1 - base_counts.complete_track_f1
+                    ),
+                    "new_pairwise_tp": int(edited.pairwise_tp),
+                    "new_pairwise_fp": int(edited.pairwise_fp),
+                    "new_pairwise_fn": int(edited.pairwise_fn),
+                    "new_complete_track_tp": int(edited.complete_tp),
+                    "new_complete_track_fp": int(edited.complete_fp),
+                    "new_complete_track_fn": int(edited.complete_fn),
+                    **{key: int(value) for key, value in deltas.items()},
+                }
+            )
+
+    bundles.sort(
+        key=lambda row: (
+            float(row["complete_track_f1_delta"]),
+            float(row["pairwise_f1_delta"]),
+            int(row["bundle_size"]),
+            str(row["support_bucket"]),
+            str(row["reason_bucket"]),
+        ),
+        reverse=True,
+    )
+    return bundles
+
+
 def load_base_counts(path: Path) -> MicroCounts:
     """Load and sum official count columns from a benchmark CSV."""
 
@@ -274,6 +375,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-complete-fn", type=int, default=None)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary-output", type=Path, default=None)
+    parser.add_argument(
+        "--bundle-output",
+        type=Path,
+        default=None,
+        help=(
+            "Optional CSV/JSON path for cumulative same-support what-if bundles. "
+            "Bundles are diagnostic/oracle rows and should not be reported as a "
+            "tracker result."
+        ),
+    )
+    parser.add_argument(
+        "--max-bundle-size",
+        type=int,
+        default=5,
+        help="Maximum number of candidates to accumulate per bundle family.",
+    )
     parser.add_argument("--format", choices=("csv", "json"), default="csv")
     return parser
 
@@ -290,6 +407,14 @@ def main(argv: list[str] | None = None) -> int:
         write_rows(
             residual_whatif_summary_rows(candidates),
             args.summary_output,
+            output_format=args.format,
+        )
+    if args.bundle_output is not None:
+        write_rows(
+            residual_whatif_bundle_rows(
+                candidates, base_counts, max_bundle_size=args.max_bundle_size
+            ),
+            args.bundle_output,
             output_format=args.format,
         )
     return 0
@@ -438,6 +563,14 @@ def _support_bucket(row: Mapping[str, Any]) -> str:
     return "+".join(labels) if labels else "unsupported"
 
 
+def _bundle_candidate_sort_key(row: Mapping[str, Any]) -> tuple[float, float, int]:
+    return (
+        -float(row.get("complete_track_f1_delta", 0.0)),
+        -float(row.get("pairwise_f1_delta", 0.0)),
+        _int_value(row.get("candidate_index", 0)),
+    )
+
+
 def _read_csv_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
@@ -449,6 +582,10 @@ def _read_csv_rows(path: Path) -> list[dict[str, str]]:
 def _preferred_fieldnames(rows: Sequence[Mapping[str, Any]]) -> list[str]:
     preferred = [
         "candidate_index",
+        "bundle_index",
+        "bundle_size",
+        "candidate_indices",
+        "track_id_or_edges",
         "edit_type",
         "support_bucket",
         "reason_bucket",

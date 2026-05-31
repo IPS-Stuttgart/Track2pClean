@@ -164,6 +164,26 @@ run_teacher_rescue teacher_adjacent_supported \
   --allow-fragment-merges \
   --min-component-observations 2
 
+# Few-edit rows: residual audits suggest the next useful repair is likely one or
+# two high-priority adjacent teacher edits, not admitting the full teacher edge
+# tail. These rows keep the same label-free dynamic-confidence ordering but cap
+# accepted edits per subject.
+run_teacher_rescue teacher_adjacent_dynamic_confidence_max1 \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --no-allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-edge-order dynamic-confidence \
+  --max-applied-edits 1
+
+run_teacher_rescue teacher_adjacent_dynamic_confidence_max2 \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --no-allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-edge-order dynamic-confidence \
+  --max-applied-edits 2
+
 run_teacher_rescue teacher_adjacent_completing \
   --allow-completing-rescue \
   --allow-source-backfill \
@@ -195,6 +215,8 @@ run_teacher_rescue teacher_adjacent_dynamic_completing_seed_source \
   --input TeacherAdjacentSeedSource="$OUT/teacher_adjacent_seed_source.csv" \
   --input TeacherAdjacentDynamicConfidence="$OUT/teacher_adjacent_dynamic_confidence.csv" \
   --input TeacherAdjacentSupported="$OUT/teacher_adjacent_supported.csv" \
+  --input TeacherAdjacentDynamicConfidenceMax1="$OUT/teacher_adjacent_dynamic_confidence_max1.csv" \
+  --input TeacherAdjacentDynamicConfidenceMax2="$OUT/teacher_adjacent_dynamic_confidence_max2.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
@@ -216,6 +238,8 @@ run_teacher_rescue teacher_adjacent_dynamic_completing_seed_source \
   --input TeacherAdjacentSeedSource="$OUT/teacher_adjacent_seed_source.csv" \
   --input TeacherAdjacentDynamicConfidence="$OUT/teacher_adjacent_dynamic_confidence.csv" \
   --input TeacherAdjacentSupported="$OUT/teacher_adjacent_supported.csv" \
+  --input TeacherAdjacentDynamicConfidenceMax1="$OUT/teacher_adjacent_dynamic_confidence_max1.csv" \
+  --input TeacherAdjacentDynamicConfidenceMax2="$OUT/teacher_adjacent_dynamic_confidence_max2.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
