@@ -111,9 +111,7 @@ def test_residual_whatif_bundle_rows_accumulate_same_support_family() -> None:
         base,
     )
 
-    bundles = whatif.residual_whatif_bundle_rows(
-        candidates, base, max_bundle_size=2
-    )
+    bundles = whatif.residual_whatif_bundle_rows(candidates, base, max_bundle_size=2)
 
     bundle = next(
         row
@@ -123,9 +121,7 @@ def test_residual_whatif_bundle_rows_accumulate_same_support_family() -> None:
         and row["bundle_size"] == 2
     )
     single_fn = next(
-        row
-        for row in candidates
-        if row["edit_type"] == "add_pairwise_fn_as_tp"
+        row for row in candidates if row["edit_type"] == "add_pairwise_fn_as_tp"
     )
     assert bundle["new_pairwise_tp"] == 588
     assert bundle["new_pairwise_fp"] == 26
