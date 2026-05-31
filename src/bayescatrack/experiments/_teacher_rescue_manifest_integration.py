@@ -245,7 +245,9 @@ def _install_advanced_workbench_manifest_row() -> None:
     if getattr(original, "_bayescatrack_teacher_rescue_manifest_integration", False):
         return
 
-    def _track2p_result_improvement_manifest_with_teacher(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    def _track2p_result_improvement_manifest_with_teacher(
+        *args: Any, **kwargs: Any
+    ) -> dict[str, Any]:
         manifest = original(*args, **kwargs)
         output_root = str(kwargs.get("output_root", "<OUTPUT_ROOT>"))
         _append_teacher_rescue_run(manifest, output_root=output_root)
