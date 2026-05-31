@@ -119,6 +119,7 @@ def test_teacher_adjacent_parser_defaults_to_structural_order() -> None:
     assert args.allow_completing_fragment_merges is False
     assert args.allow_completing_seed_source_backfill is False
     assert args.allow_teacher_supported_completing_rescue is False
+    assert args.allow_teacher_confirmed_completing_rescue is False
 
 
 def test_teacher_adjacent_parser_accepts_dynamic_structural_order() -> None:
@@ -188,6 +189,38 @@ def test_teacher_adjacent_rescue_allows_teacher_supported_complete_row() -> None
     np.testing.assert_array_equal(report.tracks, [[10, 11, 12]])
     assert report.rows[0]["applied"] == 1
     assert report.rows[0]["reason"] == "accepted_insert_target"
+
+
+def test_teacher_adjacent_rescue_allows_teacher_confirmed_complete_row() -> None:
+    predicted = np.asarray([[10, 11, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, 12]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_teacher_confirmed_completing_rescue=True,
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, 12]])
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_insert_target"
+
+
+def test_teacher_confirmed_completion_requires_exact_complete_teacher_row() -> None:
+    predicted = np.asarray([[10, 11, -1]], dtype=int)
+    teacher = np.asarray([[-1, 11, 12]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_teacher_confirmed_completing_rescue=True,
+    )
+
+    np.testing.assert_array_equal(report.tracks, predicted)
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "would_complete_track"
 
 
 def test_teacher_adjacent_rescue_backfills_missing_internal_source() -> None:
@@ -467,6 +500,22 @@ def test_teacher_adjacent_rescue_can_allow_complete_fragment_merge_only() -> Non
         teacher,
         seed_session=0,
         allow_completing_fragment_merges=True,
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, 12]])
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_merge_fragments"
+
+
+def test_teacher_adjacent_rescue_allows_teacher_confirmed_complete_merge() -> None:
+    predicted = np.asarray([[10, 11, -1], [10, -1, 12]], dtype=int)
+    teacher = np.asarray([[10, 11, 12]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_teacher_confirmed_completing_rescue=True,
     )
 
     np.testing.assert_array_equal(report.tracks, [[10, 11, 12]])
