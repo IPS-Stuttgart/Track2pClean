@@ -160,6 +160,15 @@ run_teacher_rescue teacher_adjacent_completing_seed_source \
   --allow-seed-source-backfill \
   --allow-fragment-merges
 
+# Opt-in candidate: recompute the label-free structural priority after each
+# accepted teacher edit while allowing completion.
+run_teacher_rescue teacher_adjacent_dynamic_completing_seed_source \
+  --allow-completing-rescue \
+  --allow-source-backfill \
+  --allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-edge-order dynamic-structural
+
 "$PY" -m bayescatrack benchmark compare \
   --input Track2p="$OUT/track2p_baseline.csv" \
   --input Track2pPolicyD12="$OUT/track2p_policy_d12.csv" \
@@ -170,6 +179,7 @@ run_teacher_rescue teacher_adjacent_completing_seed_source \
   --input TeacherAdjacentSeedSource="$OUT/teacher_adjacent_seed_source.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
+  --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
   --output "$OUT/residual_repair_candidates_comparison.md" \
   --format markdown \
   --highlight-best \
@@ -188,6 +198,7 @@ run_teacher_rescue teacher_adjacent_completing_seed_source \
   --input TeacherAdjacentSeedSource="$OUT/teacher_adjacent_seed_source.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
+  --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
   --output "$OUT/residual_repair_candidates_comparison.csv" \
   --format csv
 

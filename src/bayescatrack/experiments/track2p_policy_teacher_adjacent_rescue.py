@@ -106,6 +106,8 @@ def run_track2p_policy_teacher_adjacent_rescue(
     allow_teacher_supported_completion: bool = False,
     allow_teacher_supported_completing_rescue: bool = False,
     allow_teacher_confirmed_completing_rescue: bool = False,
+    allow_completing_source_backfill: bool = False,
+    allow_completing_fragment_merge: bool = False,
     allow_completing_fragment_merges: bool = False,
     allow_source_backfill: bool = True,
     allow_source_inserts: bool | None = None,
@@ -141,6 +143,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
     )
     allow_seed_completion = bool(
         allow_seed_completing_rescue or allow_completing_seed_source_backfill
+    )
+    allow_fragment_completion = bool(
+        allow_completing_fragment_merge or allow_completing_fragment_merges
     )
     results: list[SubjectBenchmarkResult] = []
     rescue_rows: list[dict[str, int | str]] = []
@@ -191,7 +196,8 @@ def run_track2p_policy_teacher_adjacent_rescue(
             allow_teacher_supported_completing_rescue=(
                 allow_teacher_supported_completion_enabled
             ),
-            allow_completing_fragment_merges=allow_completing_fragment_merges,
+            allow_completing_source_backfill=allow_completing_source_backfill,
+            allow_completing_fragment_merges=allow_fragment_completion,
             allow_source_backfill=source_backfill_enabled,
             allow_seed_source_backfill=allow_seed_source_backfill,
             allow_completing_seed_source_backfill=(
@@ -234,8 +240,14 @@ def run_track2p_policy_teacher_adjacent_rescue(
             "track2p_teacher_adjacent_allow_teacher_completion_gate": int(
                 allow_teacher_supported_completion_enabled
             ),
+            "track2p_teacher_adjacent_allow_completing_source_backfill": int(
+                allow_completing_source_backfill
+            ),
+            "track2p_teacher_adjacent_allow_completing_fragment_merge": int(
+                allow_completing_fragment_merge
+            ),
             "track2p_teacher_adjacent_allow_completing_fragment_merges": int(
-                allow_completing_fragment_merges
+                allow_fragment_completion
             ),
             "track2p_teacher_adjacent_allow_source_backfill": int(
                 source_backfill_enabled
@@ -329,6 +341,8 @@ def apply_teacher_adjacent_rescue_edges(
     allow_teacher_supported_completion: bool = False,
     allow_teacher_supported_completing_rescue: bool = False,
     allow_teacher_confirmed_completing_rescue: bool = False,
+    allow_completing_source_backfill: bool = False,
+    allow_completing_fragment_merge: bool = False,
     allow_completing_fragment_merges: bool = False,
     allow_source_backfill: bool = True,
     allow_source_inserts: bool | None = None,
@@ -378,6 +392,9 @@ def apply_teacher_adjacent_rescue_edges(
     allow_seed_completion = bool(
         allow_seed_completing_rescue or allow_completing_seed_source_backfill
     )
+    allow_fragment_completion = bool(
+        allow_completing_fragment_merge or allow_completing_fragment_merges
+    )
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
@@ -391,7 +408,8 @@ def apply_teacher_adjacent_rescue_edges(
                 allow_teacher_supported_completion_enabled
             ),
             teacher_complete_tracks=teacher_complete_tracks,
-            allow_completing_fragment_merges=allow_completing_fragment_merges,
+            allow_completing_source_backfill=allow_completing_source_backfill,
+            allow_completing_fragment_merges=allow_fragment_completion,
             allow_source_backfill=source_backfill_enabled,
             allow_seed_source_backfill=allow_seed_source_backfill,
             allow_completing_seed_source_backfill=(
@@ -409,7 +427,8 @@ def apply_teacher_adjacent_rescue_edges(
             allow_teacher_supported_completion_enabled
         ),
         teacher_complete_tracks=teacher_complete_tracks,
-        allow_completing_fragment_merges=allow_completing_fragment_merges,
+        allow_completing_source_backfill=allow_completing_source_backfill,
+        allow_completing_fragment_merges=allow_fragment_completion,
         allow_source_backfill=source_backfill_enabled,
         allow_seed_source_backfill=allow_seed_source_backfill,
         allow_completing_seed_source_backfill=allow_seed_completion,
@@ -429,7 +448,8 @@ def apply_teacher_adjacent_rescue_edges(
                 allow_teacher_supported_completion_enabled
             ),
             teacher_complete_tracks=teacher_complete_tracks,
-            allow_completing_fragment_merges=allow_completing_fragment_merges,
+            allow_completing_source_backfill=allow_completing_source_backfill,
+            allow_completing_fragment_merges=allow_fragment_completion,
             allow_source_backfill=source_backfill_enabled,
             allow_seed_source_backfill=allow_seed_source_backfill,
             allow_completing_seed_source_backfill=(
@@ -454,6 +474,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     allow_completing_rescue: bool,
     allow_teacher_supported_completing_rescue: bool,
     teacher_complete_tracks: frozenset[tuple[int, ...]],
+    allow_completing_source_backfill: bool,
     allow_completing_fragment_merges: bool,
     allow_source_backfill: bool,
     allow_seed_source_backfill: bool,
@@ -497,6 +518,9 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                         allow_teacher_supported_completing_rescue
                     ),
                     teacher_complete_tracks=teacher_complete_tracks,
+                    allow_completing_source_backfill=(
+                        allow_completing_source_backfill
+                    ),
                     allow_completing_fragment_merges=(
                         allow_completing_fragment_merges
                     ),
@@ -520,6 +544,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                 allow_teacher_supported_completing_rescue
             ),
             teacher_complete_tracks=teacher_complete_tracks,
+            allow_completing_source_backfill=allow_completing_source_backfill,
             allow_completing_fragment_merges=allow_completing_fragment_merges,
             allow_source_backfill=allow_source_backfill,
             allow_seed_source_backfill=allow_seed_source_backfill,
@@ -542,6 +567,7 @@ def _ordered_teacher_edge_occurrences(
     allow_completing_rescue: bool,
     allow_teacher_supported_completing_rescue: bool,
     teacher_complete_tracks: frozenset[tuple[int, ...]],
+    allow_completing_source_backfill: bool,
     allow_completing_fragment_merges: bool,
     allow_source_backfill: bool,
     allow_seed_source_backfill: bool,
@@ -572,6 +598,9 @@ def _ordered_teacher_edge_occurrences(
                             allow_teacher_supported_completing_rescue
                         ),
                         teacher_complete_tracks=teacher_complete_tracks,
+                        allow_completing_source_backfill=(
+                            allow_completing_source_backfill
+                        ),
                         allow_completing_fragment_merges=(
                             allow_completing_fragment_merges
                         ),
@@ -602,6 +631,9 @@ def _ordered_teacher_edge_occurrences(
                         allow_teacher_supported_completing_rescue
                     ),
                     teacher_complete_tracks=teacher_complete_tracks,
+                    allow_completing_source_backfill=(
+                        allow_completing_source_backfill
+                    ),
                     allow_completing_fragment_merges=(
                         allow_completing_fragment_merges
                     ),
@@ -626,6 +658,7 @@ def _teacher_edge_structural_order_key(
     allow_completing_rescue: bool,
     allow_teacher_supported_completing_rescue: bool,
     teacher_complete_tracks: frozenset[tuple[int, ...]],
+    allow_completing_source_backfill: bool,
     allow_completing_fragment_merges: bool,
     allow_source_backfill: bool,
     allow_seed_source_backfill: bool,
@@ -680,8 +713,13 @@ def _teacher_edge_structural_order_key(
         if allow_source_backfill and (target_seed_anchored or seed_source_backfill):
             candidate = predicted[target_row].copy()
             candidate[session_a] = roi_a
-            allow_completion = allow_completing_rescue or (
-                seed_source_backfill and allow_completing_seed_source_backfill
+            allow_completion = bool(
+                allow_completing_rescue
+                or allow_completing_source_backfill
+                or (
+                    seed_source_backfill
+                    and allow_completing_seed_source_backfill
+                )
             )
             if not _would_complete_track(
                 candidate,
@@ -726,6 +764,7 @@ def _teacher_edge_confidence_order_key(
     allow_completing_rescue: bool,
     allow_teacher_supported_completing_rescue: bool,
     teacher_complete_tracks: frozenset[tuple[int, ...]],
+    allow_completing_source_backfill: bool,
     allow_completing_fragment_merges: bool,
     allow_source_backfill: bool,
     allow_seed_source_backfill: bool,
@@ -746,6 +785,7 @@ def _teacher_edge_confidence_order_key(
             allow_teacher_supported_completing_rescue
         ),
         teacher_complete_tracks=teacher_complete_tracks,
+        allow_completing_source_backfill=allow_completing_source_backfill,
         allow_completing_fragment_merges=allow_completing_fragment_merges,
         allow_source_backfill=allow_source_backfill,
         allow_seed_source_backfill=allow_seed_source_backfill,
@@ -799,6 +839,7 @@ def _try_apply_teacher_edge(
     allow_completing_rescue: bool = False,
     allow_teacher_supported_completing_rescue: bool = False,
     teacher_complete_tracks: frozenset[tuple[int, ...]] = frozenset(),
+    allow_completing_source_backfill: bool = False,
     allow_completing_fragment_merges: bool = False,
     allow_source_backfill: bool = True,
     allow_source_inserts: bool | None = None,
@@ -899,8 +940,10 @@ def _try_apply_teacher_edge(
         row["teacher_complete_row_supported"] = int(
             _teacher_complete_row_supported(candidate_row, teacher_complete_tracks)
         )
-        allow_completion = allow_completing_rescue or (
-            seed_source_backfill and allow_completing_seed_source_backfill
+        allow_completion = bool(
+            allow_completing_rescue
+            or allow_completing_source_backfill
+            or (seed_source_backfill and allow_completing_seed_source_backfill)
         )
         if _would_complete_track(
             candidate_row,
@@ -1091,6 +1134,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-completing-source-backfill",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Allow source-backfill teacher rescue edits to complete a row "
+            "without also allowing plain target-extension completions."
+        ),
+    )
+    parser.add_argument(
+        "--allow-completing-fragment-merge",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Compatibility alias for --allow-completing-fragment-merges."
+        ),
+    )
+    parser.add_argument(
         "--allow-teacher-complete-row-rescue",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -1257,6 +1317,8 @@ def main(argv: list[str] | None = None) -> int:
         allow_teacher_confirmed_completing_rescue=(
             args.allow_teacher_confirmed_completing_rescue
         ),
+        allow_completing_source_backfill=args.allow_completing_source_backfill,
+        allow_completing_fragment_merge=args.allow_completing_fragment_merge,
         allow_completing_fragment_merges=args.allow_completing_fragment_merges,
         allow_source_backfill=args.allow_source_backfill,
         allow_source_inserts=args.allow_source_inserts,
