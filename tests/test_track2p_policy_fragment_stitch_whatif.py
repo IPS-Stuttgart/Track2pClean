@@ -1,5 +1,4 @@
 import numpy as np
-
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_fragment_stitch_whatif as audit
 
@@ -8,8 +7,12 @@ def test_fragment_stitch_whatif_is_registered() -> None:
     canonical = cli._BENCHMARK_ALIASES["track2p-fragment-stitch-whatif"]
 
     assert canonical == "track2p-policy-fragment-stitch-whatif"
-    assert cli._BENCHMARK_ALIASES["track2p-component-fragment-stitch-whatif"] == canonical
-    assert cli._BENCHMARK_COMMANDS[canonical].module == ("bayescatrack.experiments.track2p_policy_fragment_stitch_whatif")
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-component-fragment-stitch-whatif"] == canonical
+    )
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_fragment_stitch_whatif"
+    )
 
 
 def test_minimal_repair_plan_prefers_fragment_merge() -> None:
@@ -56,7 +59,9 @@ def test_duplicate_flags_detect_same_source_and_target_conflicts() -> None:
     track = (1, 20, 30)
     plan = audit._minimal_repair_plan(predicted, track)
 
-    duplicate_source, duplicate_target = audit._duplicate_flags(predicted, track, plan.selected_rows)
+    duplicate_source, duplicate_target = audit._duplicate_flags(
+        predicted, track, plan.selected_rows
+    )
 
     assert duplicate_source
     assert duplicate_target

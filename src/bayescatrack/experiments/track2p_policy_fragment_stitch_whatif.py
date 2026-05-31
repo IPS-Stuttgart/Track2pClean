@@ -123,7 +123,9 @@ def run_track2p_policy_fragment_stitch_whatif(
     )
     subject_dirs = discover_subject_dirs(policy_config.data)
     if not subject_dirs:
-        raise ValueError(f"No Track2p-style subject directories found under {policy_config.data}")
+        raise ValueError(
+            f"No Track2p-style subject directories found under {policy_config.data}"
+        )
 
     cleanup_config = cleanup_config or ComponentCleanupConfig()
     states: list[_SubjectState] = []
@@ -179,10 +181,14 @@ def _subject_state(
     threshold_method: ThresholdMethod,
     iou_distance_threshold: float,
 ) -> _SubjectState:
-    reference = _load_reference_for_subject(subject_dir, data_root=config.data, config=config)
+    reference = _load_reference_for_subject(
+        subject_dir, data_root=config.data, config=config
+    )
     _validate_reference_for_benchmark(reference, subject_dir=subject_dir, config=config)
     if reference.source != GROUND_TRUTH_REFERENCE_SOURCE:
-        raise ValueError("Track2p-policy fragment-stitch what-if requires independent manual GT references")
+        raise ValueError(
+            "Track2p-policy fragment-stitch what-if requires independent manual GT references"
+        )
     sessions = _load_subject_sessions(subject_dir, config)
     _validate_reference_roi_indices(reference, sessions)
     reference_tracks = _reference_matrix(reference, curated_only=config.curated_only)
@@ -194,20 +200,30 @@ def _subject_state(
         prune_config=_no_prune_config(),
     )
     policy_full = _normalize_int_track_matrix(policy_prediction.tracks)
-    policy_eval, reference_eval, evaluated_track_ids = _evaluated_prediction_rows(policy_full, reference_tracks, config=config)
+    policy_eval, reference_eval, evaluated_track_ids = _evaluated_prediction_rows(
+        policy_full, reference_tracks, config=config
+    )
     audit_rows = component_audit_rows(
         policy_eval,
         reference_eval,
         sessions=sessions,
-        diagnostics=cast(Sequence[Track2pPolicyLinkDiagnostic], policy_prediction.diagnostics),
+        diagnostics=cast(
+            Sequence[Track2pPolicyLinkDiagnostic], policy_prediction.diagnostics
+        ),
         subject=subject_dir.name,
         config=cleanup_config,
         track_ids=evaluated_track_ids,
         seed_session=config.seed_session,
     )
-    cleaned_full = apply_weakest_bridge_splits(policy_full, _mark_applied_splits(audit_rows, apply_splits=True))
-    baseline_scores = _score_prediction_against_reference(cleaned_full, reference, config=config)
-    cleaned_eval, reference_eval, _ = _evaluated_prediction_rows(cleaned_full, reference_tracks, config=config)
+    cleaned_full = apply_weakest_bridge_splits(
+        policy_full, _mark_applied_splits(audit_rows, apply_splits=True)
+    )
+    baseline_scores = _score_prediction_against_reference(
+        cleaned_full, reference, config=config
+    )
+    cleaned_eval, reference_eval, _ = _evaluated_prediction_rows(
+        cleaned_full, reference_tracks, config=config
+    )
     track2p_eval = _track2p_baseline_eval(subject_dir, reference_tracks, config=config)
     gap_full = _normalize_int_track_matrix(
         emulate_track2p_tracks(
@@ -218,7 +234,9 @@ def _subject_state(
             max_gap=int(config.max_gap),
         )
     )
-    gap_eval, _, _ = _evaluated_prediction_rows(gap_full, reference_tracks, config=config)
+    gap_eval, _, _ = _evaluated_prediction_rows(
+        gap_full, reference_tracks, config=config
+    )
     return _SubjectState(
         subject=subject_dir.name,
         cleaned_full=cleaned_full,
@@ -244,26 +262,40 @@ def _whatif_row(
 ) -> dict[str, float | int | str]:
     plan = _minimal_repair_plan(state.cleaned_full, track)
     candidate = _apply_repair_plan(state.cleaned_full, track, plan)
-    candidate_scores = _score_prediction_against_reference(candidate, state.reference, config=config)
+    candidate_scores = _score_prediction_against_reference(
+        candidate, state.reference, config=config
+    )
     subject_delta = _score_delta(state.baseline_scores, candidate_scores)
     global_after = _apply_delta_to_global_counts(baseline_global, subject_delta)
-    duplicate_source, duplicate_target = _duplicate_flags(state.cleaned_full, track, plan.selected_rows)
+    duplicate_source, duplicate_target = _duplicate_flags(
+        state.cleaned_full, track, plan.selected_rows
+    )
     reference_edges = _track_edges(track)
     missing_edge_counts = Counter(plan.missing_edges)
     track2p_counts = track_edge_counter(state.track2p_eval)
     policy_counts = track_edge_counter(state.policy_eval)
     gap_counts = track_edge_counter(state.gap_eval)
-    track2p_supported = tuple(edge for edge in plan.missing_edges if track2p_counts.get(edge, 0) > 0)
-    policy_supported = tuple(edge for edge in plan.missing_edges if policy_counts.get(edge, 0) > 0)
-    gap_supported = tuple(edge for edge in plan.missing_edges if gap_counts.get(edge, 0) > 0)
-    selected_complete_fp = _selected_complete_fp_count(state.cleaned_full, plan, state.reference_tracks)
+    track2p_supported = tuple(
+        edge for edge in plan.missing_edges if track2p_counts.get(edge, 0) > 0
+    )
+    policy_supported = tuple(
+        edge for edge in plan.missing_edges if policy_counts.get(edge, 0) > 0
+    )
+    gap_supported = tuple(
+        edge for edge in plan.missing_edges if gap_counts.get(edge, 0) > 0
+    )
+    selected_complete_fp = _selected_complete_fp_count(
+        state.cleaned_full, plan, state.reference_tracks
+    )
     return {
         "subject": state.subject,
         "reference_track_id": _track_id(track),
         "candidate_repair": _candidate_repair(plan),
         "sessions_present": _session_list(plan.sessions_present),
         "predicted_fragment_count": int(len(plan.selected_rows)),
-        "fragment_session_spans": _fragment_session_spans(state.cleaned_full, track, plan.selected_rows),
+        "fragment_session_spans": _fragment_session_spans(
+            state.cleaned_full, track, plan.selected_rows
+        ),
         "missing_adjacent_edges": _edge_list(plan.missing_edges),
         "wrong_adjacent_edges": _edge_list(plan.wrong_edges),
         "track2p_supported_missing_edges": _edge_list(track2p_supported),
@@ -351,15 +383,36 @@ def _minimal_repair_plan(predicted: np.ndarray, track: CompleteTrack) -> _Repair
     )
 
 
-def _repair_plan_for_rows(predicted: np.ndarray, track: CompleteTrack, rows: Sequence[int]) -> _RepairPlan:
+def _repair_plan_for_rows(
+    predicted: np.ndarray, track: CompleteTrack, rows: Sequence[int]
+) -> _RepairPlan:
     selected_rows = tuple(int(row) for row in rows)
     reference_edges = _track_edges(track)
-    existing_correct_edges = tuple(edge for row_index in selected_rows for edge in _row_edges(predicted[row_index]) if edge in reference_edges)
-    wrong_edges = tuple(edge for row_index in selected_rows for edge in _row_edges(predicted[row_index]) if _edge_touches_track(edge, track) and edge not in reference_edges)
-    sessions_present = tuple(
-        sorted({session for row_index in selected_rows for session, roi in enumerate(predicted[row_index]) if session < len(track) and int(roi) == int(track[session])})
+    existing_correct_edges = tuple(
+        edge
+        for row_index in selected_rows
+        for edge in _row_edges(predicted[row_index])
+        if edge in reference_edges
     )
-    missing_edges = tuple(edge for edge in reference_edges if edge not in existing_correct_edges)
+    wrong_edges = tuple(
+        edge
+        for row_index in selected_rows
+        for edge in _row_edges(predicted[row_index])
+        if _edge_touches_track(edge, track) and edge not in reference_edges
+    )
+    sessions_present = tuple(
+        sorted(
+            {
+                session
+                for row_index in selected_rows
+                for session, roi in enumerate(predicted[row_index])
+                if session < len(track) and int(roi) == int(track[session])
+            }
+        )
+    )
+    missing_edges = tuple(
+        edge for edge in reference_edges if edge not in existing_correct_edges
+    )
     swaps = _swap_count(predicted, track, selected_rows)
     additions = len(missing_edges) if selected_rows else len(reference_edges)
     merges = max(0, len(selected_rows) - 1)
@@ -376,7 +429,9 @@ def _repair_plan_for_rows(predicted: np.ndarray, track: CompleteTrack, rows: Seq
     )
 
 
-def _apply_repair_plan(predicted: np.ndarray, track: CompleteTrack, plan: _RepairPlan) -> np.ndarray:
+def _apply_repair_plan(
+    predicted: np.ndarray, track: CompleteTrack, plan: _RepairPlan
+) -> np.ndarray:
     target = np.asarray(track, dtype=int)
     if not plan.selected_rows:
         return np.vstack([predicted, target.reshape(1, -1)]).astype(int, copy=False)
@@ -390,14 +445,23 @@ def _apply_repair_plan(predicted: np.ndarray, track: CompleteTrack, plan: _Repai
     return output
 
 
-def _complete_fn_tracks(rows: Sequence[Mapping[str, float | int | str]]) -> tuple[CompleteTrack, ...]:
-    return tuple(_parse_track_id(str(row["track_id_or_edge"])) for row in rows if str(row.get("error_type")) == "complete_fn")
+def _complete_fn_tracks(
+    rows: Sequence[Mapping[str, float | int | str]],
+) -> tuple[CompleteTrack, ...]:
+    return tuple(
+        _parse_track_id(str(row["track_id_or_edge"]))
+        for row in rows
+        if str(row.get("error_type")) == "complete_fn"
+    )
 
 
 def _overlap_rows(predicted: np.ndarray, track: CompleteTrack) -> tuple[int, ...]:
     rows: list[int] = []
     for row_index, row in enumerate(predicted):
-        if any(session < len(row) and int(row[session]) == int(roi) for session, roi in enumerate(track)):
+        if any(
+            session < len(row) and int(row[session]) == int(roi)
+            for session, roi in enumerate(track)
+        ):
             rows.append(int(row_index))
     return tuple(rows)
 
@@ -408,11 +472,17 @@ def _candidate_subsets(rows: Sequence[int]) -> tuple[tuple[int, ...], ...]:
     limited = tuple(rows[:12])
     subsets: list[tuple[int, ...]] = []
     for mask in range(1, 1 << len(limited)):
-        subsets.append(tuple(limited[index] for index in range(len(limited)) if mask & (1 << index)))
+        subsets.append(
+            tuple(
+                limited[index] for index in range(len(limited)) if mask & (1 << index)
+            )
+        )
     return tuple(subsets)
 
 
-def _swap_count(predicted: np.ndarray, track: CompleteTrack, selected_rows: Sequence[int]) -> int:
+def _swap_count(
+    predicted: np.ndarray, track: CompleteTrack, selected_rows: Sequence[int]
+) -> int:
     swaps = 0
     for row_index in selected_rows:
         row = predicted[int(row_index)]
@@ -425,7 +495,9 @@ def _swap_count(predicted: np.ndarray, track: CompleteTrack, selected_rows: Sequ
     return int(swaps)
 
 
-def _duplicate_flags(predicted: np.ndarray, track: CompleteTrack, selected_rows: Sequence[int]) -> tuple[bool, bool]:
+def _duplicate_flags(
+    predicted: np.ndarray, track: CompleteTrack, selected_rows: Sequence[int]
+) -> tuple[bool, bool]:
     selected = set(int(row) for row in selected_rows)
     duplicate_source = False
     duplicate_target = False
@@ -437,12 +509,18 @@ def _duplicate_flags(predicted: np.ndarray, track: CompleteTrack, selected_rows:
             for ref_edge in reference_edges:
                 if edge[0] != ref_edge[0] or edge[1] != ref_edge[1]:
                     continue
-                duplicate_source = duplicate_source or (edge[2] == ref_edge[2] and edge[3] != ref_edge[3])
-                duplicate_target = duplicate_target or (edge[2] != ref_edge[2] and edge[3] == ref_edge[3])
+                duplicate_source = duplicate_source or (
+                    edge[2] == ref_edge[2] and edge[3] != ref_edge[3]
+                )
+                duplicate_target = duplicate_target or (
+                    edge[2] != ref_edge[2] and edge[3] == ref_edge[3]
+                )
     return duplicate_source, duplicate_target
 
 
-def _selected_complete_fp_count(predicted: np.ndarray, plan: _RepairPlan, reference: np.ndarray) -> int:
+def _selected_complete_fp_count(
+    predicted: np.ndarray, plan: _RepairPlan, reference: np.ndarray
+) -> int:
     reference_counter = Counter(tuple(int(value) for value in row) for row in reference)
     count = 0
     for row_index in plan.selected_rows:
@@ -483,21 +561,37 @@ def _score_delta(
     }
 
 
-def _apply_delta_to_global_counts(baseline_global: Mapping[str, int], delta: Mapping[str, int]) -> dict[str, int]:
-    return {key: int(baseline_global[key]) + int(delta.get(key, 0)) for key in baseline_global}
+def _apply_delta_to_global_counts(
+    baseline_global: Mapping[str, int], delta: Mapping[str, int]
+) -> dict[str, int]:
+    return {
+        key: int(baseline_global[key]) + int(delta.get(key, 0))
+        for key in baseline_global
+    }
 
 
 def _track_edges(track: CompleteTrack) -> tuple[TrackEdge, ...]:
-    return tuple((index, index + 1, int(track[index]), int(track[index + 1])) for index in range(max(0, len(track) - 1)) if int(track[index]) >= 0 and int(track[index + 1]) >= 0)
+    return tuple(
+        (index, index + 1, int(track[index]), int(track[index + 1]))
+        for index in range(max(0, len(track) - 1))
+        if int(track[index]) >= 0 and int(track[index + 1]) >= 0
+    )
 
 
 def _row_edges(row: np.ndarray) -> tuple[TrackEdge, ...]:
-    return tuple((index, index + 1, int(row[index]), int(row[index + 1])) for index in range(max(0, row.size - 1)) if row[index] >= 0 and row[index + 1] >= 0)
+    return tuple(
+        (index, index + 1, int(row[index]), int(row[index + 1]))
+        for index in range(max(0, row.size - 1))
+        if row[index] >= 0 and row[index + 1] >= 0
+    )
 
 
 def _edge_touches_track(edge: TrackEdge, track: CompleteTrack) -> bool:
     session_a, session_b, roi_a, roi_b = edge
-    return bool((session_a < len(track) and int(track[session_a]) == int(roi_a)) or (session_b < len(track) and int(track[session_b]) == int(roi_b)))
+    return bool(
+        (session_a < len(track) and int(track[session_a]) == int(roi_a))
+        or (session_b < len(track) and int(track[session_b]) == int(roi_b))
+    )
 
 
 def _structural_risk(
@@ -560,11 +654,17 @@ def _session_list(sessions: Sequence[int]) -> str:
     return ",".join(str(session) for session in sessions)
 
 
-def _fragment_session_spans(predicted: np.ndarray, track: CompleteTrack, selected_rows: Sequence[int]) -> str:
+def _fragment_session_spans(
+    predicted: np.ndarray, track: CompleteTrack, selected_rows: Sequence[int]
+) -> str:
     spans: list[str] = []
     for row_index in selected_rows:
         row = predicted[int(row_index)]
-        sessions = [session for session, roi in enumerate(track) if session < row.size and int(row[session]) == int(roi)]
+        sessions = [
+            session
+            for session, roi in enumerate(track)
+            if session < row.size and int(row[session]) == int(roi)
+        ]
         if not sessions:
             continue
         spans.append(f"{int(row_index)}:{min(sessions)}-{max(sessions)}")
@@ -588,7 +688,9 @@ def write_rows(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
-        output_path.write_text(json.dumps(list(rows), indent=2) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(list(rows), indent=2) + "\n", encoding="utf-8"
+        )
         return
     fieldnames = sorted({key for row in rows for key in row})
     with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -602,7 +704,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="bayescatrack benchmark track2p-policy-fragment-stitch-whatif",
-        description=("Simulate minimal oracle fragment-stitch edits for complete-track false negatives after Track2p-policy ComponentCleanup."),
+        description=(
+            "Simulate minimal oracle fragment-stitch edits for complete-track false negatives after Track2p-policy ComponentCleanup."
+        ),
     )
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--reference", type=Path, default=None)
@@ -612,7 +716,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="manual-gt",
     )
     parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", choices=("auto", "suite2p", "npy"), default="suite2p")
+    parser.add_argument(
+        "--input-format", choices=("auto", "suite2p", "npy"), default="suite2p"
+    )
     parser.add_argument(
         "--threshold-method",
         choices=("otsu", "min"),
@@ -628,7 +734,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument("--split-risk-threshold", type=float, default=1.50)
     parser.add_argument("--split-penalty", type=float, default=0.25)
     parser.add_argument("--min-side-observations", type=int, default=2)
@@ -643,8 +751,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=True,
     )
     parser.add_argument("--seed-session", type=int, default=0)
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=False
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary-output", type=Path, default=None)
     parser.add_argument("--format", choices=("csv", "json"), default="csv")
