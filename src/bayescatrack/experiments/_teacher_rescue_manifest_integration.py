@@ -34,6 +34,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "centroid_distance_weight",
     "area_ratio_weight",
     "allow_completing_rescue",
+    "allow_completing_fragment_merges",
     "allow_source_backfill",
     "allow_source_inserts",
     "allow_seed_source_backfill",
@@ -225,6 +226,9 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_completing_rescue=manifest._bool_option(
             options, "allow_completing_rescue", default=False
         ),
+        allow_completing_fragment_merges=manifest._bool_option(
+            options, "allow_completing_fragment_merges", default=False
+        ),
         allow_source_backfill=manifest._bool_option(
             options, "allow_source_backfill", default=True
         ),
@@ -320,6 +324,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             **base,
             "name": name,
             "allow_completing_rescue": allow_completing,
+            "allow_completing_fragment_merges": False,
             "allow_seed_source_backfill": allow_seed_source,
             "allow_completing_seed_source_backfill": allow_completing_seed_source,
             "output": f"{output_root}/{filename}",

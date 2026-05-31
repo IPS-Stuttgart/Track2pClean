@@ -128,6 +128,13 @@ run_teacher_rescue teacher_adjacent_default \
   --no-allow-seed-source-backfill \
   --allow-fragment-merges
 
+run_teacher_rescue teacher_adjacent_dynamic_structural \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --no-allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-edge-order dynamic-structural
+
 run_teacher_rescue teacher_adjacent_seed_source \
   --no-allow-completing-rescue \
   --allow-source-backfill \
@@ -151,6 +158,7 @@ run_teacher_rescue teacher_adjacent_completing_seed_source \
   --input Track2pPolicyD12="$OUT/track2p_policy_d12.csv" \
   --input ComponentCleanup="$OUT/track2p_policy_component_cleanup.csv" \
   --input TeacherAdjacentDefault="$OUT/teacher_adjacent_default.csv" \
+  --input TeacherAdjacentDynamicStructural="$OUT/teacher_adjacent_dynamic_structural.csv" \
   --input TeacherAdjacentSeedSource="$OUT/teacher_adjacent_seed_source.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
@@ -167,6 +175,7 @@ run_teacher_rescue teacher_adjacent_completing_seed_source \
   --input Track2pPolicyD12="$OUT/track2p_policy_d12.csv" \
   --input ComponentCleanup="$OUT/track2p_policy_component_cleanup.csv" \
   --input TeacherAdjacentDefault="$OUT/teacher_adjacent_default.csv" \
+  --input TeacherAdjacentDynamicStructural="$OUT/teacher_adjacent_dynamic_structural.csv" \
   --input TeacherAdjacentSeedSource="$OUT/teacher_adjacent_seed_source.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
