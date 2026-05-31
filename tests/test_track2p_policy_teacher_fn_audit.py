@@ -175,6 +175,19 @@ def test_teacher_adjacent_rescue_can_disable_source_backfill() -> None:
     assert report.rows[0]["reason"] == "missing_or_ambiguous_source"
 
 
+def test_teacher_adjacent_rescue_source_insert_alias_controls_backfill() -> None:
+    predicted = np.asarray([[10, -1, 12, -1]], dtype=int)
+    teacher = np.asarray([[-1, 11, 12, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0, allow_source_inserts=False
+    )
+
+    np.testing.assert_array_equal(report.tracks, predicted)
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "missing_or_ambiguous_source"
+
+
 def test_teacher_adjacent_rescue_seed_backfill_is_opt_in() -> None:
     predicted = np.asarray([[-1, 11, 12, -1]], dtype=int)
     teacher = np.asarray([[10, 11, -1, -1]], dtype=int)
