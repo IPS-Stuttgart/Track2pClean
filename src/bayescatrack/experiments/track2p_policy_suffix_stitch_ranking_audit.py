@@ -284,7 +284,10 @@ def _subject_suffix_rows(
         path_beam_width=path_beam_width,
     )
     edge_rows = _edge_rows(subject_dir.name, paths)
-    path_rows = [_path_row(subject_dir.name, path, cleaned_eval, reference_eval) for path in paths]
+    path_rows = [
+        _path_row(subject_dir.name, path, cleaned_eval, reference_eval)
+        for path in paths
+    ]
     return edge_rows, path_rows
 
 
@@ -419,7 +422,9 @@ def _edge_candidate(
 ) -> _EdgeCandidate:
     roi_a = int(matrices.source_indices[int(source_local)])
     roi_b = int(matrices.target_indices[int(target_local)])
-    registered_iou = float(matrices.registered_iou[int(source_local), int(target_local)])
+    registered_iou = float(
+        matrices.registered_iou[int(source_local), int(target_local)]
+    )
     shifted_iou = float(matrices.shifted_iou[int(source_local), int(target_local)])
     area_ratio = float(matrices.area_ratio[int(source_local), int(target_local)])
     centroid_distance = float(
@@ -490,7 +495,9 @@ def _edge_score(
     activity_similarity: float,
 ) -> float:
     min_probability = _nanmin_default((cell_probability_a, cell_probability_b), 0.5)
-    activity = 0.5 if not np.isfinite(activity_similarity) else float(activity_similarity)
+    activity = (
+        0.5 if not np.isfinite(activity_similarity) else float(activity_similarity)
+    )
     return float(
         registered_iou
         + 0.50 * shifted_iou
@@ -642,7 +649,9 @@ def _path_row(
         "candidate_sessions": _int_list(candidate_sessions),
         "path_length": int(len(edge_values)),
         "would_reach_final_session": int(
-            bool(candidate_sessions and max(candidate_sessions) >= predicted.shape[1] - 1)
+            bool(
+                candidate_sessions and max(candidate_sessions) >= predicted.shape[1] - 1
+            )
         ),
         "creates_duplicate_source": int(
             any(_creates_duplicate_source(edge.edge, predicted) for edge in edge_values)
@@ -652,7 +661,9 @@ def _path_row(
         ),
         "would_merge_complete_tp": int(
             any(
-                _would_merge_complete_tp(edge.edge, predicted, reference, path.component_id)
+                _would_merge_complete_tp(
+                    edge.edge, predicted, reference, path.component_id
+                )
                 for edge in edge_values
             )
         ),
@@ -713,11 +724,15 @@ def _summary_row(
     }
 
 
-def _assignment_threshold(iou: np.ndarray, *, threshold_method: ThresholdMethod) -> float:
+def _assignment_threshold(
+    iou: np.ndarray, *, threshold_method: ThresholdMethod
+) -> float:
     if iou.size == 0:
         return float("inf")
     row_ind, col_ind = linear_sum_assignment(1.0 - iou)
-    return float(_threshold_assigned_iou(iou[row_ind, col_ind], method=threshold_method))
+    return float(
+        _threshold_assigned_iou(iou[row_ind, col_ind], method=threshold_method)
+    )
 
 
 def _activity_similarity_matrix(
@@ -775,7 +790,10 @@ def _would_merge_complete_tp(
             continue
         if session_b >= row.size or int(row[session_b]) != int(roi_b):
             continue
-        if np.all(row >= 0) and reference_counts.get(tuple(int(value) for value in row), 0) > 0:
+        if (
+            np.all(row >= 0)
+            and reference_counts.get(tuple(int(value) for value in row), 0) > 0
+        ):
             return True
     return False
 
@@ -785,17 +803,29 @@ def _mean_edge_score(edges: Sequence[_EdgeCandidate]) -> float:
 
 
 def _mean_attr(edges: Sequence[_EdgeCandidate], name: str) -> float:
-    values = [float(getattr(edge, name)) for edge in edges if np.isfinite(float(getattr(edge, name)))]
+    values = [
+        float(getattr(edge, name))
+        for edge in edges
+        if np.isfinite(float(getattr(edge, name)))
+    ]
     return float(np.mean(values)) if values else float("nan")
 
 
 def _min_attr(edges: Sequence[_EdgeCandidate], name: str) -> float:
-    values = [float(getattr(edge, name)) for edge in edges if np.isfinite(float(getattr(edge, name)))]
+    values = [
+        float(getattr(edge, name))
+        for edge in edges
+        if np.isfinite(float(getattr(edge, name)))
+    ]
     return float(np.min(values)) if values else float("nan")
 
 
 def _max_attr(edges: Sequence[_EdgeCandidate], name: str) -> float:
-    values = [float(getattr(edge, name)) for edge in edges if np.isfinite(float(getattr(edge, name)))]
+    values = [
+        float(getattr(edge, name))
+        for edge in edges
+        if np.isfinite(float(getattr(edge, name)))
+    ]
     return float(np.max(values)) if values else float("nan")
 
 
@@ -890,7 +920,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument("--split-risk-threshold", type=float, default=1.50)
     parser.add_argument("--split-penalty", type=float, default=0.25)
     parser.add_argument("--min-side-observations", type=int, default=2)
@@ -908,7 +940,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=True,
     )
     parser.add_argument("--seed-session", type=int, default=0)
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
     parser.add_argument(
         "--include-behavior", action=argparse.BooleanOptionalAction, default=False
     )

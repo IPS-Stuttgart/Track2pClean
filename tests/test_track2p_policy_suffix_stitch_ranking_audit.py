@@ -1,5 +1,4 @@
 import numpy as np
-
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_suffix_stitch_ranking_audit as audit
 
