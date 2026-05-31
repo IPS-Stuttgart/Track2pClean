@@ -105,15 +105,11 @@ def test_reference_seed_roi_for_edge_ignores_non_reference_edges() -> None:
     reference = np.asarray([[100, 11, 12]], dtype=int)
 
     assert (
-        audit._reference_seed_roi_for_edge(
-            (1, 2, 11, 12), reference, seed_session=0
-        )
+        audit._reference_seed_roi_for_edge((1, 2, 11, 12), reference, seed_session=0)
         == 100
     )
     assert (
-        audit._reference_seed_roi_for_edge(
-            (1, 2, 11, 99), reference, seed_session=0
-        )
+        audit._reference_seed_roi_for_edge((1, 2, 11, 99), reference, seed_session=0)
         == -1
     )
 
