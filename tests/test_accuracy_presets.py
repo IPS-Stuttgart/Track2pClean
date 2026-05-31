@@ -34,7 +34,9 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
     assert all(preset.config.include_non_cells for preset in presets[:3])
     assert all(preset.config.weighted_masks for preset in presets[:3])
 
-    shifted, pruned, consensus, stability, supported_gap, confidence_gap, teacher = presets
+    shifted, pruned, consensus, stability, supported_gap, confidence_gap, teacher = (
+        presets
+    )
     assert shifted.config.cost == "registered-shifted-iou"
     assert shifted.config.higher_order_consistency_config is not None
     assert pruned.config.cost == "roi-aware-shifted"
@@ -144,7 +146,9 @@ def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -
             AccuracyPreset(
                 name="track2p-confidence-ordered-strict-gap-cleanup",
                 description="synthetic confidence strict gap preset",
-                config=build_track2p_accuracy_presets("/unused", progress=False)[-2].config,
+                config=build_track2p_accuracy_presets("/unused", progress=False)[
+                    -2
+                ].config,
                 runner="confidence-ordered-strict-gap-cleanup",
                 runner_kwargs={
                     "threshold_method": "min",
@@ -211,7 +215,9 @@ def test_teacher_adjacent_rescue_preset_runner_builds_typed_config(monkeypatch) 
             AccuracyPreset(
                 name="track2p-teacher-adjacent-rescue",
                 description="synthetic teacher rescue preset",
-                config=build_track2p_accuracy_presets("/unused", progress=False)[-1].config,
+                config=build_track2p_accuracy_presets("/unused", progress=False)[
+                    -1
+                ].config,
                 runner="teacher-adjacent-rescue",
                 runner_kwargs={
                     "threshold_method": "min",
