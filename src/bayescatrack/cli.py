@@ -79,6 +79,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Audit ComponentCleanup sensitivity to the seed-session choice",
     ),
     (
+        "track2p-policy-fragment-stitch-whatif",
+        "bayescatrack.experiments.track2p_policy_fragment_stitch_whatif",
+        "Audit minimal oracle stitches for persistent complete-track FNs",
+    ),
+    (
         "track2p-policy-teacher-fn-audit",
         "bayescatrack.experiments.track2p_policy_teacher_fn_audit",
         "Audit Track2p-supported false negatives after component cleanup",
@@ -302,6 +307,10 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-seed-sensitivity-audit": "track2p-policy-seed-sensitivity-audit",
     "track2p-component-seed-sensitivity-audit": (
         "track2p-policy-seed-sensitivity-audit"
+    ),
+    "track2p-fragment-stitch-whatif": "track2p-policy-fragment-stitch-whatif",
+    "track2p-component-fragment-stitch-whatif": (
+        "track2p-policy-fragment-stitch-whatif"
     ),
     "track2p-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
     "track2p-component-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
