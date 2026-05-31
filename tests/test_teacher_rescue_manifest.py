@@ -61,6 +61,58 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
     assert dict(run.runner_kwargs or {})["teacher_edge_order"] == "dynamic-confidence"
 
 
+def test_teacher_rescue_manifest_passes_teacher_edge_order_to_runner(
+    tmp_path, monkeypatch
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {"data": "data", "input_format": "suite2p"},
+            "runs": [
+                {
+                    "name": "teacher-rescue-confidence",
+                    "runner": "track2p-policy-teacher-adjacent-rescue",
+                    "threshold_method": "min",
+                    "iou_distance_threshold": 12.0,
+                    "cell_probability_threshold": 0.5,
+                    "teacher_edge_order": "confidence",
+                    "output": "results/teacher-rescue-confidence.csv",
+                }
+            ],
+        },
+    )
+    run = load_benchmark_manifest(manifest_path).runs[0]
+
+    from bayescatrack.experiments import (
+        track2p_policy_teacher_adjacent_rescue as rescue_module,
+    )
+
+    captured: dict[str, object] = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {"subject": "dummy"}
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+
+    def _fake_runner(_config, **kwargs):
+        captured.update(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        rescue_module,
+        "run_track2p_policy_teacher_adjacent_rescue",
+        _fake_runner,
+    )
+
+    rows = bm._run_benchmark_rows(run)
+
+    assert rows == [{"subject": "dummy"}]
+    assert captured["teacher_edge_order"] == "confidence"
+
+
 def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants():
     manifest = track2p_result_improvement_manifest(
         data_root="data",
@@ -174,3 +226,36 @@ def test_teacher_rescue_runner_specific_fields_registered():
     assert "allow_fragment_merges" in fields
     assert "min_component_observations" in fields
     assert "teacher_edge_order" in fields
+
+
+def test_teacher_rescue_manifest_runner_passes_teacher_edge_order(monkeypatch, tmp_path):
+    from bayescatrack.experiments import _teacher_rescue_manifest_integration as integration
+    from bayescatrack.experiments import (
+        track2p_policy_teacher_adjacent_rescue as rescue_module,
+    )
+    from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
+
+    captured = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {"subject": "dummy"}
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+
+    def fake_run(config, **kwargs):
+        captured.update(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        rescue_module, "run_track2p_policy_teacher_adjacent_rescue", fake_run
+    )
+    config = Track2pBenchmarkConfig(data=tmp_path, method="global-assignment")
+
+    rows = integration._run_track2p_policy_teacher_adjacent_rows(
+        config, {"teacher_edge_order": "confidence"}
+    )
+
+    assert rows == [{"subject": "dummy"}]
+    assert captured["teacher_edge_order"] == "confidence"
