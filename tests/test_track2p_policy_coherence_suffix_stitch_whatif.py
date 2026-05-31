@@ -1,7 +1,8 @@
 import numpy as np
-
 from bayescatrack import cli
-from bayescatrack.experiments import track2p_policy_coherence_suffix_stitch_whatif as audit
+from bayescatrack.experiments import (
+    track2p_policy_coherence_suffix_stitch_whatif as audit,
+)
 from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import (
     _EdgeCandidate,
     _PathCandidate,
@@ -40,16 +41,25 @@ def test_coherence_suffix_stitch_whatif_is_registered() -> None:
     canonical = cli._BENCHMARK_ALIASES["track2p-coherence-suffix-stitch-whatif"]
 
     assert canonical == "track2p-policy-coherence-suffix-stitch-whatif"
-    assert cli._BENCHMARK_ALIASES["track2p-component-coherence-suffix-stitch-whatif"] == canonical
-    assert cli._BENCHMARK_COMMANDS[canonical].module == ("bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif")
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-component-coherence-suffix-stitch-whatif"]
+        == canonical
+    )
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif"
+    )
 
 
 def test_coherence_suffix_stitch_method_is_registered() -> None:
     canonical = cli._BENCHMARK_ALIASES["track2p-coherence-suffix-stitch"]
 
     assert canonical == "track2p-policy-coherence-suffix-stitch"
-    assert cli._BENCHMARK_ALIASES["track2p-component-coherence-suffix-stitch"] == canonical
-    assert cli._BENCHMARK_COMMANDS[canonical].module == ("bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif")
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-component-coherence-suffix-stitch"] == canonical
+    )
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif"
+    )
 
 
 def test_candidate_output_is_optional() -> None:
@@ -82,7 +92,9 @@ def test_coherence_gate_accepts_two_edge_final_suffix() -> None:
         is_gt_suffix_path=1,
     )
 
-    assert audit._passes_coherence_gate(path, predicted, reference, gate=audit.CoherenceSuffixStitchGate())
+    assert audit._passes_coherence_gate(
+        path, predicted, reference, gate=audit.CoherenceSuffixStitchGate()
+    )
 
 
 def test_coherence_gate_rejects_occupied_continuation() -> None:
@@ -96,7 +108,9 @@ def test_coherence_gate_rejects_occupied_continuation() -> None:
         path_score=0.5,
     )
 
-    assert not audit._passes_coherence_gate(path, predicted, reference, gate=audit.CoherenceSuffixStitchGate())
+    assert not audit._passes_coherence_gate(
+        path, predicted, reference, gate=audit.CoherenceSuffixStitchGate()
+    )
 
 
 def test_apply_suffix_paths_fills_empty_suffix_slots() -> None:

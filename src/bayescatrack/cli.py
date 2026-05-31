@@ -330,9 +330,7 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-residual-audit": ("track2p-policy-component-residual-audit"),
     "track2p-residual-audit": "track2p-policy-component-residual-audit",
     "track2p-seed-sensitivity-audit": "track2p-policy-seed-sensitivity-audit",
-    "track2p-component-residual-whatif": (
-        "track2p-policy-component-residual-whatif"
-    ),
+    "track2p-component-residual-whatif": ("track2p-policy-component-residual-whatif"),
     "track2p-residual-whatif": "track2p-policy-component-residual-whatif",
     "track2p-component-seed-sensitivity-audit": (
         "track2p-policy-seed-sensitivity-audit"
@@ -353,9 +351,7 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-coherence-suffix-stitch-whatif": (
         "track2p-policy-coherence-suffix-stitch-whatif"
     ),
-    "track2p-coherence-suffix-stitch": (
-        "track2p-policy-coherence-suffix-stitch"
-    ),
+    "track2p-coherence-suffix-stitch": ("track2p-policy-coherence-suffix-stitch"),
     "track2p-component-coherence-suffix-stitch": (
         "track2p-policy-coherence-suffix-stitch"
     ),
