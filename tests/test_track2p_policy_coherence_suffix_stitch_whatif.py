@@ -1,8 +1,7 @@
 import numpy as np
 from bayescatrack import cli
-from bayescatrack.experiments import (
-    track2p_policy_coherence_suffix_stitch_whatif as audit,
-)
+from bayescatrack.experiments import track2p_policy_coherence_suffix_stitch as method
+from bayescatrack.experiments import track2p_policy_coherence_suffix_stitch_whatif as audit
 from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import (
     _EdgeCandidate,
     _PathCandidate,
@@ -58,7 +57,7 @@ def test_coherence_suffix_stitch_method_is_registered() -> None:
         cli._BENCHMARK_ALIASES["track2p-component-coherence-suffix-stitch"] == canonical
     )
     assert cli._BENCHMARK_COMMANDS[canonical].module == (
-        "bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif"
+        "bayescatrack.experiments.track2p_policy_coherence_suffix_stitch"
     )
 
 
@@ -77,6 +76,25 @@ def test_candidate_output_is_optional() -> None:
     )
 
     assert args.candidate_output is None
+    assert args.aggregate_row
+
+
+def test_method_output_is_subject_level_by_default() -> None:
+    parser = method.build_arg_parser()
+
+    args = parser.parse_args(
+        [
+            "--data",
+            "data",
+            "--reference",
+            "ref",
+            "--output",
+            "out.csv",
+        ]
+    )
+
+    assert args.candidate_output is None
+    assert not args.aggregate_row
 
 
 def test_coherence_gate_accepts_two_edge_final_suffix() -> None:

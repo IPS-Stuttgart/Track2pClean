@@ -100,7 +100,7 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
     ),
     (
         "track2p-policy-coherence-suffix-stitch",
-        "bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif",
+        "bayescatrack.experiments.track2p_policy_coherence_suffix_stitch",
         "Run component cleanup plus coherence-gated suffix stitch",
     ),
     (
