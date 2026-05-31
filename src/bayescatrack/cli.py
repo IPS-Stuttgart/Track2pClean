@@ -74,6 +74,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Audit residual errors after Track2p-policy component cleanup",
     ),
     (
+        "track2p-policy-component-residual-whatif",
+        "bayescatrack.experiments.track2p_policy_component_residual_whatif",
+        "Rank oracle single-edit what-if repairs for ComponentCleanup residuals",
+    ),
+    (
         "track2p-policy-seed-sensitivity-audit",
         "bayescatrack.experiments.track2p_policy_seed_sensitivity_audit",
         "Audit ComponentCleanup sensitivity to the seed-session choice",
@@ -320,6 +325,10 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-residual-audit": ("track2p-policy-component-residual-audit"),
     "track2p-residual-audit": "track2p-policy-component-residual-audit",
     "track2p-seed-sensitivity-audit": "track2p-policy-seed-sensitivity-audit",
+    "track2p-component-residual-whatif": (
+        "track2p-policy-component-residual-whatif"
+    ),
+    "track2p-residual-whatif": "track2p-policy-component-residual-whatif",
     "track2p-component-seed-sensitivity-audit": (
         "track2p-policy-seed-sensitivity-audit"
     ),
