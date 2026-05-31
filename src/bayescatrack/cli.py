@@ -94,6 +94,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run component cleanup plus seed-anchored Track2p adjacent rescue",
     ),
     (
+        "track2p-policy-teacher-veto-cleanup",
+        "bayescatrack.experiments.track2p_policy_teacher_veto_cleanup",
+        "Run component cleanup plus conservative Track2p-teacher veto cleanup",
+    ),
+    (
         "track2p-policy-component-sweep",
         "bayescatrack.experiments.track2p_policy_component_sweep",
         "Sweep Track2p-policy component-cleanup operating points",
@@ -317,6 +322,10 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-teacher-adjacent-rescue": ("track2p-policy-teacher-adjacent-rescue"),
     "track2p-component-teacher-adjacent-rescue": (
         "track2p-policy-teacher-adjacent-rescue"
+    ),
+    "track2p-teacher-veto-cleanup": "track2p-policy-teacher-veto-cleanup",
+    "track2p-component-teacher-veto-cleanup": (
+        "track2p-policy-teacher-veto-cleanup"
     ),
     "track2p-component-cleanup-sweep": "track2p-policy-component-sweep",
     "track2p-stability-cleanup": "track2p-policy-stability-cleanup",

@@ -112,6 +112,12 @@ def test_teacher_fn_parser_defaults_to_component_cleanup_settings() -> None:
     assert args.feature_mode == "none"
 
 
+def test_teacher_adjacent_parser_defaults_to_structural_order() -> None:
+    args = rescue.build_arg_parser().parse_args(["--data", "track2p-root"])
+
+    assert args.teacher_edge_order == "structural"
+
+
 def test_teacher_adjacent_rescue_extends_seed_anchored_chain() -> None:
     predicted = np.asarray([[10, -1, -1, 13, -1, -1]], dtype=int)
     teacher = np.asarray([[10, -1, -1, 13, 14, 15]], dtype=int)
@@ -204,6 +210,39 @@ def test_teacher_adjacent_rescue_seed_backfill_is_opt_in() -> None:
     np.testing.assert_array_equal(opt_in_report.tracks, [[10, 11, 12, -1]])
     assert opt_in_report.rows[0]["applied"] == 1
     assert opt_in_report.rows[0]["reason"] == "accepted_insert_source"
+
+
+def test_teacher_adjacent_rescue_structural_order_prefers_source_backfill() -> None:
+    predicted = np.asarray([[10, -1, 12, -1]], dtype=int)
+    teacher = np.asarray([[10, 99, -1, -1], [-1, 11, 12, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted, teacher, seed_session=0
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 11, 12, -1]])
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_insert_source"
+    assert report.rows[1]["applied"] == 0
+    assert report.rows[1]["reason"] == "source_has_target_conflict"
+
+
+def test_teacher_adjacent_rescue_lexicographic_order_preserves_old_behavior() -> None:
+    predicted = np.asarray([[10, -1, 12, -1]], dtype=int)
+    teacher = np.asarray([[10, 99, -1, -1], [-1, 11, 12, -1]], dtype=int)
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="lexicographic",
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 99, 12, -1]])
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_insert_target"
+    assert report.rows[1]["applied"] == 0
+    assert report.rows[1]["reason"] == "target_has_source_conflict"
 
 
 def test_teacher_adjacent_rescue_merges_compatible_fragments() -> None:
