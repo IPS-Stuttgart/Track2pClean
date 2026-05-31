@@ -272,7 +272,58 @@ def _select_paths(
         if _passes_coherence_gate(path, predicted, reference, gate=gate)
     ]
     passing.sort(key=_coherence_sort_key)
-    return tuple(passing[: int(gate.max_stitches_per_subject)])
+    selected: list[_PathCandidate] = []
+    for path in passing:
+        if not _compatible_with_selected_paths(path, selected):
+            continue
+        selected.append(path)
+        if len(selected) >= int(gate.max_stitches_per_subject):
+            break
+    return tuple(selected)
+
+
+def _compatible_with_selected_paths(
+    path: _PathCandidate, selected: Sequence[_PathCandidate]
+) -> bool:
+    """Return whether a suffix path can be applied with selected paths.
+
+    The hard coherence gate checks each path against the pre-stitch prediction.
+    When ``max_stitches_per_subject`` is greater than one, however, two
+    individually valid paths can still compete for the same component suffix or
+    target ROI. Greedy compatibility keeps multi-stitch experiments from adding
+    duplicate observations while preserving the existing single-stitch default
+    behavior.
+    """
+
+    component_id = int(path.component_id)
+    if any(int(existing.component_id) == component_id for existing in selected):
+        return False
+
+    selected_targets = {
+        (int(edge.edge[1]), int(edge.edge[3]))
+        for existing in selected
+        for edge in existing.edges
+    }
+    candidate_existing_observations = {
+        (session, int(roi))
+        for session, roi in enumerate(path.fragment_row)
+        if int(roi) >= 0
+    }
+    if selected_targets & candidate_existing_observations:
+        return False
+
+    selected_component_slots = {
+        (int(existing.component_id), int(edge.edge[1]))
+        for existing in selected
+        for edge in existing.edges
+    }
+    for edge in path.edges:
+        _session_a, session_b, _roi_a, roi_b = edge.edge
+        if (int(session_b), int(roi_b)) in selected_targets:
+            return False
+        if (component_id, int(session_b)) in selected_component_slots:
+            return False
+    return True
 
 
 def _passes_coherence_gate(

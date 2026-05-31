@@ -9,7 +9,7 @@ the frozen Track2pPolicy component-cleanup row.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 TEACHER_ADJACENT_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
 TEACHER_ADJACENT_RESCUE_ALIASES = {
@@ -145,6 +145,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         ComponentCleanupConfig,
     )
     from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+        TeacherEdgeOrder,
         run_track2p_policy_teacher_adjacent_rescue,
     )
 
@@ -255,7 +256,9 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_fragment_merges=manifest._bool_option(
             options, "allow_fragment_merges", default=True
         ),
-        teacher_edge_order=str(options.get("teacher_edge_order", "structural")),
+        teacher_edge_order=cast(
+            TeacherEdgeOrder, str(options.get("teacher_edge_order", "structural"))
+        ),
         min_component_observations=int(options.get("min_component_observations", 1)),
     )
     return [result.to_dict() for result in output.results]

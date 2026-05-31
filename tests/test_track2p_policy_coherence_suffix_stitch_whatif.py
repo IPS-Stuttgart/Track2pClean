@@ -182,3 +182,56 @@ def test_select_paths_uses_coherence_sort_and_limit() -> None:
     )
 
     assert selected == (stronger,)
+
+
+def test_select_paths_skips_conflicting_targets_when_limit_allows_more() -> None:
+    predicted = np.asarray(
+        [[1, 2, 3, -1, -1], [10, 20, 30, -1, -1], [100, 200, 300, -1, -1]],
+        dtype=int,
+    )
+    reference = np.asarray(
+        [[1, 2, 3, 4, 5], [10, 20, 30, 40, 50], [100, 200, 300, 400, 500]],
+        dtype=int,
+    )
+    strongest = _PathCandidate(
+        component_id=0,
+        fragment_row=(1, 2, 3, -1, -1),
+        fragment_span="0-2",
+        edges=(
+            _edge(2, 3, 4, centroid_distance=2.0),
+            _edge(3, 4, 5, centroid_distance=2.0),
+        ),
+        path_score=3.0,
+        path_rank=1,
+    )
+    conflicting_target = _PathCandidate(
+        component_id=1,
+        fragment_row=(10, 20, 30, -1, -1),
+        fragment_span="0-2",
+        edges=(
+            _edge(2, 30, 4, centroid_distance=2.1),
+            _edge(3, 4, 6, centroid_distance=2.1),
+        ),
+        path_score=2.0,
+        path_rank=2,
+    )
+    compatible = _PathCandidate(
+        component_id=2,
+        fragment_row=(100, 200, 300, -1, -1),
+        fragment_span="0-2",
+        edges=(
+            _edge(2, 300, 400, centroid_distance=3.0),
+            _edge(3, 400, 500, centroid_distance=3.0),
+        ),
+        path_score=1.0,
+        path_rank=3,
+    )
+
+    selected = audit._select_paths(
+        (strongest, conflicting_target, compatible),
+        predicted,
+        reference,
+        gate=audit.CoherenceSuffixStitchGate(max_stitches_per_subject=2),
+    )
+
+    assert selected == (strongest, compatible)
