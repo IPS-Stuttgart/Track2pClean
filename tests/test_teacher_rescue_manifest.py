@@ -46,34 +46,62 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
     assert dict(run.runner_kwargs or {})["allow_completing_rescue"] is True
 
 
-def test_result_improvement_manifest_includes_teacher_adjacent_rescue():
+def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants():
     manifest = track2p_result_improvement_manifest(
         data_root="data",
         reference_root="reference",
         output_root="results",
     )
 
+    expected = {
+        "track2p-policy-teacher-adjacent-rescue": {
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+        },
+        "track2p-policy-teacher-adjacent-rescue-seed-source": {
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": True,
+        },
+        "track2p-policy-teacher-adjacent-rescue-completing": {
+            "allow_completing_rescue": True,
+            "allow_seed_source_backfill": False,
+        },
+        "track2p-policy-teacher-adjacent-rescue-completing-seed-source": {
+            "allow_completing_rescue": True,
+            "allow_seed_source_backfill": True,
+        },
+    }
     run_names = [run["name"] for run in manifest["runs"]]
-    assert "track2p-policy-teacher-adjacent-rescue" in run_names
+    assert set(expected).issubset(run_names)
     assert len(run_names) == len(set(run_names))
 
-    teacher = next(
-        run
-        for run in manifest["runs"]
-        if run["name"] == "track2p-policy-teacher-adjacent-rescue"
+    component_index = run_names.index("track2p-policy-component-cleanup")
+    assert run_names[component_index + 1 : component_index + 1 + len(expected)] == list(
+        expected
     )
-    assert teacher["runner"] == "track2p-policy-teacher-adjacent-rescue"
-    assert teacher["threshold_method"] == "min"
-    assert teacher["iou_distance_threshold"] == 12.0
-    assert teacher["cell_probability_threshold"] == 0.5
-    assert teacher["allow_completing_rescue"] is False
-    assert teacher["allow_source_backfill"] is True
-    assert teacher["allow_seed_source_backfill"] is False
-    assert teacher["allow_fragment_merges"] is True
+
+    runs_by_name = {run["name"]: run for run in manifest["runs"]}
+    for name, flags in expected.items():
+        teacher = runs_by_name[name]
+        assert teacher["runner"] == "track2p-policy-teacher-adjacent-rescue"
+        assert teacher["threshold_method"] == "min"
+        assert teacher["iou_distance_threshold"] == 12.0
+        assert teacher["cell_probability_threshold"] == 0.5
+        assert teacher["allow_source_backfill"] is True
+        assert teacher["allow_fragment_merges"] is True
+        for flag, value in flags.items():
+            assert teacher[flag] is value
 
     for comparison in manifest["comparisons"]:
         labels = list(comparison["inputs"])
-        assert "track2p-policy-teacher-adjacent-rescue" in labels
+        for name in expected:
+            assert name in labels
+        component_position = labels.index("track2p-policy-component-cleanup")
+        expected_labels = list(expected)
+        actual_labels = labels[
+            component_position + 1 : component_position + 1 + len(expected)
+        ]
+        assert actual_labels == expected_labels
 
 
 def test_teacher_rescue_runner_specific_fields_registered():
