@@ -347,6 +347,16 @@ def _result_row(
     del gate
     delta = _score_delta(baseline, stitched)
     selected_rows = [row for row in candidate_rows if int(row.get("selected_by_gate", 0)) > 0]
+    pairwise_f1 = _f1_from_counts(
+        stitched["pairwise_true_positives"],
+        stitched["pairwise_false_positives"],
+        stitched["pairwise_false_negatives"],
+    )
+    complete_track_f1 = _f1_from_counts(
+        stitched["complete_track_true_positives"],
+        stitched["complete_track_false_positives"],
+        stitched["complete_track_false_negatives"],
+    )
     return {
         "subject": subject,
         "selected_paths": int(len(selected)),
@@ -356,19 +366,13 @@ def _result_row(
         "pairwise_true_positives": int(stitched["pairwise_true_positives"]),
         "pairwise_false_positives": int(stitched["pairwise_false_positives"]),
         "pairwise_false_negatives": int(stitched["pairwise_false_negatives"]),
-        "pairwise_f1_micro": _f1_from_counts(
-            stitched["pairwise_true_positives"],
-            stitched["pairwise_false_positives"],
-            stitched["pairwise_false_negatives"],
-        ),
+        "pairwise_f1": pairwise_f1,
+        "pairwise_f1_micro": pairwise_f1,
         "complete_track_true_positives": int(stitched["complete_track_true_positives"]),
         "complete_track_false_positives": int(stitched["complete_track_false_positives"]),
         "complete_track_false_negatives": int(stitched["complete_track_false_negatives"]),
-        "complete_track_f1_micro": _f1_from_counts(
-            stitched["complete_track_true_positives"],
-            stitched["complete_track_false_positives"],
-            stitched["complete_track_false_negatives"],
-        ),
+        "complete_track_f1": complete_track_f1,
+        "complete_track_f1_micro": complete_track_f1,
         "pairwise_tp_delta": int(delta["pairwise_true_positives"]),
         "pairwise_fp_delta": int(delta["pairwise_false_positives"]),
         "pairwise_fn_delta": int(delta["pairwise_false_negatives"]),
@@ -411,11 +415,13 @@ def _aggregate_result_row(
         output["pairwise_false_positives"],
         output["pairwise_false_negatives"],
     )
+    output["pairwise_f1"] = output["pairwise_f1_micro"]
     output["complete_track_f1_micro"] = _f1_from_counts(
         output["complete_track_true_positives"],
         output["complete_track_false_positives"],
         output["complete_track_false_negatives"],
     )
+    output["complete_track_f1"] = output["complete_track_f1_micro"]
     output["selected_candidate_paths"] = ";".join(str(row.get("selected_candidate_paths", "")) for row in rows if str(row.get("selected_candidate_paths", "")))
     return output
 
@@ -570,14 +576,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--candidate-output", type=Path, default=None)
+    parser.add_argument(
+        "--aggregate-row",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include an ALL aggregate row in the score output.",
+    )
     parser.add_argument("--format", choices=("csv", "json"), default="csv")
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    parser: argparse.ArgumentParser | None = None,
+) -> int:
     """Run the coherence suffix-stitch what-if CLI."""
 
-    args = build_arg_parser().parse_args(argv)
+    args = (parser or build_arg_parser()).parse_args(argv)
     cleanup_config = ComponentCleanupConfig(
         split_risk_threshold=args.split_risk_threshold,
         split_penalty=args.split_penalty,
@@ -623,7 +639,12 @@ def main(argv: list[str] | None = None) -> int:
         edge_top_k=int(args.edge_top_k),
         path_beam_width=int(args.path_beam_width),
     )
-    write_rows(result.result_rows, args.output, output_format=args.format)
+    result_rows = (
+        result.result_rows
+        if bool(args.aggregate_row)
+        else tuple(row for row in result.result_rows if str(row.get("subject")) != "ALL")
+    )
+    write_rows(result_rows, args.output, output_format=args.format)
     if args.candidate_output is not None:
         write_rows(result.candidate_rows, args.candidate_output, output_format=args.format)
     return 0
