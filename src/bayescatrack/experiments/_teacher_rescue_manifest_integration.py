@@ -62,9 +62,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
 }
 
 
-def _optional_float_option(
-    options: Mapping[str, Any], *names: str
-) -> float | None:
+def _optional_float_option(options: Mapping[str, Any], *names: str) -> float | None:
     for name in names:
         if name in options and options[name] not in {None, ""}:
             return float(options[name])

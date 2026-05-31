@@ -274,9 +274,7 @@ def test_teacher_rescue_manifest_runner_passes_teacher_edge_order(
     assert captured["teacher_edge_order"] == "confidence"
 
 
-def test_teacher_rescue_manifest_runner_passes_feature_gate(
-    monkeypatch, tmp_path
-):
+def test_teacher_rescue_manifest_runner_passes_feature_gate(monkeypatch, tmp_path):
     from bayescatrack.experiments import (
         _teacher_rescue_manifest_integration as integration,
     )

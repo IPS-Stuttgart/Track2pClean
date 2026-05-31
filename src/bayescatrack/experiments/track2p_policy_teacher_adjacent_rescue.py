@@ -374,7 +374,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 else teacher_feature_gate.min_threshold_margin
             ),
             "track2p_teacher_adjacent_min_row_margin": _score_optional_float(
-                None if teacher_feature_gate is None else teacher_feature_gate.min_row_margin
+                None
+                if teacher_feature_gate is None
+                else teacher_feature_gate.min_row_margin
             ),
             "track2p_teacher_adjacent_min_column_margin": _score_optional_float(
                 None
@@ -387,7 +389,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 else teacher_feature_gate.max_centroid_distance
             ),
             "track2p_teacher_adjacent_min_area_ratio": _score_optional_float(
-                None if teacher_feature_gate is None else teacher_feature_gate.min_area_ratio
+                None
+                if teacher_feature_gate is None
+                else teacher_feature_gate.min_area_ratio
             ),
             "track2p_teacher_adjacent_require_hungarian": int(
                 teacher_feature_gate is not None
