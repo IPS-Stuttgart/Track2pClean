@@ -1,9 +1,10 @@
 """Coherence-gated suffix-stitch what-if audit.
 
-This module deliberately stays diagnostic.  It starts from Track2pPolicy
-ComponentCleanup, generates the same short suffix candidates as the suffix
-ranking audit, applies a hard trajectory-coherence gate, and scores the
-counterfactual after at most one suffix stitch per subject.
+This module starts from Track2pPolicy ComponentCleanup, generates the same
+short suffix candidates as the suffix ranking audit, applies a hard
+trajectory-coherence gate, and scores the result after at most one suffix
+stitch per subject.  The command can be used as the promoted method row or as
+an audit row when candidate diagnostics are requested.
 """
 
 from __future__ import annotations
@@ -63,6 +64,7 @@ from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import 
 )
 
 TRACK2P_POLICY_COHERENCE_SUFFIX_STITCH_WHATIF_METHOD = "track2p-policy-coherence-suffix-stitch-whatif"
+TRACK2P_POLICY_COHERENCE_SUFFIX_STITCH_METHOD = "track2p-policy-coherence-suffix-stitch"
 
 
 @dataclass(frozen=True)
@@ -509,11 +511,11 @@ def write_rows(
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser for coherence suffix-stitch what-if."""
+    """Build the command-line parser for coherence suffix-stitch."""
 
     parser = argparse.ArgumentParser(
-        prog="bayescatrack benchmark track2p-policy-coherence-suffix-stitch-whatif",
-        description="Run a coherence-gated suffix-stitch what-if after ComponentCleanup.",
+        prog="bayescatrack benchmark track2p-policy-coherence-suffix-stitch",
+        description="Run a coherence-gated suffix stitch after ComponentCleanup.",
     )
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--reference", type=Path, default=None)
@@ -567,7 +569,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
     parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--candidate-output", type=Path, required=True)
+    parser.add_argument("--candidate-output", type=Path, default=None)
     parser.add_argument("--format", choices=("csv", "json"), default="csv")
     return parser
 
@@ -622,7 +624,8 @@ def main(argv: list[str] | None = None) -> int:
         path_beam_width=int(args.path_beam_width),
     )
     write_rows(result.result_rows, args.output, output_format=args.format)
-    write_rows(result.candidate_rows, args.candidate_output, output_format=args.format)
+    if args.candidate_output is not None:
+        write_rows(result.candidate_rows, args.candidate_output, output_format=args.format)
     return 0
 
 

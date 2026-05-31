@@ -44,6 +44,31 @@ def test_coherence_suffix_stitch_whatif_is_registered() -> None:
     assert cli._BENCHMARK_COMMANDS[canonical].module == ("bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif")
 
 
+def test_coherence_suffix_stitch_method_is_registered() -> None:
+    canonical = cli._BENCHMARK_ALIASES["track2p-coherence-suffix-stitch"]
+
+    assert canonical == "track2p-policy-coherence-suffix-stitch"
+    assert cli._BENCHMARK_ALIASES["track2p-component-coherence-suffix-stitch"] == canonical
+    assert cli._BENCHMARK_COMMANDS[canonical].module == ("bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif")
+
+
+def test_candidate_output_is_optional() -> None:
+    parser = audit.build_arg_parser()
+
+    args = parser.parse_args(
+        [
+            "--data",
+            "data",
+            "--reference",
+            "ref",
+            "--output",
+            "out.csv",
+        ]
+    )
+
+    assert args.candidate_output is None
+
+
 def test_coherence_gate_accepts_two_edge_final_suffix() -> None:
     predicted = np.asarray([[1, 2, 3, -1, -1]], dtype=int)
     reference = np.asarray([[1, 2, 3, 4, 5]], dtype=int)
