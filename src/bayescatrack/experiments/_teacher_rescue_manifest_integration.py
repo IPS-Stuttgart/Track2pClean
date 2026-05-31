@@ -34,10 +34,15 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "centroid_distance_weight",
     "area_ratio_weight",
     "allow_completing_rescue",
+    "allow_teacher_supported_completing_rescue",
+    "allow_completing_fragment_merges",
     "allow_source_backfill",
     "allow_source_inserts",
+    "allow_source_insertions",
     "allow_seed_source_backfill",
+    "allow_completing_seed_source_backfill",
     "allow_fragment_merges",
+    "min_component_observations",
 }
 
 
@@ -208,6 +213,11 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_source_inserts = manifest._bool_option(
             options, "allow_source_inserts", default=True
         )
+    allow_source_insertions = None
+    if "allow_source_insertions" in options:
+        allow_source_insertions = manifest._bool_option(
+            options, "allow_source_insertions", default=True
+        )
     output = run_track2p_policy_teacher_adjacent_rescue(
         config,
         threshold_method=manifest._policy_threshold_method(
@@ -224,15 +234,28 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_completing_rescue=manifest._bool_option(
             options, "allow_completing_rescue", default=False
         ),
+        allow_teacher_supported_completing_rescue=manifest._bool_option(
+            options, "allow_teacher_supported_completing_rescue", default=False
+        ),
+        allow_completing_fragment_merges=manifest._bool_option(
+            options, "allow_completing_fragment_merges", default=False
+        ),
         allow_source_backfill=manifest._bool_option(
             options, "allow_source_backfill", default=True
         ),
         allow_source_inserts=allow_source_inserts,
+        allow_source_insertions=allow_source_insertions,
         allow_seed_source_backfill=manifest._bool_option(
             options, "allow_seed_source_backfill", default=False
         ),
+        allow_completing_seed_source_backfill=manifest._bool_option(
+            options, "allow_completing_seed_source_backfill", default=False
+        ),
         allow_fragment_merges=manifest._bool_option(
             options, "allow_fragment_merges", default=True
+        ),
+        min_component_observations=int(
+            options.get("min_component_observations", 1)
         ),
     )
     return [result.to_dict() for result in output.results]
@@ -280,10 +303,13 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
         "min_side_observations": 2,
         "allow_source_backfill": True,
         "allow_fragment_merges": True,
+        "min_component_observations": 1,
     }
-    variants: tuple[tuple[str, bool, bool, str], ...] = (
+    variants: tuple[tuple[str, bool, bool, bool, bool, str], ...] = (
         (
             "track2p-policy-teacher-adjacent-rescue",
+            False,
+            False,
             False,
             False,
             "track2p_policy_teacher_adjacent_rescue.csv",
@@ -292,18 +318,48 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "track2p-policy-teacher-adjacent-rescue-seed-source",
             False,
             True,
+            False,
+            False,
             "track2p_policy_teacher_adjacent_rescue_seed_source.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-supported",
+            False,
+            False,
+            False,
+            False,
+            "track2p_policy_teacher_adjacent_rescue_supported.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-teacher-completing",
+            False,
+            False,
+            False,
+            True,
+            "track2p_policy_teacher_adjacent_rescue_teacher_completing.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-teacher-completing-seed-source",
+            False,
+            True,
+            True,
+            True,
+            "track2p_policy_teacher_adjacent_rescue_teacher_completing_seed_source.csv",
         ),
         (
             "track2p-policy-teacher-adjacent-rescue-completing",
             True,
             False,
+            False,
+            False,
             "track2p_policy_teacher_adjacent_rescue_completing.csv",
         ),
         (
             "track2p-policy-teacher-adjacent-rescue-completing-seed-source",
+            False,
             True,
             True,
+            False,
             "track2p_policy_teacher_adjacent_rescue_completing_seed_source.csv",
         ),
     )
@@ -312,10 +368,27 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             **base,
             "name": name,
             "allow_completing_rescue": allow_completing,
+            "allow_teacher_supported_completing_rescue": (
+                allow_teacher_supported_completing
+            ),
+            "allow_completing_fragment_merges": False,
             "allow_seed_source_backfill": allow_seed_source,
+            "allow_completing_seed_source_backfill": allow_completing_seed_source,
+            **(
+                {"min_component_observations": 2}
+                if name.endswith("-supported")
+                else {}
+            ),
             "output": f"{output_root}/{filename}",
         }
-        for name, allow_completing, allow_seed_source, filename in variants
+        for (
+            name,
+            allow_completing,
+            allow_seed_source,
+            allow_completing_seed_source,
+            allow_teacher_supported_completing,
+            filename,
+        ) in variants
     )
 
 
@@ -323,17 +396,15 @@ def _append_teacher_rescue_runs(manifest: dict[str, Any], *, output_root: str) -
     runs = manifest.get("runs")
     if not isinstance(runs, list):
         return
-    existing_names = {
-        run.get("name") for run in runs if isinstance(run, Mapping) and "name" in run
-    }
-    rows_to_insert = [
-        row
-        for row in _teacher_rescue_manifest_rows(output_root)
-        if row["name"] not in existing_names
+    rows_to_insert = list(_teacher_rescue_manifest_rows(output_root))
+    teacher_names = {row["name"] for row in rows_to_insert}
+    runs[:] = [
+        run
+        for run in runs
+        if not (isinstance(run, Mapping) and run.get("name") in teacher_names)
     ]
-    if rows_to_insert:
-        insert_at = _insertion_index_after(runs, "track2p-policy-component-cleanup")
-        runs[insert_at:insert_at] = rows_to_insert
+    insert_at = _insertion_index_after(runs, "track2p-policy-component-cleanup")
+    runs[insert_at:insert_at] = rows_to_insert
     for comparison in manifest.get("comparisons", []):
         if isinstance(comparison, dict) and isinstance(comparison.get("inputs"), dict):
             comparison["inputs"] = _insert_mapping_after_many(
@@ -353,14 +424,15 @@ def _insertion_index_after(runs: list[Any], run_name: str) -> int:
 def _insert_mapping_after_many(
     values: Mapping[str, Any], *, after_key: str, items: Any
 ) -> dict[str, Any]:
-    materialized_items = tuple(
-        (key, value) for key, value in items if key not in values
-    )
+    materialized_items = tuple(items)
     if not materialized_items:
         return dict(values)
+    inserted_keys = {key for key, _value in materialized_items}
     out: dict[str, Any] = {}
     inserted = False
     for current_key, current_value in values.items():
+        if current_key in inserted_keys:
+            continue
         out[current_key] = current_value
         if current_key == after_key:
             for key, value in materialized_items:
