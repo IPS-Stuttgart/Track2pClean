@@ -639,9 +639,8 @@ def _normalized_max_applied_edits(max_applied_edits: int | None) -> int | None:
 def _max_applied_edits_reached(
     applied_count: int, max_applied_edits: int | None
 ) -> bool:
-    return (
-        max_applied_edits is not None
-        and int(applied_count) >= int(max_applied_edits)
+    return max_applied_edits is not None and int(applied_count) >= int(
+        max_applied_edits
     )
 
 
