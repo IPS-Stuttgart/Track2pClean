@@ -9,13 +9,16 @@ the frozen Track2pPolicy component-cleanup row.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 TEACHER_ADJACENT_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
 TEACHER_ADJACENT_RESCUE_ALIASES = {
     TEACHER_ADJACENT_RESCUE_RUNNER,
     "track2p-teacher-adjacent-rescue",
 }
+TEACHER_EDGE_ORDER_CHOICES = frozenset(
+    {"lexicographic", "structural", "dynamic-structural", "confidence"}
+)
 
 TEACHER_ADJACENT_RESCUE_FIELDS = {
     "threshold_method",
@@ -42,8 +45,8 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "allow_seed_source_backfill",
     "allow_completing_seed_source_backfill",
     "allow_fragment_merges",
-    "min_component_observations",
     "teacher_edge_order",
+    "min_component_observations",
 }
 
 
@@ -80,7 +83,9 @@ def install_teacher_rescue_manifest_integration() -> None:
     ) -> dict[str, Any]:
         if runner == TEACHER_ADJACENT_RESCUE_RUNNER:
             return {
-                key: run_data[key]
+                key: _teacher_edge_order_option(run_data[key])
+                if key == "teacher_edge_order"
+                else run_data[key]
                 for key in TEACHER_ADJACENT_RESCUE_FIELDS
                 if key in run_data
             }
@@ -145,6 +150,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         ComponentCleanupConfig,
     )
     from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+        TeacherEdgeOrder,
         run_track2p_policy_teacher_adjacent_rescue,
     )
 
@@ -255,6 +261,10 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_fragment_merges=manifest._bool_option(
             options, "allow_fragment_merges", default=True
         ),
+        teacher_edge_order=cast(
+            TeacherEdgeOrder,
+            _teacher_edge_order_option(options.get("teacher_edge_order", "structural")),
+        ),
         min_component_observations=int(options.get("min_component_observations", 1)),
     )
     return [result.to_dict() for result in output.results]
@@ -304,116 +314,84 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
         "allow_fragment_merges": True,
         "min_component_observations": 1,
     }
-    variants: tuple[tuple[str, bool, bool, bool, bool, str | None, str], ...] = (
-        (
-            "track2p-policy-teacher-adjacent-rescue",
-            False,
-            False,
-            False,
-            False,
-            None,
-            "track2p_policy_teacher_adjacent_rescue.csv",
-        ),
-        (
-            "track2p-policy-teacher-adjacent-rescue-dynamic-structural",
-            False,
-            False,
-            False,
-            False,
-            "dynamic-structural",
-            "track2p_policy_teacher_adjacent_rescue_dynamic_structural.csv",
-        ),
-        (
-            "track2p-policy-teacher-adjacent-rescue-confidence",
-            False,
-            False,
-            False,
-            False,
-            "confidence",
-            "track2p_policy_teacher_adjacent_rescue_confidence.csv",
-        ),
-        (
-            "track2p-policy-teacher-adjacent-rescue-seed-source",
-            False,
-            True,
-            False,
-            False,
-            None,
-            "track2p_policy_teacher_adjacent_rescue_seed_source.csv",
-        ),
-        (
-            "track2p-policy-teacher-adjacent-rescue-supported",
-            False,
-            False,
-            False,
-            False,
-            None,
-            "track2p_policy_teacher_adjacent_rescue_supported.csv",
-        ),
-        (
-            "track2p-policy-teacher-adjacent-rescue-teacher-completing",
-            False,
-            False,
-            False,
-            True,
-            None,
-            "track2p_policy_teacher_adjacent_rescue_teacher_completing.csv",
-        ),
-        (
-            "track2p-policy-teacher-adjacent-rescue-teacher-completing-seed-source",
-            False,
-            True,
-            True,
-            True,
-            None,
-            "track2p_policy_teacher_adjacent_rescue_teacher_completing_seed_source.csv",
-        ),
-        (
-            "track2p-policy-teacher-adjacent-rescue-completing",
-            True,
-            False,
-            False,
-            False,
-            None,
-            "track2p_policy_teacher_adjacent_rescue_completing.csv",
-        ),
-        (
-            "track2p-policy-teacher-adjacent-rescue-completing-seed-source",
-            False,
-            True,
-            True,
-            False,
-            None,
-            "track2p_policy_teacher_adjacent_rescue_completing_seed_source.csv",
-        ),
-    )
-    return tuple(
+    variants: tuple[dict[str, Any], ...] = (
         {
-            **base,
-            "name": name,
-            "allow_completing_rescue": allow_completing,
-            "allow_teacher_supported_completing_rescue": (
-                allow_teacher_supported_completing
-            ),
-            "allow_completing_fragment_merges": False,
-            "allow_seed_source_backfill": allow_seed_source,
-            "allow_completing_seed_source_backfill": allow_completing_seed_source,
-            **(
-                {"min_component_observations": 2} if name.endswith("-supported") else {}
-            ),
-            **({"teacher_edge_order": teacher_edge_order} if teacher_edge_order else {}),
-            "output": f"{output_root}/{filename}",
-        }
-        for (
-            name,
-            allow_completing,
-            allow_seed_source,
-            allow_completing_seed_source,
-            allow_teacher_supported_completing,
-            teacher_edge_order,
-            filename,
-        ) in variants
+            "name": "track2p-policy-teacher-adjacent-rescue",
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue.csv",
+        },
+        {
+            "name": "track2p-policy-teacher-adjacent-rescue-dynamic-structural",
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "teacher_edge_order": "dynamic-structural",
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_dynamic_structural.csv",
+        },
+        {
+            "name": "track2p-policy-teacher-adjacent-rescue-confidence",
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "teacher_edge_order": "confidence",
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_confidence.csv",
+        },
+        {
+            "name": "track2p-policy-teacher-adjacent-rescue-seed-source",
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_seed_source.csv",
+        },
+        {
+            "name": "track2p-policy-teacher-adjacent-rescue-supported",
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "min_component_observations": 2,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_supported.csv",
+        },
+        {
+            "name": "track2p-policy-teacher-adjacent-rescue-teacher-completing",
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "allow_teacher_supported_completing_rescue": True,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_teacher_completing.csv",
+        },
+        {
+            "name": "track2p-policy-teacher-adjacent-rescue-teacher-completing-seed-source",
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_teacher_supported_completing_rescue": True,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_teacher_completing_seed_source.csv",
+        },
+        {
+            "name": "track2p-policy-teacher-adjacent-rescue-completing",
+            "allow_completing_rescue": True,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_completing.csv",
+        },
+        {
+            "name": "track2p-policy-teacher-adjacent-rescue-completing-seed-source",
+            "allow_completing_rescue": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_teacher_supported_completing_rescue": False,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_completing_seed_source.csv",
+        },
     )
+    return tuple({**base, **variant} for variant in variants)
 
 
 def _append_teacher_rescue_runs(manifest: dict[str, Any], *, output_root: str) -> None:
@@ -466,3 +444,13 @@ def _insert_mapping_after_many(
         for key, value in materialized_items:
             out[key] = value
     return out
+
+
+def _teacher_edge_order_option(value: Any) -> str:
+    output = str(value)
+    if output not in TEACHER_EDGE_ORDER_CHOICES:
+        raise ValueError(
+            "teacher_edge_order must be one of: "
+            + ", ".join(sorted(TEACHER_EDGE_ORDER_CHOICES))
+        )
+    return output
