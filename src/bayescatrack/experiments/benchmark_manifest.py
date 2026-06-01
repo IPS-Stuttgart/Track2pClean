@@ -1860,9 +1860,7 @@ def _bool_option(options: ManifestObject, key: str, *, default: bool) -> bool:
     return value
 
 
-def _first_bool_option(
-    options: ManifestObject, *keys: str, default: bool
-) -> bool:
+def _first_bool_option(options: ManifestObject, *keys: str, default: bool) -> bool:
     for key in keys:
         if key in options:
             return _bool_option(options, key, default=default)
