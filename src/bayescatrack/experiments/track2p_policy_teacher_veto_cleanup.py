@@ -287,7 +287,9 @@ def apply_teacher_veto_edges(
     for edge in _ordered_veto_edges(output, teacher, features, config):
         while track_edge_counter(output).get(edge, 0) > teacher_counts.get(edge, 0):
             if _max_applied_vetoes_reached(applied_count, config.max_applied_vetoes):
-                rows.append(_veto_limit_row(edge, features.get(edge, ResidualFeature())))
+                rows.append(
+                    _veto_limit_row(edge, features.get(edge, ResidualFeature()))
+                )
                 return TeacherVetoReport(output, tuple(rows))
             output, row = _try_veto_edge(
                 output,
