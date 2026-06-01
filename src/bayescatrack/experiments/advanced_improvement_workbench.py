@@ -382,6 +382,32 @@ def track2p_result_improvement_manifest(
             "output": f"{output_root}/track2p_policy_component_cleanup.csv",
         },
         {
+            "name": "track2p-policy-coherence-suffix-stitch",
+            "runner": "track2p-policy-coherence-suffix-stitch",
+            "transform_type": "affine",
+            "threshold_method": "min",
+            "iou_distance_threshold": 12.0,
+            "cell_probability_threshold": 0.5,
+            "max_gap": 1,
+            "weighted_masks": False,
+            "weighted_centroids": False,
+            "exclude_overlapping_pixels": False,
+            **{
+                key: value
+                for key, value in track2p_policy_component_config.items()
+                if key != "apply_splits"
+            },
+            "suffix_path_length": 2,
+            "min_cell_probability": 0.80,
+            "min_area_ratio": 0.80,
+            "max_centroid_distance": 6.0,
+            "min_shifted_iou": 0.30,
+            "min_motion_consistency": 0.50,
+            "min_shape_consistency": 0.82,
+            "max_stitches_per_subject": 1,
+            "output": f"{output_root}/track2p_policy_coherence_suffix_stitch.csv",
+        },
+        {
             "name": "track2p-policy-teacher-adjacent-rescue",
             "runner": "track2p-policy-teacher-adjacent-rescue",
             "transform_type": "affine",
