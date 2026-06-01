@@ -563,7 +563,9 @@ def test_teacher_fn_rescue_preset_rejects_low_cell_probability() -> None:
     assert output.rows[0]["reason"] == "feature_gate_cell_probability"
 
 
-def test_teacher_adjacent_rescue_cell_high_confidence_preset_uses_cell_probability() -> None:
+def test_teacher_adjacent_rescue_cell_high_confidence_preset_uses_cell_probability() -> (
+    None
+):
     predicted = np.asarray([[10, -1, -1]], dtype=int)
     teacher = np.asarray([[10, 11, -1], [10, 12, -1]], dtype=int)
 
