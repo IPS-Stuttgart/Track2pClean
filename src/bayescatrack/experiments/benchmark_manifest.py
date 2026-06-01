@@ -103,15 +103,25 @@ TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     TRACK2P_POLICY_COMPONENT_FIELDS - {"apply_splits"}
 ) | {
     "allow_completing_rescue",
+    "allow_teacher_complete_row_rescue",
+    "allow_teacher_supported_completion",
     "allow_teacher_supported_completing_rescue",
+    "allow_teacher_confirmed_completing_rescue",
+    "allow_completing_source_backfill",
+    "allow_completing_fragment_merge",
     "allow_completing_fragment_merges",
     "allow_source_backfill",
     "allow_source_inserts",
     "allow_source_insertions",
     "allow_seed_source_backfill",
+    "allow_seed_completing_backfill",
+    "allow_seed_completing_rescue",
     "allow_completing_seed_source_backfill",
     "allow_fragment_merges",
+    "min_component_observations",
+    "max_applied_edits",
     "teacher_edge_order",
+    "teacher_feature_preset",
     "teacher_min_registered_iou",
     "teacher_min_threshold_margin",
     "teacher_min_row_margin",
@@ -1266,6 +1276,7 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
         ComponentCleanupConfig,
     )
     from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+        TeacherEdgeFeatureGate,
         run_track2p_policy_teacher_adjacent_rescue,
     )
 
@@ -1340,6 +1351,50 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
         allow_source_insertions = _bool_option(
             options, "allow_source_insertions", default=True
         )
+    teacher_feature_gate = TeacherEdgeFeatureGate(
+        min_registered_iou=_optional_float_option(
+            options,
+            "teacher_min_registered_iou",
+            "teacher_gate_min_registered_iou",
+        ),
+        min_threshold_margin=_optional_float_option(
+            options,
+            "teacher_min_threshold_margin",
+            "teacher_gate_min_threshold_margin",
+        ),
+        min_row_margin=_optional_float_option(
+            options,
+            "teacher_min_row_margin",
+            "teacher_gate_min_row_margin",
+        ),
+        min_column_margin=_optional_float_option(
+            options,
+            "teacher_min_column_margin",
+            "teacher_gate_min_column_margin",
+        ),
+        max_centroid_distance=_optional_float_option(
+            options,
+            "teacher_max_centroid_distance",
+            "teacher_gate_max_centroid_distance",
+        ),
+        min_area_ratio=_optional_float_option(
+            options,
+            "teacher_min_area_ratio",
+            "teacher_gate_min_area_ratio",
+        ),
+        min_cell_probability=_optional_float_option(
+            options,
+            "teacher_min_cell_probability",
+            "teacher_gate_min_cell_probability",
+        ),
+        require_hungarian=_first_bool_option(
+            options,
+            "teacher_require_hungarian",
+            "teacher_require_hungarian_assignment",
+            "teacher_gate_require_hungarian",
+            default=False,
+        ),
+    )
     output = run_track2p_policy_teacher_adjacent_rescue(
         config,
         threshold_method=_policy_threshold_method(
@@ -1356,8 +1411,23 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
         allow_completing_rescue=_bool_option(
             options, "allow_completing_rescue", default=False
         ),
+        allow_teacher_complete_row_rescue=_bool_option(
+            options, "allow_teacher_complete_row_rescue", default=False
+        ),
+        allow_teacher_supported_completion=_bool_option(
+            options, "allow_teacher_supported_completion", default=False
+        ),
         allow_teacher_supported_completing_rescue=_bool_option(
             options, "allow_teacher_supported_completing_rescue", default=False
+        ),
+        allow_teacher_confirmed_completing_rescue=_bool_option(
+            options, "allow_teacher_confirmed_completing_rescue", default=False
+        ),
+        allow_completing_source_backfill=_bool_option(
+            options, "allow_completing_source_backfill", default=False
+        ),
+        allow_completing_fragment_merge=_bool_option(
+            options, "allow_completing_fragment_merge", default=False
         ),
         allow_completing_fragment_merges=_bool_option(
             options, "allow_completing_fragment_merges", default=False
@@ -1370,12 +1440,25 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
         allow_seed_source_backfill=_bool_option(
             options, "allow_seed_source_backfill", default=False
         ),
+        allow_seed_completing_backfill=_bool_option(
+            options, "allow_seed_completing_backfill", default=False
+        ),
+        allow_seed_completing_rescue=_bool_option(
+            options, "allow_seed_completing_rescue", default=False
+        ),
         allow_completing_seed_source_backfill=_bool_option(
             options, "allow_completing_seed_source_backfill", default=False
         ),
         allow_fragment_merges=_bool_option(
             options, "allow_fragment_merges", default=True
         ),
+        teacher_edge_order=str(options.get("teacher_edge_order", "structural")),
+        min_component_observations=int(options.get("min_component_observations", 1)),
+        max_applied_edits=_nonnegative_int_or_none(
+            options.get("max_applied_edits"), name="max_applied_edits"
+        ),
+        teacher_feature_gate=teacher_feature_gate,
+        teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
     )
     return [result.to_dict() for result in output.results]
 
@@ -1759,11 +1842,42 @@ def _float_option(options: ManifestObject, key: str, *, default: float) -> float
     return value
 
 
+def _optional_float_option(options: ManifestObject, *keys: str) -> float | None:
+    for key in keys:
+        if key not in options or options[key] is None:
+            continue
+        value = float(options[key])
+        if not math.isfinite(value):
+            raise ValueError(f"{key} must be finite")
+        return value
+    return None
+
+
 def _bool_option(options: ManifestObject, key: str, *, default: bool) -> bool:
     value = options.get(key, default)
     if not isinstance(value, bool):
         raise ValueError(f"{key} must be a boolean")
     return value
+
+
+def _first_bool_option(
+    options: ManifestObject, *keys: str, default: bool
+) -> bool:
+    for key in keys:
+        if key in options:
+            return _bool_option(options, key, default=default)
+    return default
+
+
+def _nonnegative_int_or_none(value: Any, *, name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and value.casefold() in {"none", "null", "all"}:
+        return None
+    parsed = int(value)
+    if parsed < 0:
+        raise ValueError(f"{name} must be non-negative or null")
+    return parsed
 
 
 def _positive_int_or_none(value: Any, *, name: str) -> int | None:

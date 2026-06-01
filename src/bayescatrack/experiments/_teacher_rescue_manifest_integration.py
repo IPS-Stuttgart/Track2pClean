@@ -339,6 +339,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         min_component_observations=int(options.get("min_component_observations", 1)),
         max_applied_edits=_optional_int_option(options, "max_applied_edits"),
         teacher_feature_gate=teacher_feature_gate,
+        teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
     )
     return [result.to_dict() for result in output.results]
 
@@ -509,6 +510,26 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "dynamic-confidence",
             {},
             "track2p_policy_teacher_adjacent_rescue_dynamic_confidence_seed_source_cellgate.csv",
+        ),
+        (
+            (
+                "track2p-policy-teacher-adjacent-rescue-"
+                "dynamic-seed-confidence-seed-source-max2"
+            ),
+            False,
+            True,
+            True,
+            False,
+            "dynamic-seed-confidence",
+            {
+                "max_applied_edits": 2,
+                "teacher_feature_preset": "high-confidence",
+                "teacher_min_cell_probability": 0.60,
+            },
+            (
+                "track2p_policy_teacher_adjacent_rescue_"
+                "dynamic_seed_confidence_seed_source_max2.csv"
+            ),
         ),
         (
             "track2p-policy-teacher-adjacent-rescue-seed-source",
