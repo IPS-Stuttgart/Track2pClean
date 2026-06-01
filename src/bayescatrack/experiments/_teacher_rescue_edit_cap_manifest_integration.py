@@ -17,8 +17,8 @@ EDIT_CAP_FIELD = "max_applied_edits"
 def install_teacher_rescue_edit_cap_manifest_integration() -> None:
     """Install max-applied-edit support for teacher-rescue manifests."""
 
-    from bayescatrack.experiments import benchmark_manifest as manifest
     from bayescatrack.experiments import _teacher_rescue_manifest_integration as base
+    from bayescatrack.experiments import benchmark_manifest as manifest
 
     if getattr(manifest, "_bayescatrack_teacher_rescue_edit_cap_integration", False):
         return
@@ -52,8 +52,8 @@ def _run_track2p_policy_teacher_adjacent_rows(
 ) -> list[dict[str, Any]]:
     """Run teacher rescue with manifest-provided ``max_applied_edits``."""
 
-    from bayescatrack.experiments import benchmark_manifest as manifest
     from bayescatrack.experiments import _teacher_rescue_manifest_integration as base
+    from bayescatrack.experiments import benchmark_manifest as manifest
     from bayescatrack.experiments.track2p_policy_benchmark import (
         TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
         TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
