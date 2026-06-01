@@ -180,6 +180,22 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
             "allow_completing_seed_source_backfill": True,
             "teacher_edge_order": "dynamic-confidence",
         },
+        "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max1": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "teacher_edge_order": "dynamic-confidence",
+            "max_applied_edits": 1,
+        },
+        "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max2": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "teacher_edge_order": "dynamic-confidence",
+            "max_applied_edits": 2,
+        },
         "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source-cellgate": {
             "allow_completing_rescue": False,
             "allow_teacher_supported_completing_rescue": False,
