@@ -250,7 +250,70 @@ def _install_advanced_workbench_edit_cap_rows() -> None:
 
 
 def _teacher_rescue_edit_cap_rows(output_root: str) -> tuple[dict[str, Any], ...]:
-    base = {
+    base = _teacher_rescue_base_row()
+    audit_gate = {
+        "teacher_min_registered_iou": 0.10,
+        "teacher_max_centroid_distance": 6.0,
+        "teacher_min_area_ratio": 0.45,
+    }
+    local_support = {
+        "teacher_min_threshold_margin": 0.0,
+        "teacher_min_row_margin": 0.0,
+        "teacher_min_column_margin": 0.0,
+        "teacher_max_centroid_distance": 6.0,
+        "teacher_min_area_ratio": 0.60,
+        "teacher_require_hungarian": True,
+    }
+    high_confidence = {
+        "teacher_min_registered_iou": 0.20,
+        "teacher_min_threshold_margin": 0.05,
+        "teacher_min_row_margin": 0.0,
+        "teacher_min_column_margin": 0.0,
+        "teacher_max_centroid_distance": 4.0,
+        "teacher_min_area_ratio": 0.70,
+        "teacher_min_cell_probability": 0.50,
+        "teacher_require_hungarian": True,
+    }
+    return (
+        {
+            **base,
+            "name": "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max1",
+            "max_applied_edits": 1,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_dynamic_confidence_max1.csv",
+        },
+        {
+            **base,
+            "name": "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max2",
+            "max_applied_edits": 2,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_dynamic_confidence_max2.csv",
+        },
+        {
+            **base,
+            **audit_gate,
+            "name": "track2p-policy-teacher-adjacent-rescue-feature-gated-dynamic-confidence-max1",
+            "max_applied_edits": 1,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_feature_gated_dynamic_confidence_max1.csv",
+        },
+        {
+            **base,
+            **local_support,
+            "name": "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-local-support-max2",
+            "max_applied_edits": 2,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_dynamic_confidence_local_support_max2.csv",
+        },
+        {
+            **base,
+            **high_confidence,
+            "name": "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-high-confidence-seed-source-max2",
+            "allow_seed_source_backfill": True,
+            "max_applied_edits": 2,
+            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_dynamic_confidence_high_confidence_seed_source_max2.csv",
+        },
+    )
+
+
+def _teacher_rescue_base_row() -> dict[str, Any]:
+    return {
         "runner": "track2p-policy-teacher-adjacent-rescue",
         "transform_type": "affine",
         "threshold_method": "min",
@@ -273,20 +336,6 @@ def _teacher_rescue_edit_cap_rows(output_root: str) -> tuple[dict[str, Any], ...
         "allow_completing_seed_source_backfill": False,
         "teacher_edge_order": "dynamic-confidence",
     }
-    return (
-        {
-            **base,
-            "name": "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max1",
-            "max_applied_edits": 1,
-            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_dynamic_confidence_max1.csv",
-        },
-        {
-            **base,
-            "name": "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max2",
-            "max_applied_edits": 2,
-            "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue_dynamic_confidence_max2.csv",
-        },
-    )
 
 
 def _append_teacher_rescue_edit_cap_runs(
