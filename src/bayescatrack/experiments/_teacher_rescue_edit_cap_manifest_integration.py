@@ -217,6 +217,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         teacher_edge_order=cast(
             TeacherEdgeOrder, str(options.get("teacher_edge_order", "structural"))
         ),
+        teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
         min_component_observations=int(options.get("min_component_observations", 1)),
         max_applied_edits=int(options[EDIT_CAP_FIELD]),
         teacher_feature_gate=teacher_feature_gate,
