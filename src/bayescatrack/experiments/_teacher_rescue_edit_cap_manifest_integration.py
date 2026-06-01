@@ -334,10 +334,13 @@ def _insert_mapping_after_any(
     mapping: Mapping[str, Any], *, after_keys: tuple[str, ...], items: Any
 ) -> dict[str, Any]:
     pending = list(items)
+    pending_keys = {key for key, _value in pending}
     target_key = next((key for key in after_keys if key in mapping), None)
     result: dict[str, Any] = {}
     inserted = False
     for key, value in mapping.items():
+        if key in pending_keys:
+            continue
         result[str(key)] = value
         if not inserted and key == target_key:
             result.update(dict(pending))
