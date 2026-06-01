@@ -102,6 +102,7 @@ TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     "teacher_min_column_margin",
     "teacher_max_centroid_distance",
     "teacher_min_area_ratio",
+    "teacher_min_cell_probability",
     "teacher_require_hungarian",
     "teacher_require_hungarian_assignment",
     "teacher_gate_min_registered_iou",
@@ -110,6 +111,7 @@ TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     "teacher_gate_min_column_margin",
     "teacher_gate_max_centroid_distance",
     "teacher_gate_min_area_ratio",
+    "teacher_gate_min_cell_probability",
     "teacher_gate_require_hungarian",
 }
 CONFIGURABLE_LOSO_FIELDS = {

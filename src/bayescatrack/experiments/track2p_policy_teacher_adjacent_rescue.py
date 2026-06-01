@@ -77,6 +77,7 @@ TeacherEdgeOrder = Literal[
     "confidence",
     "dynamic-confidence",
 ]
+TeacherFeaturePreset = Literal["none", "local-support", "high-confidence"]
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,7 @@ class TeacherEdgeFeatureGate:
     min_column_margin: float | None
     max_centroid_distance: float | None
     min_area_ratio: float | None
+    min_cell_probability: float | None
     require_hungarian: bool
 
     def __init__(
@@ -108,6 +110,7 @@ class TeacherEdgeFeatureGate:
         min_column_margin: float | None = None,
         max_centroid_distance: float | None = None,
         min_area_ratio: float | None = None,
+        min_cell_probability: float | None = None,
         require_hungarian: bool = False,
         require_hungarian_assignment: bool | None = None,
         require_assigned_by_hungarian: bool | None = None,
@@ -122,6 +125,7 @@ class TeacherEdgeFeatureGate:
         object.__setattr__(self, "min_column_margin", min_column_margin)
         object.__setattr__(self, "max_centroid_distance", max_centroid_distance)
         object.__setattr__(self, "min_area_ratio", min_area_ratio)
+        object.__setattr__(self, "min_cell_probability", min_cell_probability)
         object.__setattr__(self, "require_hungarian", bool(require_hungarian))
 
     @property
@@ -142,10 +146,91 @@ class TeacherEdgeFeatureGate:
             or self.min_column_margin is not None
             or self.max_centroid_distance is not None
             or self.min_area_ratio is not None
+            or self.min_cell_probability is not None
         )
 
 
 TeacherFeatureGate = TeacherEdgeFeatureGate
+
+
+def teacher_feature_gate_from_preset(
+    preset: TeacherFeaturePreset | str,
+) -> TeacherEdgeFeatureGate | None:
+    """Return a label-free teacher-rescue feature gate preset."""
+
+    normalized = str(preset).strip().lower()
+    if normalized in {"", "none"}:
+        return None
+    if normalized == "local-support":
+        return TeacherEdgeFeatureGate(
+            min_threshold_margin=0.0,
+            min_row_margin=0.0,
+            min_column_margin=0.0,
+            max_centroid_distance=6.0,
+            min_area_ratio=0.60,
+            require_hungarian=True,
+        )
+    if normalized == "high-confidence":
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.20,
+            min_threshold_margin=0.05,
+            min_row_margin=0.0,
+            min_column_margin=0.0,
+            max_centroid_distance=4.0,
+            min_area_ratio=0.70,
+            require_hungarian=True,
+        )
+    raise ValueError(f"Unsupported teacher feature preset: {preset!r}")
+
+
+def merge_teacher_feature_gates(
+    preset_gate: TeacherEdgeFeatureGate | None,
+    manual_gate: TeacherEdgeFeatureGate,
+) -> TeacherEdgeFeatureGate | None:
+    """Merge a preset teacher gate with explicit CLI threshold overrides."""
+
+    if preset_gate is None:
+        return manual_gate if manual_gate.enabled else None
+    if not manual_gate.enabled:
+        return preset_gate
+    return TeacherEdgeFeatureGate(
+        min_registered_iou=(
+            manual_gate.min_registered_iou
+            if manual_gate.min_registered_iou is not None
+            else preset_gate.min_registered_iou
+        ),
+        min_threshold_margin=(
+            manual_gate.min_threshold_margin
+            if manual_gate.min_threshold_margin is not None
+            else preset_gate.min_threshold_margin
+        ),
+        min_row_margin=(
+            manual_gate.min_row_margin
+            if manual_gate.min_row_margin is not None
+            else preset_gate.min_row_margin
+        ),
+        min_column_margin=(
+            manual_gate.min_column_margin
+            if manual_gate.min_column_margin is not None
+            else preset_gate.min_column_margin
+        ),
+        max_centroid_distance=(
+            manual_gate.max_centroid_distance
+            if manual_gate.max_centroid_distance is not None
+            else preset_gate.max_centroid_distance
+        ),
+        min_area_ratio=(
+            manual_gate.min_area_ratio
+            if manual_gate.min_area_ratio is not None
+            else preset_gate.min_area_ratio
+        ),
+        min_cell_probability=(
+            manual_gate.min_cell_probability
+            if manual_gate.min_cell_probability is not None
+            else preset_gate.min_cell_probability
+        ),
+        require_hungarian=manual_gate.require_hungarian or preset_gate.require_hungarian,
+    )
 
 
 def _resolve_source_backfill_alias(
@@ -158,6 +243,27 @@ def _resolve_source_backfill_alias(
     if allow_source_inserts is None:
         return bool(allow_source_backfill)
     return bool(allow_source_inserts)
+
+
+def _teacher_completion_gate_kwargs(
+    *,
+    allow_teacher_complete_row_rescue: bool,
+    allow_teacher_supported_completion: bool,
+    allow_teacher_supported_completing_rescue: bool,
+    allow_teacher_confirmed_completing_rescue: bool,
+) -> dict[str, bool]:
+    """Return teacher-completion kwargs without broadening exact aliases."""
+
+    return {
+        "allow_teacher_complete_row_rescue": bool(allow_teacher_complete_row_rescue),
+        "allow_teacher_supported_completion": bool(allow_teacher_supported_completion),
+        "allow_teacher_supported_completing_rescue": bool(
+            allow_teacher_supported_completing_rescue
+        ),
+        "allow_teacher_confirmed_completing_rescue": bool(
+            allow_teacher_confirmed_completing_rescue
+        ),
+    }
 
 
 def run_track2p_policy_teacher_adjacent_rescue(
@@ -189,6 +295,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     max_applied_edits: int | None = None,
     teacher_feature_gate: TeacherEdgeFeatureGate | None = None,
     edge_feature_gate: TeacherEdgeFeatureGate | None = None,
+    teacher_feature_preset: str = "none",
 ) -> ComponentAuditOutput:
     """Run component cleanup followed by adjacent Track2p teacher rescue."""
 
@@ -207,12 +314,17 @@ def run_track2p_policy_teacher_adjacent_rescue(
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
-    allow_teacher_supported_completion_enabled = bool(
-        allow_teacher_complete_row_rescue
-        or allow_teacher_supported_completion
-        or allow_teacher_supported_completing_rescue
-        or allow_teacher_confirmed_completing_rescue
+    teacher_completion_kwargs = _teacher_completion_gate_kwargs(
+        allow_teacher_complete_row_rescue=allow_teacher_complete_row_rescue,
+        allow_teacher_supported_completion=allow_teacher_supported_completion,
+        allow_teacher_supported_completing_rescue=(
+            allow_teacher_supported_completing_rescue
+        ),
+        allow_teacher_confirmed_completing_rescue=(
+            allow_teacher_confirmed_completing_rescue
+        ),
     )
+    allow_teacher_completion_gate_enabled = any(teacher_completion_kwargs.values())
     allow_seed_completion = bool(
         allow_seed_completing_backfill
         or allow_seed_completing_rescue
@@ -224,6 +336,10 @@ def run_track2p_policy_teacher_adjacent_rescue(
     min_component_observations = max(1, int(min_component_observations))
     teacher_feature_gate = _resolve_teacher_feature_gate(
         teacher_feature_gate, edge_feature_gate
+    )
+    teacher_feature_gate = merge_teacher_feature_gates(
+        teacher_feature_gate_from_preset(teacher_feature_preset),
+        teacher_feature_gate or TeacherEdgeFeatureGate(),
     )
     results: list[SubjectBenchmarkResult] = []
     rescue_rows: list[dict[str, int | str]] = []
@@ -272,9 +388,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             teacher_full,
             seed_session=policy_config.seed_session,
             allow_completing_rescue=allow_completing_rescue,
-            allow_teacher_supported_completing_rescue=(
-                allow_teacher_supported_completion_enabled
-            ),
+            **teacher_completion_kwargs,
             allow_completing_source_backfill=allow_completing_source_backfill,
             allow_completing_fragment_merges=allow_fragment_completion,
             allow_source_backfill=source_backfill_enabled,
@@ -318,7 +432,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 allow_teacher_confirmed_completing_rescue
             ),
             "track2p_teacher_adjacent_allow_teacher_completion_gate": int(
-                allow_teacher_supported_completion_enabled
+                allow_teacher_completion_gate_enabled
             ),
             "track2p_teacher_adjacent_allow_completing_source_backfill": int(
                 allow_completing_source_backfill
@@ -360,6 +474,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
             "track2p_teacher_adjacent_max_applied_edits": (
                 -1 if max_applied_edits is None else int(max_applied_edits)
             ),
+            "track2p_teacher_adjacent_feature_preset": str(
+                teacher_feature_preset
+            ),
             "track2p_teacher_adjacent_feature_gate_enabled": int(
                 _teacher_feature_gate_enabled(teacher_feature_gate)
             ),
@@ -392,6 +509,11 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 None
                 if teacher_feature_gate is None
                 else teacher_feature_gate.min_area_ratio
+            ),
+            "track2p_teacher_adjacent_min_cell_probability": _score_optional_float(
+                None
+                if teacher_feature_gate is None
+                else teacher_feature_gate.min_cell_probability
             ),
             "track2p_teacher_adjacent_require_hungarian": int(
                 teacher_feature_gate is not None
@@ -1117,13 +1239,17 @@ def _teacher_edge_confidence_order_key(
 
 def _teacher_edge_feature_order_key(
     feature: ResidualFeature | None,
-) -> tuple[int, float, float, float, float, float, float]:
+) -> tuple[int, float, float, float, float, float, float, float]:
     if feature is None:
-        return (1, 0.0, 0.0, 0.0, float("inf"), 0.0, 0.0)
+        return (1, 0.0, 0.0, 0.0, 0.0, float("inf"), 0.0, 0.0)
     registered_iou = _finite_feature(feature.registered_iou, 0.0)
     threshold_margin = _finite_feature(feature.threshold_margin, 0.0)
     row_margin = _finite_feature(feature.row_margin, 0.0)
     column_margin = _finite_feature(feature.column_margin, 0.0)
+    min_cell_probability = min(
+        _finite_feature(feature.cell_probability_a, 0.0),
+        _finite_feature(feature.cell_probability_b, 0.0),
+    )
     centroid_distance = _finite_feature(feature.centroid_distance, float("inf"))
     area_ratio = _finite_feature(feature.area_ratio, 0.0)
     return (
@@ -1134,6 +1260,7 @@ def _teacher_edge_feature_order_key(
         -min(row_margin, column_margin),
         centroid_distance,
         -area_ratio,
+        -min_cell_probability,
     )
 
 
@@ -1175,6 +1302,14 @@ def _teacher_edge_feature_gate_reason(
         reason = _feature_min_reason(value, threshold, name)
         if reason is not None:
             return reason
+    min_cell = _feature_min_pair_reason(
+        feature.cell_probability_a,
+        feature.cell_probability_b,
+        gate.min_cell_probability,
+        "cell_probability",
+    )
+    if min_cell is not None:
+        return min_cell
     return (
         _feature_max_reason(
             feature.centroid_distance,
@@ -1191,6 +1326,18 @@ def _feature_min_reason(value: float, threshold: float | None, name: str) -> str
     numeric = float(value)
     if not np.isfinite(numeric) or numeric < float(threshold):
         return f"feature_gate_{name}"
+    return None
+
+
+def _feature_min_pair_reason(
+    value_a: float, value_b: float, threshold: float | None, name: str
+) -> str | None:
+    if threshold is None:
+        return None
+    for value in (value_a, value_b):
+        numeric = float(value)
+        if not np.isfinite(numeric) or numeric < float(threshold):
+            return f"feature_gate_{name}"
     return None
 
 
@@ -1726,6 +1873,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--teacher-feature-preset",
+        choices=("none", "local-support", "high-confidence"),
+        default="none",
+        help=(
+            "Apply a label-free feature-gate preset to teacher rescue edges. "
+            "Explicit --teacher-* gate thresholds override the corresponding "
+            "preset values."
+        ),
+    )
+    parser.add_argument(
         "--teacher-min-registered-iou",
         "--teacher-gate-min-registered-iou",
         dest="teacher_min_registered_iou",
@@ -1772,6 +1929,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Reject teacher rescue edges with ROI area ratio below this value.",
+    )
+    parser.add_argument(
+        "--teacher-min-cell-probability",
+        "--teacher-gate-min-cell-probability",
+        dest="teacher_min_cell_probability",
+        type=float,
+        default=None,
+        help=(
+            "Reject teacher rescue edges when either endpoint has Suite2p cell "
+            "probability below this value."
+        ),
     )
     parser.add_argument(
         "--teacher-require-hungarian",
@@ -1822,17 +1990,22 @@ def main(argv: list[str] | None = None) -> int:
         weighted_masks=False,
         weighted_centroids=False,
     )
-    teacher_feature_gate = TeacherEdgeFeatureGate(
+    preset_teacher_feature_gate = teacher_feature_gate_from_preset(
+        cast(TeacherFeaturePreset, args.teacher_feature_preset)
+    )
+    manual_teacher_feature_gate = TeacherEdgeFeatureGate(
         min_registered_iou=args.teacher_min_registered_iou,
         min_threshold_margin=args.teacher_min_threshold_margin,
         min_row_margin=args.teacher_min_row_margin,
         min_column_margin=args.teacher_min_column_margin,
         max_centroid_distance=args.teacher_max_centroid_distance,
         min_area_ratio=args.teacher_min_area_ratio,
+        min_cell_probability=args.teacher_min_cell_probability,
         require_hungarian=args.teacher_require_hungarian,
     )
-    if not teacher_feature_gate.enabled:
-        teacher_feature_gate = None
+    teacher_feature_gate = merge_teacher_feature_gates(
+        preset_teacher_feature_gate, manual_teacher_feature_gate
+    )
     output = run_track2p_policy_teacher_adjacent_rescue(
         config,
         threshold_method=cast(ThresholdMethod, args.threshold_method),
@@ -1866,6 +2039,7 @@ def main(argv: list[str] | None = None) -> int:
         min_component_observations=args.min_component_observations,
         max_applied_edits=args.max_applied_edits,
         teacher_feature_gate=teacher_feature_gate,
+        teacher_feature_preset=str(args.teacher_feature_preset),
     )
     rows = [result.to_dict() for result in output.results]
     if args.output is not None:
