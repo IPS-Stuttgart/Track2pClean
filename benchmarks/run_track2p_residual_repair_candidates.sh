@@ -262,6 +262,20 @@ run_teacher_rescue teacher_adjacent_dynamic_confidence_cell_high_confidence_seed
   --teacher-feature-preset cell-high-confidence \
   --max-applied-edits 2
 
+# Cell-confident row: same dynamic-confidence teacher-rescue hypothesis, but add
+# an endpoint cell-probability gate. Earlier gap-rescue diagnostics showed that
+# consensus/rank were not discriminative, while high cell probability plus strong
+# local geometry was the only low-FP rescue pocket. This keeps that evidence as a
+# label-free candidate row rather than another broad teacher-edge tail.
+run_teacher_rescue teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2 \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-edge-order dynamic-confidence \
+  --teacher-feature-preset cell-confident \
+  --max-applied-edits 2
+
 run_teacher_rescue teacher_adjacent_dynamic_seed_confidence_seed_source_max2 \
   --no-allow-completing-rescue \
   --allow-source-backfill \
@@ -340,6 +354,7 @@ run_teacher_veto teacher_veto_geometric_max1 \
   --input TeacherAdjacentDynamicConfidenceTrack2pFnRescueMax2="$OUT/teacher_adjacent_dynamic_confidence_track2p_fn_rescue_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
+  --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicSeedConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_seed_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
@@ -373,6 +388,7 @@ run_teacher_veto teacher_veto_geometric_max1 \
   --input TeacherAdjacentDynamicConfidenceTrack2pFnRescueMax2="$OUT/teacher_adjacent_dynamic_confidence_track2p_fn_rescue_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
+  --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicSeedConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_seed_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \

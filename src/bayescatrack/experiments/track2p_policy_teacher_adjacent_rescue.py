@@ -83,7 +83,9 @@ TeacherFeaturePreset = Literal[
     "local-support",
     "high-confidence",
     "cell-high-confidence",
+    "cell-confident",
     "track2p-fn-rescue",
+    "residual-fn",
 ]
 
 
@@ -187,7 +189,7 @@ def teacher_feature_gate_from_preset(
             min_area_ratio=0.70,
             require_hungarian=True,
         )
-    if normalized == "cell-high-confidence":
+    if normalized in {"cell-high-confidence", "cell-confident", "cell-confidence"}:
         return TeacherEdgeFeatureGate(
             min_registered_iou=0.20,
             min_threshold_margin=0.05,
@@ -197,6 +199,14 @@ def teacher_feature_gate_from_preset(
             min_area_ratio=0.70,
             min_cell_probability=0.80,
             require_hungarian=True,
+        )
+    if normalized in {"residual-fn", "residual-fn-rescue", "teacher-fn"}:
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.10,
+            max_centroid_distance=6.0,
+            min_area_ratio=0.45,
+            min_cell_probability=0.50,
+            require_hungarian=False,
         )
     if normalized == "track2p-fn-rescue":
         return TeacherEdgeFeatureGate(
@@ -1973,13 +1983,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "local-support",
             "high-confidence",
             "cell-high-confidence",
+            "cell-confident",
             "track2p-fn-rescue",
+            "residual-fn",
         ),
         default="none",
         help=(
             "Apply a label-free feature-gate preset to teacher rescue edges. "
             "Explicit --teacher-* gate thresholds override the corresponding "
-            "preset values."
+            "preset values. The cell-confident preset is the high-confidence "
+            "gate plus a minimum Suite2p cell probability of 0.80 at both "
+            "teacher-edge endpoints."
         ),
     )
     parser.add_argument(

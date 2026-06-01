@@ -170,6 +170,14 @@ def test_teacher_adjacent_parser_accepts_feature_preset() -> None:
     assert args.teacher_feature_preset == "local-support"
 
 
+def test_teacher_adjacent_parser_accepts_residual_fn_preset() -> None:
+    args = rescue.build_arg_parser().parse_args(
+        ["--data", "track2p-root", "--teacher-feature-preset", "residual-fn"]
+    )
+
+    assert args.teacher_feature_preset == "residual-fn"
+
+
 def test_teacher_adjacent_rescue_extends_seed_anchored_chain() -> None:
     predicted = np.asarray([[10, -1, -1, 13, -1, -1]], dtype=int)
     teacher = np.asarray([[10, -1, -1, 13, 14, 15]], dtype=int)
@@ -653,6 +661,35 @@ def test_teacher_feature_preset_high_confidence_accepts_strong_edge() -> None:
     )
 
     assert rescue._teacher_edge_feature_gate_reason(feature, gate) == "accepted"
+
+
+def test_teacher_feature_preset_residual_fn_accepts_non_hungarian_edge() -> None:
+    gate = rescue.teacher_feature_gate_from_preset("residual-fn")
+    feature = rescue.ResidualFeature(
+        registered_iou=0.15,
+        centroid_distance=5.0,
+        area_ratio=0.50,
+        cell_probability_a=0.70,
+        cell_probability_b=0.80,
+        assigned_by_hungarian=0,
+    )
+
+    assert gate is not None
+    assert not gate.require_hungarian
+    assert rescue._teacher_edge_feature_gate_reason(feature, gate) == "accepted"
+
+
+def test_teacher_feature_preset_residual_fn_rejects_low_cell_probability() -> None:
+    gate = rescue.teacher_feature_gate_from_preset("residual-fn")
+    feature = rescue.ResidualFeature(
+        registered_iou=0.15,
+        centroid_distance=5.0,
+        area_ratio=0.50,
+    )
+
+    assert rescue._teacher_edge_feature_gate_reason(feature, gate) == (
+        "feature_gate_cell_probability"
+    )
 
 
 def test_teacher_feature_gate_preset_can_be_merged_with_manual_override() -> None:
