@@ -68,6 +68,8 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
 )
 
 TRACK2P_POLICY_TEACHER_VETO_CLEANUP_METHOD = "track2p-policy-teacher-veto-cleanup"
+TeacherVetoEdgeOrder = Literal["lexicographic", "risk"]
+TeacherVetoOrder = Literal["lexicographic", "weakest"]
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,9 @@ class TeacherVetoConfig:
     allow_complete_track_veto: bool = False
     keep_right_fragment: bool = True
     min_fragment_observations: int = 2
+    edge_order: TeacherVetoEdgeOrder = "risk"
+    veto_order: TeacherVetoOrder | None = None
+    max_applied_vetoes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -189,6 +194,13 @@ def run_track2p_policy_teacher_veto_cleanup(
             "track2p_teacher_veto_min_fragment_observations": int(
                 veto_config.min_fragment_observations
             ),
+            "track2p_teacher_veto_edge_order": _resolved_edge_order(veto_config),
+            "track2p_teacher_veto_order": _legacy_veto_order_label(veto_config),
+            "track2p_teacher_veto_max_applied_vetoes": (
+                -1
+                if veto_config.max_applied_vetoes is None
+                else int(veto_config.max_applied_vetoes)
+            ),
         }
         results.append(
             SubjectBenchmarkResult(
@@ -271,8 +283,12 @@ def apply_teacher_veto_edges(
     rows: list[dict[str, float | int | str]] = []
 
     teacher_counts = track_edge_counter(teacher)
-    for edge in sorted(track_edge_counter(output)):
+    applied_count = 0
+    for edge in _ordered_veto_edges(output, teacher, features, config):
         while track_edge_counter(output).get(edge, 0) > teacher_counts.get(edge, 0):
+            if _max_applied_vetoes_reached(applied_count, config.max_applied_vetoes):
+                rows.append(_veto_limit_row(edge, features.get(edge, ResidualFeature())))
+                return TeacherVetoReport(output, tuple(rows))
             output, row = _try_veto_edge(
                 output,
                 edge,
@@ -282,7 +298,85 @@ def apply_teacher_veto_edges(
             rows.append(row)
             if int(row["applied"]) == 0:
                 break
+            applied_count += 1
     return TeacherVetoReport(output, tuple(rows))
+
+
+def _ordered_veto_edges(
+    predicted: np.ndarray,
+    teacher: np.ndarray,
+    feature_index: Mapping[TrackEdge, ResidualFeature],
+    config: TeacherVetoConfig,
+) -> tuple[TrackEdge, ...]:
+    teacher_counts = track_edge_counter(teacher)
+    candidate_edges = tuple(
+        edge
+        for edge, predicted_count in track_edge_counter(predicted).items()
+        if int(predicted_count) > int(teacher_counts.get(edge, 0))
+    )
+    edge_order = _resolved_edge_order(config)
+    if edge_order == "lexicographic":
+        return tuple(sorted(candidate_edges))
+    if edge_order != "risk":
+        raise ValueError(f"Unsupported teacher-veto edge order: {edge_order!r}")
+    return tuple(
+        sorted(
+            candidate_edges,
+            key=lambda edge: _veto_edge_risk_order_key(edge, feature_index.get(edge)),
+        )
+    )
+
+
+def _resolved_edge_order(config: TeacherVetoConfig) -> TeacherVetoEdgeOrder:
+    if config.veto_order == "weakest":
+        return "risk"
+    if config.veto_order == "lexicographic":
+        return "lexicographic"
+    return config.edge_order
+
+
+def _legacy_veto_order_label(config: TeacherVetoConfig) -> str:
+    if config.veto_order is not None:
+        return str(config.veto_order)
+    return "weakest" if _resolved_edge_order(config) == "risk" else "lexicographic"
+
+
+def _veto_edge_risk_order_key(
+    edge: TrackEdge, feature: ResidualFeature | None
+) -> tuple[int, float, float, float, int, int, int, int]:
+    feature = feature or ResidualFeature()
+    competition_margin = min(float(feature.row_margin), float(feature.column_margin))
+    feature_missing = int(
+        not _finite(feature.threshold_margin)
+        or not _finite(competition_margin)
+        or not _finite(feature.registered_iou)
+    )
+    return (
+        feature_missing,
+        _finite_or_inf(feature.threshold_margin),
+        _finite_or_inf(competition_margin),
+        _finite_or_inf(feature.registered_iou),
+        int(edge[0]),
+        int(edge[1]),
+        int(edge[2]),
+        int(edge[3]),
+    )
+
+
+def _max_applied_vetoes_reached(
+    applied_count: int, max_applied_vetoes: int | None
+) -> bool:
+    return max_applied_vetoes is not None and int(applied_count) >= int(
+        max(0, int(max_applied_vetoes))
+    )
+
+
+def _veto_limit_row(
+    edge: TrackEdge, feature: ResidualFeature
+) -> dict[str, float | int | str]:
+    row = _veto_row(edge, feature)
+    row["reason"] = "max_applied_vetoes_reached"
+    return row
 
 
 def _try_veto_edge(
@@ -403,6 +497,10 @@ def _finite(value: float) -> bool:
     return math.isfinite(float(value))
 
 
+def _finite_or_inf(value: float) -> float:
+    return float(value) if _finite(value) else float("inf")
+
+
 def _optional_float(value: float | None) -> float:
     return float("nan") if value is None else float(value)
 
@@ -500,6 +598,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--teacher-veto-edge-order",
+        choices=("lexicographic", "risk"),
+        default="risk",
+        help=(
+            "Order candidate Bayes-only veto edges. 'risk' tries the weakest "
+            "low-margin edges first and is useful with --max-applied-vetoes."
+        ),
+    )
+    parser.add_argument(
+        "--veto-order",
+        choices=("lexicographic", "weakest"),
+        default=None,
+        help=(
+            "Compatibility alias for --teacher-veto-edge-order; 'weakest' maps "
+            "to 'risk'."
+        ),
+    )
+    parser.add_argument("--max-applied-vetoes", type=int, default=None)
+    parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -534,6 +651,9 @@ def main(argv: list[str] | None = None) -> int:
         allow_complete_track_veto=bool(args.allow_complete_track_veto),
         keep_right_fragment=bool(args.keep_right_fragment),
         min_fragment_observations=int(args.min_veto_fragment_observations),
+        edge_order=cast(TeacherVetoEdgeOrder, args.teacher_veto_edge_order),
+        veto_order=cast(TeacherVetoOrder | None, args.veto_order),
+        max_applied_vetoes=args.max_applied_vetoes,
     )
     config = Track2pBenchmarkConfig(
         data=args.data,

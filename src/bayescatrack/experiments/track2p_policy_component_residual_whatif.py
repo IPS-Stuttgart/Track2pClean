@@ -55,6 +55,11 @@ _SUPPORT_FLAGS = (
     "is_gap_rescue_supported",
     "is_component_cleanup_affected",
 )
+_DEFAULT_CUMULATIVE_GROUP_FIELDS = (
+    "edit_type",
+    "support_bucket",
+    "reason_bucket",
+)
 
 
 @dataclass(frozen=True)
@@ -295,6 +300,94 @@ def residual_whatif_bundle_rows(
     return bundles
 
 
+def residual_cumulative_whatif_rows(
+    residual_rows: Sequence[Mapping[str, Any]],
+    base_counts: MicroCounts,
+    *,
+    max_edits_per_group: int | None = None,
+    group_fields: Sequence[str] = _DEFAULT_CUMULATIVE_GROUP_FIELDS,
+) -> list[dict[str, float | int | str]]:
+    """Return cumulative oracle what-if prefixes within each support bucket.
+
+    This compatibility view starts from residual audit rows directly and emits
+    one row for each prefix length.  Newer callers can use
+    :func:`residual_whatif_bundle_rows`; both outputs represent the same
+    label-aware diagnostic boundary and are not paper-facing tracker rows.
+    """
+
+    if max_edits_per_group is not None and max_edits_per_group <= 0:
+        raise ValueError("max_edits_per_group must be positive when provided")
+    if not group_fields:
+        raise ValueError("group_fields must contain at least one field")
+
+    single_rows = residual_whatif_rows(residual_rows, base_counts)
+    groups: dict[tuple[str, ...], list[Mapping[str, Any]]] = defaultdict(list)
+    for row in single_rows:
+        groups[tuple(str(row.get(field, "")) for field in group_fields)].append(row)
+
+    output: list[dict[str, float | int | str]] = []
+    for group_key, rows in groups.items():
+        counts = base_counts
+        cumulative_deltas = {
+            "pairwise_tp_delta": 0,
+            "pairwise_fp_delta": 0,
+            "pairwise_fn_delta": 0,
+            "complete_tp_delta": 0,
+            "complete_fp_delta": 0,
+            "complete_fn_delta": 0,
+        }
+        selected_ids: list[str] = []
+        sorted_rows = sorted(rows, key=_cumulative_candidate_sort_key, reverse=True)
+        if max_edits_per_group is not None:
+            sorted_rows = sorted_rows[:max_edits_per_group]
+
+        for rank, row in enumerate(sorted_rows, start=1):
+            deltas = _deltas_from_candidate_row(row)
+            counts = counts.apply(**deltas)
+            for key, value in deltas.items():
+                cumulative_deltas[key] += int(value)
+            selected_ids.append(str(row["candidate_index"]))
+
+            cumulative_row: dict[str, float | int | str] = {
+                "cumulative_group": " | ".join(group_key),
+                "selected_count": rank,
+                "latest_candidate_index": int(row["candidate_index"]),
+                "latest_track_id_or_edge": str(row["track_id_or_edge"]),
+                "edit_type": str(row["edit_type"]),
+                "support_bucket": str(row["support_bucket"]),
+                "reason_bucket": str(row["reason_bucket"]),
+                "candidate_indices": ";".join(selected_ids),
+                "base_pairwise_f1": base_counts.pairwise_f1,
+                "new_pairwise_f1": counts.pairwise_f1,
+                "pairwise_f1_delta": counts.pairwise_f1 - base_counts.pairwise_f1,
+                "base_complete_track_f1": base_counts.complete_track_f1,
+                "new_complete_track_f1": counts.complete_track_f1,
+                "complete_track_f1_delta": (
+                    counts.complete_track_f1 - base_counts.complete_track_f1
+                ),
+                "new_pairwise_tp": int(counts.pairwise_tp),
+                "new_pairwise_fp": int(counts.pairwise_fp),
+                "new_pairwise_fn": int(counts.pairwise_fn),
+                "new_complete_track_tp": int(counts.complete_tp),
+                "new_complete_track_fp": int(counts.complete_fp),
+                "new_complete_track_fn": int(counts.complete_fn),
+            }
+            for key, value in cumulative_deltas.items():
+                cumulative_row[key] = int(value)
+            output.append(cumulative_row)
+
+    output.sort(
+        key=lambda row: (
+            float(row["complete_track_f1_delta"]),
+            float(row["pairwise_f1_delta"]),
+            int(row["selected_count"]),
+            str(row["cumulative_group"]),
+        ),
+        reverse=True,
+    )
+    return output
+
+
 def load_base_counts(path: Path) -> MicroCounts:
     """Load and sum official count columns from a benchmark CSV."""
 
@@ -391,6 +484,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=5,
         help="Maximum number of candidates to accumulate per bundle family.",
     )
+    parser.add_argument(
+        "--cumulative-output",
+        type=Path,
+        default=None,
+        help=(
+            "Optional CSV/JSON path for cumulative same-bucket oracle prefixes. "
+            "Prefer --bundle-output for new scripts."
+        ),
+    )
+    parser.add_argument(
+        "--max-cumulative-edits-per-group",
+        type=int,
+        default=None,
+        help="Limit the cumulative prefix length within each edit/support/reason bucket.",
+    )
     parser.add_argument("--format", choices=("csv", "json"), default="csv")
     return parser
 
@@ -415,6 +523,16 @@ def main(argv: list[str] | None = None) -> int:
                 candidates, base_counts, max_bundle_size=args.max_bundle_size
             ),
             args.bundle_output,
+            output_format=args.format,
+        )
+    if args.cumulative_output is not None:
+        write_rows(
+            residual_cumulative_whatif_rows(
+                residual_rows,
+                base_counts,
+                max_edits_per_group=args.max_cumulative_edits_per_group,
+            ),
+            args.cumulative_output,
             output_format=args.format,
         )
     return 0
@@ -546,6 +664,20 @@ def _candidate_row(
     return output
 
 
+def _deltas_from_candidate_row(row: Mapping[str, Any]) -> dict[str, int]:
+    return {
+        key: _int_value(row.get(key, 0))
+        for key in (
+            "pairwise_tp_delta",
+            "pairwise_fp_delta",
+            "pairwise_fn_delta",
+            "complete_tp_delta",
+            "complete_fp_delta",
+            "complete_fn_delta",
+        )
+    }
+
+
 def _support_bucket(row: Mapping[str, Any]) -> str:
     track2p = _boolish(row.get("is_track2p_supported", 0))
     policy = _boolish(row.get("is_policy_supported", 0))
@@ -568,6 +700,24 @@ def _bundle_candidate_sort_key(row: Mapping[str, Any]) -> tuple[float, float, in
         -float(row.get("complete_track_f1_delta", 0.0)),
         -float(row.get("pairwise_f1_delta", 0.0)),
         _int_value(row.get("candidate_index", 0)),
+    )
+
+
+def _cumulative_candidate_sort_key(
+    row: Mapping[str, Any],
+) -> tuple[float, float, int, str]:
+    pairwise_delta = float(row.get("pairwise_f1_delta", 0.0))
+    complete_delta = float(row.get("complete_track_f1_delta", 0.0))
+    is_pairwise_edit = str(row.get("edit_type", "")).startswith(
+        ("add_pairwise", "remove_pairwise")
+    )
+    primary = pairwise_delta if is_pairwise_edit else complete_delta
+    secondary = complete_delta if is_pairwise_edit else pairwise_delta
+    return (
+        primary,
+        secondary,
+        _int_value(row.get("is_track2p_supported", 0)),
+        str(row.get("track_id_or_edge", "")),
     )
 
 
