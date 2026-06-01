@@ -194,8 +194,23 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_completing_rescue=manifest._bool_option(
             options, "allow_completing_rescue", default=False
         ),
+        allow_teacher_complete_row_rescue=manifest._bool_option(
+            options, "allow_teacher_complete_row_rescue", default=False
+        ),
+        allow_teacher_supported_completion=manifest._bool_option(
+            options, "allow_teacher_supported_completion", default=False
+        ),
         allow_teacher_supported_completing_rescue=manifest._bool_option(
             options, "allow_teacher_supported_completing_rescue", default=False
+        ),
+        allow_teacher_confirmed_completing_rescue=manifest._bool_option(
+            options, "allow_teacher_confirmed_completing_rescue", default=False
+        ),
+        allow_completing_source_backfill=manifest._bool_option(
+            options, "allow_completing_source_backfill", default=False
+        ),
+        allow_completing_fragment_merge=manifest._bool_option(
+            options, "allow_completing_fragment_merge", default=False
         ),
         allow_completing_fragment_merges=manifest._bool_option(
             options, "allow_completing_fragment_merges", default=False
@@ -207,6 +222,12 @@ def _run_track2p_policy_teacher_adjacent_rows(
         allow_source_insertions=allow_source_insertions,
         allow_seed_source_backfill=manifest._bool_option(
             options, "allow_seed_source_backfill", default=False
+        ),
+        allow_seed_completing_backfill=manifest._bool_option(
+            options, "allow_seed_completing_backfill", default=False
+        ),
+        allow_seed_completing_rescue=manifest._bool_option(
+            options, "allow_seed_completing_rescue", default=False
         ),
         allow_completing_seed_source_backfill=manifest._bool_option(
             options, "allow_completing_seed_source_backfill", default=False

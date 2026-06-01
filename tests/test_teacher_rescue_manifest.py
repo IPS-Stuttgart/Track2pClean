@@ -39,7 +39,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
                     "teacher_max_centroid_distance": 6.0,
                     "teacher_min_area_ratio": 0.45,
                     "teacher_edge_order": "dynamic-confidence",
-                    "teacher_feature_preset": "high-confidence",
+                    "teacher_feature_preset": "cell-high-confidence",
                     "output": "results/teacher-rescue.csv",
                 }
             ],
@@ -68,7 +68,10 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
     assert dict(run.runner_kwargs or {})["teacher_max_centroid_distance"] == 6.0
     assert dict(run.runner_kwargs or {})["teacher_min_area_ratio"] == 0.45
     assert "teacher_min_cell_probability" not in dict(run.runner_kwargs or {})
-    assert dict(run.runner_kwargs or {})["teacher_feature_preset"] == "high-confidence"
+    assert (
+        dict(run.runner_kwargs or {})["teacher_feature_preset"]
+        == "cell-high-confidence"
+    )
     assert dict(run.runner_kwargs or {})["teacher_edge_order"] == "dynamic-confidence"
 
 
@@ -124,6 +127,7 @@ def test_teacher_rescue_manifest_passes_teacher_edge_order_to_runner(
     assert rows == [{"subject": "dummy"}]
     assert captured["teacher_edge_order"] == "confidence"
     assert captured["max_applied_edits"] == 1
+    assert captured["teacher_feature_preset"] == "none"
 
 
 def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants():
@@ -258,6 +262,25 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
             "allow_completing_seed_source_backfill": True,
             "teacher_edge_order": "dynamic-confidence",
             "teacher_min_cell_probability": 0.60,
+        },
+        "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source-cell-high-confidence-max2": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_feature_preset": "cell-high-confidence",
+            "max_applied_edits": 2,
+        },
+        "track2p-policy-teacher-adjacent-rescue-dynamic-seed-confidence-seed-source-max2": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_feature_preset": "high-confidence",
+            "teacher_min_cell_probability": 0.60,
+            "max_applied_edits": 2,
         },
         "track2p-policy-teacher-adjacent-rescue-seed-source": {
             "allow_completing_rescue": False,

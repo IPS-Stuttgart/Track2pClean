@@ -397,6 +397,42 @@ def test_teacher_adjacent_rescue_seed_backfill_is_opt_in() -> None:
     assert opt_in_report.rows[0]["reason"] == "accepted_insert_source"
 
 
+def test_teacher_adjacent_rescue_prioritizes_seed_source_backfill() -> None:
+    predicted = np.asarray(
+        [
+            [-1, 11, 12, -1],
+            [30, 31, -1, -1],
+            [30, -1, 32, -1],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray(
+        [
+            [10, 11, -1, -1],
+            [30, 31, 32, -1],
+        ],
+        dtype=int,
+    )
+
+    report = rescue.apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_seed_source_backfill=True,
+        max_applied_edits=1,
+    )
+
+    np.testing.assert_array_equal(
+        report.tracks,
+        [[10, 11, 12, -1], [30, 31, -1, -1], [30, -1, 32, -1]],
+    )
+    assert report.rows[0]["session_a"] == 0
+    assert report.rows[0]["roi_a"] == 10
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_insert_source"
+    assert any(row["reason"] == "max_applied_edits_reached" for row in report.rows)
+
+
 def test_teacher_adjacent_rescue_seed_backfill_still_rejects_complete_row() -> None:
     predicted = np.asarray([[-1, 11, 12]], dtype=int)
     teacher = np.asarray([[10, 11, -1]], dtype=int)

@@ -235,6 +235,134 @@ def test_benchmark_manifest_rejects_runner_options_for_default_track2p(tmp_path)
         load_benchmark_manifest(manifest_path)
 
 
+def test_benchmark_manifest_accepts_teacher_adjacent_rescue_options(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "input_format": "suite2p",
+            },
+            "runs": [
+                {
+                    "name": "teacher-rescue",
+                    "runner": "track2p-policy-teacher-adjacent-rescue",
+                    "allow_teacher_complete_row_rescue": True,
+                    "allow_teacher_supported_completion": True,
+                    "allow_teacher_confirmed_completing_rescue": True,
+                    "allow_completing_source_backfill": True,
+                    "allow_completing_fragment_merge": True,
+                    "allow_seed_completing_backfill": True,
+                    "allow_seed_completing_rescue": True,
+                    "min_component_observations": 3,
+                    "max_applied_edits": 2,
+                    "teacher_edge_order": "dynamic-confidence",
+                    "teacher_feature_preset": "high-confidence",
+                    "teacher_gate_min_registered_iou": 0.25,
+                    "teacher_gate_min_threshold_margin": 0.05,
+                    "teacher_gate_min_row_margin": 0.01,
+                    "teacher_gate_min_column_margin": 0.02,
+                    "teacher_gate_max_centroid_distance": 4.0,
+                    "teacher_gate_min_area_ratio": 0.7,
+                    "teacher_gate_min_cell_probability": 0.8,
+                    "teacher_gate_require_hungarian": True,
+                }
+            ],
+        },
+    )
+
+    run = load_benchmark_manifest(manifest_path).runs[0]
+    kwargs = dict(run.runner_kwargs or {})
+
+    assert run.runner == "track2p-policy-teacher-adjacent-rescue"
+    assert kwargs["allow_teacher_complete_row_rescue"] is True
+    assert kwargs["allow_teacher_supported_completion"] is True
+    assert kwargs["allow_teacher_confirmed_completing_rescue"] is True
+    assert kwargs["allow_completing_source_backfill"] is True
+    assert kwargs["allow_completing_fragment_merge"] is True
+    assert kwargs["allow_seed_completing_backfill"] is True
+    assert kwargs["allow_seed_completing_rescue"] is True
+    assert kwargs["min_component_observations"] == 3
+    assert kwargs["max_applied_edits"] == 2
+    assert kwargs["teacher_edge_order"] == "dynamic-confidence"
+    assert kwargs["teacher_feature_preset"] == "high-confidence"
+    assert kwargs["teacher_gate_require_hungarian"] is True
+
+
+def test_benchmark_manifest_dispatches_teacher_adjacent_rescue_options(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import track2p_policy_teacher_adjacent_rescue
+
+    calls = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {
+                "subject": "jm_teacher",
+                "variant": "fake teacher rescue",
+                "method": "track2p-policy-teacher-adjacent-rescue",
+                "n_sessions": 2,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+        component_rows = ()
+
+    def fake_teacher_adjacent_rescue(config, **kwargs):
+        calls["config"] = config
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_teacher_adjacent_rescue,
+        "run_track2p_policy_teacher_adjacent_rescue",
+        fake_teacher_adjacent_rescue,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "teacher-rescue",
+                    "runner": "track2p-policy-teacher-adjacent-rescue",
+                    "data": "data",
+                    "output": "results/teacher-rescue.csv",
+                    "allow_completing_source_backfill": True,
+                    "allow_seed_completing_rescue": True,
+                    "teacher_edge_order": "dynamic-confidence",
+                    "teacher_feature_preset": "high-confidence",
+                    "teacher_gate_min_registered_iou": 0.25,
+                    "teacher_gate_min_cell_probability": 0.8,
+                    "teacher_gate_require_hungarian": True,
+                    "min_component_observations": 3,
+                    "max_applied_edits": 2,
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    gate = calls["kwargs"]["teacher_feature_gate"]
+    assert result.runs[0].rows == 1
+    assert calls["kwargs"]["allow_completing_source_backfill"] is True
+    assert calls["kwargs"]["allow_seed_completing_rescue"] is True
+    assert calls["kwargs"]["teacher_edge_order"] == "dynamic-confidence"
+    assert calls["kwargs"]["teacher_feature_preset"] == "high-confidence"
+    assert calls["kwargs"]["min_component_observations"] == 3
+    assert calls["kwargs"]["max_applied_edits"] == 2
+    assert gate.min_registered_iou == 0.25
+    assert gate.min_cell_probability == 0.8
+    assert gate.require_hungarian is True
+    assert (tmp_path / "results" / "teacher-rescue.csv").exists()
+
+
 def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkeypatch):
     calls = {}
 

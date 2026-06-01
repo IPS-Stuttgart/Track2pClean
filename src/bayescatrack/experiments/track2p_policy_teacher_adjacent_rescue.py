@@ -76,8 +76,15 @@ TeacherEdgeOrder = Literal[
     "dynamic-structural",
     "confidence",
     "dynamic-confidence",
+    "dynamic-seed-confidence",
 ]
-TeacherFeaturePreset = Literal["none", "local-support", "high-confidence"]
+TeacherFeaturePreset = Literal[
+    "none",
+    "local-support",
+    "high-confidence",
+    "cell-high-confidence",
+    "track2p-fn-rescue",
+]
 
 
 @dataclass(frozen=True)
@@ -179,6 +186,25 @@ def teacher_feature_gate_from_preset(
             max_centroid_distance=4.0,
             min_area_ratio=0.70,
             require_hungarian=True,
+        )
+    if normalized == "cell-high-confidence":
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.20,
+            min_threshold_margin=0.05,
+            min_row_margin=0.0,
+            min_column_margin=0.0,
+            max_centroid_distance=4.0,
+            min_area_ratio=0.70,
+            min_cell_probability=0.80,
+            require_hungarian=True,
+        )
+    if normalized == "track2p-fn-rescue":
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.10,
+            max_centroid_distance=6.0,
+            min_area_ratio=0.45,
+            min_cell_probability=0.60,
+            require_hungarian=False,
         )
     raise ValueError(f"Unsupported teacher feature preset: {preset!r}")
 
@@ -636,6 +662,9 @@ def apply_teacher_adjacent_rescue_edges(
     This is useful for residual teacher-rescue sweeps because a wrong early teacher
     edge can claim the only open source/target slot and prevent a stronger edge
     from being tested later.
+    ``dynamic-seed-confidence`` keeps the dynamic confidence machinery, but tries
+    eligible seed-source backfills before other source-backfill edits so a small
+    ``max_applied_edits`` cap is spent on the seed-anchoring hypothesis first.
     ``min_component_observations`` is a label-free support gate: teacher edits
     must touch at least one component with this many existing observations.
 
@@ -676,7 +705,11 @@ def apply_teacher_adjacent_rescue_edges(
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
-    if edge_order in {"dynamic-structural", "dynamic-confidence"}:
+    if edge_order in {
+        "dynamic-structural",
+        "dynamic-confidence",
+        "dynamic-seed-confidence",
+    }:
         return _apply_teacher_adjacent_rescue_edges_dynamic(
             output,
             teacher,
@@ -694,7 +727,9 @@ def apply_teacher_adjacent_rescue_edges(
             allow_fragment_merges=allow_fragment_merges,
             min_component_observations=min_component_observations,
             edge_feature_index=edge_feature_index or {},
-            use_confidence_order=edge_order == "dynamic-confidence",
+            use_confidence_order=edge_order
+            in {"dynamic-confidence", "dynamic-seed-confidence"},
+            prioritize_seed_source_backfill=edge_order == "dynamic-seed-confidence",
             teacher_feature_gate=teacher_feature_gate,
             max_applied_edits=max_applied_edits,
         )
@@ -786,6 +821,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     min_component_observations: int,
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
     use_confidence_order: bool,
+    prioritize_seed_source_backfill: bool,
     teacher_feature_gate: TeacherEdgeFeatureGate | None,
     max_applied_edits: int | None,
 ) -> TeacherAdjacentRescueReport:
@@ -849,6 +885,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                 edge_feature_index=edge_feature_index,
                 min_component_observations=min_component_observations,
                 use_confidence_order=use_confidence_order,
+                prioritize_seed_source_backfill=prioritize_seed_source_backfill,
                 occurrence_index=item[1],
             ),
         )
@@ -941,7 +978,11 @@ def _ordered_teacher_edge_occurrences(
     )
     if edge_order == "lexicographic":
         return occurrences
-    if edge_order in {"dynamic-structural", "dynamic-confidence"}:
+    if edge_order in {
+        "dynamic-structural",
+        "dynamic-confidence",
+        "dynamic-seed-confidence",
+    }:
         return occurrences
     if edge_order == "confidence":
         return tuple(
@@ -1026,9 +1067,12 @@ def _teacher_edge_structural_order_key(
     """Rank Track2p teacher edits by expected structural value.
 
     Lower tuples are tried first. The ranking is label-free and uses only the
-    current predicted matrix: compatible fragment merges outrank source
-    backfills, which outrank plain target extensions. Within an action class,
-    edits involving more already-supported observations are tried first.
+    current predicted matrix: opt-in seed-session source backfills outrank
+    compatible fragment merges, which outrank ordinary source backfills and then
+    plain target extensions. The seed-backfill priority only applies when
+    ``allow_seed_source_backfill`` is enabled and directly targets the residual
+    missing-seed bucket. Within an action class, edits involving more
+    already-supported observations are tried first.
     """
 
     session_a, session_b, roi_a, roi_b = edge
@@ -1063,7 +1107,7 @@ def _teacher_edge_structural_order_key(
                     teacher_complete_tracks=teacher_complete_tracks,
                 )
             ):
-                action_rank = 0
+                action_rank = 1
                 evidence = int(np.count_nonzero(merged >= 0))
     elif source_row < 0 and target_row >= 0:
         target_seed_anchored = _row_is_seed_anchored(
@@ -1093,7 +1137,7 @@ def _teacher_edge_structural_order_key(
                 ),
                 teacher_complete_tracks=teacher_complete_tracks,
             ):
-                action_rank = 1
+                action_rank = 0 if seed_source_backfill else 2
                 evidence = int(np.count_nonzero(candidate >= 0))
     elif source_row >= 0 and target_row < 0:
         if _row_is_seed_anchored(predicted[source_row], seed_session):
@@ -1108,7 +1152,7 @@ def _teacher_edge_structural_order_key(
                 ),
                 teacher_complete_tracks=teacher_complete_tracks,
             ):
-                action_rank = 2
+                action_rank = 3
                 evidence = int(np.count_nonzero(candidate >= 0))
 
     return (
@@ -1138,6 +1182,7 @@ def _teacher_edge_dynamic_order_key(
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
     min_component_observations: int,
     use_confidence_order: bool,
+    prioritize_seed_source_backfill: bool,
     occurrence_index: int,
 ) -> tuple[Any, ...]:
     """Return the dynamic rescue priority for one pending teacher edge."""
@@ -1163,6 +1208,7 @@ def _teacher_edge_dynamic_order_key(
                 allow_fragment_merges=allow_fragment_merges,
                 edge_feature_index=edge_feature_index,
                 min_component_observations=min_component_observations,
+                prioritize_seed_source_backfill=prioritize_seed_source_backfill,
             ),
             int(occurrence_index),
         )
@@ -1204,7 +1250,8 @@ def _teacher_edge_confidence_order_key(
     allow_fragment_merges: bool,
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
     min_component_observations: int,
-) -> tuple[int, int, int, float, float, float, float, float, float, int, int, int, int]:
+    prioritize_seed_source_backfill: bool = False,
+) -> tuple[Any, ...]:
     """Return a label-free confidence-aware order key for teacher edges."""
 
     structural = _teacher_edge_structural_order_key(
@@ -1225,6 +1272,25 @@ def _teacher_edge_confidence_order_key(
         min_component_observations=min_component_observations,
     )
     feature_key = _teacher_edge_feature_order_key(edge_feature_index.get(edge))
+    if prioritize_seed_source_backfill:
+        seed_source_key = _teacher_edge_seed_source_backfill_order_key(
+            predicted,
+            edge,
+            seed_session=seed_session,
+            allow_source_backfill=allow_source_backfill,
+            allow_seed_source_backfill=allow_seed_source_backfill,
+            min_component_observations=min_component_observations,
+        )
+        return (
+            *seed_source_key,
+            structural[0],
+            structural[1],
+            *feature_key,
+            structural[2],
+            structural[3],
+            structural[4],
+            structural[5],
+        )
     return (
         structural[0],
         structural[1],
@@ -1234,6 +1300,33 @@ def _teacher_edge_confidence_order_key(
         structural[4],
         structural[5],
     )
+
+
+def _teacher_edge_seed_source_backfill_order_key(
+    predicted: np.ndarray,
+    edge: TrackEdge,
+    *,
+    seed_session: int,
+    allow_source_backfill: bool,
+    allow_seed_source_backfill: bool,
+    min_component_observations: int,
+) -> tuple[int, int, int]:
+    """Prefer eligible edits that backfill the missing seed-session source ROI."""
+
+    if not (allow_source_backfill and allow_seed_source_backfill):
+        return (1, 0, 0)
+    session_a, session_b, roi_a, roi_b = edge
+    if int(session_a) != int(seed_session):
+        return (1, 0, 0)
+    source_rows = tuple(np.flatnonzero(predicted[:, session_a] == roi_a))
+    target_rows = tuple(np.flatnonzero(predicted[:, session_b] == roi_b))
+    if len(source_rows) != 0 or len(target_rows) != 1:
+        return (1, 0, 0)
+    target_row = int(target_rows[0])
+    support = _component_observation_count(predicted[target_row])
+    if support < min_component_observations:
+        return (1, 0, 0)
+    return (0, -int(support), int(session_b))
 
 
 def _teacher_edge_feature_order_key(
@@ -1861,6 +1954,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "dynamic-structural",
             "confidence",
             "dynamic-confidence",
+            "dynamic-seed-confidence",
         ),
         default="structural",
         help=(
@@ -1868,12 +1962,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "label-free structural priority that favors merges/backfills first. "
             "dynamic-structural recomputes that priority after each attempted "
             "edit; confidence uses local registration evidence to break ties; "
-            "dynamic-confidence does both."
+            "dynamic-confidence does both; dynamic-seed-confidence additionally "
+            "prioritizes missing seed-source backfills before other teacher edits."
         ),
     )
     parser.add_argument(
         "--teacher-feature-preset",
-        choices=("none", "local-support", "high-confidence"),
+        choices=(
+            "none",
+            "local-support",
+            "high-confidence",
+            "cell-high-confidence",
+            "track2p-fn-rescue",
+        ),
         default="none",
         help=(
             "Apply a label-free feature-gate preset to teacher rescue edges. "
