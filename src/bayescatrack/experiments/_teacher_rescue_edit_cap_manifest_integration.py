@@ -170,6 +170,9 @@ def _run_track2p_policy_teacher_adjacent_rows(
         min_area_ratio=base._optional_float_option(
             options, "teacher_min_area_ratio", "teacher_gate_min_area_ratio"
         ),
+        min_cell_probability=base._optional_float_option(
+            options, "teacher_min_cell_probability", "teacher_gate_min_cell_probability"
+        ),
         require_hungarian=require_hungarian,
     )
     if not teacher_feature_gate.enabled:

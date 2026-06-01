@@ -6,8 +6,25 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
 )
 from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     TeacherEdgeFeatureGate,
+    _teacher_completion_gate_kwargs,
     apply_teacher_adjacent_rescue_edges,
 )
+
+
+def test_teacher_completion_gate_kwargs_preserve_exact_aliases() -> None:
+    kwargs = _teacher_completion_gate_kwargs(
+        allow_teacher_complete_row_rescue=True,
+        allow_teacher_supported_completion=False,
+        allow_teacher_supported_completing_rescue=False,
+        allow_teacher_confirmed_completing_rescue=False,
+    )
+
+    assert kwargs == {
+        "allow_teacher_complete_row_rescue": True,
+        "allow_teacher_supported_completion": False,
+        "allow_teacher_supported_completing_rescue": False,
+        "allow_teacher_confirmed_completing_rescue": False,
+    }
 
 
 def test_teacher_adjacent_rescue_inserts_missing_source_into_seed_anchored_row() -> (
@@ -235,6 +252,34 @@ def test_teacher_adjacent_rescue_teacher_complete_row_alias_reports_support() ->
     assert output.rows[-1]["teacher_complete_row_supported"] == 1
 
 
+def test_teacher_adjacent_rescue_exact_completion_rejects_partial_teacher_row() -> None:
+    predicted = np.asarray([[100, 20, -1, 40]], dtype=int)
+    partial_teacher = np.asarray([[100, 20, 30, -1]], dtype=int)
+
+    exact = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        partial_teacher,
+        seed_session=0,
+        allow_teacher_complete_row_rescue=True,
+    )
+
+    np.testing.assert_array_equal(exact.tracks, predicted)
+    assert exact.rows[-1]["applied"] == 0
+    assert exact.rows[-1]["reason"] == "would_complete_track"
+    assert exact.rows[-1]["teacher_complete_row_supported"] == 0
+
+    supported = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        partial_teacher,
+        seed_session=0,
+        allow_teacher_supported_completion=True,
+    )
+
+    np.testing.assert_array_equal(supported.tracks, [[100, 20, 30, 40]])
+    assert supported.rows[-1]["applied"] == 1
+    assert supported.rows[-1]["teacher_complete_row_supported"] == 1
+
+
 def test_teacher_adjacent_rescue_dynamic_confidence_reorders_stale_slot_claims() -> (
     None
 ):
@@ -368,4 +413,43 @@ def test_teacher_adjacent_rescue_feature_gate_requires_hungarian() -> None:
 
     np.testing.assert_array_equal(output.tracks, [[10, 12, -1]])
     assert output.rows[0]["reason"] == "feature_gate_hungarian"
+    assert output.rows[1]["reason"] == "accepted_insert_target"
+
+
+def test_teacher_adjacent_rescue_feature_gate_rejects_low_cell_probability() -> None:
+    predicted = np.asarray([[10, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1], [10, 12, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="lexicographic",
+        edge_feature_index={
+            (0, 1, 10, 11): ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                cell_probability_a=0.95,
+                cell_probability_b=0.40,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+            (0, 1, 10, 12): ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                cell_probability_a=0.95,
+                cell_probability_b=0.90,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+        },
+        feature_gate=TeacherEdgeFeatureGate(min_cell_probability=0.8),
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 12, -1]])
+    assert output.rows[0]["applied"] == 0
+    assert output.rows[0]["reason"] == "feature_gate_cell_probability"
+    assert output.rows[1]["applied"] == 1
     assert output.rows[1]["reason"] == "accepted_insert_target"

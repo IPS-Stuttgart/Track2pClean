@@ -131,6 +131,83 @@ def test_residual_whatif_bundle_rows_accumulate_same_support_family() -> None:
     assert bundle["pairwise_f1_delta"] > single_fn["pairwise_f1_delta"]
 
 
+def test_residual_cumulative_whatif_scores_same_bucket_prefixes() -> None:
+    base = whatif.MicroCounts(
+        pairwise_tp=586,
+        pairwise_fp=26,
+        pairwise_fn=19,
+        complete_tp=56,
+        complete_fp=3,
+        complete_fn=4,
+    )
+    rows = whatif.residual_cumulative_whatif_rows(
+        [
+            {
+                "subject": "jm046",
+                "error_type": "pairwise_fn",
+                "track_id_or_edge": "1:10->2:11",
+                "reason_bucket": "Track2p-supported missed adjacent edge",
+                "is_track2p_supported": "1",
+                "is_policy_supported": "0",
+                "is_gap_rescue_supported": "0",
+                "is_component_cleanup_affected": "0",
+            },
+            {
+                "subject": "jm046",
+                "error_type": "pairwise_fn",
+                "track_id_or_edge": "2:11->3:12",
+                "reason_bucket": "Track2p-supported missed adjacent edge",
+                "is_track2p_supported": "1",
+                "is_policy_supported": "0",
+                "is_gap_rescue_supported": "0",
+                "is_component_cleanup_affected": "0",
+            },
+            {
+                "subject": "jm038",
+                "error_type": "pairwise_fp",
+                "track_id_or_edge": "3:12->4:13",
+                "reason_bucket": "Bayes-only false continuation",
+                "is_track2p_supported": "0",
+                "is_policy_supported": "1",
+                "is_gap_rescue_supported": "0",
+                "is_component_cleanup_affected": "1",
+            },
+        ],
+        base,
+    )
+
+    rescue_prefixes = [
+        row
+        for row in rows
+        if row["edit_type"] == "add_pairwise_fn_as_tp"
+        and row["support_bucket"] == "track2p"
+    ]
+
+    assert [row["selected_count"] for row in rescue_prefixes] == [2, 1]
+    assert rescue_prefixes[0]["new_pairwise_tp"] == 588
+    assert rescue_prefixes[0]["new_pairwise_fp"] == 26
+    assert rescue_prefixes[0]["new_pairwise_fn"] == 17
+    assert rescue_prefixes[0]["pairwise_tp_delta"] == 2
+    assert rescue_prefixes[0]["pairwise_fn_delta"] == -2
+    assert (
+        rescue_prefixes[0]["pairwise_f1_delta"]
+        > rescue_prefixes[1]["pairwise_f1_delta"]
+    )
+
+
+def test_residual_cumulative_whatif_rejects_non_positive_limit() -> None:
+    try:
+        whatif.residual_cumulative_whatif_rows(
+            [],
+            whatif.MicroCounts(0, 0, 0, 0, 0, 0),
+            max_edits_per_group=0,
+        )
+    except ValueError as exc:
+        assert "max_edits_per_group" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected non-positive max_edits_per_group to fail")
+
+
 def test_load_base_counts_sums_subject_rows(tmp_path) -> None:
     path = tmp_path / "component_cleanup.csv"
     with path.open("w", encoding="utf-8", newline="") as handle:

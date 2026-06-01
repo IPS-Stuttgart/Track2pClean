@@ -83,6 +83,8 @@ class ResidualFeature:
     registered_iou: float = float("nan")
     centroid_distance: float = float("nan")
     area_ratio: float = float("nan")
+    cell_probability_a: float = float("nan")
+    cell_probability_b: float = float("nan")
     row_rank: int = -1
     column_rank: int = -1
     row_margin: float = float("nan")
@@ -751,6 +753,12 @@ def _feature_index_from_policy_diagnostics(
             registered_iou=float(diagnostic.assigned_iou),
             centroid_distance=float(diagnostic.centroid_distance),
             area_ratio=float(diagnostic.area_ratio),
+            cell_probability_a=_cell_probability(
+                sessions, session_index, int(source_indices[local_a])
+            ),
+            cell_probability_b=_cell_probability(
+                sessions, session_index + 1, int(target_indices[local_b])
+            ),
             row_rank=1,
             column_rank=1,
             row_margin=float(diagnostic.row_margin),
@@ -802,6 +810,8 @@ def _pair_feature_subset(
             registered_iou=value,
             centroid_distance=float(distances[local_a, local_b]),
             area_ratio=float(area_ratios[local_a, local_b]),
+            cell_probability_a=_session_cell_probability(reference_session, roi_a),
+            cell_probability_b=_session_cell_probability(moving_session, roi_b),
             row_rank=_rank_descending(iou[local_a, :], selected_index=local_b),
             column_rank=_rank_descending(iou[:, local_b], selected_index=local_a),
             row_margin=_margin_against_competitor(
@@ -1104,10 +1114,14 @@ def _cell_probability(
 ) -> float:
     if session_index < 0 or session_index >= len(sessions):
         return float("nan")
-    probabilities = sessions[session_index].plane_data.cell_probabilities
+    return _session_cell_probability(sessions[session_index], suite2p_roi)
+
+
+def _session_cell_probability(session: Track2pSession, suite2p_roi: int) -> float:
+    probabilities = session.plane_data.cell_probabilities
     if probabilities is None:
         return float("nan")
-    roi_indices = _roi_indices(sessions[session_index])
+    roi_indices = _roi_indices(session)
     matches = np.flatnonzero(roi_indices == int(suite2p_roi))
     if matches.size == 0:
         return float("nan")

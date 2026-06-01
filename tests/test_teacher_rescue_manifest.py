@@ -34,6 +34,10 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
                     "allow_completing_seed_source_backfill": True,
                     "allow_fragment_merges": True,
                     "min_component_observations": 2,
+                    "max_applied_edits": 1,
+                    "teacher_min_registered_iou": 0.1,
+                    "teacher_max_centroid_distance": 6.0,
+                    "teacher_min_area_ratio": 0.45,
                     "teacher_edge_order": "dynamic-confidence",
                     "output": "results/teacher-rescue.csv",
                 }
@@ -58,6 +62,11 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
         is True
     )
     assert dict(run.runner_kwargs or {})["min_component_observations"] == 2
+    assert dict(run.runner_kwargs or {})["max_applied_edits"] == 1
+    assert dict(run.runner_kwargs or {})["teacher_min_registered_iou"] == 0.1
+    assert dict(run.runner_kwargs or {})["teacher_max_centroid_distance"] == 6.0
+    assert dict(run.runner_kwargs or {})["teacher_min_area_ratio"] == 0.45
+    assert "teacher_min_cell_probability" not in dict(run.runner_kwargs or {})
     assert dict(run.runner_kwargs or {})["teacher_edge_order"] == "dynamic-confidence"
 
 
@@ -141,6 +150,29 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
             "allow_completing_seed_source_backfill": False,
             "teacher_edge_order": "confidence",
         },
+        "track2p-policy-teacher-adjacent-rescue-feature-gated-dynamic-confidence": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_min_registered_iou": 0.10,
+            "teacher_max_centroid_distance": 6.0,
+            "teacher_min_area_ratio": 0.45,
+            "min_component_observations": 2,
+        },
+        "track2p-policy-teacher-adjacent-rescue-feature-gated-dynamic-confidence-max1": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_min_registered_iou": 0.10,
+            "teacher_max_centroid_distance": 6.0,
+            "teacher_min_area_ratio": 0.45,
+            "min_component_observations": 2,
+            "max_applied_edits": 1,
+        },
         "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source": {
             "allow_completing_rescue": False,
             "allow_teacher_supported_completing_rescue": False,
@@ -163,6 +195,14 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
             "allow_completing_seed_source_backfill": False,
             "teacher_edge_order": "dynamic-confidence",
             "max_applied_edits": 2,
+        },
+        "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source-cellgate": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_min_cell_probability": 0.60,
         },
         "track2p-policy-teacher-adjacent-rescue-seed-source": {
             "allow_completing_rescue": False,
@@ -248,8 +288,10 @@ def test_teacher_rescue_runner_specific_fields_registered():
     assert "allow_completing_seed_source_backfill" in fields
     assert "allow_fragment_merges" in fields
     assert "min_component_observations" in fields
+    assert "max_applied_edits" in fields
     assert "teacher_edge_order" in fields
     assert "teacher_min_registered_iou" in fields
+    assert "teacher_min_cell_probability" in fields
     assert "teacher_require_hungarian" in fields
 
 
@@ -322,7 +364,9 @@ def test_teacher_rescue_manifest_runner_passes_feature_gate(monkeypatch, tmp_pat
         {
             "teacher_min_registered_iou": 0.4,
             "teacher_max_centroid_distance": 3.0,
+            "teacher_min_cell_probability": 0.7,
             "teacher_require_hungarian": True,
+            "max_applied_edits": 1,
         },
     )
 
@@ -330,4 +374,6 @@ def test_teacher_rescue_manifest_runner_passes_feature_gate(monkeypatch, tmp_pat
     gate = captured["teacher_feature_gate"]
     assert gate.min_registered_iou == 0.4
     assert gate.max_centroid_distance == 3.0
+    assert gate.min_cell_probability == 0.7
     assert gate.require_hungarian is True
+    assert captured["max_applied_edits"] == 1
