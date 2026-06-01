@@ -561,3 +561,46 @@ def test_teacher_fn_rescue_preset_rejects_low_cell_probability() -> None:
     np.testing.assert_array_equal(output.tracks, predicted)
     assert output.rows[0]["applied"] == 0
     assert output.rows[0]["reason"] == "feature_gate_cell_probability"
+
+
+def test_teacher_adjacent_rescue_cell_high_confidence_preset_uses_cell_probability() -> None:
+    predicted = np.asarray([[10, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1], [10, 12, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="lexicographic",
+        edge_feature_index={
+            (0, 1, 10, 11): ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                cell_probability_a=0.95,
+                cell_probability_b=0.40,
+                row_margin=0.20,
+                column_margin=0.20,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+            (0, 1, 10, 12): ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                cell_probability_a=0.95,
+                cell_probability_b=0.90,
+                row_margin=0.20,
+                column_margin=0.20,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+        },
+        feature_gate=teacher_feature_gate_from_preset("cell-high-confidence"),
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 12, -1]])
+    assert output.rows[0]["applied"] == 0
+    assert output.rows[0]["reason"] == "feature_gate_cell_probability"
+    assert output.rows[1]["applied"] == 1
+    assert output.rows[1]["reason"] == "accepted_insert_target"

@@ -82,6 +82,7 @@ TeacherFeaturePreset = Literal[
     "none",
     "local-support",
     "high-confidence",
+    "cell-high-confidence",
     "track2p-fn-rescue",
 ]
 
@@ -184,6 +185,17 @@ def teacher_feature_gate_from_preset(
             min_column_margin=0.0,
             max_centroid_distance=4.0,
             min_area_ratio=0.70,
+            require_hungarian=True,
+        )
+    if normalized == "cell-high-confidence":
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.20,
+            min_threshold_margin=0.05,
+            min_row_margin=0.0,
+            min_column_margin=0.0,
+            max_centroid_distance=4.0,
+            min_area_ratio=0.70,
+            min_cell_probability=0.80,
             require_hungarian=True,
         )
     if normalized == "track2p-fn-rescue":
@@ -1055,9 +1067,12 @@ def _teacher_edge_structural_order_key(
     """Rank Track2p teacher edits by expected structural value.
 
     Lower tuples are tried first. The ranking is label-free and uses only the
-    current predicted matrix: compatible fragment merges outrank source
-    backfills, which outrank plain target extensions. Within an action class,
-    edits involving more already-supported observations are tried first.
+    current predicted matrix: opt-in seed-session source backfills outrank
+    compatible fragment merges, which outrank ordinary source backfills and then
+    plain target extensions. The seed-backfill priority only applies when
+    ``allow_seed_source_backfill`` is enabled and directly targets the residual
+    missing-seed bucket. Within an action class, edits involving more
+    already-supported observations are tried first.
     """
 
     session_a, session_b, roi_a, roi_b = edge
@@ -1092,7 +1107,7 @@ def _teacher_edge_structural_order_key(
                     teacher_complete_tracks=teacher_complete_tracks,
                 )
             ):
-                action_rank = 0
+                action_rank = 1
                 evidence = int(np.count_nonzero(merged >= 0))
     elif source_row < 0 and target_row >= 0:
         target_seed_anchored = _row_is_seed_anchored(
@@ -1122,7 +1137,7 @@ def _teacher_edge_structural_order_key(
                 ),
                 teacher_complete_tracks=teacher_complete_tracks,
             ):
-                action_rank = 1
+                action_rank = 0 if seed_source_backfill else 2
                 evidence = int(np.count_nonzero(candidate >= 0))
     elif source_row >= 0 and target_row < 0:
         if _row_is_seed_anchored(predicted[source_row], seed_session):
@@ -1137,7 +1152,7 @@ def _teacher_edge_structural_order_key(
                 ),
                 teacher_complete_tracks=teacher_complete_tracks,
             ):
-                action_rank = 2
+                action_rank = 3
                 evidence = int(np.count_nonzero(candidate >= 0))
 
     return (
@@ -1953,7 +1968,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--teacher-feature-preset",
-        choices=("none", "local-support", "high-confidence", "track2p-fn-rescue"),
+        choices=(
+            "none",
+            "local-support",
+            "high-confidence",
+            "cell-high-confidence",
+            "track2p-fn-rescue",
+        ),
         default="none",
         help=(
             "Apply a label-free feature-gate preset to teacher rescue edges. "
