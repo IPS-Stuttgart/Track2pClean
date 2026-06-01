@@ -229,7 +229,8 @@ def merge_teacher_feature_gates(
             if manual_gate.min_cell_probability is not None
             else preset_gate.min_cell_probability
         ),
-        require_hungarian=manual_gate.require_hungarian or preset_gate.require_hungarian,
+        require_hungarian=manual_gate.require_hungarian
+        or preset_gate.require_hungarian,
     )
 
 
@@ -474,9 +475,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             "track2p_teacher_adjacent_max_applied_edits": (
                 -1 if max_applied_edits is None else int(max_applied_edits)
             ),
-            "track2p_teacher_adjacent_feature_preset": str(
-                teacher_feature_preset
-            ),
+            "track2p_teacher_adjacent_feature_preset": str(teacher_feature_preset),
             "track2p_teacher_adjacent_feature_gate_enabled": int(
                 _teacher_feature_gate_enabled(teacher_feature_gate)
             ),
