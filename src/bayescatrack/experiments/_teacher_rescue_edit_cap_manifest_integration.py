@@ -261,9 +261,11 @@ def _teacher_rescue_edit_cap_rows(output_root: str) -> tuple[dict[str, Any], ...
         "split_risk_threshold": 1.50,
         "split_penalty": 0.25,
         "min_side_observations": 2,
+        "min_component_observations": 2,
         "allow_source_backfill": True,
         "allow_fragment_merges": True,
         "allow_completing_rescue": False,
+        "allow_teacher_supported_completing_rescue": False,
         "allow_seed_source_backfill": False,
         "allow_completing_seed_source_backfill": False,
         "teacher_edge_order": "dynamic-confidence",
@@ -329,11 +331,12 @@ def _insert_mapping_after_any(
     mapping: Mapping[str, Any], *, after_keys: tuple[str, ...], items: Any
 ) -> dict[str, Any]:
     pending = list(items)
+    target_key = next((key for key in after_keys if key in mapping), None)
     result: dict[str, Any] = {}
     inserted = False
     for key, value in mapping.items():
         result[str(key)] = value
-        if not inserted and key in after_keys:
+        if not inserted and key == target_key:
             result.update(dict(pending))
             inserted = True
     if not inserted:
