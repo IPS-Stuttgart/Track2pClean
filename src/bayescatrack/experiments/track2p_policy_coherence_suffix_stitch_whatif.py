@@ -53,9 +53,9 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     emulate_track2p_pruned_tracks,
 )
 from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import (
-    _FeatureCache,
     _creates_duplicate_source,
     _creates_duplicate_target,
+    _FeatureCache,
     _max_attr,
     _mean_attr,
     _min_attr,
@@ -267,9 +267,7 @@ def _select_paths(
     gate: CoherenceSuffixStitchGate,
 ) -> tuple[_PathCandidate, ...]:
     passing = [
-        path
-        for path in paths
-        if _passes_coherence_gate(path, predicted, gate=gate)
+        path for path in paths if _passes_coherence_gate(path, predicted, gate=gate)
     ]
     passing.sort(key=_coherence_sort_key)
     selected: list[_PathCandidate] = []
@@ -389,9 +387,7 @@ def _candidate_row(
     base_row.update(
         {
             "selected_by_gate": int(selected),
-            "gate_pass": int(
-                _passes_coherence_gate(path, predicted, gate=gate)
-            ),
+            "gate_pass": int(_passes_coherence_gate(path, predicted, gate=gate)),
             "path_rank_under_existing_score": int(path.path_rank),
             "pairwise_tp_delta": int(delta["pairwise_true_positives"]),
             "pairwise_fp_delta": int(delta["pairwise_false_positives"]),
