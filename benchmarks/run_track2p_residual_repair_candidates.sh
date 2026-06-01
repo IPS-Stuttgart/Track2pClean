@@ -72,6 +72,20 @@ run_teacher_rescue() {
     --diagnostics-format csv
 }
 
+run_teacher_veto() {
+  local label=$1
+  shift
+  "$PY" -m bayescatrack benchmark track2p-policy-teacher-veto-cleanup \
+    "${COMMON[@]}" \
+    "${POLICY[@]}" \
+    "${CLEANUP[@]}" \
+    "$@" \
+    --output "$OUT/${label}.csv" \
+    --format csv \
+    --diagnostics-output "$OUT/${label}_edges.csv" \
+    --diagnostics-format csv
+}
+
 "$PY" -m bayescatrack benchmark track2p \
   "${COMMON[@]}" \
   --method track2p-baseline \
@@ -260,6 +274,24 @@ run_teacher_rescue teacher_adjacent_teacher_complete_row \
   --allow-fragment-merges \
   --teacher-edge-order dynamic-confidence
 
+# Conservative teacher-veto rows target the other residual family: Bayes-only
+# adjacent false continuations. The geometric row only tests vetoes that are
+# both absent from Track2p and locally weak by centroid/area evidence.
+run_teacher_veto teacher_veto_default \
+  --no-allow-complete-track-veto \
+  --max-threshold-margin 0.10 \
+  --max-competition-margin 0.20 \
+  --min-veto-fragment-observations 2
+
+run_teacher_veto teacher_veto_geometric_max1 \
+  --no-allow-complete-track-veto \
+  --max-threshold-margin 0.10 \
+  --max-competition-margin 0.20 \
+  --min-centroid-distance 3.0 \
+  --max-area-ratio 0.65 \
+  --min-veto-fragment-observations 2 \
+  --max-applied-vetoes 1
+
 "$PY" -m bayescatrack benchmark compare \
   --input Track2p="$OUT/track2p_baseline.csv" \
   --input Track2pPolicyD12="$OUT/track2p_policy_d12.csv" \
@@ -280,6 +312,8 @@ run_teacher_rescue teacher_adjacent_teacher_complete_row \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
   --input TeacherAdjacentTeacherCompleteRow="$OUT/teacher_adjacent_teacher_complete_row.csv" \
+  --input TeacherVetoDefault="$OUT/teacher_veto_default.csv" \
+  --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.md" \
   --format markdown \
   --highlight-best \
@@ -308,6 +342,8 @@ run_teacher_rescue teacher_adjacent_teacher_complete_row \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
   --input TeacherAdjacentTeacherCompleteRow="$OUT/teacher_adjacent_teacher_complete_row.csv" \
+  --input TeacherVetoDefault="$OUT/teacher_veto_default.csv" \
+  --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.csv" \
   --format csv
 

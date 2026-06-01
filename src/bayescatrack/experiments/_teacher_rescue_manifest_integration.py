@@ -45,6 +45,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "min_component_observations",
     "max_applied_edits",
     "teacher_edge_order",
+    "teacher_feature_preset",
     "teacher_min_registered_iou",
     "teacher_min_threshold_margin",
     "teacher_min_row_margin",
@@ -334,6 +335,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         teacher_edge_order=cast(
             TeacherEdgeOrder, str(options.get("teacher_edge_order", "structural"))
         ),
+        teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
         min_component_observations=int(options.get("min_component_observations", 1)),
         max_applied_edits=_optional_int_option(options, "max_applied_edits"),
         teacher_feature_gate=teacher_feature_gate,
@@ -437,6 +439,26 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "dynamic-confidence",
             {},
             "track2p_policy_teacher_adjacent_rescue_feature_gated_dynamic_confidence_max1.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-high-confidence-dynamic-confidence-max1",
+            False,
+            False,
+            False,
+            False,
+            "dynamic-confidence",
+            {"teacher_feature_preset": "high-confidence", "max_applied_edits": 1},
+            "track2p_policy_teacher_adjacent_rescue_high_confidence_dynamic_confidence_max1.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-high-confidence-dynamic-confidence-seed-source-max1",
+            False,
+            True,
+            True,
+            False,
+            "dynamic-confidence",
+            {"teacher_feature_preset": "high-confidence", "max_applied_edits": 1},
+            "track2p_policy_teacher_adjacent_rescue_high_confidence_dynamic_confidence_seed_source_max1.csv",
         ),
         (
             "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max1",
