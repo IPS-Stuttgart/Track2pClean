@@ -127,6 +127,7 @@ def test_teacher_adjacent_parser_defaults_to_structural_order() -> None:
     assert args.allow_teacher_confirmed_completing_rescue is False
     assert args.min_component_observations == 1
     assert args.max_applied_edits is None
+    assert args.teacher_feature_preset == "none"
 
 
 def test_teacher_adjacent_parser_accepts_dynamic_structural_order() -> None:
@@ -159,6 +160,14 @@ def test_teacher_adjacent_parser_accepts_max_applied_edits() -> None:
     )
 
     assert args.max_applied_edits == 1
+
+
+def test_teacher_adjacent_parser_accepts_feature_preset() -> None:
+    args = rescue.build_arg_parser().parse_args(
+        ["--data", "track2p-root", "--teacher-feature-preset", "local-support"]
+    )
+
+    assert args.teacher_feature_preset == "local-support"
 
 
 def test_teacher_adjacent_rescue_extends_seed_anchored_chain() -> None:
@@ -575,6 +584,50 @@ def test_teacher_adjacent_rescue_dynamic_confidence_recomputes_with_features() -
     assert any(
         row["reason"] == "accepted_merge_fragments" for row in confidence_report.rows
     )
+
+
+def test_teacher_feature_preset_local_support_requires_hungarian_assignment() -> None:
+    gate = rescue.teacher_feature_gate_from_preset("local-support")
+    feature = rescue.ResidualFeature(
+        registered_iou=0.5,
+        centroid_distance=2.0,
+        area_ratio=0.8,
+        row_margin=0.1,
+        column_margin=0.1,
+        threshold_margin=0.1,
+        assigned_by_hungarian=0,
+    )
+
+    assert (
+        rescue._teacher_edge_feature_gate_reason(feature, gate)
+        == "feature_gate_hungarian"
+    )
+
+
+def test_teacher_feature_preset_high_confidence_accepts_strong_edge() -> None:
+    gate = rescue.teacher_feature_gate_from_preset("high-confidence")
+    feature = rescue.ResidualFeature(
+        registered_iou=0.4,
+        centroid_distance=2.0,
+        area_ratio=0.8,
+        row_margin=0.1,
+        column_margin=0.1,
+        threshold_margin=0.1,
+        assigned_by_hungarian=1,
+    )
+
+    assert rescue._teacher_edge_feature_gate_reason(feature, gate) == "accepted"
+
+
+def test_teacher_feature_gate_preset_can_be_merged_with_manual_override() -> None:
+    preset_gate = rescue.teacher_feature_gate_from_preset("local-support")
+    manual_gate = rescue.TeacherEdgeFeatureGate(max_centroid_distance=3.0)
+    merged = rescue.merge_teacher_feature_gates(preset_gate, manual_gate)
+
+    assert merged is not None
+    assert merged.max_centroid_distance == 3.0
+    assert merged.min_area_ratio == 0.60
+    assert merged.require_hungarian
 
 
 def test_teacher_adjacent_rescue_merges_compatible_fragments() -> None:

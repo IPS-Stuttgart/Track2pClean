@@ -43,6 +43,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "allow_completing_seed_source_backfill",
     "allow_fragment_merges",
     "min_component_observations",
+    "max_applied_edits",
     "teacher_edge_order",
     "teacher_min_registered_iou",
     "teacher_min_threshold_margin",
@@ -50,6 +51,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "teacher_min_column_margin",
     "teacher_max_centroid_distance",
     "teacher_min_area_ratio",
+    "teacher_min_cell_probability",
     "teacher_require_hungarian",
     "teacher_require_hungarian_assignment",
     "teacher_gate_min_registered_iou",
@@ -58,6 +60,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "teacher_gate_min_column_margin",
     "teacher_gate_max_centroid_distance",
     "teacher_gate_min_area_ratio",
+    "teacher_gate_min_cell_probability",
     "teacher_gate_require_hungarian",
 }
 
@@ -66,6 +69,13 @@ def _optional_float_option(options: Mapping[str, Any], *names: str) -> float | N
     for name in names:
         if name in options and options[name] not in {None, ""}:
             return float(options[name])
+    return None
+
+
+def _optional_int_option(options: Mapping[str, Any], *names: str) -> int | None:
+    for name in names:
+        if name in options and options[name] not in {None, ""}:
+            return int(options[name])
     return None
 
 
@@ -275,6 +285,9 @@ def _run_track2p_policy_teacher_adjacent_rows(
         min_area_ratio=_optional_float_option(
             options, "teacher_min_area_ratio", "teacher_gate_min_area_ratio"
         ),
+        min_cell_probability=_optional_float_option(
+            options, "teacher_min_cell_probability", "teacher_gate_min_cell_probability"
+        ),
         require_hungarian=require_hungarian,
     )
     if not teacher_feature_gate.enabled:
@@ -319,6 +332,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
             TeacherEdgeOrder, str(options.get("teacher_edge_order", "structural"))
         ),
         min_component_observations=int(options.get("min_component_observations", 1)),
+        max_applied_edits=_optional_int_option(options, "max_applied_edits"),
         teacher_feature_gate=teacher_feature_gate,
     )
     return [result.to_dict() for result in output.results]
@@ -397,6 +411,24 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "track2p_policy_teacher_adjacent_rescue_confidence.csv",
         ),
         (
+            "track2p-policy-teacher-adjacent-rescue-feature-gated-dynamic-confidence",
+            False,
+            False,
+            False,
+            False,
+            "dynamic-confidence",
+            "track2p_policy_teacher_adjacent_rescue_feature_gated_dynamic_confidence.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-feature-gated-dynamic-confidence-max1",
+            False,
+            False,
+            False,
+            False,
+            "dynamic-confidence",
+            "track2p_policy_teacher_adjacent_rescue_feature_gated_dynamic_confidence_max1.csv",
+        ),
+        (
             "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source",
             False,
             True,
@@ -404,6 +436,15 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             False,
             "dynamic-confidence",
             "track2p_policy_teacher_adjacent_rescue_dynamic_confidence_seed_source.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source-cellgate",
+            False,
+            True,
+            True,
+            False,
+            "dynamic-confidence",
+            "track2p_policy_teacher_adjacent_rescue_dynamic_confidence_seed_source_cellgate.csv",
         ),
         (
             "track2p-policy-teacher-adjacent-rescue-seed-source",
@@ -475,6 +516,18 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
                 {"min_component_observations": 2} if name.endswith("-supported") else {}
             ),
             **(
+                _feature_gated_teacher_options(
+                    max_applied_edits=1 if name.endswith("-max1") else None
+                )
+                if "-feature-gated-" in name
+                else {}
+            ),
+            **(
+                {"teacher_min_cell_probability": 0.60}
+                if name.endswith("-cellgate")
+                else {}
+            ),
+            **(
                 {"teacher_edge_order": teacher_edge_order} if teacher_edge_order else {}
             ),
             "output": f"{output_root}/{filename}",
@@ -489,6 +542,20 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             filename,
         ) in variants
     )
+
+
+def _feature_gated_teacher_options(
+    *, max_applied_edits: int | None = None
+) -> dict[str, Any]:
+    options: dict[str, Any] = {
+        "teacher_min_registered_iou": 0.10,
+        "teacher_max_centroid_distance": 6.0,
+        "teacher_min_area_ratio": 0.45,
+        "min_component_observations": 2,
+    }
+    if max_applied_edits is not None:
+        options["max_applied_edits"] = int(max_applied_edits)
+    return options
 
 
 def _append_teacher_rescue_runs(manifest: dict[str, Any], *, output_root: str) -> None:
