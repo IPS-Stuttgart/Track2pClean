@@ -1251,9 +1251,7 @@ def _run_track2p_policy_coherence_suffix_rows(
         path_beam_width=int(options.get("path_beam_width", 100)),
     )
     return [
-        dict(row)
-        for row in output.result_rows
-        if str(row.get("subject", "")) != "ALL"
+        dict(row) for row in output.result_rows if str(row.get("subject", "")) != "ALL"
     ]
 
 
