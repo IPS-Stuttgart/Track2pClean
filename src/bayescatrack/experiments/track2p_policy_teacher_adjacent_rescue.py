@@ -1234,9 +1234,9 @@ def _teacher_edge_feature_order_key(
         -registered_iou,
         -threshold_margin,
         -min(row_margin, column_margin),
-        -min_cell_probability,
         centroid_distance,
         -area_ratio,
+        -min_cell_probability,
     )
 
 
