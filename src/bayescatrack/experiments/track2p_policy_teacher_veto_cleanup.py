@@ -80,6 +80,10 @@ class TeacherVetoConfig:
     max_competition_margin: float = 0.20
     min_registered_iou: float | None = None
     max_registered_iou: float | None = None
+    min_centroid_distance: float | None = None
+    max_area_ratio: float | None = None
+    max_cell_probability: float | None = None
+    require_unassigned_by_hungarian: bool = False
     allow_complete_track_veto: bool = False
     keep_right_fragment: bool = True
     min_fragment_observations: int = 2
@@ -184,6 +188,18 @@ def run_track2p_policy_teacher_veto_cleanup(
             ),
             "track2p_teacher_veto_max_registered_iou": _optional_float(
                 veto_config.max_registered_iou
+            ),
+            "track2p_teacher_veto_min_centroid_distance": _optional_float(
+                veto_config.min_centroid_distance
+            ),
+            "track2p_teacher_veto_max_area_ratio": _optional_float(
+                veto_config.max_area_ratio
+            ),
+            "track2p_teacher_veto_max_cell_probability": _optional_float(
+                veto_config.max_cell_probability
+            ),
+            "track2p_teacher_veto_require_unassigned_by_hungarian": int(
+                veto_config.require_unassigned_by_hungarian
             ),
             "track2p_teacher_veto_allow_complete_track_veto": int(
                 veto_config.allow_complete_track_veto
@@ -345,19 +361,26 @@ def _legacy_veto_order_label(config: TeacherVetoConfig) -> str:
 
 def _veto_edge_risk_order_key(
     edge: TrackEdge, feature: ResidualFeature | None
-) -> tuple[int, float, float, float, int, int, int, int]:
+) -> tuple[int, float, float, float, float, float, float, int, int, int, int]:
     feature = feature or ResidualFeature()
     competition_margin = min(float(feature.row_margin), float(feature.column_margin))
+    min_cell_probability = _min_cell_probability(feature)
     feature_missing = int(
         not _finite(feature.threshold_margin)
         or not _finite(competition_margin)
         or not _finite(feature.registered_iou)
+        or not _finite(feature.centroid_distance)
+        or not _finite(feature.area_ratio)
+        or not _finite(min_cell_probability)
     )
     return (
         feature_missing,
         _finite_or_inf(feature.threshold_margin),
         _finite_or_inf(competition_margin),
         _finite_or_inf(feature.registered_iou),
+        _finite_or_neg_inf(-float(feature.centroid_distance)),
+        _finite_or_inf(feature.area_ratio),
+        _finite_or_inf(min_cell_probability),
         int(edge[0]),
         int(edge[1]),
         int(edge[2]),
@@ -465,6 +488,24 @@ def _gate_reject_reason(
             return "feature_missing"
         if float(feature.registered_iou) > float(config.max_registered_iou):
             return "registered_iou_too_high"
+    if config.min_centroid_distance is not None:
+        if not _finite(feature.centroid_distance):
+            return "feature_missing"
+        if float(feature.centroid_distance) < float(config.min_centroid_distance):
+            return "centroid_distance_too_low"
+    if config.max_area_ratio is not None:
+        if not _finite(feature.area_ratio):
+            return "feature_missing"
+        if float(feature.area_ratio) > float(config.max_area_ratio):
+            return "area_ratio_too_high"
+    if config.max_cell_probability is not None:
+        min_cell_probability = _min_cell_probability(feature)
+        if not _finite(min_cell_probability):
+            return "feature_missing"
+        if float(min_cell_probability) > float(config.max_cell_probability):
+            return "cell_probability_too_high"
+    if config.require_unassigned_by_hungarian and int(feature.assigned_by_hungarian):
+        return "assigned_by_hungarian"
     return None
 
 
@@ -483,6 +524,9 @@ def _veto_row(
         "registered_iou": float(feature.registered_iou),
         "centroid_distance": float(feature.centroid_distance),
         "area_ratio": float(feature.area_ratio),
+        "cell_probability_a": float(feature.cell_probability_a),
+        "cell_probability_b": float(feature.cell_probability_b),
+        "min_cell_probability": float(_min_cell_probability(feature)),
         "row_rank": int(feature.row_rank),
         "column_rank": int(feature.column_rank),
         "row_margin": float(feature.row_margin),
@@ -497,6 +541,16 @@ def _veto_row(
 
 def _finite(value: float) -> bool:
     return math.isfinite(float(value))
+
+
+def _min_cell_probability(feature: ResidualFeature) -> float:
+    return min(float(feature.cell_probability_a), float(feature.cell_probability_b))
+
+
+def _finite_or_neg_inf(value: float) -> float:
+    if _finite(value):
+        return float(value)
+    return float("inf")
 
 
 def _finite_or_inf(value: float) -> float:
@@ -576,6 +630,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-registered-iou", type=float, default=None)
     parser.add_argument("--max-registered-iou", type=float, default=None)
     parser.add_argument(
+        "--min-centroid-distance",
+        type=float,
+        default=None,
+        help="Only veto teacher-absent edges whose centroid distance is at least this large.",
+    )
+    parser.add_argument(
+        "--max-area-ratio",
+        type=float,
+        default=None,
+        help="Only veto teacher-absent edges whose ROI area ratio is at most this value.",
+    )
+    parser.add_argument(
+        "--max-cell-probability",
+        type=float,
+        default=None,
+        help=(
+            "Only veto teacher-absent edges whose weaker endpoint cell probability "
+            "is at most this value."
+        ),
+    )
+    parser.add_argument(
+        "--require-unassigned-by-hungarian",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Only veto teacher-absent edges that were not assigned by the local Hungarian step.",
+    )
+    parser.add_argument(
         "--allow-complete-track-veto",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -650,6 +731,10 @@ def main(argv: list[str] | None = None) -> int:
         max_competition_margin=float(args.max_competition_margin),
         min_registered_iou=args.min_registered_iou,
         max_registered_iou=args.max_registered_iou,
+        min_centroid_distance=args.min_centroid_distance,
+        max_area_ratio=args.max_area_ratio,
+        max_cell_probability=args.max_cell_probability,
+        require_unassigned_by_hungarian=bool(args.require_unassigned_by_hungarian),
         allow_complete_track_veto=bool(args.allow_complete_track_veto),
         keep_right_fragment=bool(args.keep_right_fragment),
         min_fragment_observations=int(args.min_veto_fragment_observations),
