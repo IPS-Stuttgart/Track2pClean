@@ -6,8 +6,25 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
 )
 from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     TeacherEdgeFeatureGate,
+    _teacher_completion_gate_kwargs,
     apply_teacher_adjacent_rescue_edges,
 )
+
+
+def test_teacher_completion_gate_kwargs_preserve_exact_aliases() -> None:
+    kwargs = _teacher_completion_gate_kwargs(
+        allow_teacher_complete_row_rescue=True,
+        allow_teacher_supported_completion=False,
+        allow_teacher_supported_completing_rescue=False,
+        allow_teacher_confirmed_completing_rescue=False,
+    )
+
+    assert kwargs == {
+        "allow_teacher_complete_row_rescue": True,
+        "allow_teacher_supported_completion": False,
+        "allow_teacher_supported_completing_rescue": False,
+        "allow_teacher_confirmed_completing_rescue": False,
+    }
 
 
 def test_teacher_adjacent_rescue_inserts_missing_source_into_seed_anchored_row() -> (
@@ -233,6 +250,34 @@ def test_teacher_adjacent_rescue_teacher_complete_row_alias_reports_support() ->
     assert output.rows[-1]["applied"] == 1
     assert output.rows[-1]["reason"] == "accepted_insert_target"
     assert output.rows[-1]["teacher_complete_row_supported"] == 1
+
+
+def test_teacher_adjacent_rescue_exact_completion_rejects_partial_teacher_row() -> None:
+    predicted = np.asarray([[100, 20, -1, 40]], dtype=int)
+    partial_teacher = np.asarray([[100, 20, 30, -1]], dtype=int)
+
+    exact = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        partial_teacher,
+        seed_session=0,
+        allow_teacher_complete_row_rescue=True,
+    )
+
+    np.testing.assert_array_equal(exact.tracks, predicted)
+    assert exact.rows[-1]["applied"] == 0
+    assert exact.rows[-1]["reason"] == "would_complete_track"
+    assert exact.rows[-1]["teacher_complete_row_supported"] == 0
+
+    supported = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        partial_teacher,
+        seed_session=0,
+        allow_teacher_supported_completion=True,
+    )
+
+    np.testing.assert_array_equal(supported.tracks, [[100, 20, 30, 40]])
+    assert supported.rows[-1]["applied"] == 1
+    assert supported.rows[-1]["teacher_complete_row_supported"] == 1
 
 
 def test_teacher_adjacent_rescue_dynamic_confidence_reorders_stale_slot_claims() -> (

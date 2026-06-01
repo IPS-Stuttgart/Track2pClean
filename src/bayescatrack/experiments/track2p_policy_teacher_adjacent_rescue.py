@@ -245,6 +245,27 @@ def _resolve_source_backfill_alias(
     return bool(allow_source_inserts)
 
 
+def _teacher_completion_gate_kwargs(
+    *,
+    allow_teacher_complete_row_rescue: bool,
+    allow_teacher_supported_completion: bool,
+    allow_teacher_supported_completing_rescue: bool,
+    allow_teacher_confirmed_completing_rescue: bool,
+) -> dict[str, bool]:
+    """Return teacher-completion kwargs without broadening exact aliases."""
+
+    return {
+        "allow_teacher_complete_row_rescue": bool(allow_teacher_complete_row_rescue),
+        "allow_teacher_supported_completion": bool(allow_teacher_supported_completion),
+        "allow_teacher_supported_completing_rescue": bool(
+            allow_teacher_supported_completing_rescue
+        ),
+        "allow_teacher_confirmed_completing_rescue": bool(
+            allow_teacher_confirmed_completing_rescue
+        ),
+    }
+
+
 def run_track2p_policy_teacher_adjacent_rescue(
     config: Track2pBenchmarkConfig,
     *,
@@ -293,12 +314,17 @@ def run_track2p_policy_teacher_adjacent_rescue(
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
-    allow_teacher_supported_completion_enabled = bool(
-        allow_teacher_complete_row_rescue
-        or allow_teacher_supported_completion
-        or allow_teacher_supported_completing_rescue
-        or allow_teacher_confirmed_completing_rescue
+    teacher_completion_kwargs = _teacher_completion_gate_kwargs(
+        allow_teacher_complete_row_rescue=allow_teacher_complete_row_rescue,
+        allow_teacher_supported_completion=allow_teacher_supported_completion,
+        allow_teacher_supported_completing_rescue=(
+            allow_teacher_supported_completing_rescue
+        ),
+        allow_teacher_confirmed_completing_rescue=(
+            allow_teacher_confirmed_completing_rescue
+        ),
     )
+    allow_teacher_completion_gate_enabled = any(teacher_completion_kwargs.values())
     allow_seed_completion = bool(
         allow_seed_completing_backfill
         or allow_seed_completing_rescue
@@ -362,9 +388,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             teacher_full,
             seed_session=policy_config.seed_session,
             allow_completing_rescue=allow_completing_rescue,
-            allow_teacher_supported_completing_rescue=(
-                allow_teacher_supported_completion_enabled
-            ),
+            **teacher_completion_kwargs,
             allow_completing_source_backfill=allow_completing_source_backfill,
             allow_completing_fragment_merges=allow_fragment_completion,
             allow_source_backfill=source_backfill_enabled,
@@ -408,7 +432,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 allow_teacher_confirmed_completing_rescue
             ),
             "track2p_teacher_adjacent_allow_teacher_completion_gate": int(
-                allow_teacher_supported_completion_enabled
+                allow_teacher_completion_gate_enabled
             ),
             "track2p_teacher_adjacent_allow_completing_source_backfill": int(
                 allow_completing_source_backfill
