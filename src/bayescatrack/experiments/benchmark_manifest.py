@@ -32,6 +32,7 @@ TRACK2P_POLICY_RUNNER = "track2p-policy"
 TRACK2P_POLICY_DP_RUNNER = "track2p-policy-dp"
 TRACK2P_POLICY_PRUNED_RUNNER = "track2p-policy-pruned"
 TRACK2P_POLICY_COMPONENT_RUNNER = "track2p-policy-component-audit"
+TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER = "track2p-policy-coherence-suffix-stitch"
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
 BenchmarkRunner = Literal[
     "track2p",
@@ -39,6 +40,7 @@ BenchmarkRunner = Literal[
     "track2p-policy-dp",
     "track2p-policy-pruned",
     "track2p-policy-component-audit",
+    "track2p-policy-coherence-suffix-stitch",
     "track2p-policy-teacher-adjacent-rescue",
     "track2p-loso-calibration",
     "track2p-monotone-loso",
@@ -82,6 +84,20 @@ TRACK2P_POLICY_COMPONENT_FIELDS = TRACK2P_POLICY_FIELDS | {
     "column_margin_weight",
     "centroid_distance_weight",
     "area_ratio_weight",
+}
+TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS = (
+    TRACK2P_POLICY_COMPONENT_FIELDS - {"apply_splits"}
+) | {
+    "suffix_path_length",
+    "min_cell_probability",
+    "min_area_ratio",
+    "max_centroid_distance",
+    "min_shifted_iou",
+    "min_motion_consistency",
+    "min_shape_consistency",
+    "max_stitches_per_subject",
+    "edge_top_k",
+    "path_beam_width",
 }
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     TRACK2P_POLICY_COMPONENT_FIELDS - {"apply_splits"}
@@ -172,6 +188,7 @@ RUNNER_SPECIFIC_FIELDS = (
     | TRACK2P_POLICY_DP_FIELDS
     | TRACK2P_POLICY_PRUNED_FIELDS
     | TRACK2P_POLICY_COMPONENT_FIELDS
+    | TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS
     | TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS
     | CONFIGURABLE_LOSO_FIELDS
     | MONOTONE_LOSO_FIELDS
@@ -194,6 +211,9 @@ RUNNER_CONFIG_FIELDS: dict[str, set[str]] = {
     TRACK2P_POLICY_COMPONENT_RUNNER: set(
         TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_COMPONENT_FIELDS
     ),
+    TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER: set(
+        TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS
+    ),
     TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER: set(
         TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS
     ),
@@ -211,6 +231,11 @@ RUNNER_ALIASES = {
     TRACK2P_POLICY_PRUNED_RUNNER: TRACK2P_POLICY_PRUNED_RUNNER,
     TRACK2P_POLICY_COMPONENT_RUNNER: TRACK2P_POLICY_COMPONENT_RUNNER,
     "track2p-component-cleanup": TRACK2P_POLICY_COMPONENT_RUNNER,
+    TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER: TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER,
+    "track2p-coherence-suffix-stitch": TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER,
+    "track2p-component-coherence-suffix-stitch": (
+        TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER
+    ),
     TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER: (
         TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER
     ),
@@ -488,6 +513,11 @@ def _run_benchmark_rows(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
+    if run_spec.runner == TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER:
+        return _run_track2p_policy_coherence_suffix_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
     if run_spec.runner == TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER:
         return _run_track2p_policy_teacher_adjacent_rescue_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
@@ -550,6 +580,8 @@ def _runner_specific_fields(runner: str) -> set[str]:
         return set(TRACK2P_POLICY_PRUNED_FIELDS)
     if runner == TRACK2P_POLICY_COMPONENT_RUNNER:
         return set(TRACK2P_POLICY_COMPONENT_FIELDS)
+    if runner == TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER:
+        return set(TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS)
     if runner == TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER:
         return set(TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS)
     if runner == "track2p-loso-calibration":
@@ -582,6 +614,12 @@ def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
         return {
             key: run_data[key]
             for key in TRACK2P_POLICY_COMPONENT_FIELDS
+            if key in run_data
+        }
+    if runner == TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER:
+        return {
+            key: run_data[key]
+            for key in TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS
             if key in run_data
         }
     if runner == TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER:
@@ -707,6 +745,7 @@ def _run_config(
         TRACK2P_POLICY_DP_RUNNER,
         TRACK2P_POLICY_PRUNED_RUNNER,
         TRACK2P_POLICY_COMPONENT_RUNNER,
+        TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER,
         TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER,
     }:
         config_defaults = {
@@ -814,6 +853,11 @@ def _run_manifest_entry(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
         )
     if run_spec.runner == TRACK2P_POLICY_COMPONENT_RUNNER:
         return _run_track2p_policy_component_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER:
+        return _run_track2p_policy_coherence_suffix_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
@@ -1069,6 +1113,146 @@ def _run_track2p_policy_component_rows(
         apply_splits=_bool_option(options, "apply_splits", default=True),
     )
     return [result.to_dict() for result in output.results]
+
+
+def _run_track2p_policy_coherence_suffix_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.track2p_policy_benchmark import (
+        TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
+    from bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif import (
+        CoherenceSuffixStitchGate,
+        run_track2p_policy_coherence_suffix_stitch_whatif,
+    )
+    from bayescatrack.experiments.track2p_policy_component_audit import (
+        ComponentCleanupConfig,
+    )
+
+    cleanup_defaults = ComponentCleanupConfig()
+    cleanup_config = ComponentCleanupConfig(
+        threshold_margin_scale=_float_option(
+            options,
+            "threshold_margin_scale",
+            default=cleanup_defaults.threshold_margin_scale,
+        ),
+        competition_margin_scale=_float_option(
+            options,
+            "competition_margin_scale",
+            default=cleanup_defaults.competition_margin_scale,
+        ),
+        area_ratio_floor=_float_option(
+            options,
+            "area_ratio_floor",
+            default=cleanup_defaults.area_ratio_floor,
+        ),
+        centroid_distance_scale=_float_option(
+            options,
+            "centroid_distance_scale",
+            default=cleanup_defaults.centroid_distance_scale,
+        ),
+        split_risk_threshold=_float_option(
+            options,
+            "split_risk_threshold",
+            default=cleanup_defaults.split_risk_threshold,
+        ),
+        split_penalty=_float_option(
+            options,
+            "split_penalty",
+            default=cleanup_defaults.split_penalty,
+        ),
+        min_side_observations=int(
+            options.get("min_side_observations", cleanup_defaults.min_side_observations)
+        ),
+        threshold_margin_weight=_float_option(
+            options,
+            "threshold_margin_weight",
+            default=cleanup_defaults.threshold_margin_weight,
+        ),
+        row_margin_weight=_float_option(
+            options,
+            "row_margin_weight",
+            default=cleanup_defaults.row_margin_weight,
+        ),
+        column_margin_weight=_float_option(
+            options,
+            "column_margin_weight",
+            default=cleanup_defaults.column_margin_weight,
+        ),
+        centroid_distance_weight=_float_option(
+            options,
+            "centroid_distance_weight",
+            default=cleanup_defaults.centroid_distance_weight,
+        ),
+        area_ratio_weight=_float_option(
+            options,
+            "area_ratio_weight",
+            default=cleanup_defaults.area_ratio_weight,
+        ),
+    )
+    gate_defaults = CoherenceSuffixStitchGate()
+    gate = CoherenceSuffixStitchGate(
+        suffix_path_length=int(
+            options.get("suffix_path_length", gate_defaults.suffix_path_length)
+        ),
+        min_cell_probability=_float_option(
+            options,
+            "min_cell_probability",
+            default=gate_defaults.min_cell_probability,
+        ),
+        min_area_ratio=_float_option(
+            options,
+            "min_area_ratio",
+            default=gate_defaults.min_area_ratio,
+        ),
+        max_centroid_distance=_float_option(
+            options,
+            "max_centroid_distance",
+            default=gate_defaults.max_centroid_distance,
+        ),
+        min_shifted_iou=_float_option(
+            options,
+            "min_shifted_iou",
+            default=gate_defaults.min_shifted_iou,
+        ),
+        min_motion_consistency=_float_option(
+            options,
+            "min_motion_consistency",
+            default=gate_defaults.min_motion_consistency,
+        ),
+        min_shape_consistency=_float_option(
+            options,
+            "min_shape_consistency",
+            default=gate_defaults.min_shape_consistency,
+        ),
+        max_stitches_per_subject=int(
+            options.get(
+                "max_stitches_per_subject",
+                gate_defaults.max_stitches_per_subject,
+            )
+        ),
+    )
+    output = run_track2p_policy_coherence_suffix_stitch_whatif(
+        config,
+        threshold_method=_policy_threshold_method(
+            options.get("threshold_method", TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
+        ),
+        iou_distance_threshold=_float_option(
+            options,
+            "iou_distance_threshold",
+            default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        ),
+        transform_type=config.transform_type,
+        cell_probability_threshold=config.cell_probability_threshold,
+        cleanup_config=cleanup_config,
+        gate=gate,
+        edge_top_k=int(options.get("edge_top_k", 25)),
+        path_beam_width=int(options.get("path_beam_width", 100)),
+    )
+    return [
+        dict(row) for row in output.result_rows if str(row.get("subject", "")) != "ALL"
+    ]
 
 
 def _run_track2p_policy_teacher_adjacent_rescue_rows(

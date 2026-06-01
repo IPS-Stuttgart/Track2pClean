@@ -53,6 +53,8 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     emulate_track2p_pruned_tracks,
 )
 from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import (
+    _creates_duplicate_source,
+    _creates_duplicate_target,
     _FeatureCache,
     _max_attr,
     _mean_attr,
@@ -189,7 +191,6 @@ def _subject_whatif_rows(
     selected = _select_paths(
         paths,
         cleaned_eval,
-        reference_eval,
         gate=gate,
     )
     stitched = _apply_suffix_paths(cleaned_eval, selected)
@@ -262,14 +263,11 @@ def _component_cleanup_eval(
 def _select_paths(
     paths: Sequence[_PathCandidate],
     predicted: np.ndarray,
-    reference: np.ndarray,
     *,
     gate: CoherenceSuffixStitchGate,
 ) -> tuple[_PathCandidate, ...]:
     passing = [
-        path
-        for path in paths
-        if _passes_coherence_gate(path, predicted, reference, gate=gate)
+        path for path in paths if _passes_coherence_gate(path, predicted, gate=gate)
     ]
     passing.sort(key=_coherence_sort_key)
     selected: list[_PathCandidate] = []
@@ -329,7 +327,6 @@ def _compatible_with_selected_paths(
 def _passes_coherence_gate(
     path: _PathCandidate,
     predicted: np.ndarray,
-    reference: np.ndarray,
     *,
     gate: CoherenceSuffixStitchGate,
 ) -> bool:
@@ -340,10 +337,11 @@ def _passes_coherence_gate(
         return False
     if any(_target_slot_occupied(path, predicted)):
         return False
-    row = _path_row("", path, predicted, reference)
-    if int(row["creates_duplicate_source"]) or int(row["creates_duplicate_target"]):
+    if any(_creates_duplicate_source(edge.edge, predicted) for edge in path.edges):
         return False
-    if int(row["would_merge_complete_tp"]):
+    if any(_creates_duplicate_target(edge.edge, predicted) for edge in path.edges):
+        return False
+    if _would_merge_complete_prediction(path, predicted):
         return False
     return bool(
         metrics["min_cell_probability"] >= float(gate.min_cell_probability)
@@ -389,9 +387,7 @@ def _candidate_row(
     base_row.update(
         {
             "selected_by_gate": int(selected),
-            "gate_pass": int(
-                _passes_coherence_gate(path, predicted, reference, gate=gate)
-            ),
+            "gate_pass": int(_passes_coherence_gate(path, predicted, gate=gate)),
             "path_rank_under_existing_score": int(path.path_rank),
             "pairwise_tp_delta": int(delta["pairwise_true_positives"]),
             "pairwise_fp_delta": int(delta["pairwise_false_positives"]),
@@ -568,6 +564,29 @@ def _target_slot_occupied(
             )
         )
     return tuple(output)
+
+
+def _would_merge_complete_prediction(
+    path: _PathCandidate, predicted: np.ndarray
+) -> bool:
+    """Return whether a suffix would collide with an existing complete prediction.
+
+    The candidate CSV reports the GT-audited ``would_merge_complete_tp`` label,
+    but the method selector must not use that label. This topology-only guard
+    preserves the same safety intent without looking at manual-GT rows.
+    """
+
+    component_id = int(path.component_id)
+    for edge in path.edges:
+        _session_a, session_b, _roi_a, roi_b = edge.edge
+        for row_id, row in enumerate(predicted):
+            if int(row_id) == component_id:
+                continue
+            if session_b >= row.size or int(row[session_b]) != int(roi_b):
+                continue
+            if np.all(row >= 0):
+                return True
+    return False
 
 
 def _motion_consistency(edges: Sequence[Any]) -> float:
