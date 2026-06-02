@@ -99,9 +99,7 @@ TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS = (
     "edge_top_k",
     "path_beam_width",
 }
-TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
-    TRACK2P_POLICY_COMPONENT_FIELDS - {"apply_splits"}
-) | {
+TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = TRACK2P_POLICY_COMPONENT_FIELDS | {
     "allow_completing_rescue",
     "allow_teacher_complete_row_rescue",
     "allow_teacher_supported_completion",
@@ -121,6 +119,7 @@ TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     "min_component_observations",
     "max_applied_edits",
     "teacher_edge_order",
+    "teacher_action_filter",
     "teacher_repair_preset",
     "teacher_feature_preset",
     "teacher_min_registered_iou",
@@ -142,6 +141,11 @@ TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     "teacher_gate_min_area_ratio",
     "teacher_gate_min_cell_probability",
     "teacher_gate_require_hungarian",
+}
+TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_IGNORED_FIELDS = {
+    # The teacher-rescue runner always starts from component cleanup. Existing
+    # manifests use this flag for readability, but it is not a runtime kwarg.
+    "apply_splits",
 }
 CONFIGURABLE_LOSO_FIELDS = {
     "feature_names",
@@ -639,6 +643,7 @@ def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
         return {
             key: run_data[key]
             for key in TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS
+            - TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_IGNORED_FIELDS
             if key in run_data
         }
     if runner == "track2p-loso-calibration":
@@ -1461,6 +1466,7 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
             options, "allow_fragment_merges", default=True
         ),
         teacher_edge_order=str(options.get("teacher_edge_order", "structural")),
+        teacher_action_filter=str(options.get("teacher_action_filter", "all")),
         min_component_observations=int(options.get("min_component_observations", 1)),
         max_applied_edits=_nonnegative_int_or_none(
             options.get("max_applied_edits"), name="max_applied_edits"

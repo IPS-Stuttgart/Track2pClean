@@ -50,15 +50,41 @@ def _expand_teacher_repair_preset(options: Mapping[str, Any]) -> dict[str, Any]:
     preset = str(expanded.get(TEACHER_REPAIR_PRESET_FIELD, "none")).strip().lower()
     if preset in {"", "none"}:
         return expanded
-    if preset != "missing-seed-high-confidence":
+    defaults = {
+        "missing-seed-high-confidence": {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_action_filter": "seed-source-backfill",
+            "teacher_feature_preset": "seed-source-high-confidence",
+            "min_component_observations": 2,
+            "max_applied_edits": 2,
+        },
+        "missing-seed-moderate-iou": {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_action_filter": "seed-source-backfill",
+            "teacher_feature_preset": "seed-source-moderate-iou",
+            "min_component_observations": 2,
+            "max_applied_edits": 2,
+        },
+        "track2p-fn-high-confidence": {
+            "teacher_action_filter": "target-extension",
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_feature_preset": "track2p-fn-rescue",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        },
+    }
+    if preset not in defaults:
         raise ValueError(f"Unsupported teacher_repair_preset: {preset!r}")
 
-    expanded.setdefault("allow_seed_source_backfill", True)
-    expanded.setdefault("allow_completing_seed_source_backfill", True)
-    expanded.setdefault("teacher_edge_order", "dynamic-seed-confidence")
-    expanded.setdefault("teacher_feature_preset", "seed-source-high-confidence")
-    expanded["min_component_observations"] = max(
-        2, int(expanded.get("min_component_observations", 1))
-    )
-    expanded.setdefault("max_applied_edits", 2)
+    for key, value in defaults[preset].items():
+        if key == "min_component_observations":
+            expanded[key] = max(int(value), int(expanded.get(key, 1)))
+        else:
+            expanded.setdefault(key, value)
     return expanded

@@ -244,6 +244,20 @@ run_teacher_rescue teacher_adjacent_dynamic_confidence_track2p_fn_rescue_max2 \
   --min-component-observations 2 \
   --max-applied-edits 2
 
+# Residual-FN cell-confident row: this keeps the permissive residual-FN geometry
+# used for Track2p-supported adjacent FN repair, but requires both endpoints to
+# look like Suite2p cells. It directly tests the remaining pairwise-FN bucket
+# without enabling broad teacher completion or admitting the low-cell tail.
+run_teacher_rescue teacher_adjacent_dynamic_confidence_residual_fn_cell_confident_max2 \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --no-allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-edge-order dynamic-confidence \
+  --teacher-feature-preset residual-fn-cell-confident \
+  --min-component-observations 2 \
+  --max-applied-edits 2
+
 run_teacher_rescue teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2 \
   --no-allow-completing-rescue \
   --allow-source-backfill \
@@ -298,6 +312,12 @@ run_teacher_rescue teacher_adjacent_seed_source_only_high_confidence_max2 \
   --teacher-feature-preset high-confidence \
   --teacher-min-cell-probability 0.60 \
   --max-applied-edits 2
+
+run_teacher_rescue teacher_adjacent_missing_seed_high_confidence_preset \
+  --no-allow-completing-rescue \
+  --no-allow-source-backfill \
+  --allow-fragment-merges \
+  --teacher-repair-preset missing-seed-high-confidence
 
 run_teacher_rescue teacher_adjacent_completing \
   --allow-completing-rescue \
@@ -364,11 +384,13 @@ run_teacher_veto teacher_veto_geometric_max1 \
   --input TeacherAdjacentDynamicConfidenceMax2="$OUT/teacher_adjacent_dynamic_confidence_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceLocalSupportMax2="$OUT/teacher_adjacent_dynamic_confidence_local_support_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceTrack2pFnRescueMax2="$OUT/teacher_adjacent_dynamic_confidence_track2p_fn_rescue_max2.csv" \
+  --input TeacherAdjacentDynamicConfidenceResidualFnCellConfidentMax2="$OUT/teacher_adjacent_dynamic_confidence_residual_fn_cell_confident_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicSeedConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_seed_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentSeedSourceOnlyHighConfidenceMax2="$OUT/teacher_adjacent_seed_source_only_high_confidence_max2.csv" \
+  --input TeacherAdjacentMissingSeedHighConfidencePreset="$OUT/teacher_adjacent_missing_seed_high_confidence_preset.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
@@ -399,11 +421,13 @@ run_teacher_veto teacher_veto_geometric_max1 \
   --input TeacherAdjacentDynamicConfidenceMax2="$OUT/teacher_adjacent_dynamic_confidence_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceLocalSupportMax2="$OUT/teacher_adjacent_dynamic_confidence_local_support_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceTrack2pFnRescueMax2="$OUT/teacher_adjacent_dynamic_confidence_track2p_fn_rescue_max2.csv" \
+  --input TeacherAdjacentDynamicConfidenceResidualFnCellConfidentMax2="$OUT/teacher_adjacent_dynamic_confidence_residual_fn_cell_confident_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicSeedConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_seed_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentSeedSourceOnlyHighConfidenceMax2="$OUT/teacher_adjacent_seed_source_only_high_confidence_max2.csv" \
+  --input TeacherAdjacentMissingSeedHighConfidencePreset="$OUT/teacher_adjacent_missing_seed_high_confidence_preset.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
