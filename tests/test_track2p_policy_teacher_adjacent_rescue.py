@@ -343,6 +343,7 @@ def test_teacher_repair_preset_targets_missing_seed_source_backfill() -> None:
     kwargs = teacher_adjacent_repair_preset_kwargs("missing-seed-high-confidence")
 
     assert kwargs == {
+        "allow_source_backfill": False,
         "allow_seed_source_backfill": True,
         "allow_completing_seed_source_backfill": True,
         "teacher_edge_order": "dynamic-seed-confidence",
@@ -357,6 +358,7 @@ def test_teacher_moderate_iou_repair_preset_targets_missing_seed_source_backfill
     kwargs = teacher_adjacent_repair_preset_kwargs("missing-seed-moderate-iou")
 
     assert kwargs == {
+        "allow_source_backfill": False,
         "allow_seed_source_backfill": True,
         "allow_completing_seed_source_backfill": True,
         "teacher_edge_order": "dynamic-seed-confidence",

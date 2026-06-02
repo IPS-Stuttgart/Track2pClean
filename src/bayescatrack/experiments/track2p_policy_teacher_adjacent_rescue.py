@@ -315,6 +315,7 @@ def teacher_adjacent_repair_preset_kwargs(
         return {}
     if normalized == "missing-seed-high-confidence":
         return {
+            "allow_source_backfill": False,
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": True,
             "teacher_edge_order": "dynamic-seed-confidence",
@@ -325,6 +326,7 @@ def teacher_adjacent_repair_preset_kwargs(
         }
     if normalized == "missing-seed-moderate-iou":
         return {
+            "allow_source_backfill": False,
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": True,
             "teacher_edge_order": "dynamic-seed-confidence",
@@ -496,6 +498,12 @@ def run_track2p_policy_teacher_adjacent_rescue(
     cleanup_config = cleanup_config or ComponentCleanupConfig()
     repair_kwargs = teacher_adjacent_repair_preset_kwargs(teacher_repair_preset)
     if repair_kwargs:
+        if (
+            "allow_source_backfill" in repair_kwargs
+            and allow_source_inserts is None
+            and allow_source_insertions is None
+        ):
+            allow_source_backfill = bool(repair_kwargs["allow_source_backfill"])
         allow_seed_source_backfill = bool(
             allow_seed_source_backfill
             or repair_kwargs.get("allow_seed_source_backfill", False)

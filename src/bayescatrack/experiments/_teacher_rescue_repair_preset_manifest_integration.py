@@ -52,6 +52,7 @@ def _expand_teacher_repair_preset(options: Mapping[str, Any]) -> dict[str, Any]:
         return expanded
     defaults = {
         "missing-seed-high-confidence": {
+            "allow_source_backfill": False,
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": True,
             "teacher_edge_order": "dynamic-seed-confidence",
@@ -61,6 +62,7 @@ def _expand_teacher_repair_preset(options: Mapping[str, Any]) -> dict[str, Any]:
             "max_applied_edits": 2,
         },
         "missing-seed-moderate-iou": {
+            "allow_source_backfill": False,
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": True,
             "teacher_edge_order": "dynamic-seed-confidence",

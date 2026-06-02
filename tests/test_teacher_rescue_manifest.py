@@ -461,6 +461,7 @@ def test_teacher_rescue_manifest_runner_passes_teacher_edge_order(
 
     assert rows == [{"subject": "dummy"}]
     assert captured["teacher_edge_order"] == "confidence"
+    assert captured["allow_source_backfill"] is False
     assert captured["teacher_action_filter"] == "target-extension"
     assert captured["teacher_repair_preset"] == "missing-seed-high-confidence"
 
