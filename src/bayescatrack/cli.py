@@ -109,6 +109,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Audit coherence suffix gate exposure without manual GT labels",
     ),
     (
+        "track2p-policy-coherence-pareto-whatif",
+        "bayescatrack.experiments.track2p_policy_coherence_pareto_whatif",
+        "Run exact one-edit Pareto what-ifs after CoherenceSuffixStitch",
+    ),
+    (
         "track2p-policy-teacher-fn-audit",
         "bayescatrack.experiments.track2p_policy_teacher_fn_audit",
         "Audit Track2p-supported false negatives after component cleanup",
@@ -365,6 +370,12 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     ),
     "track2p-component-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"
+    ),
+    "track2p-coherence-pareto-whatif": (
+        "track2p-policy-coherence-pareto-whatif"
+    ),
+    "track2p-component-coherence-pareto-whatif": (
+        "track2p-policy-coherence-pareto-whatif"
     ),
     "track2p-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
     "track2p-component-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
