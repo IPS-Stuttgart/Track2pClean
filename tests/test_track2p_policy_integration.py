@@ -99,3 +99,21 @@ def test_guarded_benchmark_script_includes_policy_runs() -> None:
     assert '"runner": "track2p-policy-dp"' in script
     assert '"Track2p policy": "track2p-policy"' in script
     assert '"Track2p policy DP": "track2p-policy-dp"' in script
+
+
+def test_checked_in_next_steps_policy_rows_are_consecutive_policy() -> None:
+    manifest = load_benchmark_manifest(
+        Path("benchmarks/bayescatrack_next_steps_manifest.json")
+    )
+    expected_policy_rows = {
+        "track2p-policy-min-d10",
+        "track2p-policy-min-d12",
+        "track2p-policy-min-d14",
+        "track2p-policy-otsu-d12",
+    }
+    rows = {run.name: run for run in manifest.runs if run.name in expected_policy_rows}
+
+    assert set(rows) == expected_policy_rows
+    for run in rows.values():
+        assert run.runner == "track2p-policy"
+        assert run.config.max_gap == 1
