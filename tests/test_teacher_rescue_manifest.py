@@ -38,6 +38,7 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
                     "teacher_min_registered_iou": 0.1,
                     "teacher_max_centroid_distance": 6.0,
                     "teacher_min_area_ratio": 0.45,
+                    "teacher_repair_preset": "missing-seed-high-confidence",
                     "teacher_edge_order": "dynamic-confidence",
                     "teacher_feature_preset": "cell-high-confidence",
                     "output": "results/teacher-rescue.csv",
@@ -71,6 +72,10 @@ def test_manifest_accepts_teacher_adjacent_rescue_runner(tmp_path):
     assert (
         dict(run.runner_kwargs or {})["teacher_feature_preset"]
         == "cell-high-confidence"
+    )
+    assert (
+        dict(run.runner_kwargs or {})["teacher_repair_preset"]
+        == "missing-seed-high-confidence"
     )
     assert dict(run.runner_kwargs or {})["teacher_edge_order"] == "dynamic-confidence"
 
@@ -309,6 +314,18 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
             "teacher_min_cell_probability": 0.60,
             "max_applied_edits": 2,
         },
+        "track2p-policy-teacher-adjacent-rescue-missing-seed-high-confidence": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_repair_preset": "missing-seed-high-confidence",
+            "teacher_feature_preset": "seed-source-high-confidence",
+            "min_component_observations": 2,
+            "max_applied_edits": 2,
+        },
         "track2p-policy-teacher-adjacent-rescue-seed-source": {
             "allow_completing_rescue": False,
             "allow_teacher_supported_completing_rescue": False,
@@ -362,7 +379,8 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
         assert teacher["threshold_method"] == "min"
         assert teacher["iou_distance_threshold"] == 12.0
         assert teacher["cell_probability_threshold"] == 0.5
-        assert teacher["allow_source_backfill"] is True
+        expected_source_backfill = flags.get("allow_source_backfill", True)
+        assert teacher["allow_source_backfill"] is expected_source_backfill
         assert teacher["allow_fragment_merges"] is True
         assert "min_component_observations" in teacher
         for flag, value in flags.items():
@@ -395,6 +413,7 @@ def test_teacher_rescue_runner_specific_fields_registered():
     assert "min_component_observations" in fields
     assert "max_applied_edits" in fields
     assert "teacher_edge_order" in fields
+    assert "teacher_repair_preset" in fields
     assert "teacher_feature_preset" in fields
     assert "teacher_min_registered_iou" in fields
     assert "teacher_min_cell_probability" in fields
@@ -431,11 +450,16 @@ def test_teacher_rescue_manifest_runner_passes_teacher_edge_order(
     config = Track2pBenchmarkConfig(data=tmp_path, method="global-assignment")
 
     rows = integration._run_track2p_policy_teacher_adjacent_rows(
-        config, {"teacher_edge_order": "confidence"}
+        config,
+        {
+            "teacher_edge_order": "confidence",
+            "teacher_repair_preset": "missing-seed-high-confidence",
+        },
     )
 
     assert rows == [{"subject": "dummy"}]
     assert captured["teacher_edge_order"] == "confidence"
+    assert captured["teacher_repair_preset"] == "missing-seed-high-confidence"
 
 
 def test_teacher_rescue_manifest_runner_passes_feature_gate(monkeypatch, tmp_path):

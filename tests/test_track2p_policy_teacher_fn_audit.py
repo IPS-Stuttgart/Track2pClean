@@ -178,6 +178,36 @@ def test_teacher_adjacent_parser_accepts_residual_fn_preset() -> None:
     assert args.teacher_feature_preset == "residual-fn"
 
 
+def test_teacher_adjacent_parser_accepts_moderate_iou_cell_preset() -> None:
+    args = rescue.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--teacher-feature-preset",
+            "moderate-iou-cell-confidence",
+        ]
+    )
+
+    assert args.teacher_feature_preset == "moderate-iou-cell-confidence"
+
+
+def test_teacher_adjacent_parser_accepts_max_registered_iou_gate() -> None:
+    args = rescue.build_arg_parser().parse_args(
+        ["--data", "track2p-root", "--teacher-gate-max-registered-iou", "0.55"]
+    )
+
+    assert args.teacher_max_registered_iou == 0.55
+
+
+def test_teacher_feature_gate_rejects_registered_iou_above_max() -> None:
+    gate = rescue.TeacherEdgeFeatureGate(max_registered_iou=0.55)
+    feature = rescue.ResidualFeature(registered_iou=0.70)
+
+    assert rescue._teacher_edge_feature_gate_reason(feature, gate) == (
+        "feature_gate_max_registered_iou"
+    )
+
+
 def test_teacher_adjacent_rescue_extends_seed_anchored_chain() -> None:
     predicted = np.asarray([[10, -1, -1, 13, -1, -1]], dtype=int)
     teacher = np.asarray([[10, -1, -1, 13, 14, 15]], dtype=int)

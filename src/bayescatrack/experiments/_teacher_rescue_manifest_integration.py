@@ -52,8 +52,10 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "min_component_observations",
     "max_applied_edits",
     "teacher_edge_order",
+    "teacher_repair_preset",
     "teacher_feature_preset",
     "teacher_min_registered_iou",
+    "teacher_max_registered_iou",
     "teacher_min_threshold_margin",
     "teacher_min_row_margin",
     "teacher_min_column_margin",
@@ -63,6 +65,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "teacher_require_hungarian",
     "teacher_require_hungarian_assignment",
     "teacher_gate_min_registered_iou",
+    "teacher_gate_max_registered_iou",
     "teacher_gate_min_threshold_margin",
     "teacher_gate_min_row_margin",
     "teacher_gate_min_column_margin",
@@ -279,6 +282,11 @@ def _run_track2p_policy_teacher_adjacent_rows(
         min_registered_iou=_optional_float_option(
             options, "teacher_min_registered_iou", "teacher_gate_min_registered_iou"
         ),
+        max_registered_iou=_optional_float_option(
+            options,
+            "teacher_max_registered_iou",
+            "teacher_gate_max_registered_iou",
+        ),
         min_threshold_margin=_optional_float_option(
             options, "teacher_min_threshold_margin", "teacher_gate_min_threshold_margin"
         ),
@@ -363,6 +371,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         teacher_edge_order=cast(
             TeacherEdgeOrder, str(options.get("teacher_edge_order", "structural"))
         ),
+        teacher_repair_preset=str(options.get("teacher_repair_preset", "none")),
         teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
         min_component_observations=int(options.get("min_component_observations", 1)),
         max_applied_edits=_optional_int_option(options, "max_applied_edits"),
@@ -613,6 +622,25 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
                 "track2p_policy_teacher_adjacent_rescue_"
                 "dynamic_seed_confidence_seed_source_max2.csv"
             ),
+        ),
+        (
+            (
+                "track2p-policy-teacher-adjacent-rescue-"
+                "missing-seed-high-confidence"
+            ),
+            False,
+            True,
+            True,
+            False,
+            "dynamic-seed-confidence",
+            {
+                "allow_source_backfill": False,
+                "teacher_repair_preset": "missing-seed-high-confidence",
+                "teacher_feature_preset": "seed-source-high-confidence",
+                "min_component_observations": 2,
+                "max_applied_edits": 2,
+            },
+            "track2p_policy_teacher_adjacent_rescue_missing_seed_high_confidence.csv",
         ),
         (
             "track2p-policy-teacher-adjacent-rescue-seed-source",
