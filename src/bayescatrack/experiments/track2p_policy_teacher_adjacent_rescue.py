@@ -88,6 +88,7 @@ TeacherFeaturePreset = Literal[
     "cell-confident",
     "track2p-fn-rescue",
     "residual-fn",
+    "moderate-iou-cell-confidence",
     "seed-source-high-confidence",
 ]
 TeacherRepairPreset = Literal[
@@ -109,6 +110,7 @@ class TeacherEdgeFeatureGate:
     """Label-free local-evidence gate for Track2p teacher rescue edges."""
 
     min_registered_iou: float | None
+    max_registered_iou: float | None
     min_threshold_margin: float | None
     min_row_margin: float | None
     min_column_margin: float | None
@@ -121,6 +123,7 @@ class TeacherEdgeFeatureGate:
         self,
         *,
         min_registered_iou: float | None = None,
+        max_registered_iou: float | None = None,
         min_threshold_margin: float | None = None,
         min_row_margin: float | None = None,
         min_column_margin: float | None = None,
@@ -136,6 +139,7 @@ class TeacherEdgeFeatureGate:
         if require_assigned_by_hungarian is not None:
             require_hungarian = bool(require_assigned_by_hungarian)
         object.__setattr__(self, "min_registered_iou", min_registered_iou)
+        object.__setattr__(self, "max_registered_iou", max_registered_iou)
         object.__setattr__(self, "min_threshold_margin", min_threshold_margin)
         object.__setattr__(self, "min_row_margin", min_row_margin)
         object.__setattr__(self, "min_column_margin", min_column_margin)
@@ -157,6 +161,7 @@ class TeacherEdgeFeatureGate:
         return bool(
             self.require_hungarian
             or self.min_registered_iou is not None
+            or self.max_registered_iou is not None
             or self.min_threshold_margin is not None
             or self.min_row_margin is not None
             or self.min_column_margin is not None
@@ -243,6 +248,18 @@ def teacher_feature_gate_from_preset(
             min_cell_probability=0.60,
             require_hungarian=False,
         )
+    if normalized in {
+        "moderate-iou-cell-confidence",
+        "moderate-iou-cell-confident",
+    }:
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.10,
+            max_registered_iou=0.55,
+            max_centroid_distance=6.0,
+            min_area_ratio=0.60,
+            min_cell_probability=0.80,
+            require_hungarian=False,
+        )
     if normalized == "seed-source-high-confidence":
         return TeacherEdgeFeatureGate(
             min_registered_iou=0.15,
@@ -289,6 +306,11 @@ def merge_teacher_feature_gates(
             manual_gate.min_registered_iou
             if manual_gate.min_registered_iou is not None
             else preset_gate.min_registered_iou
+        ),
+        max_registered_iou=(
+            manual_gate.max_registered_iou
+            if manual_gate.max_registered_iou is not None
+            else preset_gate.max_registered_iou
         ),
         min_threshold_margin=(
             manual_gate.min_threshold_margin
@@ -597,6 +619,11 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 None
                 if teacher_feature_gate is None
                 else teacher_feature_gate.min_registered_iou
+            ),
+            "track2p_teacher_adjacent_max_registered_iou": _score_optional_float(
+                None
+                if teacher_feature_gate is None
+                else teacher_feature_gate.max_registered_iou
             ),
             "track2p_teacher_adjacent_min_threshold_margin": _score_optional_float(
                 None
@@ -1483,6 +1510,11 @@ def _teacher_edge_feature_gate_reason(
         reason = _feature_min_reason(value, threshold, name)
         if reason is not None:
             return reason
+    max_registered_iou = _feature_max_reason(
+        feature.registered_iou, gate.max_registered_iou, "max_registered_iou"
+    )
+    if max_registered_iou is not None:
+        return max_registered_iou
     min_cell = _feature_min_pair_reason(
         feature.cell_probability_a,
         feature.cell_probability_b,
@@ -2081,6 +2113,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "cell-confident",
             "track2p-fn-rescue",
             "residual-fn",
+            "moderate-iou-cell-confidence",
             "seed-source-high-confidence",
         ),
         default="none",
@@ -2099,6 +2132,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Reject teacher rescue edges with registered IoU below this value.",
+    )
+    parser.add_argument(
+        "--teacher-max-registered-iou",
+        "--teacher-gate-max-registered-iou",
+        dest="teacher_max_registered_iou",
+        type=float,
+        default=None,
+        help="Reject teacher rescue edges with registered IoU above this value.",
     )
     parser.add_argument(
         "--teacher-min-threshold-margin",
@@ -2205,6 +2246,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     manual_teacher_feature_gate = TeacherEdgeFeatureGate(
         min_registered_iou=args.teacher_min_registered_iou,
+        max_registered_iou=args.teacher_max_registered_iou,
         min_threshold_margin=args.teacher_min_threshold_margin,
         min_row_margin=args.teacher_min_row_margin,
         min_column_margin=args.teacher_min_column_margin,

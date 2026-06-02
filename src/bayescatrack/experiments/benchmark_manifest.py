@@ -121,8 +121,10 @@ TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     "min_component_observations",
     "max_applied_edits",
     "teacher_edge_order",
+    "teacher_repair_preset",
     "teacher_feature_preset",
     "teacher_min_registered_iou",
+    "teacher_max_registered_iou",
     "teacher_min_threshold_margin",
     "teacher_min_row_margin",
     "teacher_min_column_margin",
@@ -132,6 +134,7 @@ TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = (
     "teacher_require_hungarian",
     "teacher_require_hungarian_assignment",
     "teacher_gate_min_registered_iou",
+    "teacher_gate_max_registered_iou",
     "teacher_gate_min_threshold_margin",
     "teacher_gate_min_row_margin",
     "teacher_gate_min_column_margin",
@@ -1357,6 +1360,11 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
             "teacher_min_registered_iou",
             "teacher_gate_min_registered_iou",
         ),
+        max_registered_iou=_optional_float_option(
+            options,
+            "teacher_max_registered_iou",
+            "teacher_gate_max_registered_iou",
+        ),
         min_threshold_margin=_optional_float_option(
             options,
             "teacher_min_threshold_margin",
@@ -1458,6 +1466,7 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
             options.get("max_applied_edits"), name="max_applied_edits"
         ),
         teacher_feature_gate=teacher_feature_gate,
+        teacher_repair_preset=str(options.get("teacher_repair_preset", "none")),
         teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
     )
     return [result.to_dict() for result in output.results]
