@@ -29,6 +29,7 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     run_name_set = set(run_names)
     assert "track2p-policy" in run_name_set
     assert "track2p-policy-component-cleanup" in run_name_set
+    assert "track2p-policy-coherence-suffix-teacher-rescue" in run_name_set
     assert "track2p-policy-teacher-adjacent-rescue" in run_name_set
     assert "track2p-policy-dp" in run_name_set
     assert "track2p-policy-pruned" in run_name_set
@@ -64,6 +65,22 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     assert component_cleanup["apply_splits"] is True
     assert component_cleanup["split_risk_threshold"] == 1.5
     assert component_cleanup["min_side_observations"] == 2
+
+    suffix_teacher_rescue = next(
+        run
+        for run in manifest["runs"]
+        if run["name"] == "track2p-policy-coherence-suffix-teacher-rescue"
+    )
+    assert (
+        suffix_teacher_rescue["runner"]
+        == "track2p-policy-coherence-suffix-teacher-rescue"
+    )
+    assert suffix_teacher_rescue["suffix_path_length"] == 2
+    assert suffix_teacher_rescue["min_shifted_iou"] == 0.3
+    assert suffix_teacher_rescue["teacher_edge_order"] == "structural"
+    assert suffix_teacher_rescue["teacher_action_filter"] == "all"
+    assert suffix_teacher_rescue["teacher_feature_preset"] == "none"
+    assert suffix_teacher_rescue["max_applied_teacher_edits"] == -1
 
     teacher_rescue = next(
         run

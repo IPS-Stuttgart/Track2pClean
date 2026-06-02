@@ -10,7 +10,7 @@ edits.
 from __future__ import annotations
 
 import argparse
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -52,6 +52,62 @@ from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
 )
 
 METHOD = "track2p-policy-coherence-suffix-teacher-rescue"
+
+
+@dataclass(frozen=True)
+class CoherenceSuffixTeacherRescueOutput:
+    """Subject score rows and teacher edit diagnostics for the combined row."""
+
+    result_rows: tuple[dict[str, Any], ...]
+    teacher_rows: tuple[dict[str, Any], ...]
+
+
+def run_track2p_policy_coherence_suffix_teacher_rescue(
+    config: Track2pBenchmarkConfig,
+    *,
+    threshold_method: ThresholdMethod = "min",
+    iou_distance_threshold: float = 12.0,
+    transform_type: str | None = None,
+    cell_probability_threshold: float | None = None,
+    cleanup_config: ComponentCleanupConfig | None = None,
+    suffix_gate: suffix.CoherenceSuffixStitchGate | None = None,
+    edge_top_k: int = 25,
+    path_beam_width: int = 100,
+    teacher_edge_order: TeacherEdgeOrder = "structural",
+    teacher_action_filter: TeacherActionFilter = "all",
+    teacher_feature_preset: str = "none",
+    max_applied_teacher_edits: int | None = None,
+) -> CoherenceSuffixTeacherRescueOutput:
+    """Run CoherenceSuffixStitch followed by Track2p-teacher rescue."""
+
+    policy_config = track2p_policy_config(
+        config,
+        transform_type=transform_type,
+        cell_probability_threshold=cell_probability_threshold,
+    )
+    cleanup_config = cleanup_config or ComponentCleanupConfig()
+    suffix_gate = suffix_gate or suffix.CoherenceSuffixStitchGate()
+
+    rows: list[dict[str, Any]] = []
+    teacher_rows: list[dict[str, Any]] = []
+    for subject_dir in discover_subject_dirs(policy_config.data):
+        row, edits = _subject_row(
+            subject_dir,
+            config=policy_config,
+            cleanup_config=cleanup_config,
+            suffix_gate=suffix_gate,
+            threshold_method=threshold_method,
+            iou_distance_threshold=float(iou_distance_threshold),
+            edge_top_k=int(edge_top_k),
+            path_beam_width=int(path_beam_width),
+            teacher_edge_order=teacher_edge_order,
+            teacher_action_filter=teacher_action_filter,
+            teacher_feature_preset=str(teacher_feature_preset),
+            max_applied_teacher_edits=max_applied_teacher_edits,
+        )
+        rows.append(row)
+        teacher_rows.extend(edits)
+    return CoherenceSuffixTeacherRescueOutput(tuple(rows), tuple(teacher_rows))
 
 
 def _subject_row(
@@ -327,44 +383,33 @@ def main(argv: list[str] | None = None) -> int:
         min_shape_consistency=float(args.min_shape_consistency),
         max_stitches_per_subject=int(args.max_stitches_per_subject),
     )
-    policy_config = track2p_policy_config(
+    result = run_track2p_policy_coherence_suffix_teacher_rescue(
         config,
+        threshold_method=cast(ThresholdMethod, args.threshold_method),
+        iou_distance_threshold=float(args.iou_distance_threshold),
         transform_type=args.transform_type,
         cell_probability_threshold=float(args.cell_probability_threshold),
+        cleanup_config=cleanup_config,
+        suffix_gate=suffix_gate,
+        edge_top_k=int(args.edge_top_k),
+        path_beam_width=int(args.path_beam_width),
+        teacher_edge_order=cast(TeacherEdgeOrder, args.teacher_edge_order),
+        teacher_action_filter=cast(TeacherActionFilter, args.teacher_action_filter),
+        teacher_feature_preset=str(args.teacher_feature_preset),
+        max_applied_teacher_edits=(
+            None
+            if int(args.max_applied_teacher_edits) < 0
+            else int(args.max_applied_teacher_edits)
+        ),
     )
-    rows: list[dict[str, Any]] = []
-    teacher_rows: list[dict[str, Any]] = []
-    for subject_dir in discover_subject_dirs(policy_config.data):
-        row, edits = _subject_row(
-            subject_dir,
-            config=policy_config,
-            cleanup_config=cleanup_config,
-            suffix_gate=suffix_gate,
-            threshold_method=cast(ThresholdMethod, args.threshold_method),
-            iou_distance_threshold=float(args.iou_distance_threshold),
-            edge_top_k=int(args.edge_top_k),
-            path_beam_width=int(args.path_beam_width),
-            teacher_edge_order=cast(TeacherEdgeOrder, args.teacher_edge_order),
-            teacher_action_filter=cast(
-                TeacherActionFilter, args.teacher_action_filter
-            ),
-            teacher_feature_preset=str(args.teacher_feature_preset),
-            max_applied_teacher_edits=(
-                None
-                if int(args.max_applied_teacher_edits) < 0
-                else int(args.max_applied_teacher_edits)
-            ),
-        )
-        rows.append(row)
-        teacher_rows.extend(edits)
     suffix.write_rows(
-        rows,
+        result.result_rows,
         args.output,
         output_format=cast(Literal["csv", "json"], args.format),
     )
     if args.teacher_output is not None:
         suffix.write_rows(
-            teacher_rows,
+            result.teacher_rows,
             args.teacher_output,
             output_format=cast(Literal["csv", "json"], args.format),
         )

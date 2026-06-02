@@ -363,6 +363,87 @@ def test_benchmark_manifest_dispatches_teacher_adjacent_rescue_options(
     assert (tmp_path / "results" / "teacher-rescue.csv").exists()
 
 
+def test_benchmark_manifest_dispatches_coherence_suffix_teacher_rescue_options(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import (
+        track2p_policy_coherence_suffix_teacher_rescue,
+    )
+
+    calls = {}
+
+    class _FakeOutput:
+        result_rows = (
+            {
+                "subject": "jm_teacher_suffix",
+                "variant": "fake suffix teacher rescue",
+                "method": "track2p-policy-coherence-suffix-teacher-rescue",
+                "n_sessions": 2,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            },
+        )
+        teacher_rows = ()
+
+    def fake_suffix_teacher_rescue(config, **kwargs):
+        calls["config"] = config
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_coherence_suffix_teacher_rescue,
+        "run_track2p_policy_coherence_suffix_teacher_rescue",
+        fake_suffix_teacher_rescue,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "suffix-teacher-rescue",
+                    "runner": "track2p-policy-coherence-suffix-teacher-rescue",
+                    "data": "data",
+                    "output": "results/suffix-teacher-rescue.csv",
+                    "threshold_method": "min",
+                    "iou_distance_threshold": 12.0,
+                    "split_risk_threshold": 1.5,
+                    "min_side_observations": 2,
+                    "suffix_path_length": 2,
+                    "min_cell_probability": 0.8,
+                    "min_area_ratio": 0.8,
+                    "max_centroid_distance": 6.0,
+                    "min_shifted_iou": 0.3,
+                    "min_motion_consistency": 0.5,
+                    "min_shape_consistency": 0.82,
+                    "max_stitches_per_subject": 1,
+                    "teacher_edge_order": "structural",
+                    "teacher_action_filter": "all",
+                    "teacher_feature_preset": "none",
+                    "max_applied_teacher_edits": -1,
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["kwargs"]["threshold_method"] == "min"
+    assert calls["kwargs"]["iou_distance_threshold"] == 12.0
+    assert calls["kwargs"]["cleanup_config"].split_risk_threshold == 1.5
+    assert calls["kwargs"]["cleanup_config"].min_side_observations == 2
+    assert calls["kwargs"]["suffix_gate"].suffix_path_length == 2
+    assert calls["kwargs"]["suffix_gate"].min_cell_probability == 0.8
+    assert calls["kwargs"]["suffix_gate"].min_shifted_iou == 0.3
+    assert calls["kwargs"]["teacher_edge_order"] == "structural"
+    assert calls["kwargs"]["teacher_action_filter"] == "all"
+    assert calls["kwargs"]["teacher_feature_preset"] == "none"
+    assert calls["kwargs"]["max_applied_teacher_edits"] is None
+    assert (tmp_path / "results" / "suffix-teacher-rescue.csv").exists()
+
+
 def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkeypatch):
     calls = {}
 
