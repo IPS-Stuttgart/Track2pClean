@@ -181,6 +181,14 @@ def _teacher_edge_order_requires_feature_index(
     }
 
 
+def _teacher_edge_order_uses_confidence_features(
+    edge_order: TeacherEdgeOrder | str,
+) -> bool:
+    """Compatibility alias for confidence-feature edge-order detection."""
+
+    return _teacher_edge_order_requires_feature_index(edge_order)
+
+
 def teacher_feature_gate_from_preset(
     preset: TeacherFeaturePreset | str,
 ) -> TeacherEdgeFeatureGate | None:

@@ -8,6 +8,7 @@ from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     TeacherEdgeFeatureGate,
     _teacher_completion_gate_kwargs,
     _teacher_edge_order_requires_feature_index,
+    _teacher_edge_order_uses_confidence_features,
     apply_teacher_adjacent_rescue_edges,
     teacher_adjacent_repair_preset_kwargs,
     teacher_feature_gate_from_preset,
@@ -38,6 +39,15 @@ def test_teacher_edge_order_requires_feature_index_for_seed_confidence() -> None
     assert not _teacher_edge_order_requires_feature_index("lexicographic")
     assert not _teacher_edge_order_requires_feature_index("structural")
     assert not _teacher_edge_order_requires_feature_index("dynamic-structural")
+
+
+def test_teacher_edge_order_uses_confidence_features() -> None:
+    assert _teacher_edge_order_uses_confidence_features("confidence")
+    assert _teacher_edge_order_uses_confidence_features("dynamic-confidence")
+    assert _teacher_edge_order_uses_confidence_features("dynamic-seed-confidence")
+
+    assert not _teacher_edge_order_uses_confidence_features("structural")
+    assert not _teacher_edge_order_uses_confidence_features("dynamic-structural")
 
 
 def test_teacher_adjacent_rescue_inserts_missing_source_into_seed_anchored_row() -> (
