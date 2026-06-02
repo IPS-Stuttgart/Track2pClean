@@ -6,6 +6,8 @@
         "**/.pytest-tmp/**",
         "benchmarks/bayescatrack_next_steps_manifest.json",
         "benchmarks/run_track2p_residual_repair_candidates.sh",
+        "benchmarks/run_track2p_moderate_iou_teacher_fn_candidate.sh",
+        "**/benchmarks/run_track2p_moderate_iou_teacher_fn_candidate.sh",
         "src/bayescatrack/experiments/track2p_policy_component_sweep.py",
         "src/bayescatrack/experiments/track2p_gap_balanced_loso_calibration.py",
         "src/bayescatrack/experiments/track2p_policy_consensus_cleanup.py",
