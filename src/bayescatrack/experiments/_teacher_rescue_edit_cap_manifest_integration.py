@@ -1,15 +1,14 @@
 """Manifest integration for capped Track2p teacher-rescue rows.
 
-The residual-repair runner already exposes ``--max-applied-edits`` on the
-first-class Track2p teacher-adjacent rescue CLI.  This module makes the same
-knob available to JSON manifests and to the generated Track2p improvement
-manifest so high-confidence first-edit regimes can be evaluated reproducibly.
+The base teacher-rescue manifest runner accepts ``max_applied_edits``. This
+module keeps compatibility with generated manifests that install the field and
+the associated advanced-workbench rows separately.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any
 
 EDIT_CAP_FIELD = "max_applied_edits"
 
@@ -31,219 +30,8 @@ def install_teacher_rescue_edit_cap_manifest_integration() -> None:
         set(manifest.TRACK2P_CONFIG_FIELDS | base.TEACHER_ADJACENT_RESCUE_FIELDS),
     ).add(EDIT_CAP_FIELD)
 
-    original_runner = base._run_track2p_policy_teacher_adjacent_rows
-
-    def _run_track2p_policy_teacher_adjacent_rows_with_cap(
-        config: Any, options: Mapping[str, Any]
-    ) -> list[dict[str, Any]]:
-        if EDIT_CAP_FIELD not in options:
-            return original_runner(config, options)
-        return _run_track2p_policy_teacher_adjacent_rows(config, options)
-
-    base._run_track2p_policy_teacher_adjacent_rows = (
-        _run_track2p_policy_teacher_adjacent_rows_with_cap
-    )
     manifest._bayescatrack_teacher_rescue_edit_cap_integration = True
     _install_advanced_workbench_edit_cap_rows()
-
-
-def _run_track2p_policy_teacher_adjacent_rows(
-    config: Any, options: Mapping[str, Any]
-) -> list[dict[str, Any]]:
-    """Run teacher rescue with manifest-provided ``max_applied_edits``."""
-
-    from bayescatrack.experiments import _teacher_rescue_manifest_integration as base
-    from bayescatrack.experiments import benchmark_manifest as manifest
-    from bayescatrack.experiments.track2p_policy_benchmark import (
-        TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
-        TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
-    )
-    from bayescatrack.experiments.track2p_policy_component_audit import (
-        ComponentCleanupConfig,
-    )
-    from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
-        TeacherEdgeFeatureGate,
-        TeacherEdgeOrder,
-        run_track2p_policy_teacher_adjacent_rescue,
-    )
-
-    cleanup_defaults = ComponentCleanupConfig()
-    cleanup_config = ComponentCleanupConfig(
-        threshold_margin_scale=manifest._float_option(
-            options,
-            "threshold_margin_scale",
-            default=cleanup_defaults.threshold_margin_scale,
-        ),
-        competition_margin_scale=manifest._float_option(
-            options,
-            "competition_margin_scale",
-            default=cleanup_defaults.competition_margin_scale,
-        ),
-        area_ratio_floor=manifest._float_option(
-            options,
-            "area_ratio_floor",
-            default=cleanup_defaults.area_ratio_floor,
-        ),
-        centroid_distance_scale=manifest._float_option(
-            options,
-            "centroid_distance_scale",
-            default=cleanup_defaults.centroid_distance_scale,
-        ),
-        split_risk_threshold=manifest._float_option(
-            options,
-            "split_risk_threshold",
-            default=cleanup_defaults.split_risk_threshold,
-        ),
-        split_penalty=manifest._float_option(
-            options,
-            "split_penalty",
-            default=cleanup_defaults.split_penalty,
-        ),
-        min_side_observations=int(
-            options.get("min_side_observations", cleanup_defaults.min_side_observations)
-        ),
-        threshold_margin_weight=manifest._float_option(
-            options,
-            "threshold_margin_weight",
-            default=cleanup_defaults.threshold_margin_weight,
-        ),
-        row_margin_weight=manifest._float_option(
-            options,
-            "row_margin_weight",
-            default=cleanup_defaults.row_margin_weight,
-        ),
-        column_margin_weight=manifest._float_option(
-            options,
-            "column_margin_weight",
-            default=cleanup_defaults.column_margin_weight,
-        ),
-        centroid_distance_weight=manifest._float_option(
-            options,
-            "centroid_distance_weight",
-            default=cleanup_defaults.centroid_distance_weight,
-        ),
-        area_ratio_weight=manifest._float_option(
-            options,
-            "area_ratio_weight",
-            default=cleanup_defaults.area_ratio_weight,
-        ),
-    )
-    allow_source_inserts = None
-    if "allow_source_inserts" in options:
-        allow_source_inserts = manifest._bool_option(
-            options, "allow_source_inserts", default=True
-        )
-    allow_source_insertions = None
-    if "allow_source_insertions" in options:
-        allow_source_insertions = manifest._bool_option(
-            options, "allow_source_insertions", default=True
-        )
-    require_hungarian = False
-    for require_key in (
-        "teacher_require_hungarian",
-        "teacher_require_hungarian_assignment",
-        "teacher_gate_require_hungarian",
-    ):
-        if require_key in options:
-            require_hungarian = manifest._bool_option(
-                options, require_key, default=False
-            )
-            break
-    teacher_feature_gate = TeacherEdgeFeatureGate(
-        min_registered_iou=base._optional_float_option(
-            options, "teacher_min_registered_iou", "teacher_gate_min_registered_iou"
-        ),
-        min_threshold_margin=base._optional_float_option(
-            options, "teacher_min_threshold_margin", "teacher_gate_min_threshold_margin"
-        ),
-        min_row_margin=base._optional_float_option(
-            options, "teacher_min_row_margin", "teacher_gate_min_row_margin"
-        ),
-        min_column_margin=base._optional_float_option(
-            options, "teacher_min_column_margin", "teacher_gate_min_column_margin"
-        ),
-        max_centroid_distance=base._optional_float_option(
-            options,
-            "teacher_max_centroid_distance",
-            "teacher_gate_max_centroid_distance",
-        ),
-        min_area_ratio=base._optional_float_option(
-            options, "teacher_min_area_ratio", "teacher_gate_min_area_ratio"
-        ),
-        min_cell_probability=base._optional_float_option(
-            options, "teacher_min_cell_probability", "teacher_gate_min_cell_probability"
-        ),
-        require_hungarian=require_hungarian,
-    )
-    if not teacher_feature_gate.enabled:
-        teacher_feature_gate = None
-
-    output = run_track2p_policy_teacher_adjacent_rescue(
-        config,
-        threshold_method=manifest._policy_threshold_method(
-            options.get("threshold_method", TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
-        ),
-        iou_distance_threshold=manifest._float_option(
-            options,
-            "iou_distance_threshold",
-            default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
-        ),
-        transform_type=config.transform_type,
-        cell_probability_threshold=config.cell_probability_threshold,
-        cleanup_config=cleanup_config,
-        allow_completing_rescue=manifest._bool_option(
-            options, "allow_completing_rescue", default=False
-        ),
-        allow_teacher_complete_row_rescue=manifest._bool_option(
-            options, "allow_teacher_complete_row_rescue", default=False
-        ),
-        allow_teacher_supported_completion=manifest._bool_option(
-            options, "allow_teacher_supported_completion", default=False
-        ),
-        allow_teacher_supported_completing_rescue=manifest._bool_option(
-            options, "allow_teacher_supported_completing_rescue", default=False
-        ),
-        allow_teacher_confirmed_completing_rescue=manifest._bool_option(
-            options, "allow_teacher_confirmed_completing_rescue", default=False
-        ),
-        allow_completing_source_backfill=manifest._bool_option(
-            options, "allow_completing_source_backfill", default=False
-        ),
-        allow_completing_fragment_merge=manifest._bool_option(
-            options, "allow_completing_fragment_merge", default=False
-        ),
-        allow_completing_fragment_merges=manifest._bool_option(
-            options, "allow_completing_fragment_merges", default=False
-        ),
-        allow_source_backfill=manifest._bool_option(
-            options, "allow_source_backfill", default=True
-        ),
-        allow_source_inserts=allow_source_inserts,
-        allow_source_insertions=allow_source_insertions,
-        allow_seed_source_backfill=manifest._bool_option(
-            options, "allow_seed_source_backfill", default=False
-        ),
-        allow_seed_completing_backfill=manifest._bool_option(
-            options, "allow_seed_completing_backfill", default=False
-        ),
-        allow_seed_completing_rescue=manifest._bool_option(
-            options, "allow_seed_completing_rescue", default=False
-        ),
-        allow_completing_seed_source_backfill=manifest._bool_option(
-            options, "allow_completing_seed_source_backfill", default=False
-        ),
-        allow_fragment_merges=manifest._bool_option(
-            options, "allow_fragment_merges", default=True
-        ),
-        teacher_edge_order=cast(
-            TeacherEdgeOrder, str(options.get("teacher_edge_order", "structural"))
-        ),
-        teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
-        min_component_observations=int(options.get("min_component_observations", 1)),
-        max_applied_edits=int(options[EDIT_CAP_FIELD]),
-        teacher_feature_gate=teacher_feature_gate,
-    )
-    return [result.to_dict() for result in output.results]
 
 
 def _install_advanced_workbench_edit_cap_rows() -> None:

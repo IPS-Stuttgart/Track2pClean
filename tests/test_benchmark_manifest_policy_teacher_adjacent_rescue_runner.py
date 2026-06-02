@@ -80,6 +80,7 @@ def test_policy_teacher_adjacent_rescue_runner_kwargs_are_runner_specific() -> N
         "allow_completing_rescue": True,
         "allow_teacher_supported_completing_rescue": True,
         "allow_completing_fragment_merges": True,
+        "apply_splits": True,
         "allow_source_backfill": True,
         "allow_source_inserts": False,
         "allow_source_insertions": True,
