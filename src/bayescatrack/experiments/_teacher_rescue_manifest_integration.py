@@ -624,10 +624,7 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             ),
         ),
         (
-            (
-                "track2p-policy-teacher-adjacent-rescue-"
-                "missing-seed-high-confidence"
-            ),
+            ("track2p-policy-teacher-adjacent-rescue-" "missing-seed-high-confidence"),
             False,
             True,
             True,
