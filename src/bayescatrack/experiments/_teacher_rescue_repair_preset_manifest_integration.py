@@ -19,8 +19,8 @@ TEACHER_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
 def install_teacher_rescue_repair_preset_manifest_integration() -> None:
     """Install manifest expansion for teacher-rescue repair presets."""
 
-    from bayescatrack.experiments import benchmark_manifest as manifest
     from bayescatrack.experiments import _teacher_rescue_manifest_integration as base
+    from bayescatrack.experiments import benchmark_manifest as manifest
 
     if getattr(manifest, "_bayescatrack_teacher_repair_preset_integration", False):
         return
@@ -39,7 +39,9 @@ def install_teacher_rescue_repair_preset_manifest_integration() -> None:
     ) -> list[dict[str, Any]]:
         return original_runner(config, _expand_teacher_repair_preset(options))
 
-    base._run_track2p_policy_teacher_adjacent_rows = _run_teacher_rows_with_repair_preset
+    base._run_track2p_policy_teacher_adjacent_rows = (
+        _run_teacher_rows_with_repair_preset
+    )
     manifest._bayescatrack_teacher_repair_preset_integration = True
 
 
