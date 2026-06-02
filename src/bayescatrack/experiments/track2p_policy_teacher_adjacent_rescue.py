@@ -95,6 +95,7 @@ TeacherFeaturePreset = Literal[
     "cell-confident",
     "track2p-fn-rescue",
     "residual-fn",
+    "residual-fn-cell-confident",
     "moderate-iou-cell-confidence",
     "seed-source-high-confidence",
 ]
@@ -245,6 +246,18 @@ def teacher_feature_gate_from_preset(
             max_centroid_distance=6.0,
             min_area_ratio=0.45,
             min_cell_probability=0.50,
+            require_hungarian=False,
+        )
+    if normalized in {
+        "residual-fn-cell-confident",
+        "residual-fn-cell-confidence",
+        "teacher-fn-cell-confident",
+    }:
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.10,
+            max_centroid_distance=6.0,
+            min_area_ratio=0.45,
+            min_cell_probability=0.80,
             require_hungarian=False,
         )
     if normalized == "track2p-fn-rescue":
@@ -2261,6 +2274,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "cell-confident",
             "track2p-fn-rescue",
             "residual-fn",
+            "residual-fn-cell-confident",
             "moderate-iou-cell-confidence",
             "seed-source-high-confidence",
         ),
@@ -2270,7 +2284,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "Explicit --teacher-* gate thresholds override the corresponding "
             "preset values. The cell-confident preset is the high-confidence "
             "gate plus a minimum Suite2p cell probability of 0.80 at both "
-            "teacher-edge endpoints."
+            "teacher-edge endpoints. residual-fn-cell-confident keeps the "
+            "permissive residual-FN geometry gate but adds the same 0.80 "
+            "endpoint cell-probability requirement and does not require a "
+            "Hungarian assignment."
         ),
     )
     parser.add_argument(

@@ -386,6 +386,61 @@ def test_seed_source_high_confidence_preset_accepts_seed_backfill_without_hungar
     assert output.rows[0]["reason"] == "accepted_insert_source"
 
 
+def test_residual_fn_cell_confident_preset_requires_cells_without_hungarian() -> None:
+    predicted = np.asarray([[10, -1, 30, -1]], dtype=int)
+    teacher = np.asarray([[10, 20, -1, -1]], dtype=int)
+    gate = teacher_feature_gate_from_preset("residual-fn-cell-confident")
+
+    assert gate is not None
+    assert gate.min_registered_iou == 0.10
+    assert gate.max_centroid_distance == 6.0
+    assert gate.min_area_ratio == 0.45
+    assert gate.min_cell_probability == 0.80
+    assert not gate.require_hungarian
+
+    low_cell_report = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        feature_gate=gate,
+        edge_feature_index={
+            (0, 1, 10, 20): ResidualFeature(
+                registered_iou=0.12,
+                centroid_distance=5.0,
+                area_ratio=0.50,
+                cell_probability_a=0.79,
+                cell_probability_b=0.90,
+                assigned_by_hungarian=0,
+            )
+        },
+    )
+
+    np.testing.assert_array_equal(low_cell_report.tracks, predicted)
+    assert low_cell_report.rows[0]["applied"] == 0
+    assert low_cell_report.rows[0]["reason"] == "feature_gate_cell_probability"
+
+    high_cell_report = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        feature_gate=gate,
+        edge_feature_index={
+            (0, 1, 10, 20): ResidualFeature(
+                registered_iou=0.12,
+                centroid_distance=5.0,
+                area_ratio=0.50,
+                cell_probability_a=0.80,
+                cell_probability_b=0.90,
+                assigned_by_hungarian=0,
+            )
+        },
+    )
+
+    np.testing.assert_array_equal(high_cell_report.tracks, [[10, 20, 30, -1]])
+    assert high_cell_report.rows[0]["applied"] == 1
+    assert high_cell_report.rows[0]["reason"] == "accepted_insert_target"
+
+
 def test_teacher_adjacent_rescue_accepts_seed_completing_backfill_alias() -> None:
     predicted = np.asarray([[-1, 11, 12]], dtype=int)
     teacher = np.asarray([[10, 11, -1]], dtype=int)
