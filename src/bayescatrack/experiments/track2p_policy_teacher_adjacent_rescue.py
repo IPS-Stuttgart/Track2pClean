@@ -1207,10 +1207,7 @@ def _teacher_edge_structural_order_key(
         if (
             (allow_source_backfill and target_seed_anchored)
             or seed_source_backfill
-            or (
-                allow_source_backfill
-                and allow_teacher_supported_completing_rescue
-            )
+            or (allow_source_backfill and allow_teacher_supported_completing_rescue)
         ):
             candidate = predicted[target_row].copy()
             candidate[session_a] = roi_a
