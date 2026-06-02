@@ -413,6 +413,7 @@ def test_teacher_rescue_runner_specific_fields_registered():
     assert "min_component_observations" in fields
     assert "max_applied_edits" in fields
     assert "teacher_edge_order" in fields
+    assert "teacher_action_filter" in fields
     assert "teacher_repair_preset" in fields
     assert "teacher_feature_preset" in fields
     assert "teacher_min_registered_iou" in fields
@@ -453,12 +454,14 @@ def test_teacher_rescue_manifest_runner_passes_teacher_edge_order(
         config,
         {
             "teacher_edge_order": "confidence",
+            "teacher_action_filter": "target-extension",
             "teacher_repair_preset": "missing-seed-high-confidence",
         },
     )
 
     assert rows == [{"subject": "dummy"}]
     assert captured["teacher_edge_order"] == "confidence"
+    assert captured["teacher_action_filter"] == "target-extension"
     assert captured["teacher_repair_preset"] == "missing-seed-high-confidence"
 
 

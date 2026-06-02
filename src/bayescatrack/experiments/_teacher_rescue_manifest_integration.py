@@ -52,6 +52,7 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "min_component_observations",
     "max_applied_edits",
     "teacher_edge_order",
+    "teacher_action_filter",
     "teacher_repair_preset",
     "teacher_feature_preset",
     "teacher_min_registered_iou",
@@ -191,6 +192,7 @@ def _run_track2p_policy_teacher_adjacent_rows(
         ComponentCleanupConfig,
     )
     from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+        TeacherActionFilter,
         TeacherEdgeFeatureGate,
         TeacherEdgeOrder,
         run_track2p_policy_teacher_adjacent_rescue,
@@ -370,6 +372,9 @@ def _run_track2p_policy_teacher_adjacent_rows(
         ),
         teacher_edge_order=cast(
             TeacherEdgeOrder, str(options.get("teacher_edge_order", "structural"))
+        ),
+        teacher_action_filter=cast(
+            TeacherActionFilter, str(options.get("teacher_action_filter", "all"))
         ),
         teacher_repair_preset=str(options.get("teacher_repair_preset", "none")),
         teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),

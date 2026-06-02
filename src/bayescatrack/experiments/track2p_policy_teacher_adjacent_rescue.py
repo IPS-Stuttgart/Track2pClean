@@ -12,8 +12,10 @@ complete-row fragment merges can be enabled separately for a narrower
 stitch-only rescue. A seed-source backfill opt-in can now be used independently
 of broad source backfill, allowing a narrow Track2p-supported probe of the
 missing seed-session ROI residual bucket without also admitting arbitrary
-non-seed source insertions. The command
-does not use manual GT labels to choose edges.
+non-seed source insertions. Missing-seed repair presets also restrict the
+teacher action family to seed-source backfills by default, so a tiny edit budget
+cannot be spent on unrelated target extensions before the seed-source hypothesis
+is tested. The command does not use manual GT labels to choose edges.
 """
 
 from __future__ import annotations
@@ -98,10 +100,13 @@ TeacherFeaturePreset = Literal[
     "residual-fn-cell-confident",
     "moderate-iou-cell-confidence",
     "seed-source-high-confidence",
+    "seed-source-moderate-iou",
 ]
 TeacherRepairPreset = Literal[
     "none",
     "missing-seed-high-confidence",
+    "missing-seed-moderate-iou",
+    "track2p-fn-high-confidence",
 ]
 
 
@@ -288,6 +293,15 @@ def teacher_feature_gate_from_preset(
             min_cell_probability=0.70,
             require_hungarian=False,
         )
+    if normalized in {"seed-source-moderate-iou", "missing-seed-moderate-iou"}:
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.10,
+            max_registered_iou=0.55,
+            max_centroid_distance=6.0,
+            min_area_ratio=0.60,
+            min_cell_probability=0.80,
+            require_hungarian=False,
+        )
     raise ValueError(f"Unsupported teacher feature preset: {preset!r}")
 
 
@@ -304,9 +318,28 @@ def teacher_adjacent_repair_preset_kwargs(
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": True,
             "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_action_filter": "seed-source-backfill",
             "teacher_feature_preset": "seed-source-high-confidence",
             "min_component_observations": 2,
             "max_applied_edits": 2,
+        }
+    if normalized == "missing-seed-moderate-iou":
+        return {
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_action_filter": "seed-source-backfill",
+            "teacher_feature_preset": "seed-source-moderate-iou",
+            "min_component_observations": 2,
+            "max_applied_edits": 2,
+        }
+    if normalized in {"track2p-fn-high-confidence", "track2p-fn-target-extension"}:
+        return {
+            "teacher_action_filter": "target-extension",
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_feature_preset": "track2p-fn-rescue",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
         }
     raise ValueError(f"Unsupported teacher repair preset: {preset!r}")
 
@@ -464,23 +497,32 @@ def run_track2p_policy_teacher_adjacent_rescue(
     repair_kwargs = teacher_adjacent_repair_preset_kwargs(teacher_repair_preset)
     if repair_kwargs:
         allow_seed_source_backfill = bool(
-            allow_seed_source_backfill or repair_kwargs["allow_seed_source_backfill"]
+            allow_seed_source_backfill
+            or repair_kwargs.get("allow_seed_source_backfill", False)
         )
         allow_completing_seed_source_backfill = bool(
             allow_completing_seed_source_backfill
-            or repair_kwargs["allow_completing_seed_source_backfill"]
+            or repair_kwargs.get("allow_completing_seed_source_backfill", False)
         )
-        if teacher_edge_order == "structural":
+        if teacher_action_filter == "all" and "teacher_action_filter" in repair_kwargs:
+            teacher_action_filter = cast(
+                TeacherActionFilter, repair_kwargs["teacher_action_filter"]
+            )
+        if teacher_edge_order == "structural" and "teacher_edge_order" in repair_kwargs:
             teacher_edge_order = cast(
                 TeacherEdgeOrder, repair_kwargs["teacher_edge_order"]
             )
-        if teacher_feature_preset == "none":
+        if (
+            teacher_feature_preset == "none"
+            and "teacher_feature_preset" in repair_kwargs
+        ):
             teacher_feature_preset = str(repair_kwargs["teacher_feature_preset"])
-        min_component_observations = max(
-            int(min_component_observations),
-            int(repair_kwargs["min_component_observations"]),
-        )
-        if max_applied_edits is None:
+        if "min_component_observations" in repair_kwargs:
+            min_component_observations = max(
+                int(min_component_observations),
+                int(repair_kwargs["min_component_observations"]),
+            )
+        if max_applied_edits is None and "max_applied_edits" in repair_kwargs:
             max_applied_edits = int(repair_kwargs["max_applied_edits"])
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
@@ -2218,15 +2260,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--teacher-repair-preset",
-        choices=("none", "missing-seed-high-confidence"),
+        choices=(
+            "none",
+            "missing-seed-high-confidence",
+            "missing-seed-moderate-iou",
+            "track2p-fn-high-confidence",
+        ),
         default="none",
         help=(
             "Apply a narrow label-free teacher-rescue macro. "
             "'missing-seed-high-confidence' prioritizes seed-session source "
             "backfills with dynamic seed/confidence ordering, a small edit cap, "
-            "and the seed-source-high-confidence feature gate. Explicit non-default "
-            "CLI values for order, feature preset, edit cap, and component support "
-            "are preserved."
+            "and the seed-source-high-confidence feature gate; "
+            "'missing-seed-moderate-iou' adds the same action restriction "
+            "with a moderate-IoU cell-confidence gate; "
+            "'track2p-fn-high-confidence' restricts rescue to high-confidence "
+            "target extensions. Explicit non-default CLI values for order, "
+            "feature preset, edit cap, and component support are preserved."
         ),
     )
     parser.add_argument(
@@ -2277,6 +2327,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "residual-fn-cell-confident",
             "moderate-iou-cell-confidence",
             "seed-source-high-confidence",
+            "seed-source-moderate-iou",
         ),
         default="none",
         help=(
@@ -2287,7 +2338,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "teacher-edge endpoints. residual-fn-cell-confident keeps the "
             "permissive residual-FN geometry gate but adds the same 0.80 "
             "endpoint cell-probability requirement and does not require a "
-            "Hungarian assignment."
+            "Hungarian assignment; seed-source-moderate-iou additionally caps "
+            "registered IoU to avoid high-overlap continuation spam."
         ),
     )
     parser.add_argument(
