@@ -287,6 +287,18 @@ run_teacher_rescue teacher_adjacent_dynamic_seed_confidence_seed_source_max2 \
   --teacher-min-cell-probability 0.60 \
   --max-applied-edits 2
 
+run_teacher_rescue teacher_adjacent_seed_source_only_high_confidence_max2 \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --allow-seed-source-backfill \
+  --allow-completing-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-edge-order dynamic-seed-confidence \
+  --teacher-action-filter seed-source-backfill \
+  --teacher-feature-preset high-confidence \
+  --teacher-min-cell-probability 0.60 \
+  --max-applied-edits 2
+
 run_teacher_rescue teacher_adjacent_completing \
   --allow-completing-rescue \
   --allow-source-backfill \
@@ -356,6 +368,7 @@ run_teacher_veto teacher_veto_geometric_max1 \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicSeedConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_seed_confidence_seed_source_max2.csv" \
+  --input TeacherAdjacentSeedSourceOnlyHighConfidenceMax2="$OUT/teacher_adjacent_seed_source_only_high_confidence_max2.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
@@ -390,6 +403,7 @@ run_teacher_veto teacher_veto_geometric_max1 \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicSeedConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_seed_confidence_seed_source_max2.csv" \
+  --input TeacherAdjacentSeedSourceOnlyHighConfidenceMax2="$OUT/teacher_adjacent_seed_source_only_high_confidence_max2.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
