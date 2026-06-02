@@ -354,7 +354,9 @@ def test_teacher_repair_preset_targets_missing_seed_source_backfill() -> None:
     }
 
 
-def test_teacher_moderate_iou_repair_preset_targets_missing_seed_source_backfill() -> None:
+def test_teacher_moderate_iou_repair_preset_targets_missing_seed_source_backfill() -> (
+    None
+):
     kwargs = teacher_adjacent_repair_preset_kwargs("missing-seed-moderate-iou")
 
     assert kwargs == {
