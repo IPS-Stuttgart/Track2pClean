@@ -28,15 +28,23 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         "track2p-supported-gap-cleanup",
         "track2p-confidence-ordered-strict-gap-cleanup",
         "track2p-teacher-adjacent-rescue",
+        "track2p-teacher-fn-rescue",
     ]
     assert all(preset.config.method == "global-assignment" for preset in presets)
     assert all(preset.config.reference_kind == "manual-gt" for preset in presets)
     assert all(preset.config.include_non_cells for preset in presets[:3])
     assert all(preset.config.weighted_masks for preset in presets[:3])
 
-    shifted, pruned, consensus, stability, supported_gap, confidence_gap, teacher = (
-        presets
-    )
+    (
+        shifted,
+        pruned,
+        consensus,
+        stability,
+        supported_gap,
+        confidence_gap,
+        teacher,
+        teacher_fn,
+    ) = presets
     assert shifted.config.cost == "registered-shifted-iou"
     assert shifted.config.higher_order_consistency_config is not None
     assert pruned.config.cost == "roi-aware-shifted"
@@ -85,6 +93,16 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
     teacher_cleanup_kwargs = teacher.runner_kwargs["cleanup_config_kwargs"]
     assert isinstance(teacher_cleanup_kwargs, dict)
     assert teacher_cleanup_kwargs["require_complete_track"] is True
+    assert teacher_fn.runner == "teacher-adjacent-rescue"
+    assert teacher_fn.config is stability.config
+    assert teacher_fn.runner_kwargs is not None
+    assert (
+        teacher_fn.runner_kwargs["teacher_repair_preset"]
+        == "track2p-fn-high-confidence"
+    )
+    assert teacher_fn.runner_kwargs["threshold_method"] == "min"
+    teacher_fn_cleanup_kwargs = teacher_fn.runner_kwargs["cleanup_config_kwargs"]
+    assert isinstance(teacher_fn_cleanup_kwargs, dict)
 
 
 def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
@@ -112,6 +130,8 @@ def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
     assert rows[5]["teacher_adjacent_rescue"] is False
     assert rows[6]["runner"] == "teacher-adjacent-rescue"
     assert rows[6]["teacher_adjacent_rescue"] is True
+    assert rows[7]["runner"] == "teacher-adjacent-rescue"
+    assert rows[7]["teacher_adjacent_rescue"] is True
 
 
 def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -> None:
@@ -147,7 +167,7 @@ def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -
                 name="track2p-confidence-ordered-strict-gap-cleanup",
                 description="synthetic confidence strict gap preset",
                 config=build_track2p_accuracy_presets("/unused", progress=False)[
-                    -2
+                    -3
                 ].config,
                 runner="confidence-ordered-strict-gap-cleanup",
                 runner_kwargs={

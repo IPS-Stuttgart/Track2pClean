@@ -80,6 +80,24 @@ def _expand_teacher_repair_preset(options: Mapping[str, Any]) -> dict[str, Any]:
             "min_component_observations": 2,
             "max_applied_edits": 3,
         },
+        "track2p-fn-moderate-iou-cell-confident": {
+            "teacher_action_filter": "target-extension",
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_feature_preset": "moderate-iou-cell-confidence",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        },
+        "residual-union-cell-confident": {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_fragment_merges": False,
+            "teacher_action_filter": "target-extension-or-seed-source-backfill",
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_feature_preset": "residual-fn-cell-confident",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        },
     }
     if preset not in defaults:
         raise ValueError(f"Unsupported teacher_repair_preset: {preset!r}")

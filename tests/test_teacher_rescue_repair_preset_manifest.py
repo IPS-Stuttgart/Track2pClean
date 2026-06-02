@@ -47,6 +47,34 @@ def test_track2p_fn_repair_preset_expands_to_target_extension_gate():
     assert options["max_applied_edits"] == 3
 
 
+def test_track2p_fn_moderate_iou_preset_expands_to_target_extension_gate():
+    options = _expand_teacher_repair_preset(
+        {"teacher_repair_preset": "track2p-fn-moderate-iou-cell-confident"}
+    )
+
+    assert options["teacher_action_filter"] == "target-extension"
+    assert options["teacher_edge_order"] == "dynamic-confidence"
+    assert options["teacher_feature_preset"] == "moderate-iou-cell-confidence"
+    assert options["min_component_observations"] == 2
+    assert options["max_applied_edits"] == 3
+
+
+def test_residual_union_preset_expands_to_two_residual_buckets():
+    options = _expand_teacher_repair_preset(
+        {"teacher_repair_preset": "residual-union-cell-confident"}
+    )
+
+    assert options["allow_source_backfill"] is False
+    assert options["allow_seed_source_backfill"] is True
+    assert options["allow_completing_seed_source_backfill"] is True
+    assert options["allow_fragment_merges"] is False
+    assert options["teacher_action_filter"] == "target-extension-or-seed-source-backfill"
+    assert options["teacher_edge_order"] == "dynamic-seed-confidence"
+    assert options["teacher_feature_preset"] == "residual-fn-cell-confident"
+    assert options["min_component_observations"] == 2
+    assert options["max_applied_edits"] == 3
+
+
 def test_missing_seed_repair_preset_preserves_explicit_overrides():
     options = _expand_teacher_repair_preset(
         {
