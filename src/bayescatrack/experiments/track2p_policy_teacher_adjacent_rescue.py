@@ -79,8 +79,11 @@ TeacherEdgeOrder = Literal[
     "structural",
     "dynamic-structural",
     "confidence",
+    "cell-confidence",
     "dynamic-confidence",
+    "dynamic-cell-confidence",
     "dynamic-seed-confidence",
+    "dynamic-seed-cell-confidence",
 ]
 TeacherActionFilter = Literal[
     "all",
@@ -88,6 +91,7 @@ TeacherActionFilter = Literal[
     "source-backfill",
     "seed-source-backfill",
     "fragment-merge",
+    "target-extension-or-seed-source-backfill",
 ]
 TeacherFeaturePreset = Literal[
     "none",
@@ -107,6 +111,8 @@ TeacherRepairPreset = Literal[
     "missing-seed-high-confidence",
     "missing-seed-moderate-iou",
     "track2p-fn-high-confidence",
+    "track2p-fn-moderate-iou-cell-confident",
+    "residual-union-cell-confident",
 ]
 
 
@@ -194,8 +200,11 @@ def _teacher_edge_order_requires_feature_index(
 
     return str(edge_order) in {
         "confidence",
+        "cell-confidence",
         "dynamic-confidence",
+        "dynamic-cell-confidence",
         "dynamic-seed-confidence",
+        "dynamic-seed-cell-confidence",
     }
 
 
@@ -340,6 +349,33 @@ def teacher_adjacent_repair_preset_kwargs(
             "teacher_action_filter": "target-extension",
             "teacher_edge_order": "dynamic-confidence",
             "teacher_feature_preset": "track2p-fn-rescue",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        }
+    if normalized in {
+        "track2p-fn-moderate-iou-cell-confident",
+        "track2p-fn-moderate-iou-cell-confidence",
+    }:
+        return {
+            "teacher_action_filter": "target-extension",
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_feature_preset": "moderate-iou-cell-confidence",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        }
+    if normalized in {
+        "residual-union-cell-confident",
+        "residual-union",
+        "track2p-fn-or-missing-seed",
+    }:
+        return {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_fragment_merges": False,
+            "teacher_action_filter": "target-extension-or-seed-source-backfill",
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_feature_preset": "residual-fn-cell-confident",
             "min_component_observations": 2,
             "max_applied_edits": 3,
         }
@@ -504,6 +540,8 @@ def run_track2p_policy_teacher_adjacent_rescue(
             and allow_source_insertions is None
         ):
             allow_source_backfill = bool(repair_kwargs["allow_source_backfill"])
+        if "allow_fragment_merges" in repair_kwargs:
+            allow_fragment_merges = bool(repair_kwargs["allow_fragment_merges"])
         allow_seed_source_backfill = bool(
             allow_seed_source_backfill
             or repair_kwargs.get("allow_seed_source_backfill", False)
@@ -911,7 +949,9 @@ def apply_teacher_adjacent_rescue_edges(
     if edge_order in {
         "dynamic-structural",
         "dynamic-confidence",
+        "dynamic-cell-confidence",
         "dynamic-seed-confidence",
+        "dynamic-seed-cell-confidence",
     }:
         return _apply_teacher_adjacent_rescue_edges_dynamic(
             output,
@@ -932,8 +972,16 @@ def apply_teacher_adjacent_rescue_edges(
             min_component_observations=min_component_observations,
             edge_feature_index=edge_feature_index or {},
             use_confidence_order=edge_order
-            in {"dynamic-confidence", "dynamic-seed-confidence"},
-            prioritize_seed_source_backfill=edge_order == "dynamic-seed-confidence",
+            in {
+                "dynamic-confidence",
+                "dynamic-cell-confidence",
+                "dynamic-seed-confidence",
+                "dynamic-seed-cell-confidence",
+            },
+            prefer_cell_confidence=edge_order
+            in {"dynamic-cell-confidence", "dynamic-seed-cell-confidence"},
+            prioritize_seed_source_backfill=edge_order
+            in {"dynamic-seed-confidence", "dynamic-seed-cell-confidence"},
             teacher_feature_gate=teacher_feature_gate,
             max_applied_edits=max_applied_edits,
         )
@@ -1040,6 +1088,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     min_component_observations: int,
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
     use_confidence_order: bool,
+    prefer_cell_confidence: bool,
     prioritize_seed_source_backfill: bool,
     teacher_feature_gate: TeacherEdgeFeatureGate | None,
     max_applied_edits: int | None,
@@ -1119,6 +1168,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                 edge_feature_index=edge_feature_index,
                 min_component_observations=min_component_observations,
                 use_confidence_order=use_confidence_order,
+                prefer_cell_confidence=prefer_cell_confidence,
                 prioritize_seed_source_backfill=prioritize_seed_source_backfill,
                 occurrence_index=item[1],
             ),
@@ -1215,10 +1265,12 @@ def _ordered_teacher_edge_occurrences(
     if edge_order in {
         "dynamic-structural",
         "dynamic-confidence",
+        "dynamic-cell-confidence",
         "dynamic-seed-confidence",
+        "dynamic-seed-cell-confidence",
     }:
         return occurrences
-    if edge_order == "confidence":
+    if edge_order in {"confidence", "cell-confidence"}:
         return tuple(
             sorted(
                 occurrences,
@@ -1246,6 +1298,7 @@ def _ordered_teacher_edge_occurrences(
                         allow_fragment_merges=allow_fragment_merges,
                         edge_feature_index=edge_feature_index,
                         min_component_observations=min_component_observations,
+                        prefer_cell_confidence=edge_order == "cell-confidence",
                     ),
                     item[1],
                 ),
@@ -1422,6 +1475,7 @@ def _teacher_edge_dynamic_order_key(
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
     min_component_observations: int,
     use_confidence_order: bool,
+    prefer_cell_confidence: bool,
     prioritize_seed_source_backfill: bool,
     occurrence_index: int,
 ) -> tuple[Any, ...]:
@@ -1448,6 +1502,7 @@ def _teacher_edge_dynamic_order_key(
                 allow_fragment_merges=allow_fragment_merges,
                 edge_feature_index=edge_feature_index,
                 min_component_observations=min_component_observations,
+                prefer_cell_confidence=prefer_cell_confidence,
                 prioritize_seed_source_backfill=prioritize_seed_source_backfill,
             ),
             int(occurrence_index),
@@ -1490,6 +1545,7 @@ def _teacher_edge_confidence_order_key(
     allow_fragment_merges: bool,
     edge_feature_index: Mapping[TrackEdge, ResidualFeature],
     min_component_observations: int,
+    prefer_cell_confidence: bool = False,
     prioritize_seed_source_backfill: bool = False,
 ) -> tuple[Any, ...]:
     """Return a label-free confidence-aware order key for teacher edges."""
@@ -1511,7 +1567,10 @@ def _teacher_edge_confidence_order_key(
         allow_fragment_merges=allow_fragment_merges,
         min_component_observations=min_component_observations,
     )
-    feature_key = _teacher_edge_feature_order_key(edge_feature_index.get(edge))
+    feature_key = _teacher_edge_feature_order_key(
+        edge_feature_index.get(edge),
+        prefer_cell_confidence=prefer_cell_confidence,
+    )
     if prioritize_seed_source_backfill:
         seed_source_key = _teacher_edge_seed_source_backfill_order_key(
             predicted,
@@ -1576,7 +1635,11 @@ def _teacher_edge_seed_source_backfill_order_key(
 
 def _teacher_edge_feature_order_key(
     feature: ResidualFeature | None,
+    *,
+    prefer_cell_confidence: bool = False,
 ) -> tuple[int, float, float, float, float, float, float, float]:
+    if prefer_cell_confidence:
+        return _teacher_edge_cell_confidence_order_key(feature)
     if feature is None:
         return (1, 0.0, 0.0, 0.0, 0.0, float("inf"), 0.0, 0.0)
     registered_iou = _finite_feature(feature.registered_iou, 0.0)
@@ -1598,6 +1661,35 @@ def _teacher_edge_feature_order_key(
         centroid_distance,
         -area_ratio,
         -min_cell_probability,
+    )
+
+
+def _teacher_edge_cell_confidence_order_key(
+    feature: ResidualFeature | None,
+) -> tuple[int, float, float, float, float, float, float, float]:
+    """Order teacher edges by cell/shape confidence before raw registered IoU."""
+
+    if feature is None:
+        return (1, 0.0, 0.0, float("inf"), 0.0, 0.0, 0.0, 0.0)
+    registered_iou = _finite_feature(feature.registered_iou, 0.0)
+    threshold_margin = _finite_feature(feature.threshold_margin, 0.0)
+    row_margin = _finite_feature(feature.row_margin, 0.0)
+    column_margin = _finite_feature(feature.column_margin, 0.0)
+    min_cell_probability = min(
+        _finite_feature(feature.cell_probability_a, 0.0),
+        _finite_feature(feature.cell_probability_b, 0.0),
+    )
+    centroid_distance = _finite_feature(feature.centroid_distance, float("inf"))
+    area_ratio = _finite_feature(feature.area_ratio, 0.0)
+    return (
+        0,
+        -float(feature.assigned_by_hungarian),
+        -min_cell_probability,
+        -area_ratio,
+        centroid_distance,
+        -threshold_margin,
+        -min(row_margin, column_margin),
+        -registered_iou,
     )
 
 
@@ -1680,6 +1772,11 @@ def _teacher_edge_action_filter_reason(
         "seed-source-backfill",
     }:
         return "accepted"
+    if normalized == "target-extension-or-seed-source-backfill" and action in {
+        "target-extension",
+        "seed-source-backfill",
+    }:
+        return "accepted"
     if action == normalized:
         return "accepted"
     return f"action_filter_{normalized}"
@@ -1718,6 +1815,7 @@ def _normalize_teacher_action_filter(
         "source-backfill",
         "seed-source-backfill",
         "fragment-merge",
+        "target-extension-or-seed-source-backfill",
     }
     if normalized not in allowed:
         raise ValueError(f"Unsupported teacher action filter: {action_filter!r}")
@@ -2273,6 +2371,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "missing-seed-high-confidence",
             "missing-seed-moderate-iou",
             "track2p-fn-high-confidence",
+            "track2p-fn-moderate-iou-cell-confident",
+            "residual-union-cell-confident",
         ),
         default="none",
         help=(
@@ -2283,8 +2383,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "'missing-seed-moderate-iou' adds the same action restriction "
             "with a moderate-IoU cell-confidence gate; "
             "'track2p-fn-high-confidence' restricts rescue to high-confidence "
-            "target extensions. Explicit non-default CLI values for order, "
-            "feature preset, edit cap, and component support are preserved."
+            "target extensions; 'track2p-fn-moderate-iou-cell-confident' tests "
+            "the same residual Track2p-FN target-extension bucket with a "
+            "moderate-IoU, cell-confident feature gate; "
+            "'residual-union-cell-confident' combines target extensions and "
+            "seed-source backfills with a cell-confident residual-FN feature "
+            "gate, while disabling broad source backfill and fragment merges. "
+            "Explicit non-default CLI values for order, feature preset, edit "
+            "cap, and component support are preserved."
         ),
     )
     parser.add_argument(
@@ -2294,8 +2400,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "structural",
             "dynamic-structural",
             "confidence",
+            "cell-confidence",
             "dynamic-confidence",
+            "dynamic-cell-confidence",
             "dynamic-seed-confidence",
+            "dynamic-seed-cell-confidence",
         ),
         default="structural",
         help=(
@@ -2303,8 +2412,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "label-free structural priority that favors merges/backfills first. "
             "dynamic-structural recomputes that priority after each attempted "
             "edit; confidence uses local registration evidence to break ties; "
-            "dynamic-confidence does both; dynamic-seed-confidence additionally "
-            "prioritizes missing seed-source backfills before other teacher edits."
+            "cell-confidence orders by endpoint cell probability before raw "
+            "IoU; dynamic-confidence does both; dynamic-seed-confidence "
+            "additionally prioritizes missing seed-source backfills before "
+            "other teacher edits; dynamic-cell-confidence and "
+            "dynamic-seed-cell-confidence combine those behaviors."
         ),
     )
     parser.add_argument(
@@ -2315,11 +2427,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "source-backfill",
             "seed-source-backfill",
             "fragment-merge",
+            "target-extension-or-seed-source-backfill",
         ),
         default="all",
         help=(
             "Restrict teacher rescue attempts to one structural action class. "
-            "Use seed-source-backfill to target the residual missing-seed bucket."
+            "Use seed-source-backfill to target the residual missing-seed "
+            "bucket, or target-extension-or-seed-source-backfill to test the "
+            "two residual repair buckets without enabling broad source backfill "
+            "or merges."
         ),
     )
     parser.add_argument(

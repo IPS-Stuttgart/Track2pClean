@@ -33,8 +33,11 @@ def test_teacher_completion_gate_kwargs_preserve_exact_aliases() -> None:
 
 def test_teacher_edge_order_requires_feature_index_for_seed_confidence() -> None:
     assert _teacher_edge_order_requires_feature_index("confidence")
+    assert _teacher_edge_order_requires_feature_index("cell-confidence")
     assert _teacher_edge_order_requires_feature_index("dynamic-confidence")
+    assert _teacher_edge_order_requires_feature_index("dynamic-cell-confidence")
     assert _teacher_edge_order_requires_feature_index("dynamic-seed-confidence")
+    assert _teacher_edge_order_requires_feature_index("dynamic-seed-cell-confidence")
 
     assert not _teacher_edge_order_requires_feature_index("lexicographic")
     assert not _teacher_edge_order_requires_feature_index("structural")
@@ -43,8 +46,11 @@ def test_teacher_edge_order_requires_feature_index_for_seed_confidence() -> None
 
 def test_teacher_edge_order_uses_confidence_features() -> None:
     assert _teacher_edge_order_uses_confidence_features("confidence")
+    assert _teacher_edge_order_uses_confidence_features("cell-confidence")
     assert _teacher_edge_order_uses_confidence_features("dynamic-confidence")
+    assert _teacher_edge_order_uses_confidence_features("dynamic-cell-confidence")
     assert _teacher_edge_order_uses_confidence_features("dynamic-seed-confidence")
+    assert _teacher_edge_order_uses_confidence_features("dynamic-seed-cell-confidence")
 
     assert not _teacher_edge_order_uses_confidence_features("structural")
     assert not _teacher_edge_order_uses_confidence_features("dynamic-structural")
@@ -242,6 +248,53 @@ def test_dynamic_seed_confidence_prioritizes_missing_seed_source_backfill() -> N
     assert output.rows[0]["reason"] == "accepted_insert_source"
 
 
+def test_cell_confidence_order_prioritizes_cell_probability_before_iou() -> None:
+    predicted = np.asarray([[10, -1, -1], [11, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 20, -1], [11, 21, -1]], dtype=int)
+    edge_feature_index = {
+        (0, 1, 10, 20): ResidualFeature(
+            registered_iou=0.90,
+            centroid_distance=1.0,
+            area_ratio=0.95,
+            threshold_margin=0.50,
+            assigned_by_hungarian=1,
+            cell_probability_a=0.55,
+            cell_probability_b=0.55,
+        ),
+        (0, 1, 11, 21): ResidualFeature(
+            registered_iou=0.20,
+            centroid_distance=2.0,
+            area_ratio=0.80,
+            threshold_margin=0.10,
+            assigned_by_hungarian=1,
+            cell_probability_a=0.95,
+            cell_probability_b=0.95,
+        ),
+    }
+
+    iou_ordered = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="confidence",
+        edge_feature_index=edge_feature_index,
+        max_applied_edits=1,
+    )
+    cell_ordered = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="cell-confidence",
+        edge_feature_index=edge_feature_index,
+        max_applied_edits=1,
+    )
+
+    np.testing.assert_array_equal(iou_ordered.tracks, [[10, 20, -1], [11, -1, -1]])
+    np.testing.assert_array_equal(cell_ordered.tracks, [[10, -1, -1], [11, 21, -1]])
+    assert iou_ordered.rows[0]["roi_b"] == 20
+    assert cell_ordered.rows[0]["roi_b"] == 21
+
+
 def test_teacher_adjacent_rescue_can_filter_to_seed_source_backfills() -> None:
     predicted = np.asarray(
         [
@@ -272,6 +325,53 @@ def test_teacher_adjacent_rescue_can_filter_to_seed_source_backfills() -> None:
     assert output.rows[0]["reason"] == "action_filter_seed-source-backfill"
     assert output.rows[1]["applied"] == 1
     assert output.rows[1]["reason"] == "accepted_insert_source"
+
+
+def test_teacher_adjacent_rescue_can_filter_to_target_or_seed_source_union() -> None:
+    predicted = np.asarray(
+        [
+            [10, -1, -1],
+            [-1, 21, -1],
+            [30, -1, -1],
+            [-1, 31, -1],
+            [-1, -1, 42],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray(
+        [
+            [10, 11, -1],
+            [20, 21, -1],
+            [30, 31, -1],
+            [-1, 41, 42],
+        ],
+        dtype=int,
+    )
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_seed_source_backfill=True,
+        allow_completing_seed_source_backfill=True,
+        teacher_action_filter="target-extension-or-seed-source-backfill",
+        edge_order="lexicographic",
+    )
+
+    np.testing.assert_array_equal(
+        output.tracks,
+        [
+            [10, 11, -1],
+            [20, 21, -1],
+            [30, -1, -1],
+            [-1, 31, -1],
+            [-1, -1, 42],
+        ],
+    )
+    applied_reasons = [row["reason"] for row in output.rows if int(row["applied"])]
+    rejected_reasons = [row["reason"] for row in output.rows if not int(row["applied"])]
+    assert applied_reasons == ["accepted_insert_target", "accepted_insert_source"]
+    assert "action_filter_target-extension-or-seed-source-backfill" in rejected_reasons
 
 
 def test_teacher_adjacent_rescue_rejects_source_insertion_that_completes_row() -> None:
@@ -378,6 +478,36 @@ def test_track2p_fn_repair_preset_targets_teacher_extensions() -> None:
         "teacher_action_filter": "target-extension",
         "teacher_edge_order": "dynamic-confidence",
         "teacher_feature_preset": "track2p-fn-rescue",
+        "min_component_observations": 2,
+        "max_applied_edits": 3,
+    }
+
+
+def test_track2p_fn_moderate_iou_repair_preset_targets_cell_gated_extensions() -> None:
+    kwargs = teacher_adjacent_repair_preset_kwargs(
+        "track2p-fn-moderate-iou-cell-confident"
+    )
+
+    assert kwargs == {
+        "teacher_action_filter": "target-extension",
+        "teacher_edge_order": "dynamic-confidence",
+        "teacher_feature_preset": "moderate-iou-cell-confidence",
+        "min_component_observations": 2,
+        "max_applied_edits": 3,
+    }
+
+
+def test_residual_union_repair_preset_targets_two_residual_buckets() -> None:
+    kwargs = teacher_adjacent_repair_preset_kwargs("residual-union-cell-confident")
+
+    assert kwargs == {
+        "allow_source_backfill": False,
+        "allow_seed_source_backfill": True,
+        "allow_completing_seed_source_backfill": True,
+        "allow_fragment_merges": False,
+        "teacher_action_filter": "target-extension-or-seed-source-backfill",
+        "teacher_edge_order": "dynamic-seed-confidence",
+        "teacher_feature_preset": "residual-fn-cell-confident",
         "min_component_observations": 2,
         "max_applied_edits": 3,
     }

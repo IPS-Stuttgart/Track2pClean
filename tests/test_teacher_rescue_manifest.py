@@ -314,6 +314,20 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
             "teacher_min_cell_probability": 0.60,
             "max_applied_edits": 2,
         },
+        "track2p-policy-teacher-adjacent-rescue-track2p-fn-target-extension": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "allow_fragment_merges": False,
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_action_filter": "target-extension",
+            "teacher_repair_preset": "track2p-fn-high-confidence",
+            "teacher_feature_preset": "track2p-fn-rescue",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        },
         "track2p-policy-teacher-adjacent-rescue-missing-seed-high-confidence": {
             "allow_completing_rescue": False,
             "allow_teacher_supported_completing_rescue": False,
@@ -381,7 +395,8 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
         assert teacher["cell_probability_threshold"] == 0.5
         expected_source_backfill = flags.get("allow_source_backfill", True)
         assert teacher["allow_source_backfill"] is expected_source_backfill
-        assert teacher["allow_fragment_merges"] is True
+        expected_fragment_merges = flags.get("allow_fragment_merges", True)
+        assert teacher["allow_fragment_merges"] is expected_fragment_merges
         assert "min_component_observations" in teacher
         for flag, value in flags.items():
             if isinstance(value, bool):
