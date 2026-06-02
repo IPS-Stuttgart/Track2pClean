@@ -80,6 +80,13 @@ TeacherEdgeOrder = Literal[
     "dynamic-confidence",
     "dynamic-seed-confidence",
 ]
+TeacherActionFilter = Literal[
+    "all",
+    "target-extension",
+    "source-backfill",
+    "seed-source-backfill",
+    "fragment-merge",
+]
 TeacherFeaturePreset = Literal[
     "none",
     "local-support",
@@ -337,6 +344,20 @@ def _resolve_source_backfill_alias(
     return bool(allow_source_inserts)
 
 
+def _source_backfill_allowed_for_edge(
+    source_backfill_enabled: bool,
+    *,
+    allow_seed_source_backfill: bool,
+    session_a: int,
+    seed_session: int,
+) -> bool:
+    """Return whether this missing-source edge may be considered for backfill."""
+
+    return bool(source_backfill_enabled) or bool(
+        allow_seed_source_backfill and int(session_a) == int(seed_session)
+    )
+
+
 def _teacher_completion_gate_kwargs(
     *,
     allow_teacher_complete_row_rescue: bool,
@@ -383,6 +404,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     allow_completing_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
     teacher_edge_order: TeacherEdgeOrder = "structural",
+    teacher_action_filter: TeacherActionFilter = "all",
     min_component_observations: int = 1,
     max_applied_edits: int | None = None,
     teacher_feature_gate: TeacherEdgeFeatureGate | None = None,
@@ -510,6 +532,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             allow_completing_seed_source_backfill=(allow_seed_completion),
             allow_fragment_merges=allow_fragment_merges,
             edge_order=teacher_edge_order,
+            teacher_action_filter=teacher_action_filter,
             edge_feature_index=edge_feature_index,
             teacher_feature_gate=teacher_feature_gate,
             min_component_observations=min_component_observations,
@@ -582,6 +605,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 allow_fragment_merges
             ),
             "track2p_teacher_adjacent_edge_order": str(teacher_edge_order),
+            "track2p_teacher_adjacent_action_filter": str(teacher_action_filter),
             "track2p_teacher_adjacent_min_component_observations": int(
                 min_component_observations
             ),
@@ -714,6 +738,7 @@ def apply_teacher_adjacent_rescue_edges(
     allow_completing_seed_source_backfill: bool = False,
     allow_fragment_merges: bool = True,
     edge_order: TeacherEdgeOrder = "structural",
+    teacher_action_filter: TeacherActionFilter = "all",
     edge_feature_index: Mapping[TrackEdge, ResidualFeature] | None = None,
     teacher_feature_gate: TeacherEdgeFeatureGate | None = None,
     feature_gate: TeacherEdgeFeatureGate | None = None,
@@ -802,6 +827,7 @@ def apply_teacher_adjacent_rescue_edges(
             output,
             teacher,
             seed_session=seed_session,
+            teacher_action_filter=teacher_action_filter,
             allow_completing_rescue=allow_completing_rescue,
             allow_teacher_supported_completing_rescue=(
                 allow_teacher_supported_completion_enabled
@@ -853,6 +879,20 @@ def apply_teacher_adjacent_rescue_edges(
                 }
             )
             continue
+        action_reason = _teacher_edge_action_filter_reason(
+            output,
+            edge,
+            seed_session=seed_session,
+            action_filter=teacher_action_filter,
+        )
+        if action_reason != "accepted":
+            rows.append(
+                {
+                    **_teacher_edge_rejection_row(edge, action_reason),
+                    "occurrence_index": int(occurrence_index),
+                }
+            )
+            continue
         gate_reason = _teacher_edge_feature_gate_reason(
             (edge_feature_index or {}).get(edge), teacher_feature_gate
         )
@@ -897,6 +937,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     teacher: np.ndarray,
     *,
     seed_session: int,
+    teacher_action_filter: TeacherActionFilter,
     allow_completing_rescue: bool,
     allow_teacher_supported_completing_rescue: bool,
     teacher_complete_tracks: frozenset[tuple[int, ...]],
@@ -934,6 +975,21 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                 continue
             if output_counts.get(edge, 0) > occurrence_index:
                 attempted.add(occurrence)
+                continue
+            action_reason = _teacher_edge_action_filter_reason(
+                output,
+                edge,
+                seed_session=seed_session,
+                action_filter=teacher_action_filter,
+            )
+            if action_reason != "accepted":
+                attempted.add(occurrence)
+                rows.append(
+                    {
+                        **_teacher_edge_rejection_row(edge, action_reason),
+                        "occurrence_index": int(occurrence_index),
+                    }
+                )
                 continue
             gate_reason = _teacher_edge_feature_gate_reason(
                 edge_feature_index.get(edge), teacher_feature_gate
@@ -1204,10 +1260,16 @@ def _teacher_edge_structural_order_key(
         seed_source_backfill = bool(
             allow_seed_source_backfill and session_a == seed_session
         )
+        source_backfill_allowed = _source_backfill_allowed_for_edge(
+            allow_source_backfill,
+            allow_seed_source_backfill=allow_seed_source_backfill,
+            session_a=int(session_a),
+            seed_session=int(seed_session),
+        )
         if (
-            (allow_source_backfill and target_seed_anchored)
+            (source_backfill_allowed and target_seed_anchored)
             or seed_source_backfill
-            or (allow_source_backfill and allow_teacher_supported_completing_rescue)
+            or (source_backfill_allowed and allow_teacher_supported_completing_rescue)
         ):
             candidate = predicted[target_row].copy()
             candidate[session_a] = roi_a
@@ -1401,10 +1463,14 @@ def _teacher_edge_seed_source_backfill_order_key(
 ) -> tuple[int, int, int]:
     """Prefer eligible edits that backfill the missing seed-session source ROI."""
 
-    del allow_source_backfill
-    if not allow_seed_source_backfill:
-        return (1, 0, 0)
     session_a, session_b, roi_a, roi_b = edge
+    if not _source_backfill_allowed_for_edge(
+        allow_source_backfill,
+        allow_seed_source_backfill=allow_seed_source_backfill,
+        session_a=int(session_a),
+        seed_session=int(seed_session),
+    ):
+        return (1, 0, 0)
     if int(session_a) != int(seed_session):
         return (1, 0, 0)
     source_rows = tuple(np.flatnonzero(predicted[:, session_a] == roi_a))
@@ -1499,6 +1565,68 @@ def _teacher_edge_feature_gate_reason(
         )
         or "accepted"
     )
+
+
+def _teacher_edge_action_filter_reason(
+    predicted: np.ndarray,
+    edge: TrackEdge,
+    *,
+    seed_session: int,
+    action_filter: TeacherActionFilter | str,
+) -> str:
+    """Return a rejection reason when ``edge`` is not in the requested action class."""
+
+    normalized = _normalize_teacher_action_filter(action_filter)
+    if normalized == "all":
+        return "accepted"
+    action = _teacher_edge_action(predicted, edge, seed_session=seed_session)
+    if normalized == "source-backfill" and action in {
+        "source-backfill",
+        "seed-source-backfill",
+    }:
+        return "accepted"
+    if action == normalized:
+        return "accepted"
+    return f"action_filter_{normalized}"
+
+
+def _teacher_edge_action(
+    predicted: np.ndarray, edge: TrackEdge, *, seed_session: int
+) -> str:
+    session_a, session_b, roi_a, roi_b = edge
+    if int(session_b) != int(session_a) + 1:
+        return "other"
+    source_rows = tuple(np.flatnonzero(predicted[:, session_a] == roi_a))
+    target_rows = tuple(np.flatnonzero(predicted[:, session_b] == roi_b))
+    if len(source_rows) == 1 and len(target_rows) == 0:
+        return "target-extension"
+    if len(source_rows) == 0 and len(target_rows) == 1:
+        return (
+            "seed-source-backfill"
+            if int(session_a) == int(seed_session)
+            else "source-backfill"
+        )
+    if len(source_rows) == 1 and len(target_rows) == 1:
+        return (
+            "fragment-merge" if int(source_rows[0]) != int(target_rows[0]) else "other"
+        )
+    return "other"
+
+
+def _normalize_teacher_action_filter(
+    action_filter: TeacherActionFilter | str,
+) -> TeacherActionFilter:
+    normalized = str(action_filter).strip().lower().replace("_", "-")
+    allowed = {
+        "all",
+        "target-extension",
+        "source-backfill",
+        "seed-source-backfill",
+        "fragment-merge",
+    }
+    if normalized not in allowed:
+        raise ValueError(f"Unsupported teacher action filter: {action_filter!r}")
+    return cast(TeacherActionFilter, normalized)
 
 
 def _feature_min_reason(value: float, threshold: float | None, name: str) -> str | None:
@@ -1655,7 +1783,12 @@ def _try_apply_teacher_edge(
         seed_source_backfill = bool(
             allow_seed_source_backfill and session_a == seed_session
         )
-        if not (source_backfill_enabled or seed_source_backfill):
+        if not _source_backfill_allowed_for_edge(
+            source_backfill_enabled,
+            allow_seed_source_backfill=allow_seed_source_backfill,
+            session_a=int(session_a),
+            seed_session=int(seed_session),
+        ):
             row["reason"] = "missing_or_ambiguous_source"
             return output, row
         candidate_row = output[target_row].copy()
@@ -2072,6 +2205,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--teacher-action-filter",
+        choices=(
+            "all",
+            "target-extension",
+            "source-backfill",
+            "seed-source-backfill",
+            "fragment-merge",
+        ),
+        default="all",
+        help=(
+            "Restrict teacher rescue attempts to one structural action class. "
+            "Use seed-source-backfill to target the residual missing-seed bucket."
+        ),
+    )
+    parser.add_argument(
         "--teacher-feature-preset",
         choices=(
             "none",
@@ -2246,6 +2394,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         allow_fragment_merges=args.allow_fragment_merges,
         teacher_edge_order=cast(TeacherEdgeOrder, args.teacher_edge_order),
+        teacher_action_filter=cast(TeacherActionFilter, args.teacher_action_filter),
         min_component_observations=args.min_component_observations,
         max_applied_edits=args.max_applied_edits,
         teacher_feature_gate=teacher_feature_gate,
