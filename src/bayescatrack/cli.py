@@ -371,9 +371,7 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"
     ),
-    "track2p-coherence-pareto-whatif": (
-        "track2p-policy-coherence-pareto-whatif"
-    ),
+    "track2p-coherence-pareto-whatif": ("track2p-policy-coherence-pareto-whatif"),
     "track2p-component-coherence-pareto-whatif": (
         "track2p-policy-coherence-pareto-whatif"
     ),

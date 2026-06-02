@@ -49,8 +49,8 @@ from bayescatrack.experiments.track2p_policy_benchmark import (
 )
 from bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif import (
     CoherenceSuffixStitchGate,
-    _FeatureCache,
     _apply_suffix_paths,
+    _FeatureCache,
     _select_paths,
 )
 from bayescatrack.experiments.track2p_policy_component_audit import (
@@ -75,9 +75,7 @@ from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import 
     _ranked_suffix_paths,
 )
 
-TRACK2P_POLICY_COHERENCE_PARETO_WHATIF_METHOD = (
-    "track2p-policy-coherence-pareto-whatif"
-)
+TRACK2P_POLICY_COHERENCE_PARETO_WHATIF_METHOD = "track2p-policy-coherence-pareto-whatif"
 
 _COUNT_KEYS = (
     "pairwise_true_positives",
@@ -215,7 +213,9 @@ def run_track2p_policy_coherence_pareto_whatif(
             )
         )
     rows.sort(key=_pareto_sort_key)
-    summary = _summary_rows(rows, global_base=global_base, global_track2p=global_track2p)
+    summary = _summary_rows(
+        rows, global_base=global_base, global_track2p=global_track2p
+    )
     return CoherenceParetoWhatIfResult(tuple(rows), tuple(summary))
 
 
@@ -288,9 +288,7 @@ def _subject_state(
     )
     selected = _select_paths(paths, cleaned_eval, gate=gate)
     stitched_eval = _apply_suffix_paths(cleaned_eval, selected)
-    track2p_eval = _track2p_baseline_eval(
-        subject_dir, reference_tracks, config=config
-    )
+    track2p_eval = _track2p_baseline_eval(subject_dir, reference_tracks, config=config)
     return _SubjectState(
         subject=subject_dir.name,
         sessions=sessions,
@@ -351,14 +349,23 @@ def _subject_whatif_rows(
             )
 
     seen_swaps: set[tuple[TrackEdge, TrackEdge]] = set()
-    fp_edge_set = {edge for edge, _count in _residual_edges(predicted_counts, reference_counts, error_type="pairwise_fp")}
+    fp_edge_set = {
+        edge
+        for edge, _count in _residual_edges(
+            predicted_counts, reference_counts, error_type="pairwise_fp"
+        )
+    }
     for fn_edge in fn_edges:
-        for fp_edge in _conflict_coupled_fp_edges(fn_edge, state.predicted, fp_edge_set):
+        for fp_edge in _conflict_coupled_fp_edges(
+            fn_edge, state.predicted, fp_edge_set
+        ):
             key = (fn_edge, fp_edge)
             if key in seen_swaps:
                 continue
             seen_swaps.add(key)
-            simulation = _simulate_swap_edge(state.predicted, missing_edge=fn_edge, wrong_edge=fp_edge)
+            simulation = _simulate_swap_edge(
+                state.predicted, missing_edge=fn_edge, wrong_edge=fp_edge
+            )
             rows.append(
                 _candidate_row(
                     state,
@@ -459,12 +466,19 @@ def _simulate_add_edge(predicted: np.ndarray, edge: TrackEdge) -> _Simulation:
         if merged is not None:
             keep = [index for index in range(output.shape[0]) if index != target_row]
             output[source_row] = merged
-            return _Simulation(output[np.asarray(keep, dtype=int)], True, "merge_components", "accepted")
+            return _Simulation(
+                output[np.asarray(keep, dtype=int)],
+                True,
+                "merge_components",
+                "accepted",
+            )
     if len(source_rows) == 0 and len(target_rows) == 0:
         new_row = np.full((1, output.shape[1]), -1, dtype=int)
         new_row[0, session_a] = int(roi_a)
         new_row[0, session_b] = int(roi_b)
-        return _Simulation(np.vstack([output, new_row]), True, "add_partial_component", "accepted")
+        return _Simulation(
+            np.vstack([output, new_row]), True, "add_partial_component", "accepted"
+        )
     return _Simulation(output, False, "reject", "ambiguous_multiple_components")
 
 
@@ -488,11 +502,15 @@ def _simulate_swap_edge(
     row_index = matching_rows[0]
     duplicate_source = bool(
         roi_a != wrong_roi_a
-        and np.any((output[:, session_a] == roi_a) & (np.arange(output.shape[0]) != row_index))
+        and np.any(
+            (output[:, session_a] == roi_a) & (np.arange(output.shape[0]) != row_index)
+        )
     )
     duplicate_target = bool(
         roi_b != wrong_roi_b
-        and np.any((output[:, session_b] == roi_b) & (np.arange(output.shape[0]) != row_index))
+        and np.any(
+            (output[:, session_b] == roi_b) & (np.arange(output.shape[0]) != row_index)
+        )
     )
     output[row_index, session_a] = int(roi_a)
     output[row_index, session_b] = int(roi_b)
@@ -552,8 +570,12 @@ def _candidate_row(
     feature = _edge_feature_row(state, edge)
     base_complete_tp = int(state.base_scores["complete_track_true_positives"])
     base_complete_fp = int(state.base_scores["complete_track_false_positives"])
-    would_break_complete_tp = int(candidate_scores["complete_track_true_positives"]) < base_complete_tp
-    would_create_complete_fp = int(candidate_scores["complete_track_false_positives"]) > base_complete_fp
+    would_break_complete_tp = (
+        int(candidate_scores["complete_track_true_positives"]) < base_complete_tp
+    )
+    would_create_complete_fp = (
+        int(candidate_scores["complete_track_false_positives"]) > base_complete_fp
+    )
     support = _support_flags(state, edge)
     structural_risk, risk_reason = _structural_risk(
         simulation,
@@ -592,22 +614,26 @@ def _candidate_row(
             new_global["complete_track_false_positives"],
             new_global["complete_track_false_negatives"],
         ),
-        "pareto_improves_track2p": int(_pareto_improves_track2p(new_global, global_track2p)),
+        "pareto_improves_track2p": int(
+            _pareto_improves_track2p(new_global, global_track2p)
+        ),
         "structural_risk": int(structural_risk),
         "structural_risk_reason": risk_reason,
         "rescue_applied": int(simulation.applied),
         "rescue_action": simulation.action,
         "rescue_reject_reason": simulation.reason if not simulation.applied else "",
-        "swap_removed_session_a": int(swap_removed_edge[0]) if swap_removed_edge else -1,
-        "swap_removed_session_b": int(swap_removed_edge[1]) if swap_removed_edge else -1,
+        "swap_removed_session_a": (
+            int(swap_removed_edge[0]) if swap_removed_edge else -1
+        ),
+        "swap_removed_session_b": (
+            int(swap_removed_edge[1]) if swap_removed_edge else -1
+        ),
         "swap_removed_roi_a": int(swap_removed_edge[2]) if swap_removed_edge else -1,
         "swap_removed_roi_b": int(swap_removed_edge[3]) if swap_removed_edge else -1,
     }
 
 
-def _edge_feature_row(
-    state: _SubjectState, edge: TrackEdge
-) -> dict[str, float | int]:
+def _edge_feature_row(state: _SubjectState, edge: TrackEdge) -> dict[str, float | int]:
     session_a, session_b, roi_a, roi_b = edge
     base = {
         "registered_iou": float("nan"),
@@ -637,10 +663,26 @@ def _edge_feature_row(
         "area_ratio": float(pair.area_ratio[source_index, target_index]),
         "cell_probability_a": base["cell_probability_a"],
         "cell_probability_b": base["cell_probability_b"],
-        "row_rank": int(_rank_descending(pair.registered_iou[source_index, :], selected_index=target_index)),
-        "column_rank": int(_rank_descending(pair.registered_iou[:, target_index], selected_index=source_index)),
-        "row_margin": float(_margin_against_competitor(pair.registered_iou[source_index, :], selected_index=target_index)),
-        "column_margin": float(_margin_against_competitor(pair.registered_iou[:, target_index], selected_index=source_index)),
+        "row_rank": int(
+            _rank_descending(
+                pair.registered_iou[source_index, :], selected_index=target_index
+            )
+        ),
+        "column_rank": int(
+            _rank_descending(
+                pair.registered_iou[:, target_index], selected_index=source_index
+            )
+        ),
+        "row_margin": float(
+            _margin_against_competitor(
+                pair.registered_iou[source_index, :], selected_index=target_index
+            )
+        ),
+        "column_margin": float(
+            _margin_against_competitor(
+                pair.registered_iou[:, target_index], selected_index=source_index
+            )
+        ),
     }
 
 
@@ -704,8 +746,7 @@ def _score_deltas(
 def _sum_scores(scores: Sequence[Mapping[str, float | int]]) -> dict[str, int]:
     score_rows = tuple(scores)
     return {
-        key: int(sum(int(score[key]) for score in score_rows))
-        for key in _COUNT_KEYS
+        key: int(sum(int(score[key]) for score in score_rows)) for key in _COUNT_KEYS
     }
 
 
@@ -748,11 +789,16 @@ def _pareto_improves_track2p(
     return bool(
         candidate_pairwise >= track2p_pairwise
         and candidate_complete >= track2p_complete
-        and (candidate_pairwise > track2p_pairwise or candidate_complete > track2p_complete)
+        and (
+            candidate_pairwise > track2p_pairwise
+            or candidate_complete > track2p_complete
+        )
     )
 
 
-def _pareto_sort_key(row: Mapping[str, float | int | str]) -> tuple[float, float, int, str, str]:
+def _pareto_sort_key(
+    row: Mapping[str, float | int | str],
+) -> tuple[float, float, int, str, str]:
     return (
         -float(row["new_pairwise_f1_micro"]),
         -float(row["new_complete_track_f1_micro"]),
@@ -796,12 +842,22 @@ def _summary_rows(
             "baseline_complete_track_f1_micro": baseline_complete,
             "track2p_pairwise_f1_micro": track2p_pairwise,
             "track2p_complete_track_f1_micro": track2p_complete,
-            "best_new_pairwise_f1_micro": max((float(row["new_pairwise_f1_micro"]) for row in rows), default=baseline_pairwise),
-            "best_new_complete_track_f1_micro": max((float(row["new_complete_track_f1_micro"]) for row in rows), default=baseline_complete),
-            "pareto_improves_track2p_count": int(sum(int(row.get("pareto_improves_track2p", 0)) for row in rows)),
+            "best_new_pairwise_f1_micro": max(
+                (float(row["new_pairwise_f1_micro"]) for row in rows),
+                default=baseline_pairwise,
+            ),
+            "best_new_complete_track_f1_micro": max(
+                (float(row["new_complete_track_f1_micro"]) for row in rows),
+                default=baseline_complete,
+            ),
+            "pareto_improves_track2p_count": int(
+                sum(int(row.get("pareto_improves_track2p", 0)) for row in rows)
+            ),
         }
     ]
-    grouped: dict[tuple[str, str], list[Mapping[str, float | int | str]]] = defaultdict(list)
+    grouped: dict[tuple[str, str], list[Mapping[str, float | int | str]]] = defaultdict(
+        list
+    )
     for row in rows:
         grouped[(str(row["edit_type"]), str(row["support_bucket"]))].append(row)
     for (edit_type, support_bucket), group_rows in sorted(grouped.items()):
@@ -812,8 +868,12 @@ def _summary_rows(
                 "edit_type": edit_type,
                 "support_bucket": support_bucket,
                 "candidate_count": int(len(group_rows)),
-                "applied_count": int(sum(int(row.get("rescue_applied", 0)) for row in group_rows)),
-                "structural_risk_min": int(min(int(row.get("structural_risk", 0)) for row in group_rows)),
+                "applied_count": int(
+                    sum(int(row.get("rescue_applied", 0)) for row in group_rows)
+                ),
+                "structural_risk_min": int(
+                    min(int(row.get("structural_risk", 0)) for row in group_rows)
+                ),
                 "best_subject": str(best["subject"]),
                 "best_edge": f"{best['session_a']}:{best['roi_a']}->{best['session_b']}:{best['roi_b']}",
                 "best_pairwise_tp_delta": int(best["pairwise_tp_delta"]),
@@ -823,8 +883,14 @@ def _summary_rows(
                 "best_complete_fp_delta": int(best["complete_fp_delta"]),
                 "best_complete_fn_delta": int(best["complete_fn_delta"]),
                 "best_new_pairwise_f1_micro": float(best["new_pairwise_f1_micro"]),
-                "best_new_complete_track_f1_micro": float(best["new_complete_track_f1_micro"]),
-                "pareto_improves_track2p_count": int(sum(int(row.get("pareto_improves_track2p", 0)) for row in group_rows)),
+                "best_new_complete_track_f1_micro": float(
+                    best["new_complete_track_f1_micro"]
+                ),
+                "pareto_improves_track2p_count": int(
+                    sum(
+                        int(row.get("pareto_improves_track2p", 0)) for row in group_rows
+                    )
+                ),
                 "baseline_pairwise_f1_micro": baseline_pairwise,
                 "baseline_complete_track_f1_micro": baseline_complete,
                 "track2p_pairwise_f1_micro": track2p_pairwise,
@@ -850,7 +916,9 @@ def write_rows(
         )
         return
     remaining = sorted({key for row in rows for key in row} - set(preferred_fields))
-    fieldnames = [field for field in preferred_fields if any(field in row for row in rows)]
+    fieldnames = [
+        field for field in preferred_fields if any(field in row for row in rows)
+    ]
     fieldnames.extend(remaining)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -891,7 +959,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument("--split-risk-threshold", type=float, default=1.50)
     parser.add_argument("--split-penalty", type=float, default=0.25)
     parser.add_argument("--min-side-observations", type=int, default=2)
@@ -977,7 +1047,12 @@ def main(argv: list[str] | None = None) -> int:
         edge_top_k=int(args.edge_top_k),
         path_beam_width=int(args.path_beam_width),
     )
-    write_rows(result.rows, args.output, output_format=args.format, preferred_fields=_OUTPUT_FIELDS)
+    write_rows(
+        result.rows,
+        args.output,
+        output_format=args.format,
+        preferred_fields=_OUTPUT_FIELDS,
+    )
     if args.summary_output is not None:
         write_rows(result.summary_rows, args.summary_output, output_format=args.format)
     return 0

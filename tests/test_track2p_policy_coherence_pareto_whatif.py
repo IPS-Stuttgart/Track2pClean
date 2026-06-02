@@ -1,5 +1,4 @@
 import numpy as np
-
 from bayescatrack import cli
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import track2p_policy_coherence_pareto_whatif as audit
