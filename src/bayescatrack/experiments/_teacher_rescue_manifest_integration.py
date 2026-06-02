@@ -529,6 +529,22 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "track2p_policy_teacher_adjacent_rescue_dynamic_confidence_first_edit_seed_source.csv",
         ),
         (
+            (
+                "track2p-policy-teacher-adjacent-rescue-"
+                "dynamic-seed-confidence-first-edit-seed-source"
+            ),
+            False,
+            True,
+            True,
+            False,
+            "dynamic-seed-confidence",
+            {"max_applied_edits": 1},
+            (
+                "track2p_policy_teacher_adjacent_rescue_"
+                "dynamic_seed_confidence_first_edit_seed_source.csv"
+            ),
+        ),
+        (
             "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source-cellgate",
             False,
             True,
@@ -547,6 +563,36 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "dynamic-confidence",
             {"teacher_feature_preset": "cell-high-confidence", "max_applied_edits": 2},
             "track2p_policy_teacher_adjacent_rescue_dynamic_confidence_seed_source_cell_high_confidence_max2.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-residual-fn-dynamic-confidence",
+            False,
+            True,
+            True,
+            False,
+            "dynamic-confidence",
+            {
+                "teacher_feature_preset": "residual-fn",
+                "min_component_observations": 2,
+            },
+            "track2p_policy_teacher_adjacent_rescue_residual_fn_dynamic_confidence.csv",
+        ),
+        (
+            "track2p-policy-teacher-adjacent-rescue-residual-fn-dynamic-confidence-max2",
+            False,
+            True,
+            True,
+            False,
+            "dynamic-confidence",
+            {
+                "teacher_feature_preset": "residual-fn",
+                "min_component_observations": 2,
+                "max_applied_edits": 2,
+            },
+            (
+                "track2p_policy_teacher_adjacent_rescue_residual_fn_"
+                "dynamic_confidence_max2.csv"
+            ),
         ),
         (
             (

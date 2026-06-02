@@ -9,8 +9,10 @@ seed-anchored fragments when the edit has no ROI conflicts.  Completing a row by
 isolated insertion remains disabled unless explicitly allowed or unless the
 completed row is also present as a complete Track2p teacher row, while
 complete-row fragment merges can be enabled separately for a narrower
-stitch-only rescue. A compatibility seed-completing backfill opt-in allows only
-Track2p-supported source backfills that fill the seed-session ROI. The command
+stitch-only rescue. A seed-source backfill opt-in can now be used independently
+of broad source backfill, allowing a narrow Track2p-supported probe of the
+missing seed-session ROI residual bucket without also admitting arbitrary
+non-seed source insertions. The command
 does not use manual GT labels to choose edges.
 """
 
@@ -83,7 +85,14 @@ TeacherFeaturePreset = Literal[
     "local-support",
     "high-confidence",
     "cell-high-confidence",
+    "cell-confident",
     "track2p-fn-rescue",
+    "residual-fn",
+    "seed-source-high-confidence",
+]
+TeacherRepairPreset = Literal[
+    "none",
+    "missing-seed-high-confidence",
 ]
 
 
@@ -160,6 +169,26 @@ class TeacherEdgeFeatureGate:
 TeacherFeatureGate = TeacherEdgeFeatureGate
 
 
+def _teacher_edge_order_requires_feature_index(
+    edge_order: TeacherEdgeOrder | str,
+) -> bool:
+    """Return whether a teacher-edge order needs local feature extraction."""
+
+    return str(edge_order) in {
+        "confidence",
+        "dynamic-confidence",
+        "dynamic-seed-confidence",
+    }
+
+
+def _teacher_edge_order_uses_confidence_features(
+    edge_order: TeacherEdgeOrder | str,
+) -> bool:
+    """Compatibility alias for confidence-feature edge-order detection."""
+
+    return _teacher_edge_order_requires_feature_index(edge_order)
+
+
 def teacher_feature_gate_from_preset(
     preset: TeacherFeaturePreset | str,
 ) -> TeacherEdgeFeatureGate | None:
@@ -187,7 +216,7 @@ def teacher_feature_gate_from_preset(
             min_area_ratio=0.70,
             require_hungarian=True,
         )
-    if normalized == "cell-high-confidence":
+    if normalized in {"cell-high-confidence", "cell-confident", "cell-confidence"}:
         return TeacherEdgeFeatureGate(
             min_registered_iou=0.20,
             min_threshold_margin=0.05,
@@ -198,6 +227,14 @@ def teacher_feature_gate_from_preset(
             min_cell_probability=0.80,
             require_hungarian=True,
         )
+    if normalized in {"residual-fn", "residual-fn-rescue", "teacher-fn"}:
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.10,
+            max_centroid_distance=6.0,
+            min_area_ratio=0.45,
+            min_cell_probability=0.50,
+            require_hungarian=False,
+        )
     if normalized == "track2p-fn-rescue":
         return TeacherEdgeFeatureGate(
             min_registered_iou=0.10,
@@ -206,7 +243,35 @@ def teacher_feature_gate_from_preset(
             min_cell_probability=0.60,
             require_hungarian=False,
         )
+    if normalized == "seed-source-high-confidence":
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.15,
+            max_centroid_distance=6.0,
+            min_area_ratio=0.60,
+            min_cell_probability=0.70,
+            require_hungarian=False,
+        )
     raise ValueError(f"Unsupported teacher feature preset: {preset!r}")
+
+
+def teacher_adjacent_repair_preset_kwargs(
+    preset: TeacherRepairPreset | str,
+) -> dict[str, Any]:
+    """Return label-free macro options for narrow teacher-rescue repair modes."""
+
+    normalized = str(preset).strip().lower()
+    if normalized in {"", "none"}:
+        return {}
+    if normalized == "missing-seed-high-confidence":
+        return {
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_feature_preset": "seed-source-high-confidence",
+            "min_component_observations": 2,
+            "max_applied_edits": 2,
+        }
+    raise ValueError(f"Unsupported teacher repair preset: {preset!r}")
 
 
 def merge_teacher_feature_gates(
@@ -322,6 +387,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
     max_applied_edits: int | None = None,
     teacher_feature_gate: TeacherEdgeFeatureGate | None = None,
     edge_feature_gate: TeacherEdgeFeatureGate | None = None,
+    teacher_repair_preset: str = "none",
     teacher_feature_preset: str = "none",
 ) -> ComponentAuditOutput:
     """Run component cleanup followed by adjacent Track2p teacher rescue."""
@@ -338,6 +404,27 @@ def run_track2p_policy_teacher_adjacent_rescue(
         )
 
     cleanup_config = cleanup_config or ComponentCleanupConfig()
+    repair_kwargs = teacher_adjacent_repair_preset_kwargs(teacher_repair_preset)
+    if repair_kwargs:
+        allow_seed_source_backfill = bool(
+            allow_seed_source_backfill or repair_kwargs["allow_seed_source_backfill"]
+        )
+        allow_completing_seed_source_backfill = bool(
+            allow_completing_seed_source_backfill
+            or repair_kwargs["allow_completing_seed_source_backfill"]
+        )
+        if teacher_edge_order == "structural":
+            teacher_edge_order = cast(
+                TeacherEdgeOrder, repair_kwargs["teacher_edge_order"]
+            )
+        if teacher_feature_preset == "none":
+            teacher_feature_preset = str(repair_kwargs["teacher_feature_preset"])
+        min_component_observations = max(
+            int(min_component_observations),
+            int(repair_kwargs["min_component_observations"]),
+        )
+        if max_applied_edits is None:
+            max_applied_edits = int(repair_kwargs["max_applied_edits"])
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
@@ -406,7 +493,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
                 threshold_method=threshold_method,
                 iou_distance_threshold=float(iou_distance_threshold),
             )
-            if teacher_edge_order in {"confidence", "dynamic-confidence"}
+            if _teacher_edge_order_requires_feature_index(teacher_edge_order)
             or _teacher_feature_gate_enabled(teacher_feature_gate)
             else {}
         )
@@ -501,6 +588,7 @@ def run_track2p_policy_teacher_adjacent_rescue(
             "track2p_teacher_adjacent_max_applied_edits": (
                 -1 if max_applied_edits is None else int(max_applied_edits)
             ),
+            "track2p_teacher_adjacent_repair_preset": str(teacher_repair_preset),
             "track2p_teacher_adjacent_feature_preset": str(teacher_feature_preset),
             "track2p_teacher_adjacent_feature_gate_enabled": int(
                 _teacher_feature_gate_enabled(teacher_feature_gate)
@@ -1116,10 +1204,13 @@ def _teacher_edge_structural_order_key(
         seed_source_backfill = bool(
             allow_seed_source_backfill and session_a == seed_session
         )
-        if allow_source_backfill and (
-            target_seed_anchored
+        if (
+            (allow_source_backfill and target_seed_anchored)
             or seed_source_backfill
-            or allow_teacher_supported_completing_rescue
+            or (
+                allow_source_backfill
+                and allow_teacher_supported_completing_rescue
+            )
         ):
             candidate = predicted[target_row].copy()
             candidate[session_a] = roi_a
@@ -1313,7 +1404,8 @@ def _teacher_edge_seed_source_backfill_order_key(
 ) -> tuple[int, int, int]:
     """Prefer eligible edits that backfill the missing seed-session source ROI."""
 
-    if not (allow_source_backfill and allow_seed_source_backfill):
+    del allow_source_backfill
+    if not allow_seed_source_backfill:
         return (1, 0, 0)
     session_a, session_b, roi_a, roi_b = edge
     if int(session_a) != int(seed_session):
@@ -1562,13 +1654,13 @@ def _try_apply_teacher_edge(
         return output, row
 
     if source_row < 0 and target_row >= 0:
-        if not source_backfill_enabled:
-            row["reason"] = "missing_or_ambiguous_source"
-            return output, row
         target_seed_anchored = _row_is_seed_anchored(output[target_row], seed_session)
         seed_source_backfill = bool(
             allow_seed_source_backfill and session_a == seed_session
         )
+        if not (source_backfill_enabled or seed_source_backfill):
+            row["reason"] = "missing_or_ambiguous_source"
+            return output, row
         candidate_row = output[target_row].copy()
         candidate_row[session_a] = roi_a
         teacher_completion_supported = _teacher_complete_row_supported(
@@ -1862,7 +1954,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help=(
             "Allow adjacent Track2p teacher edges to fill a missing source "
             "observation when the target observation is already in a "
-            "seed-anchored component."
+            "seed-anchored component. Disable this while enabling "
+            "--allow-seed-source-backfill to test only the missing-seed "
+            "source-backfill bucket."
         ),
     )
     parser.add_argument(
@@ -1891,7 +1985,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=False,
         help=(
             "Also allow source backfill when the missing source observation is "
-            "the seed-session ROI. This directly targets missing-seed residual "
+            "the seed-session ROI, even when broad source backfill is disabled "
+            "with --no-allow-source-backfill. This directly targets missing-seed residual "
             "errors, so it is opt-in."
         ),
     )
@@ -1947,6 +2042,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--teacher-repair-preset",
+        choices=("none", "missing-seed-high-confidence"),
+        default="none",
+        help=(
+            "Apply a narrow label-free teacher-rescue macro. "
+            "'missing-seed-high-confidence' prioritizes seed-session source "
+            "backfills with dynamic seed/confidence ordering, a small edit cap, "
+            "and the seed-source-high-confidence feature gate. Explicit non-default "
+            "CLI values for order, feature preset, edit cap, and component support "
+            "are preserved."
+        ),
+    )
+    parser.add_argument(
         "--teacher-edge-order",
         choices=(
             "lexicographic",
@@ -1973,13 +2081,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "local-support",
             "high-confidence",
             "cell-high-confidence",
+            "cell-confident",
             "track2p-fn-rescue",
+            "residual-fn",
+            "seed-source-high-confidence",
         ),
         default="none",
         help=(
             "Apply a label-free feature-gate preset to teacher rescue edges. "
             "Explicit --teacher-* gate thresholds override the corresponding "
-            "preset values."
+            "preset values. The cell-confident preset is the high-confidence "
+            "gate plus a minimum Suite2p cell probability of 0.80 at both "
+            "teacher-edge endpoints."
         ),
     )
     parser.add_argument(
@@ -2139,6 +2252,7 @@ def main(argv: list[str] | None = None) -> int:
         min_component_observations=args.min_component_observations,
         max_applied_edits=args.max_applied_edits,
         teacher_feature_gate=teacher_feature_gate,
+        teacher_repair_preset=args.teacher_repair_preset,
         teacher_feature_preset=str(args.teacher_feature_preset),
     )
     rows = [result.to_dict() for result in output.results]

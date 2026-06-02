@@ -7,7 +7,10 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
 from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     TeacherEdgeFeatureGate,
     _teacher_completion_gate_kwargs,
+    _teacher_edge_order_requires_feature_index,
+    _teacher_edge_order_uses_confidence_features,
     apply_teacher_adjacent_rescue_edges,
+    teacher_adjacent_repair_preset_kwargs,
     teacher_feature_gate_from_preset,
 )
 
@@ -26,6 +29,25 @@ def test_teacher_completion_gate_kwargs_preserve_exact_aliases() -> None:
         "allow_teacher_supported_completing_rescue": False,
         "allow_teacher_confirmed_completing_rescue": False,
     }
+
+
+def test_teacher_edge_order_requires_feature_index_for_seed_confidence() -> None:
+    assert _teacher_edge_order_requires_feature_index("confidence")
+    assert _teacher_edge_order_requires_feature_index("dynamic-confidence")
+    assert _teacher_edge_order_requires_feature_index("dynamic-seed-confidence")
+
+    assert not _teacher_edge_order_requires_feature_index("lexicographic")
+    assert not _teacher_edge_order_requires_feature_index("structural")
+    assert not _teacher_edge_order_requires_feature_index("dynamic-structural")
+
+
+def test_teacher_edge_order_uses_confidence_features() -> None:
+    assert _teacher_edge_order_uses_confidence_features("confidence")
+    assert _teacher_edge_order_uses_confidence_features("dynamic-confidence")
+    assert _teacher_edge_order_uses_confidence_features("dynamic-seed-confidence")
+
+    assert not _teacher_edge_order_uses_confidence_features("structural")
+    assert not _teacher_edge_order_uses_confidence_features("dynamic-structural")
 
 
 def test_teacher_adjacent_rescue_inserts_missing_source_into_seed_anchored_row() -> (
@@ -71,6 +93,35 @@ def test_teacher_adjacent_rescue_can_disable_source_insertions_alias() -> None:
     np.testing.assert_array_equal(output.tracks, predicted)
     assert output.rows[0]["applied"] == 0
     assert output.rows[0]["reason"] == "missing_or_ambiguous_source"
+
+
+def test_teacher_adjacent_rescue_allows_seed_only_source_backfill() -> None:
+    predicted = np.asarray([[-1, 20, -1]], dtype=int)
+    teacher = np.asarray([[10, 20, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_source_backfill=False,
+        allow_seed_source_backfill=True,
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 20, -1]])
+    assert output.rows == (
+        {
+            "session_a": 0,
+            "session_b": 1,
+            "roi_a": 10,
+            "roi_b": 20,
+            "applied": 1,
+            "reason": "accepted_insert_source",
+            "source_row": -1,
+            "target_row": 0,
+            "teacher_complete_row_supported": 0,
+            "occurrence_index": 0,
+        },
+    )
 
 
 def test_teacher_adjacent_rescue_can_require_component_support() -> None:
@@ -212,6 +263,53 @@ def test_teacher_adjacent_rescue_accepts_seed_completion_alias() -> None:
     )
 
     np.testing.assert_array_equal(output.tracks, [[100, 20, 30, 40]])
+    assert output.rows[0]["applied"] == 1
+    assert output.rows[0]["reason"] == "accepted_insert_source"
+
+
+def test_teacher_repair_preset_targets_missing_seed_source_backfill() -> None:
+    kwargs = teacher_adjacent_repair_preset_kwargs("missing-seed-high-confidence")
+
+    assert kwargs == {
+        "allow_seed_source_backfill": True,
+        "allow_completing_seed_source_backfill": True,
+        "teacher_edge_order": "dynamic-seed-confidence",
+        "teacher_feature_preset": "seed-source-high-confidence",
+        "min_component_observations": 2,
+        "max_applied_edits": 2,
+    }
+
+
+def test_seed_source_high_confidence_preset_accepts_seed_backfill_without_hungarian() -> (
+    None
+):
+    predicted = np.asarray([[-1, 20, 30]], dtype=int)
+    teacher = np.asarray([[10, 20, -1]], dtype=int)
+    gate = teacher_feature_gate_from_preset("seed-source-high-confidence")
+
+    assert gate is not None
+    assert not gate.require_hungarian
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_seed_source_backfill=True,
+        allow_completing_seed_source_backfill=True,
+        feature_gate=gate,
+        edge_feature_index={
+            (0, 1, 10, 20): ResidualFeature(
+                registered_iou=0.18,
+                centroid_distance=5.5,
+                area_ratio=0.65,
+                cell_probability_a=0.75,
+                cell_probability_b=0.80,
+                assigned_by_hungarian=0,
+            )
+        },
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 20, 30]])
     assert output.rows[0]["applied"] == 1
     assert output.rows[0]["reason"] == "accepted_insert_source"
 
@@ -605,4 +703,50 @@ def test_teacher_adjacent_rescue_cell_high_confidence_preset_uses_cell_probabili
     assert output.rows[0]["applied"] == 0
     assert output.rows[0]["reason"] == "feature_gate_cell_probability"
     assert output.rows[1]["applied"] == 1
+    assert output.rows[1]["reason"] == "accepted_insert_target"
+
+
+def test_teacher_adjacent_rescue_cell_confident_preset_requires_cells() -> None:
+    predicted = np.asarray([[10, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1], [10, 12, -1]], dtype=int)
+    gate = teacher_feature_gate_from_preset("cell-confident")
+
+    assert gate is not None
+    assert gate.min_cell_probability == 0.80
+    assert gate.require_hungarian
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        edge_order="lexicographic",
+        edge_feature_index={
+            (0, 1, 10, 11): ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                cell_probability_a=0.95,
+                cell_probability_b=0.40,
+                row_margin=0.3,
+                column_margin=0.3,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+            (0, 1, 10, 12): ResidualFeature(
+                registered_iou=0.8,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                cell_probability_a=0.95,
+                cell_probability_b=0.90,
+                row_margin=0.3,
+                column_margin=0.3,
+                threshold_margin=0.30,
+                assigned_by_hungarian=1,
+            ),
+        },
+        feature_gate=gate,
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 12, -1]])
+    assert output.rows[0]["reason"] == "feature_gate_cell_probability"
     assert output.rows[1]["reason"] == "accepted_insert_target"
