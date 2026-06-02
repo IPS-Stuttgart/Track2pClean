@@ -23,6 +23,7 @@
       "threshold_method": "min",
       "iou_distance_threshold": 10.0,
       "cell_probability_threshold": 0.5,
+      "max_gap": 1,
       "output": "<OUTPUT_ROOT>/track2p_policy_min_d10.csv"
     },
     {
@@ -32,6 +33,7 @@
       "threshold_method": "min",
       "iou_distance_threshold": 12.0,
       "cell_probability_threshold": 0.5,
+      "max_gap": 1,
       "output": "<OUTPUT_ROOT>/track2p_policy_min_d12.csv"
     },
     {
@@ -310,6 +312,7 @@
       "threshold_method": "min",
       "iou_distance_threshold": 14.0,
       "cell_probability_threshold": 0.5,
+      "max_gap": 1,
       "output": "<OUTPUT_ROOT>/track2p_policy_min_d14.csv"
     },
     {
@@ -319,6 +322,7 @@
       "threshold_method": "otsu",
       "iou_distance_threshold": 12.0,
       "cell_probability_threshold": 0.5,
+      "max_gap": 1,
       "output": "<OUTPUT_ROOT>/track2p_policy_otsu_d12.csv"
     },
     {
