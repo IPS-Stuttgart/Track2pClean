@@ -258,6 +258,31 @@ run_teacher_rescue teacher_adjacent_dynamic_confidence_residual_fn_cell_confiden
   --min-component-observations 2 \
   --max-applied-edits 2
 
+run_teacher_rescue teacher_adjacent_dynamic_cell_confidence_residual_fn_cell_confident_max2 \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --no-allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-edge-order dynamic-cell-confidence \
+  --teacher-feature-preset residual-fn-cell-confident \
+  --min-component-observations 2 \
+  --max-applied-edits 2
+
+run_teacher_rescue teacher_adjacent_track2p_fn_moderate_iou_cell_confident_preset \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --no-allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-repair-preset track2p-fn-moderate-iou-cell-confident
+
+run_teacher_rescue teacher_adjacent_residual_union_cell_confident_preset \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --allow-seed-source-backfill \
+  --allow-completing-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-repair-preset residual-union-cell-confident
+
 run_teacher_rescue teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2 \
   --no-allow-completing-rescue \
   --allow-source-backfill \
@@ -385,6 +410,9 @@ run_teacher_veto teacher_veto_geometric_max1 \
   --input TeacherAdjacentDynamicConfidenceLocalSupportMax2="$OUT/teacher_adjacent_dynamic_confidence_local_support_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceTrack2pFnRescueMax2="$OUT/teacher_adjacent_dynamic_confidence_track2p_fn_rescue_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceResidualFnCellConfidentMax2="$OUT/teacher_adjacent_dynamic_confidence_residual_fn_cell_confident_max2.csv" \
+  --input TeacherAdjacentDynamicCellConfidenceResidualFnCellConfidentMax2="$OUT/teacher_adjacent_dynamic_cell_confidence_residual_fn_cell_confident_max2.csv" \
+  --input TeacherAdjacentTrack2pFnModerateIouCellConfidentPreset="$OUT/teacher_adjacent_track2p_fn_moderate_iou_cell_confident_preset.csv" \
+  --input TeacherAdjacentResidualUnionCellConfidentPreset="$OUT/teacher_adjacent_residual_union_cell_confident_preset.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
@@ -422,6 +450,9 @@ run_teacher_veto teacher_veto_geometric_max1 \
   --input TeacherAdjacentDynamicConfidenceLocalSupportMax2="$OUT/teacher_adjacent_dynamic_confidence_local_support_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceTrack2pFnRescueMax2="$OUT/teacher_adjacent_dynamic_confidence_track2p_fn_rescue_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceResidualFnCellConfidentMax2="$OUT/teacher_adjacent_dynamic_confidence_residual_fn_cell_confident_max2.csv" \
+  --input TeacherAdjacentDynamicCellConfidenceResidualFnCellConfidentMax2="$OUT/teacher_adjacent_dynamic_cell_confidence_residual_fn_cell_confident_max2.csv" \
+  --input TeacherAdjacentTrack2pFnModerateIouCellConfidentPreset="$OUT/teacher_adjacent_track2p_fn_moderate_iou_cell_confident_preset.csv" \
+  --input TeacherAdjacentResidualUnionCellConfidentPreset="$OUT/teacher_adjacent_residual_union_cell_confident_preset.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \

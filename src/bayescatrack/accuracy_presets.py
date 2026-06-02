@@ -29,6 +29,7 @@ AccuracyPresetName = Literal[
     "track2p-supported-gap-cleanup",
     "track2p-confidence-ordered-strict-gap-cleanup",
     "track2p-teacher-adjacent-rescue",
+    "track2p-teacher-fn-rescue",
 ]
 AccuracyPresetRunner = Literal[
     "benchmark",
@@ -222,6 +223,10 @@ def build_track2p_accuracy_presets(
             "require_complete_track": True,
         },
     }
+    teacher_fn_rescue_runner_kwargs = {
+        **teacher_rescue_runner_kwargs,
+        "teacher_repair_preset": "track2p-fn-high-confidence",
+    }
 
     return (
         AccuracyPreset(
@@ -306,6 +311,17 @@ def build_track2p_accuracy_presets(
             config=stability_cleanup,
             runner="teacher-adjacent-rescue",
             runner_kwargs=teacher_rescue_runner_kwargs,
+        ),
+        AccuracyPreset(
+            name="track2p-teacher-fn-rescue",
+            description=(
+                "Component cleanup plus the dedicated Track2p-supported false-"
+                "negative repair preset: dynamic-confidence target extensions, "
+                "a high-confidence local feature gate, and a small edit budget."
+            ),
+            config=stability_cleanup,
+            runner="teacher-adjacent-rescue",
+            runner_kwargs=teacher_fn_rescue_runner_kwargs,
         ),
     )
 
