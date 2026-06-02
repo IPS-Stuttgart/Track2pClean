@@ -644,7 +644,10 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
                 "min_component_observations": 2,
                 "max_applied_edits": 3,
             },
-            ("track2p_policy_teacher_adjacent_rescue_" "track2p_fn_target_extension.csv"),
+            (
+                "track2p_policy_teacher_adjacent_rescue_"
+                "track2p_fn_target_extension.csv"
+            ),
         ),
         (
             ("track2p-policy-teacher-adjacent-rescue-" "missing-seed-high-confidence"),

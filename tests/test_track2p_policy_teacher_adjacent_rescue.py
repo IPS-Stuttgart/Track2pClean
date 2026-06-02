@@ -50,9 +50,7 @@ def test_teacher_edge_order_uses_confidence_features() -> None:
     assert _teacher_edge_order_uses_confidence_features("dynamic-confidence")
     assert _teacher_edge_order_uses_confidence_features("dynamic-cell-confidence")
     assert _teacher_edge_order_uses_confidence_features("dynamic-seed-confidence")
-    assert _teacher_edge_order_uses_confidence_features(
-        "dynamic-seed-cell-confidence"
-    )
+    assert _teacher_edge_order_uses_confidence_features("dynamic-seed-cell-confidence")
 
     assert not _teacher_edge_order_uses_confidence_features("structural")
     assert not _teacher_edge_order_uses_confidence_features("dynamic-structural")
@@ -371,9 +369,7 @@ def test_teacher_adjacent_rescue_can_filter_to_target_or_seed_source_union() -> 
         ],
     )
     applied_reasons = [row["reason"] for row in output.rows if int(row["applied"])]
-    rejected_reasons = [
-        row["reason"] for row in output.rows if not int(row["applied"])
-    ]
+    rejected_reasons = [row["reason"] for row in output.rows if not int(row["applied"])]
     assert applied_reasons == ["accepted_insert_target", "accepted_insert_source"]
     assert "action_filter_target-extension-or-seed-source-backfill" in rejected_reasons
 
