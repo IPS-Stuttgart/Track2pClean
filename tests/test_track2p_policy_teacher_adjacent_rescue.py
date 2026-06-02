@@ -267,9 +267,7 @@ def test_teacher_adjacent_rescue_can_filter_to_seed_source_backfills() -> None:
         edge_order="lexicographic",
     )
 
-    np.testing.assert_array_equal(
-        output.tracks, [[10, -1, -1, -1], [20, 21, 22, -1]]
-    )
+    np.testing.assert_array_equal(output.tracks, [[10, -1, -1, -1], [20, 21, 22, -1]])
     assert output.rows[0]["applied"] == 0
     assert output.rows[0]["reason"] == "action_filter_seed-source-backfill"
     assert output.rows[1]["applied"] == 1
