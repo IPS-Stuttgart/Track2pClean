@@ -41,7 +41,11 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
     _feature_subset_for_edges,
 )
 from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+    TeacherActionFilter,
     TeacherEdgeOrder,
+    TeacherEdgeFeatureGate,
+    _teacher_edge_order_requires_feature_index,
+    _teacher_feature_gate_enabled,
     apply_teacher_adjacent_rescue_edges,
     merge_teacher_feature_gates,
     teacher_feature_gate_from_preset,
@@ -61,6 +65,7 @@ def _subject_row(
     edge_top_k: int,
     path_beam_width: int,
     teacher_edge_order: TeacherEdgeOrder,
+    teacher_action_filter: TeacherActionFilter,
     teacher_feature_preset: str,
     max_applied_teacher_edits: int | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -111,14 +116,22 @@ def _subject_row(
     teacher, _reference_again, _teacher_ids = _evaluated_prediction_rows(
         _normalize_int_track_matrix(teacher_full), reference_tracks, config=config
     )
-    teacher_edges = set(track_edge_counter(_normalize_int_track_matrix(teacher)))
-    edge_features = _feature_subset_for_edges(
-        sessions,
-        teacher_edges,
-        transform_type=config.transform_type,
-        threshold_method=threshold_method,
-        iou_distance_threshold=float(iou_distance_threshold),
+    teacher_feature_gate = merge_teacher_feature_gates(
+        teacher_feature_gate_from_preset(teacher_feature_preset),
+        TeacherEdgeFeatureGate(),
     )
+    edge_features = {}
+    if _teacher_edge_order_requires_feature_index(
+        teacher_edge_order
+    ) or _teacher_feature_gate_enabled(teacher_feature_gate):
+        teacher_edges = set(track_edge_counter(_normalize_int_track_matrix(teacher)))
+        edge_features = _feature_subset_for_edges(
+            sessions,
+            teacher_edges,
+            transform_type=config.transform_type,
+            threshold_method=threshold_method,
+            iou_distance_threshold=float(iou_distance_threshold),
+        )
     teacher_report = apply_teacher_adjacent_rescue_edges(
         stitched,
         teacher,
@@ -127,11 +140,9 @@ def _subject_row(
         allow_source_backfill=True,
         allow_fragment_merges=True,
         edge_order=teacher_edge_order,
+        teacher_action_filter=teacher_action_filter,
         edge_feature_index=edge_features,
-        teacher_feature_gate=merge_teacher_feature_gates(
-            teacher_feature_gate_from_preset(teacher_feature_preset),
-            teacher_feature_gate_from_preset("none") or _empty_teacher_gate(),
-        ),
+        teacher_feature_gate=teacher_feature_gate,
         min_component_observations=1,
         max_applied_edits=max_applied_teacher_edits,
     )
@@ -157,14 +168,6 @@ def _subject_row(
         for edit in teacher_report.rows
     ]
     return row, teacher_rows
-
-
-def _empty_teacher_gate() -> Any:
-    from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
-        TeacherEdgeFeatureGate,
-    )
-
-    return TeacherEdgeFeatureGate()
 
 
 def _score_row(
@@ -250,7 +253,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "dynamic-confidence",
             "dynamic-seed-confidence",
         ),
-        default="dynamic-confidence",
+        default="structural",
+    )
+    parser.add_argument(
+        "--teacher-action-filter",
+        choices=(
+            "all",
+            "target-extension",
+            "source-backfill",
+            "seed-source-backfill",
+            "fragment-merge",
+        ),
+        default="all",
     )
     parser.add_argument(
         "--teacher-feature-preset",
@@ -261,9 +275,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "cell-high-confidence",
             "track2p-fn-rescue",
         ),
-        default="track2p-fn-rescue",
+        default="none",
     )
-    parser.add_argument("--max-applied-teacher-edits", type=int, default=2)
+    parser.add_argument(
+        "--max-applied-teacher-edits",
+        type=int,
+        default=-1,
+        help="Cap accepted teacher edits per subject; -1 leaves the rescue uncapped.",
+    )
     parser.add_argument("--teacher-output", type=Path, default=None)
     return parser
 
@@ -326,6 +345,9 @@ def main(argv: list[str] | None = None) -> int:
             edge_top_k=int(args.edge_top_k),
             path_beam_width=int(args.path_beam_width),
             teacher_edge_order=cast(TeacherEdgeOrder, args.teacher_edge_order),
+            teacher_action_filter=cast(
+                TeacherActionFilter, args.teacher_action_filter
+            ),
             teacher_feature_preset=str(args.teacher_feature_preset),
             max_applied_teacher_edits=(
                 None
