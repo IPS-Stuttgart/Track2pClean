@@ -124,6 +124,46 @@ def test_teacher_adjacent_rescue_allows_seed_only_source_backfill() -> None:
     )
 
 
+def test_teacher_adjacent_rescue_seed_source_backfill_can_bypass_generic_source_backfill() -> (
+    None
+):
+    predicted = np.asarray([[-1, 20, 30]], dtype=int)
+    teacher = np.asarray([[10, 20, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_source_backfill=False,
+        allow_seed_source_backfill=True,
+        allow_completing_seed_source_backfill=True,
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 20, 30]])
+    assert output.rows[0]["applied"] == 1
+    assert output.rows[0]["reason"] == "accepted_insert_source"
+
+
+def test_teacher_adjacent_rescue_seed_source_only_does_not_allow_nonseed_backfill() -> (
+    None
+):
+    predicted = np.asarray([[10, -1, 30]], dtype=int)
+    teacher = np.asarray([[-1, 20, 30]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_source_backfill=False,
+        allow_seed_source_backfill=True,
+        allow_completing_seed_source_backfill=True,
+    )
+
+    np.testing.assert_array_equal(output.tracks, predicted)
+    assert output.rows[0]["applied"] == 0
+    assert output.rows[0]["reason"] == "missing_or_ambiguous_source"
+
+
 def test_teacher_adjacent_rescue_can_require_component_support() -> None:
     predicted = np.asarray([[100, -1, -1, -1]], dtype=int)
     teacher = np.asarray([[100, 20, -1, -1]], dtype=int)
@@ -200,6 +240,40 @@ def test_dynamic_seed_confidence_prioritizes_missing_seed_source_backfill() -> N
     assert output.rows[0]["roi_a"] == 30
     assert output.rows[0]["applied"] == 1
     assert output.rows[0]["reason"] == "accepted_insert_source"
+
+
+def test_teacher_adjacent_rescue_can_filter_to_seed_source_backfills() -> None:
+    predicted = np.asarray(
+        [
+            [10, -1, -1, -1],
+            [-1, 21, 22, -1],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray(
+        [
+            [10, 11, -1, -1],
+            [20, 21, -1, -1],
+        ],
+        dtype=int,
+    )
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_seed_source_backfill=True,
+        teacher_action_filter="seed-source-backfill",
+        edge_order="lexicographic",
+    )
+
+    np.testing.assert_array_equal(
+        output.tracks, [[10, -1, -1, -1], [20, 21, 22, -1]]
+    )
+    assert output.rows[0]["applied"] == 0
+    assert output.rows[0]["reason"] == "action_filter_seed-source-backfill"
+    assert output.rows[1]["applied"] == 1
+    assert output.rows[1]["reason"] == "accepted_insert_source"
 
 
 def test_teacher_adjacent_rescue_rejects_source_insertion_that_completes_row() -> None:
