@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-
 _PAIRWISE_TP = "pairwise_true_positives"
 _PAIRWISE_FP = "pairwise_false_positives"
 _PAIRWISE_FN = "pairwise_false_negatives"
@@ -190,7 +189,11 @@ def discover_candidates(
             row, "gap_rescue_supported", "is_gap_rescue_supported"
         )
 
-        if _is_pairwise_fn(error_type) and track2p_supported and not component_supported:
+        if (
+            _is_pairwise_fn(error_type)
+            and track2p_supported
+            and not component_supported
+        ):
             candidates.append(
                 WhatIfCandidate(
                     candidate_id=f"teacher-fn-rescue-{candidate_key}",
@@ -287,7 +290,9 @@ def summarize(scored_rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             {
                 "edit_type": edit_type,
                 "candidates": len(rows),
-                "subjects": ",".join(sorted({str(row.get("subject", "")) for row in rows})),
+                "subjects": ",".join(
+                    sorted({str(row.get("subject", "")) for row in rows})
+                ),
                 "best_pairwise_f1_delta": best["pairwise_f1_delta"],
                 "best_complete_track_f1_delta": best["complete_track_f1_delta"],
                 "best_candidate_id": best["candidate_id"],
@@ -379,25 +384,33 @@ def _truthy_field(row: Mapping[str, str], *names: str) -> bool:
 
 def _is_pairwise_fn(error_type: str) -> bool:
     return "pairwise" in error_type and (
-        "false_negative" in error_type or error_type.endswith("fn") or "_fn" in error_type
+        "false_negative" in error_type
+        or error_type.endswith("fn")
+        or "_fn" in error_type
     )
 
 
 def _is_pairwise_fp(error_type: str) -> bool:
     return "pairwise" in error_type and (
-        "false_positive" in error_type or error_type.endswith("fp") or "_fp" in error_type
+        "false_positive" in error_type
+        or error_type.endswith("fp")
+        or "_fp" in error_type
     )
 
 
 def _is_complete_fp(error_type: str) -> bool:
     return "complete" in error_type and (
-        "false_positive" in error_type or error_type.endswith("fp") or "_fp" in error_type
+        "false_positive" in error_type
+        or error_type.endswith("fp")
+        or "_fp" in error_type
     )
 
 
 def _is_complete_fn(error_type: str) -> bool:
     return "complete" in error_type and (
-        "false_negative" in error_type or error_type.endswith("fn") or "_fn" in error_type
+        "false_negative" in error_type
+        or error_type.endswith("fn")
+        or "_fn" in error_type
     )
 
 

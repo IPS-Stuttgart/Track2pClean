@@ -354,7 +354,9 @@ def _ordered_veto_edges(
         if int(predicted_count) > int(teacher_counts.get(edge, 0))
     }
     if config.include_teacher_supported_complete_track_edges:
-        candidate_edges.update(_teacher_unsupported_complete_row_edges(predicted, teacher))
+        candidate_edges.update(
+            _teacher_unsupported_complete_row_edges(predicted, teacher)
+        )
     edge_order = _resolved_edge_order(config)
     if edge_order == "lexicographic":
         return tuple(sorted(candidate_edges))
@@ -506,9 +508,8 @@ def _try_veto_edge(
         row["complete_teacher_row_supported"] = int(
             _complete_row_supported(output[row_index], teacher_complete_tracks)
         )
-        if (
-            config.include_teacher_supported_complete_track_edges
-            and int(row["complete_teacher_row_supported"])
+        if config.include_teacher_supported_complete_track_edges and int(
+            row["complete_teacher_row_supported"]
         ):
             row["reason"] = "teacher_complete_track_supported"
             return output, row
