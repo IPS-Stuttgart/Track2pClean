@@ -16,7 +16,7 @@ def test_missing_seed_repair_preset_expands_to_narrow_defaults():
     assert options["allow_source_backfill"] is False
     assert options["allow_seed_source_backfill"] is True
     assert options["allow_completing_seed_source_backfill"] is True
-    assert options["teacher_edge_order"] == "dynamic-seed-cell-confidence"
+    assert options["teacher_edge_order"] == "dynamic-seed-confidence"
     assert options["teacher_action_filter"] == "seed-source-backfill"
     assert options["teacher_feature_preset"] == "seed-source-high-confidence"
     assert options["min_component_observations"] == 2
