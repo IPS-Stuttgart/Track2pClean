@@ -530,6 +530,24 @@ def test_residual_union_repair_preset_targets_two_residual_buckets() -> None:
     }
 
 
+def test_residual_union_action_specific_preset_splits_feature_gates() -> None:
+    kwargs = teacher_adjacent_repair_preset_kwargs("residual-union-action-specific")
+
+    assert kwargs == {
+        "allow_source_backfill": False,
+        "allow_seed_source_backfill": True,
+        "allow_completing_seed_source_backfill": True,
+        "allow_fragment_merges": False,
+        "teacher_action_filter": "target-extension-or-seed-source-backfill",
+        "teacher_edge_order": "dynamic-seed-cell-confidence",
+        "teacher_feature_preset": "none",
+        "target_extension_feature_preset": "moderate-iou-cell-confidence",
+        "seed_source_feature_preset": "seed-source-cell-confident",
+        "min_component_observations": 2,
+        "max_applied_edits": 3,
+    }
+
+
 def test_seed_source_high_confidence_preset_accepts_seed_backfill_without_hungarian() -> (
     None
 ):
@@ -627,6 +645,59 @@ def test_seed_source_cell_confident_preset_rejects_low_cell_seed_backfill() -> N
     np.testing.assert_array_equal(output.tracks, predicted)
     assert output.rows[0]["applied"] == 0
     assert output.rows[0]["reason"] == "feature_gate_cell_probability"
+
+
+def test_action_specific_feature_gates_separate_target_and_seed_backfill() -> None:
+    predicted = np.asarray(
+        [
+            [10, -1, -1],
+            [-1, 21, 22],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray(
+        [
+            [10, 11, -1],
+            [20, 21, -1],
+        ],
+        dtype=int,
+    )
+    edge_feature_index = {
+        (0, 1, 10, 11): ResidualFeature(
+            registered_iou=0.20,
+            centroid_distance=2.0,
+            area_ratio=0.80,
+            cell_probability_a=0.60,
+            cell_probability_b=0.60,
+        ),
+        (0, 1, 20, 21): ResidualFeature(
+            registered_iou=0.01,
+            centroid_distance=3.0,
+            area_ratio=0.65,
+            cell_probability_a=0.88,
+            cell_probability_b=0.90,
+        ),
+    }
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_source_backfill=False,
+        allow_seed_source_backfill=True,
+        allow_completing_seed_source_backfill=True,
+        teacher_action_filter="target-extension-or-seed-source-backfill",
+        edge_order="lexicographic",
+        edge_feature_index=edge_feature_index,
+        target_extension_feature_gate=TeacherEdgeFeatureGate(min_cell_probability=0.90),
+        seed_source_feature_gate=TeacherEdgeFeatureGate(min_cell_probability=0.85),
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, -1, -1], [20, 21, 22]])
+    assert output.rows[0]["applied"] == 0
+    assert output.rows[0]["reason"] == "feature_gate_cell_probability"
+    assert output.rows[1]["applied"] == 1
+    assert output.rows[1]["reason"] == "accepted_insert_source"
 
 
 def test_seed_source_moderate_iou_preset_rejects_high_iou_teacher_edge() -> None:

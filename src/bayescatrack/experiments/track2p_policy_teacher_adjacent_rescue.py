@@ -20,6 +20,10 @@ ordering: once the residual FN / missing-seed action gate has selected a tiny
 edit budget, high endpoint cell probability and shape support are stronger
 tie-breakers than raw registered IoU. The command does not use manual GT labels
 to choose edges.
+
+Action-specific feature gates allow a residual-union preset to be strict for
+ordinary target extensions while keeping a separate, seed-source-specific gate
+for the missing seed-session ROI bucket.
 """
 
 from __future__ import annotations
@@ -120,6 +124,7 @@ TeacherRepairPreset = Literal[
     "track2p-fn-moderate-iou-cell-confident",
     "track2p-fn-moderate-iou-cell-confidence",
     "residual-union-cell-confident",
+    "residual-union-action-specific",
 ]
 
 
@@ -405,6 +410,20 @@ def teacher_adjacent_repair_preset_kwargs(
             "min_component_observations": 2,
             "max_applied_edits": 3,
         }
+    if normalized == "residual-union-action-specific":
+        return {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_fragment_merges": False,
+            "teacher_action_filter": "target-extension-or-seed-source-backfill",
+            "teacher_edge_order": "dynamic-seed-cell-confidence",
+            "teacher_feature_preset": "none",
+            "target_extension_feature_preset": "moderate-iou-cell-confidence",
+            "seed_source_feature_preset": "seed-source-cell-confident",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        }
     raise ValueError(f"Unsupported teacher repair preset: {preset!r}")
 
 
@@ -543,6 +562,8 @@ def run_track2p_policy_teacher_adjacent_rescue(
     edge_feature_gate: TeacherEdgeFeatureGate | None = None,
     teacher_repair_preset: str = "none",
     teacher_feature_preset: str = "none",
+    target_extension_feature_preset: str = "none",
+    seed_source_feature_preset: str = "none",
 ) -> ComponentAuditOutput:
     """Run component cleanup followed by adjacent Track2p teacher rescue."""
 
@@ -589,6 +610,20 @@ def run_track2p_policy_teacher_adjacent_rescue(
             and "teacher_feature_preset" in repair_kwargs
         ):
             teacher_feature_preset = str(repair_kwargs["teacher_feature_preset"])
+        if (
+            target_extension_feature_preset == "none"
+            and "target_extension_feature_preset" in repair_kwargs
+        ):
+            target_extension_feature_preset = str(
+                repair_kwargs["target_extension_feature_preset"]
+            )
+        if (
+            seed_source_feature_preset == "none"
+            and "seed_source_feature_preset" in repair_kwargs
+        ):
+            seed_source_feature_preset = str(
+                repair_kwargs["seed_source_feature_preset"]
+            )
         if "min_component_observations" in repair_kwargs:
             min_component_observations = max(
                 int(min_component_observations),
@@ -625,6 +660,12 @@ def run_track2p_policy_teacher_adjacent_rescue(
     teacher_feature_gate = merge_teacher_feature_gates(
         teacher_feature_gate_from_preset(teacher_feature_preset),
         teacher_feature_gate or TeacherEdgeFeatureGate(),
+    )
+    target_extension_feature_gate = teacher_feature_gate_from_preset(
+        target_extension_feature_preset
+    )
+    seed_source_feature_gate = teacher_feature_gate_from_preset(
+        seed_source_feature_preset
     )
     results: list[SubjectBenchmarkResult] = []
     rescue_rows: list[dict[str, int | str]] = []
@@ -666,6 +707,8 @@ def run_track2p_policy_teacher_adjacent_rescue(
             )
             if _teacher_edge_order_requires_feature_index(teacher_edge_order)
             or _teacher_feature_gate_enabled(teacher_feature_gate)
+            or _teacher_feature_gate_enabled(target_extension_feature_gate)
+            or _teacher_feature_gate_enabled(seed_source_feature_gate)
             else {}
         )
         rescue = apply_teacher_adjacent_rescue_edges(
@@ -684,6 +727,8 @@ def run_track2p_policy_teacher_adjacent_rescue(
             teacher_action_filter=teacher_action_filter,
             edge_feature_index=edge_feature_index,
             teacher_feature_gate=teacher_feature_gate,
+            target_extension_feature_gate=target_extension_feature_gate,
+            seed_source_feature_gate=seed_source_feature_gate,
             min_component_observations=min_component_observations,
             max_applied_edits=max_applied_edits,
         )
@@ -763,6 +808,16 @@ def run_track2p_policy_teacher_adjacent_rescue(
             ),
             "track2p_teacher_adjacent_repair_preset": str(teacher_repair_preset),
             "track2p_teacher_adjacent_feature_preset": str(teacher_feature_preset),
+            "track2p_teacher_adjacent_target_extension_feature_preset": str(
+                target_extension_feature_preset
+            ),
+            "track2p_teacher_adjacent_seed_source_feature_preset": str(
+                seed_source_feature_preset
+            ),
+            "track2p_teacher_adjacent_action_specific_feature_gate_enabled": int(
+                _teacher_feature_gate_enabled(target_extension_feature_gate)
+                or _teacher_feature_gate_enabled(seed_source_feature_gate)
+            ),
             "track2p_teacher_adjacent_feature_gate_enabled": int(
                 _teacher_feature_gate_enabled(teacher_feature_gate)
             ),
@@ -897,6 +952,8 @@ def apply_teacher_adjacent_rescue_edges(
     teacher_feature_gate: TeacherEdgeFeatureGate | None = None,
     feature_gate: TeacherEdgeFeatureGate | None = None,
     edge_feature_gate: TeacherEdgeFeatureGate | None = None,
+    target_extension_feature_gate: TeacherEdgeFeatureGate | None = None,
+    seed_source_feature_gate: TeacherEdgeFeatureGate | None = None,
     min_component_observations: int = 1,
     max_applied_edits: int | None = None,
 ) -> TeacherAdjacentRescueReport:
@@ -969,6 +1026,10 @@ def apply_teacher_adjacent_rescue_edges(
     teacher_feature_gate = _resolve_teacher_feature_gate(
         teacher_feature_gate, feature_gate, edge_feature_gate
     )
+    target_extension_feature_gate = _resolve_teacher_feature_gate(
+        target_extension_feature_gate
+    )
+    seed_source_feature_gate = _resolve_teacher_feature_gate(seed_source_feature_gate)
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
@@ -1009,6 +1070,8 @@ def apply_teacher_adjacent_rescue_edges(
             prioritize_seed_source_backfill=edge_order
             in {"dynamic-seed-confidence", "dynamic-seed-cell-confidence"},
             teacher_feature_gate=teacher_feature_gate,
+            target_extension_feature_gate=target_extension_feature_gate,
+            seed_source_feature_gate=seed_source_feature_gate,
             max_applied_edits=max_applied_edits,
         )
     edge_occurrences = _ordered_teacher_edge_occurrences(
@@ -1057,8 +1120,16 @@ def apply_teacher_adjacent_rescue_edges(
                 }
             )
             continue
+        selected_feature_gate = _teacher_edge_feature_gate_for_action(
+            output,
+            edge,
+            seed_session=seed_session,
+            default_gate=teacher_feature_gate,
+            target_extension_gate=target_extension_feature_gate,
+            seed_source_gate=seed_source_feature_gate,
+        )
         gate_reason = _teacher_edge_feature_gate_reason(
-            (edge_feature_index or {}).get(edge), teacher_feature_gate
+            (edge_feature_index or {}).get(edge), selected_feature_gate
         )
         if gate_reason != "accepted":
             rows.append(
@@ -1117,6 +1188,8 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     prefer_cell_confidence: bool,
     prioritize_seed_source_backfill: bool,
     teacher_feature_gate: TeacherEdgeFeatureGate | None,
+    target_extension_feature_gate: TeacherEdgeFeatureGate | None,
+    seed_source_feature_gate: TeacherEdgeFeatureGate | None,
     max_applied_edits: int | None,
 ) -> TeacherAdjacentRescueReport:
     """Apply teacher edits while recomputing structural priorities."""
@@ -1156,8 +1229,16 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                     }
                 )
                 continue
+            selected_feature_gate = _teacher_edge_feature_gate_for_action(
+                output,
+                edge,
+                seed_session=seed_session,
+                default_gate=teacher_feature_gate,
+                target_extension_gate=target_extension_feature_gate,
+                seed_source_gate=seed_source_feature_gate,
+            )
             gate_reason = _teacher_edge_feature_gate_reason(
-                edge_feature_index.get(edge), teacher_feature_gate
+                edge_feature_index.get(edge), selected_feature_gate
             )
             if gate_reason != "accepted":
                 attempted.add(occurrence)
@@ -1731,6 +1812,29 @@ def _resolve_teacher_feature_gate(
         if _teacher_feature_gate_enabled(gate):
             return gate
     return None
+
+
+def _teacher_edge_feature_gate_for_action(
+    predicted: np.ndarray,
+    edge: TrackEdge,
+    *,
+    seed_session: int,
+    default_gate: TeacherEdgeFeatureGate | None,
+    target_extension_gate: TeacherEdgeFeatureGate | None,
+    seed_source_gate: TeacherEdgeFeatureGate | None,
+) -> TeacherEdgeFeatureGate | None:
+    """Return an action-specific feature gate when one is configured."""
+
+    action = _teacher_edge_action(predicted, edge, seed_session=seed_session)
+    if action == "target-extension" and _teacher_feature_gate_enabled(
+        target_extension_gate
+    ):
+        return target_extension_gate
+    if action == "seed-source-backfill" and _teacher_feature_gate_enabled(
+        seed_source_gate
+    ):
+        return seed_source_gate
+    return default_gate
 
 
 def _teacher_feature_gate_enabled(gate: TeacherEdgeFeatureGate | None) -> bool:
@@ -2401,6 +2505,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "track2p-fn-moderate-iou-cell-confident",
             "track2p-fn-moderate-iou-cell-confidence",
             "residual-union-cell-confident",
+            "residual-union-action-specific",
         ),
         default="none",
         help=(
@@ -2419,7 +2524,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "moderate-IoU, cell-confident feature gate; "
             "'residual-union-cell-confident' combines target extensions and "
             "seed-source backfills with a cell-confident residual-FN feature "
-            "gate, while disabling broad source backfill and fragment merges. "
+            "gate, while disabling broad source backfill and fragment merges; "
+            "'residual-union-action-specific' uses the same residual-union action "
+            "filter but applies a stricter moderate-IoU/cell gate to target "
+            "extensions and a seed-source cell-confident gate to missing-seed "
+            "backfills. "
             "Explicit non-default CLI values for order, feature preset, edit "
             "cap, and component support are preserved."
         ),
@@ -2498,6 +2607,41 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "source-backfill gate with a stronger 0.85 endpoint cell-probability "
             "requirement and no positive-IoU floor; seed-source-moderate-iou "
             "additionally caps registered IoU to avoid high-overlap continuation spam."
+        ),
+    )
+    parser.add_argument(
+        "--target-extension-feature-preset",
+        choices=(
+            "none",
+            "local-support",
+            "high-confidence",
+            "cell-high-confidence",
+            "cell-confident",
+            "track2p-fn-rescue",
+            "residual-fn",
+            "residual-fn-cell-confident",
+            "moderate-iou-cell-confidence",
+        ),
+        default="none",
+        help=(
+            "Optional action-specific feature gate for target-extension teacher "
+            "edits. When set, this gate overrides --teacher-feature-preset only "
+            "for target extensions."
+        ),
+    )
+    parser.add_argument(
+        "--seed-source-feature-preset",
+        choices=(
+            "none",
+            "seed-source-high-confidence",
+            "seed-source-cell-confident",
+            "seed-source-moderate-iou",
+        ),
+        default="none",
+        help=(
+            "Optional action-specific feature gate for seed-source-backfill "
+            "teacher edits. When set, this gate overrides --teacher-feature-preset "
+            "only for missing-seed source backfills."
         ),
     )
     parser.add_argument(
@@ -2669,6 +2813,8 @@ def main(argv: list[str] | None = None) -> int:
         teacher_feature_gate=teacher_feature_gate,
         teacher_repair_preset=args.teacher_repair_preset,
         teacher_feature_preset=str(args.teacher_feature_preset),
+        target_extension_feature_preset=str(args.target_extension_feature_preset),
+        seed_source_feature_preset=str(args.seed_source_feature_preset),
     )
     rows = [result.to_dict() for result in output.results]
     if args.output is not None:
