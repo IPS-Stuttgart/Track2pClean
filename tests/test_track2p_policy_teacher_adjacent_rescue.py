@@ -374,6 +374,38 @@ def test_teacher_adjacent_rescue_can_filter_to_target_or_seed_source_union() -> 
     assert "action_filter_target-extension-or-seed-source-backfill" in rejected_reasons
 
 
+def test_teacher_adjacent_rescue_can_filter_to_completing_rescues() -> None:
+    predicted = np.asarray(
+        [
+            [10, -1, -1],
+            [20, 21, -1],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray(
+        [
+            [10, 11, -1],
+            [20, 21, 22],
+        ],
+        dtype=int,
+    )
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_completing_rescue=True,
+        teacher_action_filter="completing-rescue",
+        edge_order="lexicographic",
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, -1, -1], [20, 21, 22]])
+    assert output.rows[0]["applied"] == 0
+    assert output.rows[0]["reason"] == "action_filter_completing-rescue"
+    assert output.rows[1]["applied"] == 1
+    assert output.rows[1]["reason"] == "accepted_insert_target"
+
+
 def test_teacher_adjacent_rescue_rejects_source_insertion_that_completes_row() -> None:
     predicted = np.asarray([[100, 20, -1, 40]], dtype=int)
     teacher = np.asarray([[-1, -1, 30, 40]], dtype=int)

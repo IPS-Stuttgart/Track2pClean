@@ -12,7 +12,10 @@ complete-row fragment merges can be enabled separately for a narrower
 stitch-only rescue. A seed-source backfill opt-in can now be used independently
 of broad source backfill, allowing a narrow Track2p-supported probe of the
 missing seed-session ROI residual bucket without also admitting arbitrary
-non-seed source insertions. Missing-seed repair presets also restrict the
+non-seed source insertions. A completing-rescue action filter can spend a tiny
+teacher edit budget only on edges that would complete a predicted row, which is
+useful after residual audits show that non-completing inserts are often safe but
+metric-neutral. Missing-seed repair presets also restrict the
 teacher action family to seed-source backfills by default, so a tiny edit budget
 cannot be spent on unrelated target extensions before the seed-source hypothesis
 is tested. Residual-union presets additionally use the cell-priority dynamic
@@ -100,6 +103,7 @@ TeacherActionFilter = Literal[
     "seed-source-backfill",
     "fragment-merge",
     "target-extension-or-seed-source-backfill",
+    "completing-rescue",
 ]
 TeacherFeaturePreset = Literal[
     "none",
@@ -1902,6 +1906,12 @@ def _teacher_edge_action_filter_reason(
         "seed-source-backfill",
     }:
         return "accepted"
+    if normalized == "completing-rescue":
+        return (
+            "accepted"
+            if _teacher_edge_would_complete_row(predicted, edge)
+            else "action_filter_completing-rescue"
+        )
     if normalized == "target-extension-or-seed-source-backfill" and action in {
         "target-extension",
         "seed-source-backfill",
@@ -1935,6 +1945,39 @@ def _teacher_edge_action(
     return "other"
 
 
+def _teacher_edge_would_complete_row(predicted: np.ndarray, edge: TrackEdge) -> bool:
+    """Return whether applying ``edge`` would make an affected row complete.
+
+    This helper is intentionally label-free: it only inspects the current
+    predicted matrix and the teacher edge endpoints. The normal rescue gates still
+    decide whether the completion is allowed, teacher-supported, seed-anchored, and
+    conflict-free. The action filter merely keeps small edit budgets focused on
+    official complete-row opportunities instead of non-completing insertions.
+    """
+
+    session_a, session_b, roi_a, roi_b = edge
+    if int(session_b) != int(session_a) + 1:
+        return False
+    source_rows = tuple(np.flatnonzero(predicted[:, session_a] == roi_a))
+    target_rows = tuple(np.flatnonzero(predicted[:, session_b] == roi_b))
+    if len(source_rows) == 1 and len(target_rows) == 0:
+        candidate = predicted[int(source_rows[0])].copy()
+        candidate[session_b] = roi_b
+        return bool(np.all(candidate >= 0))
+    if len(source_rows) == 0 and len(target_rows) == 1:
+        candidate = predicted[int(target_rows[0])].copy()
+        candidate[session_a] = roi_a
+        return bool(np.all(candidate >= 0))
+    if len(source_rows) == 1 and len(target_rows) == 1:
+        source_row = int(source_rows[0])
+        target_row = int(target_rows[0])
+        if source_row == target_row:
+            return False
+        merged = _merge_rows_if_compatible(predicted[source_row], predicted[target_row])
+        return bool(merged is not None and np.all(merged >= 0))
+    return False
+
+
 def _normalize_teacher_action_filter(
     action_filter: TeacherActionFilter | str,
 ) -> TeacherActionFilter:
@@ -1946,6 +1989,7 @@ def _normalize_teacher_action_filter(
         "seed-source-backfill",
         "fragment-merge",
         "target-extension-or-seed-source-backfill",
+        "completing-rescue",
     }
     if normalized not in allowed:
         raise ValueError(f"Unsupported teacher action filter: {action_filter!r}")
@@ -2569,6 +2613,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "seed-source-backfill",
             "fragment-merge",
             "target-extension-or-seed-source-backfill",
+            "completing-rescue",
         ),
         default="all",
         help=(
