@@ -109,6 +109,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run coherence suffix stitch plus Track2p-teacher adjacent rescue",
     ),
     (
+        "track2p-policy-coherence-teacher-overlay-audit",
+        "bayescatrack.experiments.track2p_policy_coherence_teacher_overlay_audit",
+        "Audit Track2p-teacher adjacent edges after coherence suffix stitching",
+    ),
+    (
         "track2p-policy-coherence-suffix-exposure-audit",
         "bayescatrack.experiments.track2p_policy_coherence_suffix_exposure_audit",
         "Audit coherence suffix gate exposure without manual GT labels",
@@ -375,6 +380,12 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     ),
     "track2p-component-coherence-suffix-teacher-rescue": (
         "track2p-policy-coherence-suffix-teacher-rescue"
+    ),
+    "track2p-coherence-teacher-overlay-audit": (
+        "track2p-policy-coherence-teacher-overlay-audit"
+    ),
+    "track2p-component-coherence-teacher-overlay-audit": (
+        "track2p-policy-coherence-teacher-overlay-audit"
     ),
     "track2p-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"
