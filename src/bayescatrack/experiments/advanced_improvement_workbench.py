@@ -419,8 +419,7 @@ def track2p_result_improvement_manifest(
             "teacher_feature_preset": "none",
             "max_applied_teacher_edits": -1,
             "output": (
-                f"{output_root}/"
-                "track2p_policy_coherence_suffix_teacher_rescue.csv"
+                f"{output_root}/" "track2p_policy_coherence_suffix_teacher_rescue.csv"
             ),
         },
         {
