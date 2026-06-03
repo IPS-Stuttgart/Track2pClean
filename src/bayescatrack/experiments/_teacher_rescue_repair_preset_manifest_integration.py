@@ -63,6 +63,16 @@ def _expand_teacher_repair_preset(options: Mapping[str, Any]) -> dict[str, Any]:
             "min_component_observations": 2,
             "max_applied_edits": 2,
         },
+        "missing-seed-cell-confident": {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_action_filter": "seed-source-backfill",
+            "teacher_feature_preset": "seed-source-cell-confident",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        },
         "missing-seed-moderate-iou": {
             "allow_source_backfill": False,
             "allow_seed_source_backfill": True,
@@ -81,6 +91,13 @@ def _expand_teacher_repair_preset(options: Mapping[str, Any]) -> dict[str, Any]:
             "max_applied_edits": 3,
         },
         "track2p-fn-moderate-iou-cell-confident": {
+            "teacher_action_filter": "target-extension",
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_feature_preset": "moderate-iou-cell-confidence",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        },
+        "track2p-fn-moderate-iou-cell-confidence": {
             "teacher_action_filter": "target-extension",
             "teacher_edge_order": "dynamic-confidence",
             "teacher_feature_preset": "moderate-iou-cell-confidence",

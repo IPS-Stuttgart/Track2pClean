@@ -314,6 +314,18 @@ def test_result_improvement_manifest_includes_teacher_adjacent_rescue_variants()
             "teacher_min_cell_probability": 0.60,
             "max_applied_edits": 2,
         },
+        "track2p-policy-teacher-adjacent-rescue-moderate-iou-cell-target-extension-max3": {
+            "allow_completing_rescue": False,
+            "allow_teacher_supported_completing_rescue": False,
+            "allow_seed_source_backfill": False,
+            "allow_completing_seed_source_backfill": False,
+            "teacher_edge_order": "dynamic-confidence",
+            "teacher_action_filter": "target-extension",
+            "teacher_repair_preset": "track2p-fn-moderate-iou-cell-confidence",
+            "teacher_feature_preset": "moderate-iou-cell-confidence",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+        },
         "track2p-policy-teacher-adjacent-rescue-track2p-fn-target-extension": {
             "allow_completing_rescue": False,
             "allow_teacher_supported_completing_rescue": False,
