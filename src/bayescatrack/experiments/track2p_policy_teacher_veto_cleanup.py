@@ -84,6 +84,7 @@ class TeacherVetoConfig:
     max_area_ratio: float | None = None
     max_cell_probability: float | None = None
     require_unassigned_by_hungarian: bool = False
+    require_teacher_conflict: bool = False
     allow_complete_track_veto: bool = False
     complete_track_veto_only: bool = False
     keep_right_fragment: bool = True
@@ -202,6 +203,9 @@ def run_track2p_policy_teacher_veto_cleanup(
             "track2p_teacher_veto_require_unassigned_by_hungarian": int(
                 veto_config.require_unassigned_by_hungarian
             ),
+            "track2p_teacher_veto_require_teacher_conflict": int(
+                veto_config.require_teacher_conflict
+            ),
             "track2p_teacher_veto_allow_complete_track_veto": int(
                 veto_config.allow_complete_track_veto
             ),
@@ -314,6 +318,7 @@ def apply_teacher_veto_edges(
             output, row = _try_veto_edge(
                 output,
                 edge,
+                teacher=teacher,
                 feature=features.get(edge),
                 config=config,
             )
@@ -412,6 +417,7 @@ def _try_veto_edge(
     predicted: np.ndarray,
     edge: TrackEdge,
     *,
+    teacher: np.ndarray,
     feature: ResidualFeature | None,
     config: TeacherVetoConfig,
 ) -> tuple[np.ndarray, dict[str, float | int | str]]:
@@ -419,6 +425,8 @@ def _try_veto_edge(
     session_a, session_b, roi_a, roi_b = edge
     feature = feature or ResidualFeature()
     row = _veto_row(edge, feature)
+    teacher_conflict = _has_teacher_conflict(edge, teacher)
+    row["teacher_conflict"] = int(teacher_conflict)
     candidate_rows = tuple(
         int(row_index)
         for row_index in np.flatnonzero(
@@ -442,6 +450,9 @@ def _try_veto_edge(
         return output, row
     if row_is_complete and not config.allow_complete_track_veto:
         row["reason"] = "would_split_complete_track"
+        return output, row
+    if config.require_teacher_conflict and not teacher_conflict:
+        row["reason"] = "no_teacher_conflict"
         return output, row
     reason = _gate_reject_reason(feature, config)
     if reason is not None:
@@ -472,6 +483,32 @@ def _try_veto_edge(
     row["left_observations"] = left_observations
     row["right_observations"] = right_observations
     return output, row
+
+
+def _has_teacher_conflict(edge: TrackEdge, teacher: np.ndarray) -> bool:
+    """Return whether Track2p actively prefers another adjacent endpoint."""
+
+    session_a, session_b, roi_a, roi_b = edge
+    if session_a < 0 or session_b < 0 or teacher.ndim != 2:
+        return False
+    if session_a >= teacher.shape[1] or session_b >= teacher.shape[1]:
+        return False
+    for row in teacher:
+        teacher_source = int(row[session_a])
+        teacher_target = int(row[session_b])
+        source_conflict = (
+            teacher_source == int(roi_a)
+            and teacher_target >= 0
+            and teacher_target != int(roi_b)
+        )
+        target_conflict = (
+            teacher_target == int(roi_b)
+            and teacher_source >= 0
+            and teacher_source != int(roi_a)
+        )
+        if source_conflict or target_conflict:
+            return True
+    return False
 
 
 def _gate_reject_reason(
@@ -542,6 +579,7 @@ def _veto_row(
         "threshold": float(feature.threshold),
         "threshold_margin": float(feature.threshold_margin),
         "assigned_by_hungarian": int(feature.assigned_by_hungarian),
+        "teacher_conflict": -1,
         "left_observations": 0,
         "right_observations": 0,
     }
@@ -665,6 +703,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Only veto teacher-absent edges that were not assigned by the local Hungarian step.",
     )
     parser.add_argument(
+        "--require-teacher-conflict",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Only veto Bayes-only edges when Track2p actively chooses a competing "
+            "source or target in the same adjacent session pair."
+        ),
+    )
+    parser.add_argument(
         "--allow-complete-track-veto",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -753,6 +800,7 @@ def main(argv: list[str] | None = None) -> int:
         max_area_ratio=args.max_area_ratio,
         max_cell_probability=args.max_cell_probability,
         require_unassigned_by_hungarian=bool(args.require_unassigned_by_hungarian),
+        require_teacher_conflict=bool(args.require_teacher_conflict),
         allow_complete_track_veto=bool(args.allow_complete_track_veto),
         complete_track_veto_only=bool(args.complete_track_veto_only),
         keep_right_fragment=bool(args.keep_right_fragment),

@@ -149,6 +149,47 @@ def test_teacher_veto_rejects_high_margin_edge() -> None:
     np.testing.assert_array_equal(report.tracks, predicted)
 
 
+def test_teacher_veto_can_require_active_teacher_conflict() -> None:
+    predicted = np.asarray([[10, 11, 12, -1]], dtype=int)
+    teacher_absent = np.asarray([[10, 11, -1, -1]], dtype=int)
+    edge = (1, 2, 11, 12)
+
+    report = veto.apply_teacher_veto_edges(
+        predicted,
+        teacher_absent,
+        feature_index={edge: _weak_feature()},
+        config=veto.TeacherVetoConfig(
+            min_fragment_observations=1,
+            require_teacher_conflict=True,
+        ),
+    )
+
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "no_teacher_conflict"
+    assert report.rows[0]["teacher_conflict"] == 0
+    np.testing.assert_array_equal(report.tracks, predicted)
+
+
+def test_teacher_veto_conflict_gate_accepts_competing_teacher_target() -> None:
+    predicted = np.asarray([[10, 11, 12, -1]], dtype=int)
+    teacher_conflict = np.asarray([[10, 11, 99, -1]], dtype=int)
+    edge = (1, 2, 11, 12)
+
+    report = veto.apply_teacher_veto_edges(
+        predicted,
+        teacher_conflict,
+        feature_index={edge: _weak_feature()},
+        config=veto.TeacherVetoConfig(
+            min_fragment_observations=1,
+            require_teacher_conflict=True,
+        ),
+    )
+
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_split_edge"
+    assert report.rows[0]["teacher_conflict"] == 1
+
+
 def test_teacher_veto_rejects_complete_track_by_default() -> None:
     predicted = np.asarray([[10, 11, 12]], dtype=int)
     teacher = np.asarray([[10, 11, -1]], dtype=int)
@@ -427,6 +468,7 @@ def test_teacher_veto_parser_exposes_order_and_cap() -> None:
             "--max-cell-probability",
             "0.5",
             "--require-unassigned-by-hungarian",
+            "--require-teacher-conflict",
             "--complete-track-veto-only",
         ]
     )
@@ -438,4 +480,5 @@ def test_teacher_veto_parser_exposes_order_and_cap() -> None:
     assert args.max_area_ratio == 0.55
     assert args.max_cell_probability == 0.5
     assert args.require_unassigned_by_hungarian is True
+    assert args.require_teacher_conflict is True
     assert args.complete_track_veto_only is True

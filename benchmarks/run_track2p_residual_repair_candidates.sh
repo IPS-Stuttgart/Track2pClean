@@ -399,6 +399,20 @@ run_teacher_veto teacher_veto_geometric_max1 \
   --min-veto-fragment-observations 2 \
   --max-applied-vetoes 1
 
+# Conflict-gated veto row: Track2p absence alone is a weak teacher signal, but an
+# active Track2p disagreement is stronger. This row only splits a Bayes-only edge
+# when Track2p uses the same source with a different target, or the same target
+# with a different source, in the same adjacent session pair.
+run_teacher_veto teacher_veto_conflict_geometric_max1 \
+  --no-allow-complete-track-veto \
+  --require-teacher-conflict \
+  --max-threshold-margin 0.10 \
+  --max-competition-margin 0.20 \
+  --min-centroid-distance 3.0 \
+  --max-area-ratio 0.65 \
+  --min-veto-fragment-observations 2 \
+  --max-applied-vetoes 1
+
 run_teacher_veto teacher_veto_complete_track_max1 \
   --allow-complete-track-veto \
   --complete-track-veto-only \
@@ -442,6 +456,7 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --input TeacherAdjacentTeacherCompleteRow="$OUT/teacher_adjacent_teacher_complete_row.csv" \
   --input TeacherVetoDefault="$OUT/teacher_veto_default.csv" \
   --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
+  --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.md" \
   --format markdown \
@@ -484,6 +499,7 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --input TeacherAdjacentTeacherCompleteRow="$OUT/teacher_adjacent_teacher_complete_row.csv" \
   --input TeacherVetoDefault="$OUT/teacher_veto_default.csv" \
   --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
+  --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.csv" \
   --format csv
