@@ -1,0 +1,1 @@
+{"defaults":{"data":"DATA_ROOT","reference":"REFERENCE_ROOT","reference_kind":"manual-gt","input_format":"suite2p","include_behavior":false,"format":"csv"},"runs":[{"name":"track2p","method":"track2p-baseline","output":"OUTPUT_ROOT/track2p.csv"}],"comparisons":[]}
