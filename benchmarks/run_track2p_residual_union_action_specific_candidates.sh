@@ -130,6 +130,23 @@ run_teacher_rescue residual_union_action_specific_max2 \
   --teacher-repair-preset residual-union-action-specific \
   --max-applied-edits 2
 
+# Complete-row-focused residual union: the residual audit says complete-track
+# FNs are now the high-leverage objective, while prior gap/insert rows often
+# accepted safe edits that did not move official metrics. This row keeps the
+# action-specific gates from PR #481, but spends one edit only on teacher edges
+# that would complete a predicted row and pass the teacher-supported completion
+# gate.
+run_teacher_rescue residual_union_action_specific_completing_max1 \
+  --no-allow-completing-rescue \
+  --allow-teacher-complete-row-rescue \
+  --no-allow-source-backfill \
+  --allow-seed-source-backfill \
+  --allow-completing-seed-source-backfill \
+  --no-allow-fragment-merges \
+  --teacher-repair-preset residual-union-action-specific \
+  --teacher-action-filter completing-rescue \
+  --max-applied-edits 1
+
 run_teacher_rescue residual_union_action_specific_default \
   --no-allow-completing-rescue \
   --no-allow-source-backfill \
@@ -145,6 +162,7 @@ run_teacher_rescue residual_union_action_specific_default \
   --input ResidualUnionCellConfident="$OUT/residual_union_cell_confident.csv" \
   --input ResidualUnionActionSpecificMax1="$OUT/residual_union_action_specific_max1.csv" \
   --input ResidualUnionActionSpecificMax2="$OUT/residual_union_action_specific_max2.csv" \
+  --input ResidualUnionActionSpecificCompletingMax1="$OUT/residual_union_action_specific_completing_max1.csv" \
   --input ResidualUnionActionSpecificDefault="$OUT/residual_union_action_specific_default.csv" \
   --output "$OUT/residual_union_action_specific_comparison.md" \
   --format markdown \
@@ -161,6 +179,7 @@ run_teacher_rescue residual_union_action_specific_default \
   --input ResidualUnionCellConfident="$OUT/residual_union_cell_confident.csv" \
   --input ResidualUnionActionSpecificMax1="$OUT/residual_union_action_specific_max1.csv" \
   --input ResidualUnionActionSpecificMax2="$OUT/residual_union_action_specific_max2.csv" \
+  --input ResidualUnionActionSpecificCompletingMax1="$OUT/residual_union_action_specific_completing_max1.csv" \
   --input ResidualUnionActionSpecificDefault="$OUT/residual_union_action_specific_default.csv" \
   --output "$OUT/residual_union_action_specific_comparison.csv" \
   --format csv

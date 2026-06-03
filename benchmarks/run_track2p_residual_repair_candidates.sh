@@ -389,6 +389,21 @@ run_teacher_rescue teacher_adjacent_teacher_complete_row \
   --allow-fragment-merges \
   --teacher-edge-order dynamic-confidence
 
+# Complete-row-focused teacher rescue: after the strict gap experiment, isolated
+# inserts were often safe but metric-neutral.  This row spends a tiny edit budget
+# only on teacher edges that would complete a predicted row, and then requires the
+# completed row to be Track2p-teacher-supported plus cell/shape-confident.
+run_teacher_rescue teacher_adjacent_teacher_complete_row_cell_confident_max1 \
+  --no-allow-completing-rescue \
+  --allow-teacher-complete-row-rescue \
+  --allow-source-backfill \
+  --allow-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-action-filter completing-rescue \
+  --teacher-edge-order dynamic-cell-confidence \
+  --teacher-feature-preset cell-confident \
+  --max-applied-edits 1
+
 # Conservative teacher-veto rows target the other residual family: Bayes-only
 # adjacent false continuations. The geometric row only tests vetoes that are
 # both absent from Track2p and locally weak by centroid/area evidence.
@@ -474,6 +489,7 @@ run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
   --input TeacherAdjacentTeacherCompleteRow="$OUT/teacher_adjacent_teacher_complete_row.csv" \
+  --input TeacherAdjacentTeacherCompleteRowCellConfidentMax1="$OUT/teacher_adjacent_teacher_complete_row_cell_confident_max1.csv" \
   --input TeacherVetoDefault="$OUT/teacher_veto_default.csv" \
   --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
   --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
@@ -519,6 +535,7 @@ run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
   --input TeacherAdjacentTeacherCompleteRow="$OUT/teacher_adjacent_teacher_complete_row.csv" \
+  --input TeacherAdjacentTeacherCompleteRowCellConfidentMax1="$OUT/teacher_adjacent_teacher_complete_row_cell_confident_max1.csv" \
   --input TeacherVetoDefault="$OUT/teacher_veto_default.csv" \
   --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
   --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
