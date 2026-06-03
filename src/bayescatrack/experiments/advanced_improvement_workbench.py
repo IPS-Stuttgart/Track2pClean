@@ -438,14 +438,22 @@ def track2p_result_improvement_manifest(
                 for key, value in track2p_policy_component_config.items()
                 if key != "apply_splits"
             },
-            # This row tests the residual-audit hypothesis that remaining
-            # official FNs are better addressed by adjacent Track2p-supported
-            # edits and missing-seed backfills than by gap propagation.
+            # Residual audits show that full gap/teacher propagation is too
+            # permissive: the useful signal is concentrated in adjacent
+            # Track2p-supported FNs and missing-seed backfills. Keep this canned
+            # row in that narrow regime instead of running broad teacher rescue.
+            "teacher_repair_preset": "residual-union-action-specific",
             "allow_completing_rescue": False,
-            "allow_source_backfill": True,
+            "allow_source_backfill": False,
             "allow_seed_source_backfill": True,
             "allow_completing_seed_source_backfill": True,
-            "allow_fragment_merges": True,
+            "allow_fragment_merges": False,
+            "teacher_edge_order": "dynamic-seed-cell-confidence",
+            "teacher_action_filter": "target-extension-or-seed-source-backfill",
+            "teacher_feature_preset": "none",
+            "target_extension_feature_preset": "moderate-iou-cell-confidence",
+            "seed_source_feature_preset": "seed-source-cell-confident",
+            "max_applied_edits": 3,
             "output": f"{output_root}/track2p_policy_teacher_adjacent_rescue.csv",
         },
         {
