@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack import cli
 from bayescatrack.experiments import (
     track2p_policy_coherence_teacher_overlay_audit as overlay_audit,
@@ -13,9 +12,7 @@ def test_coherence_teacher_overlay_audit_is_registered() -> None:
 
     assert canonical == "track2p-policy-coherence-teacher-overlay-audit"
     assert (
-        cli._BENCHMARK_ALIASES[
-            "track2p-component-coherence-teacher-overlay-audit"
-        ]
+        cli._BENCHMARK_ALIASES["track2p-component-coherence-teacher-overlay-audit"]
         == canonical
     )
     assert (

@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
-
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import (
     track2p_policy_coherence_suffix_stitch_whatif as suffix,
@@ -44,8 +43,8 @@ from bayescatrack.experiments.track2p_policy_component_audit import (
 )
 from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     TeacherAdjacentRescueReport,
-    apply_teacher_adjacent_rescue_edges,
     _try_apply_teacher_edge,
+    apply_teacher_adjacent_rescue_edges,
 )
 
 METHOD = "track2p-policy-coherence-teacher-overlay-audit"
