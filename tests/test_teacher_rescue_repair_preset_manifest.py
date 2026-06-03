@@ -3,6 +3,9 @@ from __future__ import annotations
 from bayescatrack.experiments._teacher_rescue_repair_preset_manifest_integration import (
     _expand_teacher_repair_preset,
 )
+from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+    teacher_adjacent_repair_preset_kwargs,
+)
 
 
 def test_missing_seed_repair_preset_expands_to_narrow_defaults():
@@ -13,7 +16,7 @@ def test_missing_seed_repair_preset_expands_to_narrow_defaults():
     assert options["allow_source_backfill"] is False
     assert options["allow_seed_source_backfill"] is True
     assert options["allow_completing_seed_source_backfill"] is True
-    assert options["teacher_edge_order"] == "dynamic-seed-confidence"
+    assert options["teacher_edge_order"] == "dynamic-seed-cell-confidence"
     assert options["teacher_action_filter"] == "seed-source-backfill"
     assert options["teacher_feature_preset"] == "seed-source-high-confidence"
     assert options["min_component_observations"] == 2
@@ -102,6 +105,25 @@ def test_residual_union_preset_expands_to_two_residual_buckets():
     assert options["teacher_feature_preset"] == "residual-fn-cell-confident"
     assert options["min_component_observations"] == 2
     assert options["max_applied_edits"] == 3
+
+
+def test_manifest_repair_preset_expansion_matches_cli_defaults():
+    presets = (
+        "missing-seed-high-confidence",
+        "missing-seed-cell-confident",
+        "missing-seed-moderate-iou",
+        "track2p-fn-high-confidence",
+        "track2p-fn-moderate-iou-cell-confident",
+        "track2p-fn-moderate-iou-cell-confidence",
+        "residual-union-cell-confident",
+    )
+
+    for preset in presets:
+        options = _expand_teacher_repair_preset({"teacher_repair_preset": preset})
+        expected = teacher_adjacent_repair_preset_kwargs(preset)
+
+        for key, value in expected.items():
+            assert options[key] == value
 
 
 def test_missing_seed_repair_preset_preserves_explicit_overrides():

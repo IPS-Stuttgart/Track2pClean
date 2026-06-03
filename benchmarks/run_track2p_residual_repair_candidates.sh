@@ -423,6 +423,17 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --min-veto-fragment-observations 2 \
   --max-applied-vetoes 1
 
+run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
+  --allow-complete-track-veto \
+  --complete-track-veto-only \
+  --include-teacher-supported-complete-track-edges \
+  --max-threshold-margin 0.10 \
+  --max-competition-margin 0.20 \
+  --min-centroid-distance 3.0 \
+  --max-area-ratio 0.65 \
+  --min-veto-fragment-observations 2 \
+  --max-applied-vetoes 1
+
 "$PY" -m bayescatrack benchmark compare \
   --input Track2p="$OUT/track2p_baseline.csv" \
   --input Track2pPolicyD12="$OUT/track2p_policy_d12.csv" \
@@ -458,6 +469,7 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
   --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
+  --input TeacherVetoCompleteTrackRowAbsentMax1="$OUT/teacher_veto_complete_track_row_absent_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.md" \
   --format markdown \
   --highlight-best \
@@ -501,6 +513,7 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
   --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
+  --input TeacherVetoCompleteTrackRowAbsentMax1="$OUT/teacher_veto_complete_track_row_absent_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.csv" \
   --format csv
 

@@ -52,74 +52,14 @@ def _expand_teacher_repair_preset(options: Mapping[str, Any]) -> dict[str, Any]:
     preset = str(expanded.get(TEACHER_REPAIR_PRESET_FIELD, "none")).strip().lower()
     if preset in {"", "none"}:
         return expanded
-    defaults = {
-        "missing-seed-high-confidence": {
-            "allow_source_backfill": False,
-            "allow_seed_source_backfill": True,
-            "allow_completing_seed_source_backfill": True,
-            "teacher_edge_order": "dynamic-seed-confidence",
-            "teacher_action_filter": "seed-source-backfill",
-            "teacher_feature_preset": "seed-source-high-confidence",
-            "min_component_observations": 2,
-            "max_applied_edits": 2,
-        },
-        "missing-seed-cell-confident": {
-            "allow_source_backfill": False,
-            "allow_seed_source_backfill": True,
-            "allow_completing_seed_source_backfill": True,
-            "teacher_edge_order": "dynamic-seed-confidence",
-            "teacher_action_filter": "seed-source-backfill",
-            "teacher_feature_preset": "seed-source-cell-confident",
-            "min_component_observations": 2,
-            "max_applied_edits": 3,
-        },
-        "missing-seed-moderate-iou": {
-            "allow_source_backfill": False,
-            "allow_seed_source_backfill": True,
-            "allow_completing_seed_source_backfill": True,
-            "teacher_edge_order": "dynamic-seed-confidence",
-            "teacher_action_filter": "seed-source-backfill",
-            "teacher_feature_preset": "seed-source-moderate-iou",
-            "min_component_observations": 2,
-            "max_applied_edits": 2,
-        },
-        "track2p-fn-high-confidence": {
-            "teacher_action_filter": "target-extension",
-            "teacher_edge_order": "dynamic-confidence",
-            "teacher_feature_preset": "track2p-fn-rescue",
-            "min_component_observations": 2,
-            "max_applied_edits": 3,
-        },
-        "track2p-fn-moderate-iou-cell-confident": {
-            "teacher_action_filter": "target-extension",
-            "teacher_edge_order": "dynamic-confidence",
-            "teacher_feature_preset": "moderate-iou-cell-confidence",
-            "min_component_observations": 2,
-            "max_applied_edits": 3,
-        },
-        "track2p-fn-moderate-iou-cell-confidence": {
-            "teacher_action_filter": "target-extension",
-            "teacher_edge_order": "dynamic-confidence",
-            "teacher_feature_preset": "moderate-iou-cell-confidence",
-            "min_component_observations": 2,
-            "max_applied_edits": 3,
-        },
-        "residual-union-cell-confident": {
-            "allow_source_backfill": False,
-            "allow_seed_source_backfill": True,
-            "allow_completing_seed_source_backfill": True,
-            "allow_fragment_merges": False,
-            "teacher_action_filter": "target-extension-or-seed-source-backfill",
-            "teacher_edge_order": "dynamic-seed-confidence",
-            "teacher_feature_preset": "residual-fn-cell-confident",
-            "min_component_observations": 2,
-            "max_applied_edits": 3,
-        },
-    }
-    if preset not in defaults:
-        raise ValueError(f"Unsupported teacher_repair_preset: {preset!r}")
 
-    for key, value in defaults[preset].items():
+    from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+        teacher_adjacent_repair_preset_kwargs,
+    )
+
+    defaults = teacher_adjacent_repair_preset_kwargs(preset)
+
+    for key, value in defaults.items():
         if key == "min_component_observations":
             expanded[key] = max(int(value), int(expanded.get(key, 1)))
         else:

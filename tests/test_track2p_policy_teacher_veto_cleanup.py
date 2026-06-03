@@ -389,6 +389,69 @@ def test_teacher_veto_complete_track_only_can_split_complete_row() -> None:
     np.testing.assert_array_equal(report.tracks, [[10, 11, -1, -1], [-1, -1, 12, 13]])
 
 
+def test_teacher_veto_can_consider_complete_rows_absent_from_teacher() -> None:
+    predicted = np.asarray([[10, 11, 12, 13]], dtype=int)
+    teacher = np.asarray(
+        [
+            [10, 11, 12, -1],
+            [-1, -1, 12, 13],
+        ],
+        dtype=int,
+    )
+    bridge_edge = (1, 2, 11, 12)
+
+    default_report = veto.apply_teacher_veto_edges(
+        predicted,
+        teacher,
+        feature_index={bridge_edge: _weak_feature()},
+        config=veto.TeacherVetoConfig(
+            allow_complete_track_veto=True,
+            complete_track_veto_only=True,
+            min_fragment_observations=2,
+        ),
+    )
+    assert default_report.rows == ()
+
+    report = veto.apply_teacher_veto_edges(
+        predicted,
+        teacher,
+        feature_index={bridge_edge: _weak_feature()},
+        config=veto.TeacherVetoConfig(
+            allow_complete_track_veto=True,
+            complete_track_veto_only=True,
+            include_teacher_supported_complete_track_edges=True,
+            min_fragment_observations=2,
+        ),
+    )
+
+    applied_rows = [row for row in report.rows if int(row["applied"])]
+    assert len(applied_rows) == 1
+    assert applied_rows[0]["session_a"] == 1
+    assert applied_rows[0]["session_b"] == 2
+    assert applied_rows[0]["reason"] == "accepted_split_edge"
+    assert applied_rows[0]["complete_teacher_row_supported"] == 0
+    np.testing.assert_array_equal(report.tracks, [[10, 11, -1, -1], [-1, -1, 12, 13]])
+
+
+def test_teacher_veto_does_not_split_teacher_supported_complete_row() -> None:
+    predicted = np.asarray([[10, 11, 12, 13]], dtype=int)
+    teacher = np.asarray([[10, 11, 12, 13]], dtype=int)
+
+    report = veto.apply_teacher_veto_edges(
+        predicted,
+        teacher,
+        config=veto.TeacherVetoConfig(
+            allow_complete_track_veto=True,
+            complete_track_veto_only=True,
+            include_teacher_supported_complete_track_edges=True,
+            min_fragment_observations=2,
+        ),
+    )
+
+    assert report.rows == ()
+    np.testing.assert_array_equal(report.tracks, predicted)
+
+
 def test_teacher_veto_rejects_edges_that_fail_optional_shape_cell_gates() -> None:
     predicted = np.asarray(
         [
@@ -470,6 +533,7 @@ def test_teacher_veto_parser_exposes_order_and_cap() -> None:
             "--require-unassigned-by-hungarian",
             "--require-teacher-conflict",
             "--complete-track-veto-only",
+            "--include-teacher-supported-complete-track-edges",
         ]
     )
 
@@ -482,3 +546,4 @@ def test_teacher_veto_parser_exposes_order_and_cap() -> None:
     assert args.require_unassigned_by_hungarian is True
     assert args.require_teacher_conflict is True
     assert args.complete_track_veto_only is True
+    assert args.include_teacher_supported_complete_track_edges is True

@@ -5,6 +5,10 @@ budget.  Track2p still has the best pairwise F1, so its *absence* can be useful
 negative teacher evidence.  This candidate starts from the frozen
 Track2pPolicy component-cleanup prediction and conservatively splits only weak,
 Bayes-only adjacent edges that are absent from Track2p output.
+An opt-in complete-row veto can also consider adjacent edges that Track2p uses
+elsewhere when the entire complete predicted row is absent from Track2p.  That
+targets complete-track false positives assembled from individually plausible
+teacher-supported local links without broadening the default pairwise veto.
 
 The operation is intentionally narrow and disabled from any paper-facing
 manifest by default.  It is a candidate cleanup row to test whether Track2p can
@@ -87,6 +91,7 @@ class TeacherVetoConfig:
     require_teacher_conflict: bool = False
     allow_complete_track_veto: bool = False
     complete_track_veto_only: bool = False
+    include_teacher_supported_complete_track_edges: bool = False
     keep_right_fragment: bool = True
     min_fragment_observations: int = 2
     edge_order: TeacherVetoEdgeOrder = "risk"
@@ -212,6 +217,9 @@ def run_track2p_policy_teacher_veto_cleanup(
             "track2p_teacher_veto_complete_track_veto_only": int(
                 veto_config.complete_track_veto_only
             ),
+            "track2p_teacher_veto_include_teacher_supported_complete_track_edges": int(
+                veto_config.include_teacher_supported_complete_track_edges
+            ),
             "track2p_teacher_veto_keep_right_fragment": int(
                 veto_config.keep_right_fragment
             ),
@@ -307,9 +315,12 @@ def apply_teacher_veto_edges(
     rows: list[dict[str, float | int | str]] = []
 
     teacher_counts = track_edge_counter(teacher)
+    teacher_complete_tracks = _complete_row_set(teacher)
     applied_count = 0
     for edge in _ordered_veto_edges(output, teacher, features, config):
-        while track_edge_counter(output).get(edge, 0) > teacher_counts.get(edge, 0):
+        while _veto_candidate_still_present(
+            output, teacher_counts, teacher_complete_tracks, edge, config
+        ):
             if _max_applied_vetoes_reached(applied_count, config.max_applied_vetoes):
                 rows.append(
                     _veto_limit_row(edge, features.get(edge, ResidualFeature()))
@@ -321,6 +332,7 @@ def apply_teacher_veto_edges(
                 teacher=teacher,
                 feature=features.get(edge),
                 config=config,
+                teacher_complete_tracks=teacher_complete_tracks,
             )
             rows.append(row)
             if int(row["applied"]) == 0:
@@ -336,11 +348,13 @@ def _ordered_veto_edges(
     config: TeacherVetoConfig,
 ) -> tuple[TrackEdge, ...]:
     teacher_counts = track_edge_counter(teacher)
-    candidate_edges = tuple(
+    candidate_edges = {
         edge
         for edge, predicted_count in track_edge_counter(predicted).items()
         if int(predicted_count) > int(teacher_counts.get(edge, 0))
-    )
+    }
+    if config.include_teacher_supported_complete_track_edges:
+        candidate_edges.update(_teacher_unsupported_complete_row_edges(predicted, teacher))
     edge_order = _resolved_edge_order(config)
     if edge_order == "lexicographic":
         return tuple(sorted(candidate_edges))
@@ -350,6 +364,48 @@ def _ordered_veto_edges(
         sorted(
             candidate_edges,
             key=lambda edge: _veto_edge_risk_order_key(edge, feature_index.get(edge)),
+        )
+    )
+
+
+def _teacher_unsupported_complete_row_edges(
+    predicted: np.ndarray, teacher: np.ndarray
+) -> set[TrackEdge]:
+    """Return adjacent edges from complete predicted rows absent as Track2p rows."""
+
+    predicted = _normalize_int_track_matrix(predicted)
+    teacher_complete_tracks = _complete_row_set(teacher)
+    output: set[TrackEdge] = set()
+    for track_row in predicted:
+        if not np.all(track_row >= 0):
+            continue
+        if _row_tuple(track_row) in teacher_complete_tracks:
+            continue
+        for session_a in range(track_row.shape[0] - 1):
+            output.add(
+                (
+                    int(session_a),
+                    int(session_a + 1),
+                    int(track_row[session_a]),
+                    int(track_row[session_a + 1]),
+                )
+            )
+    return output
+
+
+def _veto_candidate_still_present(
+    predicted: np.ndarray,
+    teacher_counts: Mapping[TrackEdge, int],
+    teacher_complete_tracks: frozenset[tuple[int, ...]],
+    edge: TrackEdge,
+    config: TeacherVetoConfig,
+) -> bool:
+    if track_edge_counter(predicted).get(edge, 0) > int(teacher_counts.get(edge, 0)):
+        return True
+    return bool(
+        config.include_teacher_supported_complete_track_edges
+        and _edge_in_teacher_unsupported_complete_row(
+            predicted, edge, teacher_complete_tracks
         )
     )
 
@@ -420,6 +476,7 @@ def _try_veto_edge(
     teacher: np.ndarray,
     feature: ResidualFeature | None,
     config: TeacherVetoConfig,
+    teacher_complete_tracks: frozenset[tuple[int, ...]] = frozenset(),
 ) -> tuple[np.ndarray, dict[str, float | int | str]]:
     output = np.asarray(predicted, dtype=int).copy()
     session_a, session_b, roi_a, roi_b = edge
@@ -445,6 +502,16 @@ def _try_veto_edge(
     row_index = int(candidate_rows[0])
     row["row_index"] = row_index
     row_is_complete = bool(np.all(output[row_index] >= 0))
+    if row_is_complete:
+        row["complete_teacher_row_supported"] = int(
+            _complete_row_supported(output[row_index], teacher_complete_tracks)
+        )
+        if (
+            config.include_teacher_supported_complete_track_edges
+            and int(row["complete_teacher_row_supported"])
+        ):
+            row["reason"] = "teacher_complete_track_supported"
+            return output, row
     if config.complete_track_veto_only and not row_is_complete:
         row["reason"] = "not_complete_track"
         return output, row
@@ -582,7 +649,40 @@ def _veto_row(
         "teacher_conflict": -1,
         "left_observations": 0,
         "right_observations": 0,
+        "complete_teacher_row_supported": 0,
     }
+
+
+def _edge_in_teacher_unsupported_complete_row(
+    predicted: np.ndarray,
+    edge: TrackEdge,
+    teacher_complete_tracks: frozenset[tuple[int, ...]],
+) -> bool:
+    session_a, session_b, roi_a, roi_b = edge
+    predicted = _normalize_int_track_matrix(predicted)
+    for track_row in predicted:
+        if not np.all(track_row >= 0):
+            continue
+        if not (track_row[session_a] == roi_a and track_row[session_b] == roi_b):
+            continue
+        if not _complete_row_supported(track_row, teacher_complete_tracks):
+            return True
+    return False
+
+
+def _complete_row_set(track_matrix: np.ndarray) -> frozenset[tuple[int, ...]]:
+    track_matrix = _normalize_int_track_matrix(track_matrix)
+    return frozenset(_row_tuple(row) for row in track_matrix if np.all(row >= 0))
+
+
+def _complete_row_supported(
+    track_row: np.ndarray, complete_tracks: frozenset[tuple[int, ...]]
+) -> bool:
+    return _row_tuple(track_row) in complete_tracks
+
+
+def _row_tuple(track_row: np.ndarray) -> tuple[int, ...]:
+    return tuple(int(value) for value in track_row)
 
 
 def _finite(value: float) -> bool:
@@ -731,6 +831,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--include-teacher-supported-complete-track-edges",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "When complete-track veto is enabled, also consider adjacent edges "
+            "that Track2p uses elsewhere if the full complete predicted row is "
+            "absent from Track2p complete rows."
+        ),
+    )
+    parser.add_argument(
         "--keep-right-fragment",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -803,6 +913,9 @@ def main(argv: list[str] | None = None) -> int:
         require_teacher_conflict=bool(args.require_teacher_conflict),
         allow_complete_track_veto=bool(args.allow_complete_track_veto),
         complete_track_veto_only=bool(args.complete_track_veto_only),
+        include_teacher_supported_complete_track_edges=bool(
+            args.include_teacher_supported_complete_track_edges
+        ),
         keep_right_fragment=bool(args.keep_right_fragment),
         min_fragment_observations=int(args.min_veto_fragment_observations),
         edge_order=cast(TeacherVetoEdgeOrder, args.teacher_veto_edge_order),
