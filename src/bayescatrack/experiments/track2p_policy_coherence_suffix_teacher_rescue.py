@@ -76,6 +76,13 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
     teacher_edge_order: TeacherEdgeOrder = "structural",
     teacher_action_filter: TeacherActionFilter = "all",
     teacher_feature_preset: str = "none",
+    target_extension_feature_preset: str = "none",
+    seed_source_feature_preset: str = "none",
+    allow_source_backfill: bool = True,
+    allow_seed_source_backfill: bool = False,
+    allow_completing_seed_source_backfill: bool = False,
+    allow_fragment_merges: bool = True,
+    min_teacher_component_observations: int = 1,
     max_applied_teacher_edits: int | None = None,
 ) -> CoherenceSuffixTeacherRescueOutput:
     """Run CoherenceSuffixStitch followed by Track2p-teacher rescue."""
@@ -103,6 +110,13 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
             teacher_edge_order=teacher_edge_order,
             teacher_action_filter=teacher_action_filter,
             teacher_feature_preset=str(teacher_feature_preset),
+            target_extension_feature_preset=str(target_extension_feature_preset),
+            seed_source_feature_preset=str(seed_source_feature_preset),
+            allow_source_backfill=bool(allow_source_backfill),
+            allow_seed_source_backfill=bool(allow_seed_source_backfill),
+            allow_completing_seed_source_backfill=bool(allow_completing_seed_source_backfill),
+            allow_fragment_merges=bool(allow_fragment_merges),
+            min_teacher_component_observations=int(min_teacher_component_observations),
             max_applied_teacher_edits=max_applied_teacher_edits,
         )
         rows.append(row)
@@ -123,6 +137,13 @@ def _subject_row(
     teacher_edge_order: TeacherEdgeOrder,
     teacher_action_filter: TeacherActionFilter,
     teacher_feature_preset: str,
+    target_extension_feature_preset: str,
+    seed_source_feature_preset: str,
+    allow_source_backfill: bool,
+    allow_seed_source_backfill: bool,
+    allow_completing_seed_source_backfill: bool,
+    allow_fragment_merges: bool,
+    min_teacher_component_observations: int,
     max_applied_teacher_edits: int | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     reference = _load_reference_for_subject(
@@ -176,10 +197,23 @@ def _subject_row(
         teacher_feature_gate_from_preset(teacher_feature_preset),
         TeacherEdgeFeatureGate(),
     )
+    target_extension_feature_gate = teacher_feature_gate_from_preset(
+        target_extension_feature_preset
+    )
+    seed_source_feature_gate = teacher_feature_gate_from_preset(
+        seed_source_feature_preset
+    )
     edge_features = {}
     if _teacher_edge_order_requires_feature_index(
         teacher_edge_order
-    ) or _teacher_feature_gate_enabled(teacher_feature_gate):
+    ) or any(
+        _teacher_feature_gate_enabled(gate)
+        for gate in (
+            teacher_feature_gate,
+            target_extension_feature_gate,
+            seed_source_feature_gate,
+        )
+    ):
         teacher_edges = set(track_edge_counter(_normalize_int_track_matrix(teacher)))
         edge_features = _feature_subset_for_edges(
             sessions,
@@ -193,13 +227,17 @@ def _subject_row(
         teacher,
         seed_session=config.seed_session,
         allow_completing_rescue=False,
-        allow_source_backfill=True,
-        allow_fragment_merges=True,
+        allow_source_backfill=allow_source_backfill,
+        allow_seed_source_backfill=allow_seed_source_backfill,
+        allow_completing_seed_source_backfill=allow_completing_seed_source_backfill,
+        allow_fragment_merges=allow_fragment_merges,
         edge_order=teacher_edge_order,
         teacher_action_filter=teacher_action_filter,
         edge_feature_index=edge_features,
         teacher_feature_gate=teacher_feature_gate,
-        min_component_observations=1,
+        target_extension_feature_gate=target_extension_feature_gate,
+        seed_source_feature_gate=seed_source_feature_gate,
+        min_component_observations=max(1, int(min_teacher_component_observations)),
         max_applied_edits=max_applied_teacher_edits,
     )
     scores = dict(score_track_matrices(teacher_report.tracks, reference_eval))
@@ -327,24 +365,60 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
         default="all",
     )
+    teacher_feature_preset_choices = (
+        "none",
+        "local-support",
+        "high-confidence",
+        "cell-high-confidence",
+        "cell-confident",
+        "cell-confidence",
+        "track2p-fn-rescue",
+        "residual-fn",
+        "residual-fn-cell-confident",
+        "moderate-iou-cell-confidence",
+        "seed-source-high-confidence",
+        "seed-source-cell-confident",
+        "seed-source-moderate-iou",
+    )
     parser.add_argument(
         "--teacher-feature-preset",
-        choices=(
-            "none",
-            "local-support",
-            "high-confidence",
-            "cell-high-confidence",
-            "cell-confident",
-            "cell-confidence",
-            "track2p-fn-rescue",
-            "residual-fn",
-            "residual-fn-cell-confident",
-            "moderate-iou-cell-confidence",
-            "seed-source-high-confidence",
-            "seed-source-cell-confident",
-            "seed-source-moderate-iou",
-        ),
+        choices=teacher_feature_preset_choices,
         default="none",
+    )
+    parser.add_argument(
+        "--target-extension-feature-preset",
+        choices=teacher_feature_preset_choices,
+        default="none",
+    )
+    parser.add_argument(
+        "--seed-source-feature-preset",
+        choices=teacher_feature_preset_choices,
+        default="none",
+    )
+    parser.add_argument(
+        "--allow-source-backfill",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--allow-seed-source-backfill",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    parser.add_argument(
+        "--allow-completing-seed-source-backfill",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    parser.add_argument(
+        "--allow-fragment-merges",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--min-teacher-component-observations",
+        type=int,
+        default=1,
     )
     parser.add_argument(
         "--max-applied-teacher-edits",
@@ -409,6 +483,13 @@ def main(argv: list[str] | None = None) -> int:
         teacher_edge_order=cast(TeacherEdgeOrder, args.teacher_edge_order),
         teacher_action_filter=cast(TeacherActionFilter, args.teacher_action_filter),
         teacher_feature_preset=str(args.teacher_feature_preset),
+        target_extension_feature_preset=str(args.target_extension_feature_preset),
+        seed_source_feature_preset=str(args.seed_source_feature_preset),
+        allow_source_backfill=bool(args.allow_source_backfill),
+        allow_seed_source_backfill=bool(args.allow_seed_source_backfill),
+        allow_completing_seed_source_backfill=bool(args.allow_completing_seed_source_backfill),
+        allow_fragment_merges=bool(args.allow_fragment_merges),
+        min_teacher_component_observations=int(args.min_teacher_component_observations),
         max_applied_teacher_edits=(
             None
             if int(args.max_applied_teacher_edits) < 0
