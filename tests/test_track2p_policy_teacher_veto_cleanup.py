@@ -345,9 +345,7 @@ def test_teacher_veto_complete_track_only_can_split_complete_row() -> None:
 
     assert report.rows[0]["applied"] == 1
     assert report.rows[0]["reason"] == "accepted_split_edge"
-    np.testing.assert_array_equal(
-        report.tracks, [[10, 11, -1, -1], [-1, -1, 12, 13]]
-    )
+    np.testing.assert_array_equal(report.tracks, [[10, 11, -1, -1], [-1, -1, 12, 13]])
 
 
 def test_teacher_veto_rejects_edges_that_fail_optional_shape_cell_gates() -> None:

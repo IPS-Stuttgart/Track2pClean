@@ -721,9 +721,7 @@ def test_residual_fn_cell_confident_preset_requires_cells_without_hungarian() ->
     assert high_cell_report.rows[0]["reason"] == "accepted_insert_target"
 
 
-def test_residual_union_preset_spends_tiny_budget_on_cell_confident_seed_edge() -> (
-    None
-):
+def test_residual_union_preset_spends_tiny_budget_on_cell_confident_seed_edge() -> None:
     predicted = np.asarray([[-1, 20, 22], [-1, 21, 23]], dtype=int)
     teacher = np.asarray([[10, 20, -1], [11, 21, -1]], dtype=int)
     kwargs = teacher_adjacent_repair_preset_kwargs("residual-union-cell-confident")
