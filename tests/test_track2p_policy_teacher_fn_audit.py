@@ -211,7 +211,7 @@ def test_moderate_iou_teacher_repair_preset_targets_adjacent_fns() -> None:
 
     assert kwargs == {
         "teacher_action_filter": "target-extension",
-        "teacher_edge_order": "dynamic-confidence",
+        "teacher_edge_order": "dynamic-cell-confidence",
         "teacher_feature_preset": "moderate-iou-cell-confidence",
         "min_component_observations": 2,
         "max_applied_edits": 3,
