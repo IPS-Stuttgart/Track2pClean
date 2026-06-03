@@ -139,7 +139,9 @@ def run_track2p_policy_growth_field_residual_audit(
     suffix_gate = suffix_gate or suffix.CoherenceSuffixStitchGate()
     subject_dirs = discover_subject_dirs(policy_config.data)
     if not subject_dirs:
-        raise ValueError(f"No Track2p-style subject directories found under {policy_config.data}")
+        raise ValueError(
+            f"No Track2p-style subject directories found under {policy_config.data}"
+        )
 
     all_rows: list[dict[str, Any]] = []
     summary_rows: list[dict[str, Any]] = []
@@ -177,7 +179,9 @@ def _subject_rows(
     anchor_min_shifted_iou: float,
     anchor_min_cell_probability: float,
 ) -> list[dict[str, Any]]:
-    reference = _load_reference_for_subject(subject_dir, data_root=config.data, config=config)
+    reference = _load_reference_for_subject(
+        subject_dir, data_root=config.data, config=config
+    )
     _validate_reference_for_benchmark(reference, subject_dir=subject_dir, config=config)
     if reference.source != GROUND_TRUTH_REFERENCE_SOURCE:
         raise ValueError(f"{METHOD} requires independent manual-GT references")
@@ -193,7 +197,9 @@ def _subject_rows(
         prune_config=_no_prune_config(),
     )
     policy_full = _normalize_int_track_matrix(policy_prediction.tracks)
-    policy_eval, reference_eval, _policy_ids = _evaluated_prediction_rows(policy_full, reference_tracks, config=config)
+    policy_eval, reference_eval, _policy_ids = _evaluated_prediction_rows(
+        policy_full, reference_tracks, config=config
+    )
     reference_eval = _as_track_matrix(reference_eval)
     n_sessions = int(reference_eval.shape[1])
     policy_eval = _pad_track_matrix(_as_track_matrix(policy_eval), width=n_sessions)
@@ -230,8 +236,12 @@ def _subject_rows(
         width=n_sessions,
     )
 
-    teacher_full, _variant = _predict_subject_tracks(subject_dir, replace(config, method="track2p-baseline"))
-    teacher, _reference_again, _teacher_ids = _evaluated_prediction_rows(_normalize_int_track_matrix(teacher_full), reference_tracks, config=config)
+    teacher_full, _variant = _predict_subject_tracks(
+        subject_dir, replace(config, method="track2p-baseline")
+    )
+    teacher, _reference_again, _teacher_ids = _evaluated_prediction_rows(
+        _normalize_int_track_matrix(teacher_full), reference_tracks, config=config
+    )
     teacher = _pad_track_matrix(_as_track_matrix(teacher), width=n_sessions)
     teacher_report = apply_teacher_adjacent_rescue_edges(
         stitched,
@@ -317,10 +327,14 @@ def _subject_rows(
                 transform_type=config.transform_type,
             )
         )
-    return _augment_with_shifted_iou_and_margins(rows, sessions, feature_cache=feature_cache)
+    return _augment_with_shifted_iou_and_margins(
+        rows, sessions, feature_cache=feature_cache
+    )
 
 
-def _residual_edges(predicted: np.ndarray, reference: np.ndarray) -> tuple[tuple[TrackEdge, ResidualKind, int], ...]:
+def _residual_edges(
+    predicted: np.ndarray, reference: np.ndarray
+) -> tuple[tuple[TrackEdge, ResidualKind, int], ...]:
     predicted_counts = track_edge_counter(predicted)
     reference_counts = track_edge_counter(reference)
     rows: list[tuple[TrackEdge, ResidualKind, int]] = []
@@ -348,7 +362,9 @@ def _anchor_edges(
 ) -> dict[tuple[int, int], tuple[TrackEdge, ...]]:
     track2p_edges = set(track_edge_counter(track2p))
     policy_edges = set(track_edge_counter(policy))
-    cleanup_or_combined = set(track_edge_counter(component_cleanup)) | set(track_edge_counter(combined))
+    cleanup_or_combined = set(track_edge_counter(component_cleanup)) | set(
+        track_edge_counter(combined)
+    )
     candidates = track2p_edges & policy_edges & cleanup_or_combined
     by_pair: dict[tuple[int, int], list[TrackEdge]] = defaultdict(list)
     for edge in sorted(candidates):
@@ -374,7 +390,12 @@ def _anchor_edges(
     for pair, edges in by_pair.items():
         source_counts = Counter((edge[0], edge[2]) for edge in edges)
         target_counts = Counter((edge[1], edge[3]) for edge in edges)
-        conflict_free = tuple(edge for edge in edges if source_counts[(edge[0], edge[2])] == 1 and target_counts[(edge[1], edge[3])] == 1)
+        conflict_free = tuple(
+            edge
+            for edge in edges
+            if source_counts[(edge[0], edge[2])] == 1
+            and target_counts[(edge[1], edge[3])] == 1
+        )
         output[pair] = conflict_free
     return output
 
@@ -383,10 +404,14 @@ def _growth_models_by_pair(
     sessions: Sequence[Track2pSession],
     anchor_edges: Mapping[tuple[int, int], Sequence[TrackEdge]],
 ) -> dict[tuple[int, int], _GrowthModel]:
-    return {pair: _fit_growth_model(sessions, edges) for pair, edges in anchor_edges.items()}
+    return {
+        pair: _fit_growth_model(sessions, edges) for pair, edges in anchor_edges.items()
+    }
 
 
-def _fit_growth_model(sessions: Sequence[Track2pSession], edges: Sequence[TrackEdge]) -> _GrowthModel:
+def _fit_growth_model(
+    sessions: Sequence[Track2pSession], edges: Sequence[TrackEdge]
+) -> _GrowthModel:
     if not edges:
         return _identity_growth_model()
     sources: list[np.ndarray] = []
@@ -411,7 +436,9 @@ def _fit_growth_model(sessions: Sequence[Track2pSession], edges: Sequence[TrackE
         keep = residual_norms <= median + max(3.0 * 1.4826 * mad, 2.0)
         if int(np.sum(keep)) >= 3 and not bool(np.all(keep)):
             affine = fit_affine_growth_transform(source_xy[keep], target_xy[keep])
-            residual_vectors = _residual_vectors(source_xy[keep], target_xy[keep], affine)
+            residual_vectors = _residual_vectors(
+                source_xy[keep], target_xy[keep], affine
+            )
         model_type = "robust_affine" if int(np.sum(keep)) < len(keep) else "affine"
         inlier_count = int(np.sum(keep))
     else:
@@ -464,9 +491,17 @@ def _edge_growth_features(
     predicted = _apply_affine(source, model.affine_xy)
     residual_vector = target - predicted
     residual = float(np.linalg.norm(residual_vector))
-    mahalanobis = float(np.sqrt(max(0.0, float(residual_vector @ model.covariance_inverse @ residual_vector))))
+    mahalanobis = float(
+        np.sqrt(
+            max(
+                0.0, float(residual_vector @ model.covariance_inverse @ residual_vector)
+            )
+        )
+    )
     observed_area_ratio = _observed_area_ratio(sessions, edge)
-    area_residual = _area_growth_residual(observed_area_ratio, model.expected_area_ratio)
+    area_residual = _area_growth_residual(
+        observed_area_ratio, model.expected_area_ratio
+    )
     motion = _motion_context_features(sessions, edge, predicted, source, target)
     return _EdgeGrowthFeatures(
         centroid_a_x=float(source[0]),
@@ -477,11 +512,15 @@ def _edge_growth_features(
         predicted_b_y=float(predicted[1]),
         growth_residual=residual,
         growth_residual_mahalanobis=mahalanobis,
-        radial_direction_cosine=_radial_direction_cosine(sessions, edge, source, target),
+        radial_direction_cosine=_radial_direction_cosine(
+            sessions, edge, source, target
+        ),
         expected_area_ratio=float(model.expected_area_ratio),
         observed_area_ratio=observed_area_ratio,
         area_growth_residual=area_residual,
-        local_neighbor_distortion=_local_neighbor_distortion(sessions, edge, anchor_edges, expected_area_ratio=model.expected_area_ratio),
+        local_neighbor_distortion=_local_neighbor_distortion(
+            sessions, edge, anchor_edges, expected_area_ratio=model.expected_area_ratio
+        ),
         two_edge_motion_consistency=motion["two_edge_motion_consistency"],
         two_edge_acceleration=motion["two_edge_acceleration"],
     )
@@ -522,10 +561,16 @@ def _motion_context_features(
             adjacent_vectors.append(next_xy - np.asarray(target_xy, dtype=float))
     cosines = [_cosine(current, vector) for vector in adjacent_vectors]
     finite_cosines = [value for value in cosines if np.isfinite(value)]
-    accelerations = [float(np.linalg.norm(current - vector)) for vector in adjacent_vectors]
+    accelerations = [
+        float(np.linalg.norm(current - vector)) for vector in adjacent_vectors
+    ]
     return {
-        "two_edge_motion_consistency": (float(np.mean(finite_cosines)) if finite_cosines else float("nan")),
-        "two_edge_acceleration": (float(np.mean(accelerations)) if accelerations else float("nan")),
+        "two_edge_motion_consistency": (
+            float(np.mean(finite_cosines)) if finite_cosines else float("nan")
+        ),
+        "two_edge_acceleration": (
+            float(np.mean(accelerations)) if accelerations else float("nan")
+        ),
     }
 
 
@@ -552,19 +597,27 @@ def _what_if_candidate(
     return candidate, reason
 
 
-def _split_at_edge(predicted: np.ndarray, edge: TrackEdge, reference: np.ndarray) -> tuple[np.ndarray, str]:
+def _split_at_edge(
+    predicted: np.ndarray, edge: TrackEdge, reference: np.ndarray
+) -> tuple[np.ndarray, str]:
     predicted = _as_track_matrix(predicted)
     session_a, session_b, roi_a, roi_b = edge
     if session_a >= predicted.shape[1] or session_b >= predicted.shape[1]:
         return predicted.copy(), "edge_outside_prediction_width"
     if session_b != session_a + 1:
         return np.asarray(predicted, dtype=int).copy(), "not_adjacent"
-    rows = [int(row_index) for row_index in np.flatnonzero(predicted[:, session_a] == roi_a) if int(predicted[int(row_index), session_b]) == int(roi_b)]
+    rows = [
+        int(row_index)
+        for row_index in np.flatnonzero(predicted[:, session_a] == roi_a)
+        if int(predicted[int(row_index), session_b]) == int(roi_b)
+    ]
     if len(rows) != 1:
         return np.asarray(predicted, dtype=int).copy(), "edge_absent_or_ambiguous"
     row_index = rows[0]
     row = np.asarray(predicted[row_index], dtype=int)
-    if np.all(row >= 0) and _complete_track_counter(reference).get(tuple(int(value) for value in row), 0):
+    if np.all(row >= 0) and _complete_track_counter(reference).get(
+        tuple(int(value) for value in row), 0
+    ):
         return np.asarray(predicted, dtype=int).copy(), "would_break_complete_tp"
     left = row.copy()
     right = row.copy()
@@ -630,10 +683,18 @@ def _edge_row(
         "is_residual_fp": int(error_type == "pairwise_fp"),
         "is_residual_fn": int(error_type == "pairwise_fn"),
         "occurrence_index": int(occurrence_index),
-        "track2p_supported": int(track_edge_counter(track2p).get(edge, 0) > occurrence_index),
-        "policy_supported": int(track_edge_counter(policy).get(edge, 0) > occurrence_index),
-        "component_cleanup_supported": int(track_edge_counter(component_cleanup).get(edge, 0) > occurrence_index),
-        "coherence_suffix_teacher_supported": int(track_edge_counter(combined).get(edge, 0) > occurrence_index),
+        "track2p_supported": int(
+            track_edge_counter(track2p).get(edge, 0) > occurrence_index
+        ),
+        "policy_supported": int(
+            track_edge_counter(policy).get(edge, 0) > occurrence_index
+        ),
+        "component_cleanup_supported": int(
+            track_edge_counter(component_cleanup).get(edge, 0) > occurrence_index
+        ),
+        "coherence_suffix_teacher_supported": int(
+            track_edge_counter(combined).get(edge, 0) > occurrence_index
+        ),
         "centroid_a_x": growth.centroid_a_x,
         "centroid_a_y": growth.centroid_a_y,
         "centroid_b_x": growth.centroid_b_x,
@@ -666,7 +727,10 @@ def _edge_row(
         "threshold_margin": float(local.threshold_margin),
         "assigned_by_hungarian": int(local.assigned_by_hungarian),
         "edit_reason": edit_reason,
-        "would_fix_complete_fn": int(delta["complete_track_false_negatives"] < 0 and delta["complete_track_true_positives"] > 0),
+        "would_fix_complete_fn": int(
+            delta["complete_track_false_negatives"] < 0
+            and delta["complete_track_true_positives"] > 0
+        ),
         "would_create_complete_fp": int(delta["complete_track_false_positives"] > 0),
         "pairwise_tp_delta": int(delta["pairwise_true_positives"]),
         "pairwise_fp_delta": int(delta["pairwise_false_positives"]),
@@ -685,37 +749,59 @@ def _edge_row(
     }
 
 
-def _summary_rows(subject: str, rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _summary_rows(
+    subject: str, rows: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for error_type in ("pairwise_fp", "pairwise_fn", "ALL"):
-        subset = [row for row in rows if error_type == "ALL" or str(row.get("error_type")) == error_type]
+        subset = [
+            row
+            for row in rows
+            if error_type == "ALL" or str(row.get("error_type")) == error_type
+        ]
         output.append(
             {
                 "subject": subject,
                 "error_type": error_type,
                 "n_edges": int(len(subset)),
                 "median_growth_residual": _median(subset, "growth_residual"),
-                "median_growth_residual_mahalanobis": _median(subset, "growth_residual_mahalanobis"),
-                "median_radial_direction_cosine": _median(subset, "radial_direction_cosine"),
+                "median_growth_residual_mahalanobis": _median(
+                    subset, "growth_residual_mahalanobis"
+                ),
+                "median_radial_direction_cosine": _median(
+                    subset, "radial_direction_cosine"
+                ),
                 "median_area_growth_residual": _median(subset, "area_growth_residual"),
-                "median_local_neighbor_distortion": _median(subset, "local_neighbor_distortion"),
-                "would_fix_complete_fn": int(sum(int(row.get("would_fix_complete_fn", 0)) for row in subset)),
-                "would_create_complete_fp": int(sum(int(row.get("would_create_complete_fp", 0)) for row in subset)),
+                "median_local_neighbor_distortion": _median(
+                    subset, "local_neighbor_distortion"
+                ),
+                "would_fix_complete_fn": int(
+                    sum(int(row.get("would_fix_complete_fn", 0)) for row in subset)
+                ),
+                "would_create_complete_fp": int(
+                    sum(int(row.get("would_create_complete_fp", 0)) for row in subset)
+                ),
                 "max_new_pairwise_f1_micro": _max(subset, "new_pairwise_f1_micro"),
-                "max_new_complete_track_f1_micro": _max(subset, "new_complete_track_f1_micro"),
+                "max_new_complete_track_f1_micro": _max(
+                    subset, "new_complete_track_f1_micro"
+                ),
             }
         )
     return output
 
 
-def _centroid_xy(sessions: Sequence[Track2pSession], session_index: int, suite2p_roi: int) -> np.ndarray | None:
+def _centroid_xy(
+    sessions: Sequence[Track2pSession], session_index: int, suite2p_roi: int
+) -> np.ndarray | None:
     if session_index < 0 or session_index >= len(sessions):
         return None
     roi_indices = _roi_indices(sessions[session_index])
     matches = np.flatnonzero(roi_indices == int(suite2p_roi))
     if matches.size == 0:
         return None
-    centroids = np.asarray(sessions[session_index].plane_data.centroids(order="xy"), dtype=float).T
+    centroids = np.asarray(
+        sessions[session_index].plane_data.centroids(order="xy"), dtype=float
+    ).T
     return np.asarray(centroids[int(matches[0])], dtype=float)
 
 
@@ -728,7 +814,9 @@ def _observed_area_ratio(sessions: Sequence[Track2pSession], edge: TrackEdge) ->
     return float(area_b / area_a)
 
 
-def _roi_area(sessions: Sequence[Track2pSession], session_index: int, suite2p_roi: int) -> float:
+def _roi_area(
+    sessions: Sequence[Track2pSession], session_index: int, suite2p_roi: int
+) -> float:
     if session_index < 0 or session_index >= len(sessions):
         return float("nan")
     roi_indices = _roi_indices(sessions[session_index])
@@ -743,7 +831,9 @@ def _apply_affine(point_xy: np.ndarray, affine_xy: np.ndarray) -> np.ndarray:
     return np.asarray(point_xy, dtype=float) @ affine_xy[:, :2].T + affine_xy[:, 2]
 
 
-def _residual_vectors(source_xy: np.ndarray, target_xy: np.ndarray, affine_xy: np.ndarray) -> np.ndarray:
+def _residual_vectors(
+    source_xy: np.ndarray, target_xy: np.ndarray, affine_xy: np.ndarray
+) -> np.ndarray:
     predicted = source_xy @ affine_xy[:, :2].T + affine_xy[:, 2][None, :]
     return np.asarray(target_xy, dtype=float) - predicted
 
@@ -757,7 +847,9 @@ def _robust_residual_scale(residual_vectors: np.ndarray) -> float:
     return max(float(1.4826 * mad), median, 1.0)
 
 
-def _residual_covariance_inverse(residual_vectors: np.ndarray, residual_scale: float) -> np.ndarray:
+def _residual_covariance_inverse(
+    residual_vectors: np.ndarray, residual_scale: float
+) -> np.ndarray:
     residuals = np.asarray(residual_vectors, dtype=float)
     if residuals.shape[0] >= 2:
         covariance = np.cov(residuals.T)
@@ -777,7 +869,12 @@ def _expected_area_ratio(affine_xy: np.ndarray) -> float:
 
 
 def _area_growth_residual(observed: float, expected: float) -> float:
-    if not np.isfinite(observed) or not np.isfinite(expected) or observed <= 0.0 or expected <= 0.0:
+    if (
+        not np.isfinite(observed)
+        or not np.isfinite(expected)
+        or observed <= 0.0
+        or expected <= 0.0
+    ):
         return float("nan")
     return float(abs(np.log(observed / expected)))
 
@@ -847,14 +944,18 @@ def _local_index(values: np.ndarray, roi: int) -> int:
 
 
 def _median(rows: Sequence[Mapping[str, Any]], key: str) -> float:
-    values = [float(row[key]) for row in rows if key in row and np.isfinite(float(row[key]))]
+    values = [
+        float(row[key]) for row in rows if key in row and np.isfinite(float(row[key]))
+    ]
     if not values:
         return float("nan")
     return float(np.median(np.asarray(values, dtype=float)))
 
 
 def _max(rows: Sequence[Mapping[str, Any]], key: str) -> float:
-    values = [float(row[key]) for row in rows if key in row and np.isfinite(float(row[key]))]
+    values = [
+        float(row[key]) for row in rows if key in row and np.isfinite(float(row[key]))
+    ]
     if not values:
         return float("nan")
     return float(np.max(np.asarray(values, dtype=float)))
@@ -879,13 +980,31 @@ def _augment_with_shifted_iou_and_margins(
         row["registered_iou"] = float(matrices.registered_iou[local_a, local_b])
         row["centroid_distance"] = float(matrices.centroid_distance[local_a, local_b])
         row["area_ratio"] = float(matrices.area_ratio[local_a, local_b])
-        row["row_rank"] = int(_rank_descending(matrices.registered_iou[local_a], selected_index=local_b))
-        row["column_rank"] = int(_rank_descending(matrices.registered_iou[:, local_b], selected_index=local_a))
-        row["row_margin"] = float(_margin_against_competitor(matrices.registered_iou[local_a], selected_index=local_b))
-        row["column_margin"] = float(_margin_against_competitor(matrices.registered_iou[:, local_b], selected_index=local_a))
-        row["threshold_margin"] = float(matrices.registered_iou[local_a, local_b] - matrices.threshold)
+        row["row_rank"] = int(
+            _rank_descending(matrices.registered_iou[local_a], selected_index=local_b)
+        )
+        row["column_rank"] = int(
+            _rank_descending(
+                matrices.registered_iou[:, local_b], selected_index=local_a
+            )
+        )
+        row["row_margin"] = float(
+            _margin_against_competitor(
+                matrices.registered_iou[local_a], selected_index=local_b
+            )
+        )
+        row["column_margin"] = float(
+            _margin_against_competitor(
+                matrices.registered_iou[:, local_b], selected_index=local_a
+            )
+        )
+        row["threshold_margin"] = float(
+            matrices.registered_iou[local_a, local_b] - matrices.threshold
+        )
         row["cell_probability_a"] = _cell_probability(sessions, session_a, roi_a)
-        row["cell_probability_b"] = _cell_probability(sessions, int(row["session_b"]), roi_b)
+        row["cell_probability_b"] = _cell_probability(
+            sessions, int(row["session_b"]), roi_b
+        )
     return rows
 
 
@@ -899,7 +1018,9 @@ def write_rows(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
-        output_path.write_text(json.dumps(list(rows), indent=2) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(list(rows), indent=2) + "\n", encoding="utf-8"
+        )
         return
     fieldnames = sorted({key for row in rows for key in row})
     with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -912,7 +1033,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     """Build the growth-field residual-audit parser."""
 
     parser = suffix.build_arg_parser()
-    parser.prog = "python -m bayescatrack.experiments.track2p_policy_growth_field_residual_audit"
+    parser.prog = (
+        "python -m bayescatrack.experiments.track2p_policy_growth_field_residual_audit"
+    )
     parser.description = "Audit residual CoherenceSuffixTeacherRescue official errors against a label-free lower-left growth/deformation prior."
     parser.add_argument("--summary-output", type=Path, default=None)
     parser.add_argument("--anchor-min-registered-iou", type=float, default=0.50)
@@ -935,7 +1058,9 @@ def main(argv: list[str] | None = None) -> int:
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
         transform_type=args.transform_type,
-        allow_track2p_as_reference_for_smoke_test=(args.allow_track2p_as_reference_for_smoke_test),
+        allow_track2p_as_reference_for_smoke_test=(
+            args.allow_track2p_as_reference_for_smoke_test
+        ),
         include_behavior=args.include_behavior,
         include_non_cells=False,
         cell_probability_threshold=args.cell_probability_threshold,

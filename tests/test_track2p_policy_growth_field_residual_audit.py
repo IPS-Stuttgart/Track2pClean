@@ -12,8 +12,14 @@ def test_growth_field_residual_audit_is_registered() -> None:
     canonical = cli._BENCHMARK_ALIASES["track2p-growth-field-residual-audit"]
 
     assert canonical == "track2p-policy-growth-field-residual-audit"
-    assert cli._BENCHMARK_ALIASES["track2p-component-growth-field-residual-audit"] == canonical
-    assert cli._BENCHMARK_COMMANDS[canonical].module == "bayescatrack.experiments.track2p_policy_growth_field_residual_audit"
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-component-growth-field-residual-audit"]
+        == canonical
+    )
+    assert (
+        cli._BENCHMARK_COMMANDS[canonical].module
+        == "bayescatrack.experiments.track2p_policy_growth_field_residual_audit"
+    )
 
 
 def test_growth_field_residual_audit_parser_exposes_anchor_defaults() -> None:
@@ -88,12 +94,16 @@ def test_fit_growth_model_uses_translation_fallback_for_two_anchors(
     model = growth_audit._fit_growth_model([], ((0, 1, 1, 11), (0, 1, 2, 12)))
 
     assert model.model_type == "translation_fallback"
-    assert growth_audit._apply_affine(np.asarray([4.0, 6.0]), model.affine_xy) == (pytest.approx(np.asarray([5.0, 8.0])))
+    assert growth_audit._apply_affine(np.asarray([4.0, 6.0]), model.affine_xy) == (
+        pytest.approx(np.asarray([5.0, 8.0]))
+    )
 
 
 def test_cosine_handles_zero_vectors() -> None:
     assert np.isnan(growth_audit._cosine(np.asarray([0.0, 0.0]), np.ones(2)))
-    assert growth_audit._cosine(np.asarray([1.0, 0.0]), np.asarray([2.0, 0.0])) == (pytest.approx(1.0))
+    assert growth_audit._cosine(np.asarray([1.0, 0.0]), np.asarray([2.0, 0.0])) == (
+        pytest.approx(1.0)
+    )
 
 
 def test_motion_context_accepts_single_track_vector(monkeypatch) -> None:
