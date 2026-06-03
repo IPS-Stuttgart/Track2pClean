@@ -15,7 +15,11 @@ missing seed-session ROI residual bucket without also admitting arbitrary
 non-seed source insertions. Missing-seed repair presets also restrict the
 teacher action family to seed-source backfills by default, so a tiny edit budget
 cannot be spent on unrelated target extensions before the seed-source hypothesis
-is tested. The command does not use manual GT labels to choose edges.
+is tested. Residual-union presets additionally use the cell-priority dynamic
+ordering: once the residual FN / missing-seed action gate has selected a tiny
+edit budget, high endpoint cell probability and shape support are stronger
+tie-breakers than raw registered IoU. The command does not use manual GT labels
+to choose edges.
 """
 
 from __future__ import annotations
@@ -396,7 +400,7 @@ def teacher_adjacent_repair_preset_kwargs(
             "allow_completing_seed_source_backfill": True,
             "allow_fragment_merges": False,
             "teacher_action_filter": "target-extension-or-seed-source-backfill",
-            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_edge_order": "dynamic-seed-cell-confidence",
             "teacher_feature_preset": "residual-fn-cell-confident",
             "min_component_observations": 2,
             "max_applied_edits": 3,

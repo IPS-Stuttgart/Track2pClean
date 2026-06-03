@@ -85,6 +85,7 @@ class TeacherVetoConfig:
     max_cell_probability: float | None = None
     require_unassigned_by_hungarian: bool = False
     allow_complete_track_veto: bool = False
+    complete_track_veto_only: bool = False
     keep_right_fragment: bool = True
     min_fragment_observations: int = 2
     edge_order: TeacherVetoEdgeOrder = "risk"
@@ -203,6 +204,9 @@ def run_track2p_policy_teacher_veto_cleanup(
             ),
             "track2p_teacher_veto_allow_complete_track_veto": int(
                 veto_config.allow_complete_track_veto
+            ),
+            "track2p_teacher_veto_complete_track_veto_only": int(
+                veto_config.complete_track_veto_only
             ),
             "track2p_teacher_veto_keep_right_fragment": int(
                 veto_config.keep_right_fragment
@@ -432,7 +436,11 @@ def _try_veto_edge(
         return output, row
     row_index = int(candidate_rows[0])
     row["row_index"] = row_index
-    if np.all(output[row_index] >= 0) and not config.allow_complete_track_veto:
+    row_is_complete = bool(np.all(output[row_index] >= 0))
+    if config.complete_track_veto_only and not row_is_complete:
+        row["reason"] = "not_complete_track"
+        return output, row
+    if row_is_complete and not config.allow_complete_track_veto:
         row["reason"] = "would_split_complete_track"
         return output, row
     reason = _gate_reject_reason(feature, config)
@@ -666,6 +674,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--complete-track-veto-only",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Only apply teacher-veto splits to currently complete predicted rows. "
+            "This targets the residual complete-track FP budget without spending "
+            "a small veto cap on incomplete-row pairwise FPs first."
+        ),
+    )
+    parser.add_argument(
         "--keep-right-fragment",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -736,6 +754,7 @@ def main(argv: list[str] | None = None) -> int:
         max_cell_probability=args.max_cell_probability,
         require_unassigned_by_hungarian=bool(args.require_unassigned_by_hungarian),
         allow_complete_track_veto=bool(args.allow_complete_track_veto),
+        complete_track_veto_only=bool(args.complete_track_veto_only),
         keep_right_fragment=bool(args.keep_right_fragment),
         min_fragment_observations=int(args.min_veto_fragment_observations),
         edge_order=cast(TeacherVetoEdgeOrder, args.teacher_veto_edge_order),
