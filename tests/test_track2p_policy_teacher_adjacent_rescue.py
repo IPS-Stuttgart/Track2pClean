@@ -759,7 +759,7 @@ def test_residual_union_preset_spends_tiny_budget_on_cell_confident_seed_edge() 
         max_applied_edits=int(kwargs["max_applied_edits"]),
     )
 
-    np.testing.assert_array_equal(report.tracks, [[-1, 20, 22], [11, 21, 23]])
+    np.testing.assert_array_equal(report.tracks, [[10, 20, 22], [11, 21, 23]])
     assert report.rows[0]["roi_a"] == 11
     assert report.rows[0]["applied"] == 1
 
