@@ -55,6 +55,8 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "teacher_action_filter",
     "teacher_repair_preset",
     "teacher_feature_preset",
+    "target_extension_feature_preset",
+    "seed_source_feature_preset",
     "teacher_min_registered_iou",
     "teacher_max_registered_iou",
     "teacher_min_threshold_margin",
