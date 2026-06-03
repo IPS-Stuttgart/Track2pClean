@@ -146,6 +146,7 @@ def test_policy_coherence_suffix_runner_kwargs_are_runner_specific() -> None:
 
 
 def test_policy_coherence_suffix_teacher_runner_kwargs_are_runner_specific() -> None:
+    # jscpd:ignore-start
     assert _runner_kwargs(
         {
             "threshold_method": "min",
@@ -186,3 +187,4 @@ def test_policy_coherence_suffix_teacher_runner_kwargs_are_runner_specific() -> 
         "teacher_feature_preset": "none",
         "max_applied_teacher_edits": -1,
     }
+    # jscpd:ignore-end

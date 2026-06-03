@@ -42,8 +42,8 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
 )
 from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     TeacherActionFilter,
-    TeacherEdgeOrder,
     TeacherEdgeFeatureGate,
+    TeacherEdgeOrder,
     _teacher_edge_order_requires_feature_index,
     _teacher_feature_gate_enabled,
     apply_teacher_adjacent_rescue_edges,

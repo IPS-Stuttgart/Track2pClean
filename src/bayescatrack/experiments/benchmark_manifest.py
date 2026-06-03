@@ -1440,9 +1440,7 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
     )
     raw_max_edits = options.get("max_applied_teacher_edits")
     max_applied_teacher_edits = (
-        None
-        if raw_max_edits is None or int(raw_max_edits) < 0
-        else int(raw_max_edits)
+        None if raw_max_edits is None or int(raw_max_edits) < 0 else int(raw_max_edits)
     )
     output = run_track2p_policy_coherence_suffix_teacher_rescue(
         config,
