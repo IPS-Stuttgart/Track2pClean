@@ -30,6 +30,7 @@ AccuracyPresetName = Literal[
     "track2p-confidence-ordered-strict-gap-cleanup",
     "track2p-teacher-adjacent-rescue",
     "track2p-teacher-fn-rescue",
+    "track2p-residual-union-action-specific-rescue",
 ]
 AccuracyPresetRunner = Literal[
     "benchmark",
@@ -227,6 +228,10 @@ def build_track2p_accuracy_presets(
         **teacher_rescue_runner_kwargs,
         "teacher_repair_preset": "track2p-fn-high-confidence",
     }
+    residual_union_action_specific_runner_kwargs = {
+        **teacher_rescue_runner_kwargs,
+        "teacher_repair_preset": "residual-union-action-specific",
+    }
 
     return (
         AccuracyPreset(
@@ -322,6 +327,19 @@ def build_track2p_accuracy_presets(
             config=stability_cleanup,
             runner="teacher-adjacent-rescue",
             runner_kwargs=teacher_fn_rescue_runner_kwargs,
+        ),
+        AccuracyPreset(
+            name="track2p-residual-union-action-specific-rescue",
+            description=(
+                "Component cleanup plus the residual-union teacher-rescue preset "
+                "with action-specific gates: moderate-IoU/cell-confidence target "
+                "extensions for Track2p-supported adjacent FNs, and stricter "
+                "seed-source cell-confidence backfills for the missing seed-session "
+                "ROI bucket."
+            ),
+            config=stability_cleanup,
+            runner="teacher-adjacent-rescue",
+            runner_kwargs=residual_union_action_specific_runner_kwargs,
         ),
     )
 

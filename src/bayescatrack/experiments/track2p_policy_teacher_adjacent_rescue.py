@@ -389,7 +389,7 @@ def teacher_adjacent_repair_preset_kwargs(
     }:
         return {
             "teacher_action_filter": "target-extension",
-            "teacher_edge_order": "dynamic-confidence",
+            "teacher_edge_order": "dynamic-cell-confidence",
             "teacher_feature_preset": "moderate-iou-cell-confidence",
             "min_component_observations": 2,
             "max_applied_edits": 3,
@@ -2521,7 +2521,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "'track2p-fn-high-confidence' restricts rescue to high-confidence "
             "target extensions; 'track2p-fn-moderate-iou-cell-confident' tests "
             "the same residual Track2p-FN target-extension bucket with a "
-            "moderate-IoU, cell-confident feature gate; "
+            "moderate-IoU, cell-confident feature gate and cell-confidence "
+            "dynamic ordering; "
             "'residual-union-cell-confident' combines target extensions and "
             "seed-source backfills with a cell-confident residual-FN feature "
             "gate, while disabling broad source backfill and fragment merges; "
