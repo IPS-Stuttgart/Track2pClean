@@ -283,6 +283,14 @@ run_teacher_rescue teacher_adjacent_residual_union_cell_confident_preset \
   --allow-fragment-merges \
   --teacher-repair-preset residual-union-cell-confident
 
+run_teacher_rescue teacher_adjacent_residual_union_action_specific_preset \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --allow-seed-source-backfill \
+  --allow-completing-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-repair-preset residual-union-action-specific
+
 run_teacher_rescue teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2 \
   --no-allow-completing-rescue \
   --allow-source-backfill \
@@ -423,6 +431,17 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --min-veto-fragment-observations 2 \
   --max-applied-vetoes 1
 
+run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
+  --allow-complete-track-veto \
+  --complete-track-veto-only \
+  --include-teacher-supported-complete-track-edges \
+  --max-threshold-margin 0.10 \
+  --max-competition-margin 0.20 \
+  --min-centroid-distance 3.0 \
+  --max-area-ratio 0.65 \
+  --min-veto-fragment-observations 2 \
+  --max-applied-vetoes 1
+
 "$PY" -m bayescatrack benchmark compare \
   --input Track2p="$OUT/track2p_baseline.csv" \
   --input Track2pPolicyD12="$OUT/track2p_policy_d12.csv" \
@@ -443,6 +462,7 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --input TeacherAdjacentDynamicCellConfidenceResidualFnCellConfidentMax2="$OUT/teacher_adjacent_dynamic_cell_confidence_residual_fn_cell_confident_max2.csv" \
   --input TeacherAdjacentTrack2pFnModerateIouCellConfidentPreset="$OUT/teacher_adjacent_track2p_fn_moderate_iou_cell_confident_preset.csv" \
   --input TeacherAdjacentResidualUnionCellConfidentPreset="$OUT/teacher_adjacent_residual_union_cell_confident_preset.csv" \
+  --input TeacherAdjacentResidualUnionActionSpecificPreset="$OUT/teacher_adjacent_residual_union_action_specific_preset.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
@@ -458,6 +478,7 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
   --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
+  --input TeacherVetoCompleteTrackRowAbsentMax1="$OUT/teacher_veto_complete_track_row_absent_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.md" \
   --format markdown \
   --highlight-best \
@@ -486,6 +507,7 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --input TeacherAdjacentDynamicCellConfidenceResidualFnCellConfidentMax2="$OUT/teacher_adjacent_dynamic_cell_confidence_residual_fn_cell_confident_max2.csv" \
   --input TeacherAdjacentTrack2pFnModerateIouCellConfidentPreset="$OUT/teacher_adjacent_track2p_fn_moderate_iou_cell_confident_preset.csv" \
   --input TeacherAdjacentResidualUnionCellConfidentPreset="$OUT/teacher_adjacent_residual_union_cell_confident_preset.csv" \
+  --input TeacherAdjacentResidualUnionActionSpecificPreset="$OUT/teacher_adjacent_residual_union_action_specific_preset.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
@@ -501,6 +523,7 @@ run_teacher_veto teacher_veto_complete_track_max1 \
   --input TeacherVetoGeometricMax1="$OUT/teacher_veto_geometric_max1.csv" \
   --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
+  --input TeacherVetoCompleteTrackRowAbsentMax1="$OUT/teacher_veto_complete_track_row_absent_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.csv" \
   --format csv
 

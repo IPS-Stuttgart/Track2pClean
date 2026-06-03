@@ -29,6 +29,7 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         "track2p-confidence-ordered-strict-gap-cleanup",
         "track2p-teacher-adjacent-rescue",
         "track2p-teacher-fn-rescue",
+        "track2p-residual-union-action-specific-rescue",
     ]
     assert all(preset.config.method == "global-assignment" for preset in presets)
     assert all(preset.config.reference_kind == "manual-gt" for preset in presets)
@@ -44,6 +45,7 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         confidence_gap,
         teacher,
         teacher_fn,
+        teacher_residual_union,
     ) = presets
     assert shifted.config.cost == "registered-shifted-iou"
     assert shifted.config.higher_order_consistency_config is not None
@@ -103,6 +105,18 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
     assert teacher_fn.runner_kwargs["threshold_method"] == "min"
     teacher_fn_cleanup_kwargs = teacher_fn.runner_kwargs["cleanup_config_kwargs"]
     assert isinstance(teacher_fn_cleanup_kwargs, dict)
+    assert teacher_residual_union.runner == "teacher-adjacent-rescue"
+    assert teacher_residual_union.config is stability.config
+    assert teacher_residual_union.runner_kwargs is not None
+    assert (
+        teacher_residual_union.runner_kwargs["teacher_repair_preset"]
+        == "residual-union-action-specific"
+    )
+    assert teacher_residual_union.runner_kwargs["threshold_method"] == "min"
+    residual_union_cleanup_kwargs = teacher_residual_union.runner_kwargs[
+        "cleanup_config_kwargs"
+    ]
+    assert isinstance(residual_union_cleanup_kwargs, dict)
 
 
 def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
@@ -132,6 +146,8 @@ def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
     assert rows[6]["teacher_adjacent_rescue"] is True
     assert rows[7]["runner"] == "teacher-adjacent-rescue"
     assert rows[7]["teacher_adjacent_rescue"] is True
+    assert rows[8]["runner"] == "teacher-adjacent-rescue"
+    assert rows[8]["teacher_adjacent_rescue"] is True
 
 
 def test_confidence_strict_gap_preset_runner_builds_typed_configs(monkeypatch) -> None:

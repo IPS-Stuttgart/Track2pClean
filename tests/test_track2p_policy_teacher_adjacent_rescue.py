@@ -507,7 +507,7 @@ def test_track2p_fn_moderate_iou_repair_preset_targets_cell_gated_extensions() -
 
     assert kwargs == {
         "teacher_action_filter": "target-extension",
-        "teacher_edge_order": "dynamic-confidence",
+        "teacher_edge_order": "dynamic-cell-confidence",
         "teacher_feature_preset": "moderate-iou-cell-confidence",
         "min_component_observations": 2,
         "max_applied_edits": 3,
