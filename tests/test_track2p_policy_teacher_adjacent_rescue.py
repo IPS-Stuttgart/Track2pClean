@@ -523,7 +523,7 @@ def test_residual_union_repair_preset_targets_two_residual_buckets() -> None:
         "allow_completing_seed_source_backfill": True,
         "allow_fragment_merges": False,
         "teacher_action_filter": "target-extension-or-seed-source-backfill",
-        "teacher_edge_order": "dynamic-seed-confidence",
+        "teacher_edge_order": "dynamic-seed-cell-confidence",
         "teacher_feature_preset": "residual-fn-cell-confident",
         "min_component_observations": 2,
         "max_applied_edits": 3,
@@ -719,6 +719,51 @@ def test_residual_fn_cell_confident_preset_requires_cells_without_hungarian() ->
     np.testing.assert_array_equal(high_cell_report.tracks, [[10, 20, 30, -1]])
     assert high_cell_report.rows[0]["applied"] == 1
     assert high_cell_report.rows[0]["reason"] == "accepted_insert_target"
+
+
+def test_residual_union_preset_spends_tiny_budget_on_cell_confident_seed_edge() -> (
+    None
+):
+    predicted = np.asarray([[-1, 20, 22], [-1, 21, 23]], dtype=int)
+    teacher = np.asarray([[10, 20, -1], [11, 21, -1]], dtype=int)
+    kwargs = teacher_adjacent_repair_preset_kwargs("residual-union-cell-confident")
+    gate = teacher_feature_gate_from_preset(str(kwargs["teacher_feature_preset"]))
+
+    report = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_source_backfill=bool(kwargs["allow_source_backfill"]),
+        allow_seed_source_backfill=bool(kwargs["allow_seed_source_backfill"]),
+        allow_completing_seed_source_backfill=bool(
+            kwargs["allow_completing_seed_source_backfill"]
+        ),
+        allow_fragment_merges=bool(kwargs["allow_fragment_merges"]),
+        teacher_action_filter=str(kwargs["teacher_action_filter"]),
+        edge_order=str(kwargs["teacher_edge_order"]),
+        feature_gate=gate,
+        edge_feature_index={
+            (0, 1, 10, 20): ResidualFeature(
+                registered_iou=0.90,
+                centroid_distance=1.0,
+                area_ratio=0.95,
+                cell_probability_a=0.81,
+                cell_probability_b=0.81,
+            ),
+            (0, 1, 11, 21): ResidualFeature(
+                registered_iou=0.20,
+                centroid_distance=2.0,
+                area_ratio=0.90,
+                cell_probability_a=0.97,
+                cell_probability_b=0.97,
+            ),
+        },
+        max_applied_edits=int(kwargs["max_applied_edits"]),
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[10, 20, 22], [11, 21, 23]])
+    assert report.rows[0]["roi_a"] == 11
+    assert report.rows[0]["applied"] == 1
 
 
 def test_teacher_adjacent_rescue_accepts_seed_completing_backfill_alias() -> None:

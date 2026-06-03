@@ -306,6 +306,50 @@ def test_teacher_veto_accepts_geometrically_weak_edge_when_requested() -> None:
     assert report.rows[0]["reason"] == "accepted_split_edge"
 
 
+def test_teacher_veto_complete_track_only_rejects_incomplete_row() -> None:
+    predicted = np.asarray([[10, 11, 12, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1, -1]], dtype=int)
+    edge = (1, 2, 11, 12)
+
+    report = veto.apply_teacher_veto_edges(
+        predicted,
+        teacher,
+        feature_index={edge: _weak_feature()},
+        config=veto.TeacherVetoConfig(
+            allow_complete_track_veto=True,
+            complete_track_veto_only=True,
+            min_fragment_observations=1,
+        ),
+    )
+
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "not_complete_track"
+    np.testing.assert_array_equal(report.tracks, predicted)
+
+
+def test_teacher_veto_complete_track_only_can_split_complete_row() -> None:
+    predicted = np.asarray([[10, 11, 12, 13]], dtype=int)
+    teacher = np.asarray([[10, 11, -1, -1]], dtype=int)
+    edge = (1, 2, 11, 12)
+
+    report = veto.apply_teacher_veto_edges(
+        predicted,
+        teacher,
+        feature_index={edge: _weak_feature()},
+        config=veto.TeacherVetoConfig(
+            allow_complete_track_veto=True,
+            complete_track_veto_only=True,
+            min_fragment_observations=2,
+        ),
+    )
+
+    assert report.rows[0]["applied"] == 1
+    assert report.rows[0]["reason"] == "accepted_split_edge"
+    np.testing.assert_array_equal(
+        report.tracks, [[10, 11, -1, -1], [-1, -1, 12, 13]]
+    )
+
+
 def test_teacher_veto_rejects_edges_that_fail_optional_shape_cell_gates() -> None:
     predicted = np.asarray(
         [
@@ -385,6 +429,7 @@ def test_teacher_veto_parser_exposes_order_and_cap() -> None:
             "--max-cell-probability",
             "0.5",
             "--require-unassigned-by-hungarian",
+            "--complete-track-veto-only",
         ]
     )
 
@@ -395,3 +440,4 @@ def test_teacher_veto_parser_exposes_order_and_cap() -> None:
     assert args.max_area_ratio == 0.55
     assert args.max_cell_probability == 0.5
     assert args.require_unassigned_by_hungarian is True
+    assert args.complete_track_veto_only is True
