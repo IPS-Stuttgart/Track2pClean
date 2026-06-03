@@ -421,6 +421,13 @@ def test_benchmark_manifest_dispatches_coherence_suffix_teacher_rescue_options(
                     "teacher_edge_order": "structural",
                     "teacher_action_filter": "all",
                     "teacher_feature_preset": "none",
+                    "target_extension_feature_preset": "moderate-iou-cell-confidence",
+                    "seed_source_feature_preset": "seed-source-cell-confident",
+                    "allow_source_backfill": False,
+                    "allow_seed_source_backfill": True,
+                    "allow_completing_seed_source_backfill": True,
+                    "allow_fragment_merges": False,
+                    "min_teacher_component_observations": 2,
                     "max_applied_teacher_edits": -1,
                 }
             ],
@@ -440,6 +447,13 @@ def test_benchmark_manifest_dispatches_coherence_suffix_teacher_rescue_options(
     assert calls["kwargs"]["teacher_edge_order"] == "structural"
     assert calls["kwargs"]["teacher_action_filter"] == "all"
     assert calls["kwargs"]["teacher_feature_preset"] == "none"
+    assert calls["kwargs"]["target_extension_feature_preset"] == "moderate-iou-cell-confidence"
+    assert calls["kwargs"]["seed_source_feature_preset"] == "seed-source-cell-confident"
+    assert calls["kwargs"]["allow_source_backfill"] is False
+    assert calls["kwargs"]["allow_seed_source_backfill"] is True
+    assert calls["kwargs"]["allow_completing_seed_source_backfill"] is True
+    assert calls["kwargs"]["allow_fragment_merges"] is False
+    assert calls["kwargs"]["min_teacher_component_observations"] == 2
     assert calls["kwargs"]["max_applied_teacher_edits"] is None
     assert (tmp_path / "results" / "suffix-teacher-rescue.csv").exists()
 

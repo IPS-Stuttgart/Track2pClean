@@ -109,6 +109,13 @@ TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS = (
         "teacher_edge_order",
         "teacher_action_filter",
         "teacher_feature_preset",
+        "target_extension_feature_preset",
+        "seed_source_feature_preset",
+        "allow_source_backfill",
+        "allow_seed_source_backfill",
+        "allow_completing_seed_source_backfill",
+        "allow_fragment_merges",
+        "min_teacher_component_observations",
         "max_applied_teacher_edits",
     }
 )
@@ -1463,6 +1470,17 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
         teacher_edge_order=str(options.get("teacher_edge_order", "structural")),
         teacher_action_filter=str(options.get("teacher_action_filter", "all")),
         teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
+        target_extension_feature_preset=str(options.get("target_extension_feature_preset", "none")),
+        seed_source_feature_preset=str(options.get("seed_source_feature_preset", "none")),
+        allow_source_backfill=_bool_option(options, "allow_source_backfill", default=True),
+        allow_seed_source_backfill=_bool_option(options, "allow_seed_source_backfill", default=False),
+        allow_completing_seed_source_backfill=_bool_option(
+            options,
+            "allow_completing_seed_source_backfill",
+            default=False,
+        ),
+        allow_fragment_merges=_bool_option(options, "allow_fragment_merges", default=True),
+        min_teacher_component_observations=int(options.get("min_teacher_component_observations", 1)),
         max_applied_teacher_edits=max_applied_teacher_edits,
     )
     return [dict(row) for row in output.result_rows]

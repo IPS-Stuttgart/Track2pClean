@@ -27,3 +27,39 @@ def test_coherence_suffix_teacher_rescue_defaults_match_manifest_teacher_row() -
     assert args.teacher_action_filter == "all"
     assert args.teacher_feature_preset == "none"
     assert args.max_applied_teacher_edits == -1
+
+
+def test_coherence_suffix_teacher_rescue_exposes_action_specific_gates() -> None:
+    parser = track2p_policy_coherence_suffix_teacher_rescue.build_arg_parser()
+    args = parser.parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "scores.csv",
+            "--teacher-edge-order",
+            "dynamic-seed-cell-confidence",
+            "--teacher-action-filter",
+            "target-extension-or-seed-source-backfill",
+            "--target-extension-feature-preset",
+            "moderate-iou-cell-confidence",
+            "--seed-source-feature-preset",
+            "seed-source-cell-confident",
+            "--no-allow-source-backfill",
+            "--allow-seed-source-backfill",
+            "--allow-completing-seed-source-backfill",
+            "--no-allow-fragment-merges",
+            "--min-teacher-component-observations",
+            "2",
+        ]
+    )
+
+    assert args.teacher_edge_order == "dynamic-seed-cell-confidence"
+    assert args.teacher_action_filter == "target-extension-or-seed-source-backfill"
+    assert args.target_extension_feature_preset == "moderate-iou-cell-confidence"
+    assert args.seed_source_feature_preset == "seed-source-cell-confident"
+    assert args.allow_source_backfill is False
+    assert args.allow_seed_source_backfill is True
+    assert args.allow_completing_seed_source_backfill is True
+    assert args.allow_fragment_merges is False
+    assert args.min_teacher_component_observations == 2
