@@ -629,6 +629,28 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             ),
         ),
         (
+            (
+                "track2p-policy-teacher-adjacent-rescue-"
+                "moderate-iou-cell-target-extension-max3"
+            ),
+            False,
+            False,
+            False,
+            False,
+            "dynamic-confidence",
+            {
+                "teacher_action_filter": "target-extension",
+                "teacher_repair_preset": "track2p-fn-moderate-iou-cell-confidence",
+                "teacher_feature_preset": "moderate-iou-cell-confidence",
+                "min_component_observations": 2,
+                "max_applied_edits": 3,
+            },
+            (
+                "track2p_policy_teacher_adjacent_rescue_"
+                "moderate_iou_cell_target_extension_max3.csv"
+            ),
+        ),
+        (
             ("track2p-policy-teacher-adjacent-rescue-" "track2p-fn-target-extension"),
             False,
             False,

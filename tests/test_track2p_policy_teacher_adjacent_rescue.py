@@ -454,6 +454,21 @@ def test_teacher_repair_preset_targets_missing_seed_source_backfill() -> None:
     }
 
 
+def test_teacher_cell_confident_repair_preset_targets_missing_seed_source_backfill() -> None:
+    kwargs = teacher_adjacent_repair_preset_kwargs("missing-seed-cell-confident")
+
+    assert kwargs == {
+        "allow_source_backfill": False,
+        "allow_seed_source_backfill": True,
+        "allow_completing_seed_source_backfill": True,
+        "teacher_edge_order": "dynamic-seed-confidence",
+        "teacher_action_filter": "seed-source-backfill",
+        "teacher_feature_preset": "seed-source-cell-confident",
+        "min_component_observations": 2,
+        "max_applied_edits": 3,
+    }
+
+
 def test_teacher_moderate_iou_repair_preset_targets_missing_seed_source_backfill() -> (
     None
 ):
@@ -545,6 +560,71 @@ def test_seed_source_high_confidence_preset_accepts_seed_backfill_without_hungar
     np.testing.assert_array_equal(output.tracks, [[10, 20, 30]])
     assert output.rows[0]["applied"] == 1
     assert output.rows[0]["reason"] == "accepted_insert_source"
+
+
+def test_seed_source_cell_confident_preset_allows_low_iou_seed_backfill() -> None:
+    predicted = np.asarray([[-1, 20, 30]], dtype=int)
+    teacher = np.asarray([[10, 20, -1]], dtype=int)
+    gate = teacher_feature_gate_from_preset("seed-source-cell-confident")
+
+    assert gate is not None
+    assert gate.min_registered_iou == 0.0
+    assert gate.min_cell_probability == 0.85
+    assert not gate.require_hungarian
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_seed_source_backfill=True,
+        allow_completing_seed_source_backfill=True,
+        teacher_action_filter="seed-source-backfill",
+        feature_gate=gate,
+        edge_feature_index={
+            (0, 1, 10, 20): ResidualFeature(
+                registered_iou=0.02,
+                centroid_distance=5.0,
+                area_ratio=0.65,
+                cell_probability_a=0.90,
+                cell_probability_b=0.86,
+                assigned_by_hungarian=0,
+            )
+        },
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 20, 30]])
+    assert output.rows[0]["applied"] == 1
+    assert output.rows[0]["reason"] == "accepted_insert_source"
+
+
+def test_seed_source_cell_confident_preset_rejects_low_cell_seed_backfill() -> None:
+    predicted = np.asarray([[-1, 20, 30]], dtype=int)
+    teacher = np.asarray([[10, 20, -1]], dtype=int)
+    gate = teacher_feature_gate_from_preset("seed-source-cell-confident")
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_seed_source_backfill=True,
+        allow_completing_seed_source_backfill=True,
+        teacher_action_filter="seed-source-backfill",
+        feature_gate=gate,
+        edge_feature_index={
+            (0, 1, 10, 20): ResidualFeature(
+                registered_iou=0.20,
+                centroid_distance=2.0,
+                area_ratio=0.90,
+                cell_probability_a=0.84,
+                cell_probability_b=0.95,
+                assigned_by_hungarian=0,
+            )
+        },
+    )
+
+    np.testing.assert_array_equal(output.tracks, predicted)
+    assert output.rows[0]["applied"] == 0
+    assert output.rows[0]["reason"] == "feature_gate_cell_probability"
 
 
 def test_seed_source_moderate_iou_preset_rejects_high_iou_teacher_edge() -> None:

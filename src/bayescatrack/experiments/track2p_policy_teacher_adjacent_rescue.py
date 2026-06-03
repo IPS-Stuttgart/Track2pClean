@@ -104,14 +104,17 @@ TeacherFeaturePreset = Literal[
     "residual-fn-cell-confident",
     "moderate-iou-cell-confidence",
     "seed-source-high-confidence",
+    "seed-source-cell-confident",
     "seed-source-moderate-iou",
 ]
 TeacherRepairPreset = Literal[
     "none",
     "missing-seed-high-confidence",
+    "missing-seed-cell-confident",
     "missing-seed-moderate-iou",
     "track2p-fn-high-confidence",
     "track2p-fn-moderate-iou-cell-confident",
+    "track2p-fn-moderate-iou-cell-confidence",
     "residual-union-cell-confident",
 ]
 
@@ -302,6 +305,14 @@ def teacher_feature_gate_from_preset(
             min_cell_probability=0.70,
             require_hungarian=False,
         )
+    if normalized in {"seed-source-cell-confident", "missing-seed-cell-confident"}:
+        return TeacherEdgeFeatureGate(
+            min_registered_iou=0.0,
+            max_centroid_distance=6.0,
+            min_area_ratio=0.60,
+            min_cell_probability=0.85,
+            require_hungarian=False,
+        )
     if normalized in {"seed-source-moderate-iou", "missing-seed-moderate-iou"}:
         return TeacherEdgeFeatureGate(
             min_registered_iou=0.10,
@@ -332,6 +343,17 @@ def teacher_adjacent_repair_preset_kwargs(
             "teacher_feature_preset": "seed-source-high-confidence",
             "min_component_observations": 2,
             "max_applied_edits": 2,
+        }
+    if normalized == "missing-seed-cell-confident":
+        return {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "teacher_edge_order": "dynamic-seed-confidence",
+            "teacher_action_filter": "seed-source-backfill",
+            "teacher_feature_preset": "seed-source-cell-confident",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
         }
     if normalized == "missing-seed-moderate-iou":
         return {
@@ -2369,9 +2391,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         choices=(
             "none",
             "missing-seed-high-confidence",
+            "missing-seed-cell-confident",
             "missing-seed-moderate-iou",
             "track2p-fn-high-confidence",
             "track2p-fn-moderate-iou-cell-confident",
+            "track2p-fn-moderate-iou-cell-confidence",
             "residual-union-cell-confident",
         ),
         default="none",
@@ -2380,6 +2404,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "'missing-seed-high-confidence' prioritizes seed-session source "
             "backfills with dynamic seed/confidence ordering, a small edit cap, "
             "and the seed-source-high-confidence feature gate; "
+            "'missing-seed-cell-confident' targets the same action bucket with "
+            "a stricter endpoint-cell gate, no positive-IoU floor, and a "
+            "three-edit cap; "
             "'missing-seed-moderate-iou' adds the same action restriction "
             "with a moderate-IoU cell-confidence gate; "
             "'track2p-fn-high-confidence' restricts rescue to high-confidence "
@@ -2451,6 +2478,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "residual-fn-cell-confident",
             "moderate-iou-cell-confidence",
             "seed-source-high-confidence",
+            "seed-source-cell-confident",
             "seed-source-moderate-iou",
         ),
         default="none",
@@ -2462,8 +2490,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "teacher-edge endpoints. residual-fn-cell-confident keeps the "
             "permissive residual-FN geometry gate but adds the same 0.80 "
             "endpoint cell-probability requirement and does not require a "
-            "Hungarian assignment; seed-source-moderate-iou additionally caps "
-            "registered IoU to avoid high-overlap continuation spam."
+            "Hungarian assignment; seed-source-cell-confident is a missing-seed "
+            "source-backfill gate with a stronger 0.85 endpoint cell-probability "
+            "requirement and no positive-IoU floor; seed-source-moderate-iou "
+            "additionally caps registered IoU to avoid high-overlap continuation spam."
         ),
     )
     parser.add_argument(

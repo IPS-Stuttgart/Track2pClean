@@ -191,6 +191,33 @@ def test_teacher_adjacent_parser_accepts_moderate_iou_cell_preset() -> None:
     assert args.teacher_feature_preset == "moderate-iou-cell-confidence"
 
 
+def test_teacher_adjacent_parser_accepts_moderate_iou_repair_preset() -> None:
+    args = rescue.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--teacher-repair-preset",
+            "track2p-fn-moderate-iou-cell-confidence",
+        ]
+    )
+
+    assert args.teacher_repair_preset == "track2p-fn-moderate-iou-cell-confidence"
+
+
+def test_moderate_iou_teacher_repair_preset_targets_adjacent_fns() -> None:
+    kwargs = rescue.teacher_adjacent_repair_preset_kwargs(
+        "track2p-fn-moderate-iou-cell-confidence"
+    )
+
+    assert kwargs == {
+        "teacher_action_filter": "target-extension",
+        "teacher_edge_order": "dynamic-confidence",
+        "teacher_feature_preset": "moderate-iou-cell-confidence",
+        "min_component_observations": 2,
+        "max_applied_edits": 3,
+    }
+
+
 def test_teacher_adjacent_parser_accepts_max_registered_iou_gate() -> None:
     args = rescue.build_arg_parser().parse_args(
         ["--data", "track2p-root", "--teacher-gate-max-registered-iou", "0.55"]
