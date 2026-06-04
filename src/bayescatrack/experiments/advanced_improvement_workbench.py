@@ -358,6 +358,7 @@ def track2p_result_improvement_manifest(
         # aligned with the frozen strict gate rather than making it a broad
         # clean-up pass.
         "min_growth_residual_mahalanobis": 20.0,
+        "min_growth_residual": 2.5,
         "min_veto_cell_probability": 0.50,
         "min_veto_registered_iou": 0.45,
         "max_veto_registered_iou": 0.60,

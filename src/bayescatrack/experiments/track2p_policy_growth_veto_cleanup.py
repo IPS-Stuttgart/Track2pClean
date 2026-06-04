@@ -67,6 +67,7 @@ class GrowthVetoGate:
     """Label-free gate for applying one-edge growth-veto splits."""
 
     min_growth_residual_mahalanobis: float = 20.0
+    min_growth_residual: float = 2.5
     min_registered_iou: float = 0.45
     min_shifted_iou: float = 0.60
     max_registered_iou: float | None = 0.60
@@ -183,6 +184,9 @@ def run_track2p_policy_growth_veto_cleanup(
                 "track2p_growth_veto_min_mahalanobis": float(
                     growth_veto_gate.min_growth_residual_mahalanobis
                 ),
+                "track2p_growth_veto_min_residual": float(
+                    growth_veto_gate.min_growth_residual
+                ),
                 "track2p_growth_veto_min_registered_iou": float(
                     growth_veto_gate.min_registered_iou
                 ),
@@ -264,6 +268,9 @@ def run_track2p_policy_growth_veto_cleanup(
                     "growth_veto_min_mahalanobis": float(
                         growth_veto_gate.min_growth_residual_mahalanobis
                     ),
+                    "growth_veto_min_residual": float(
+                        growth_veto_gate.min_growth_residual
+                    ),
                     "growth_veto_min_registered_iou": float(
                         growth_veto_gate.min_registered_iou
                     ),
@@ -335,6 +342,11 @@ def growth_veto_gate_reason(
         return "complete_component_size_below_gate"
     if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
         return "growth_anchor_count_below_gate"
+    growth_residual = _finite_float(row.get("growth_residual"), float("nan"))
+    if not np.isfinite(growth_residual) or growth_residual < float(
+        gate.min_growth_residual
+    ):
+        return "growth_residual_below_gate"
     for key, threshold in (
         ("growth_residual_mahalanobis", gate.min_growth_residual_mahalanobis),
         ("registered_iou", gate.min_registered_iou),
@@ -443,6 +455,11 @@ def _needs_sparse_shifted_iou(
     ) < int(gate.min_complete_component_size):
         return False
     if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
+        return False
+    growth_residual = _finite_float(row.get("growth_residual"), float("nan"))
+    if not np.isfinite(growth_residual) or growth_residual < float(
+        gate.min_growth_residual
+    ):
         return False
     for key, threshold in (
         ("growth_residual_mahalanobis", gate.min_growth_residual_mahalanobis),
@@ -653,6 +670,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=20.0,
     )
     parser.add_argument(
+        "--min-growth-residual",
+        "--growth-veto-min-residual",
+        dest="min_growth_residual",
+        type=float,
+        default=2.5,
+        help=(
+            "Require an absolute growth-field residual, in pixels, in addition "
+            "to the Mahalanobis residual. This prevents vetoes caused only by an "
+            "over-confident/tiny growth covariance on a visually small displacement."
+        ),
+    )
+    parser.add_argument(
         "--min-veto-registered-iou",
         "--growth-veto-min-registered-iou",
         dest="min_veto_registered_iou",
@@ -820,6 +849,7 @@ def main(argv: list[str] | None = None) -> int:
         anchor_min_cell_probability=float(args.anchor_min_cell_probability),
         growth_veto_gate=GrowthVetoGate(
             min_growth_residual_mahalanobis=float(args.min_growth_residual_mahalanobis),
+            min_growth_residual=float(args.min_growth_residual),
             min_registered_iou=float(args.min_veto_registered_iou),
             min_shifted_iou=float(args.min_veto_shifted_iou),
             max_registered_iou=args.max_veto_registered_iou,

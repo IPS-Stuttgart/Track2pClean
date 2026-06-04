@@ -24,6 +24,7 @@ def _candidate_row(**overrides: object) -> dict[str, object]:
         "complete_component_size": 7,
         "growth_anchor_count": 2,
         "growth_residual_mahalanobis": 26.0,
+        "growth_residual": 2.94,
         "registered_iou": 0.55,
         "shifted_iou": 0.76,
         "row_rank": 1,
@@ -112,6 +113,7 @@ def test_growth_veto_cleanup_parser_exposes_conservative_defaults() -> None:
     )
 
     assert args.min_growth_residual_mahalanobis == 20.0
+    assert args.min_growth_residual == 2.5
     assert args.min_veto_registered_iou == 0.45
     assert args.min_veto_shifted_iou == 0.60
     assert args.max_veto_registered_iou == 0.60
@@ -223,6 +225,19 @@ def test_growth_veto_gate_rejects_low_growth_residual() -> None:
     )
 
     assert reason == "growth_residual_mahalanobis_below_gate"
+
+
+def test_growth_veto_gate_rejects_low_absolute_growth_residual() -> None:
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(
+            growth_residual_mahalanobis=26.0,
+            growth_residual=1.0,
+        ),
+        cleanup.GrowthVetoGate(),
+        n_sessions=7,
+    )
+
+    assert reason == "growth_residual_below_gate"
 
 
 def test_growth_veto_gate_rejects_low_cell_probability() -> None:
