@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from types import SimpleNamespace
 
 import numpy as np
 from bayescatrack import cli
@@ -98,3 +99,31 @@ def test_edge_source_classifies_incremental_support() -> None:
         )
         == "teacher"
     )
+
+
+def test_anchor_edges_use_policy_diagnostics_without_feature_cache(monkeypatch) -> None:
+    sessions = (object(), object())
+    diagnostic = SimpleNamespace(
+        session_index=0,
+        local_roi_a=0,
+        local_roi_b=0,
+        assigned_iou=0.75,
+    )
+
+    def fake_roi_indices(session: object) -> np.ndarray:
+        return np.asarray([10]) if session is sessions[0] else np.asarray([11])
+
+    monkeypatch.setattr(veto, "_roi_indices", fake_roi_indices)
+    monkeypatch.setattr(veto, "_cell_probability", lambda *args: 0.90)
+
+    anchors = veto._anchor_edges_from_policy_diagnostics(
+        sessions,
+        diagnostics=(diagnostic,),
+        track2p=np.asarray([[10, 11]], dtype=int),
+        component_cleanup=np.asarray([[10, 11]], dtype=int),
+        combined=np.asarray([[10, 11]], dtype=int),
+        min_registered_iou=0.50,
+        min_cell_probability=0.80,
+    )
+
+    assert anchors == {(0, 1): ((0, 1, 10, 11),)}
