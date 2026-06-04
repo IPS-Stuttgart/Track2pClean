@@ -11,7 +11,7 @@ requires-python = ">=3.11,<3.15"
 dependencies = [
     "numpy",
     "scipy",
-    "pyrecest @ git+https://github.com/FlorianPfaff/PyRecEst.git@8df52f9283360b14cfee670b89e486bec8c1140c",
+    "pyrecest @ git+https://github.com/FlorianPfaff/PyRecEst.git@6ad4680a187f13b88e2cd6e4485e16c7f115962a",
 ]
 
 [project.optional-dependencies]
