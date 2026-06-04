@@ -108,3 +108,20 @@ def test_policy_teacher_adjacent_rescue_runner_kwargs_are_runner_specific() -> N
         "teacher_min_cell_probability": 0.8,
         "teacher_require_hungarian": True,
     }
+
+
+def test_coherence_suffix_teacher_rescue_manifest_accepts_teacher_completion_gates() -> None:
+    assert _runner_kwargs(
+        {
+            "allow_teacher_supported_completing_rescue": True,
+            "allow_teacher_confirmed_completing_rescue": True,
+            "allow_completing_rescue": False,
+            "teacher_action_filter": "completing-rescue",
+        },
+        "track2p-policy-coherence-suffix-teacher-rescue",
+    ) == {
+        "allow_teacher_supported_completing_rescue": True,
+        "allow_teacher_confirmed_completing_rescue": True,
+        "allow_completing_rescue": False,
+        "teacher_action_filter": "completing-rescue",
+    }
