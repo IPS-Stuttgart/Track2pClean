@@ -119,6 +119,16 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Audit residual errors after teacher rescue with growth-field priors",
     ),
     (
+        "track2p-policy-growth-veto-whatif",
+        "bayescatrack.experiments.track2p_policy_growth_veto_whatif",
+        "Audit growth-veto one-edge removals over accepted teacher-rescue edges",
+    ),
+    (
+        "track2p-policy-growth-veto-cleanup",
+        "bayescatrack.experiments.track2p_policy_growth_veto_cleanup",
+        "Run CoherenceSuffixTeacherRescue plus a strict label-free growth veto",
+    ),
+    (
         "track2p-policy-coherence-suffix-exposure-audit",
         "bayescatrack.experiments.track2p_policy_coherence_suffix_exposure_audit",
         "Audit coherence suffix gate exposure without manual GT labels",
@@ -397,6 +407,12 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     ),
     "track2p-component-growth-field-residual-audit": (
         "track2p-policy-growth-field-residual-audit"
+    ),
+    "track2p-growth-veto-whatif": ("track2p-policy-growth-veto-whatif"),
+    "track2p-component-growth-veto-whatif": ("track2p-policy-growth-veto-whatif"),
+    "track2p-growth-veto-cleanup": "track2p-policy-growth-veto-cleanup",
+    "track2p-component-growth-veto-cleanup": (
+        "track2p-policy-growth-veto-cleanup"
     ),
     "track2p-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"

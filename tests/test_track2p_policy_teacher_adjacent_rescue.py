@@ -10,6 +10,7 @@ from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     _teacher_edge_order_requires_feature_index,
     _teacher_edge_order_uses_confidence_features,
     apply_teacher_adjacent_rescue_edges,
+    build_arg_parser,
     teacher_adjacent_repair_preset_kwargs,
     teacher_feature_gate_from_preset,
 )
@@ -429,6 +430,51 @@ def test_dynamic_teacher_rescue_reconsiders_action_filter_after_edit() -> None:
     assert applied_edges == [(0, 1, 10, 20), (1, 2, 20, 30)]
 
 
+def test_teacher_adjacent_rescue_can_filter_to_completing_seed_source_backfills() -> (
+    None
+):
+    predicted = np.asarray(
+        [
+            [-1, 20, 30],
+            [-1, 21, -1],
+            [40, -1, 42],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray(
+        [
+            [10, 20, -1],
+            [11, 21, -1],
+            [40, 41, 42],
+        ],
+        dtype=int,
+    )
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_source_backfill=False,
+        allow_seed_source_backfill=True,
+        allow_completing_seed_source_backfill=True,
+        allow_completing_rescue=True,
+        teacher_action_filter="completing-seed-source-backfill",
+        edge_order="lexicographic",
+    )
+
+    np.testing.assert_array_equal(
+        output.tracks, [[10, 20, 30], [-1, 21, -1], [40, -1, 42]]
+    )
+    assert [row["reason"] for row in output.rows if int(row["applied"])] == [
+        "accepted_insert_source"
+    ]
+    assert all(
+        row["reason"] == "action_filter_completing-seed-source-backfill"
+        for row in output.rows
+        if not int(row["applied"])
+    )
+
+
 def test_teacher_adjacent_rescue_rejects_source_insertion_that_completes_row() -> None:
     predicted = np.asarray([[100, 20, -1, 40]], dtype=int)
     teacher = np.asarray([[-1, -1, 30, 40]], dtype=int)
@@ -543,6 +589,26 @@ def test_teacher_moderate_iou_repair_preset_targets_missing_seed_source_backfill
     }
 
 
+def test_teacher_completing_seed_source_preset_targets_only_completing_backfills() -> (
+    None
+):
+    kwargs = teacher_adjacent_repair_preset_kwargs(
+        "missing-seed-completing-moderate-iou"
+    )
+
+    assert kwargs == {
+        "allow_source_backfill": False,
+        "allow_seed_source_backfill": True,
+        "allow_completing_seed_source_backfill": True,
+        "allow_fragment_merges": False,
+        "teacher_edge_order": "dynamic-seed-cell-confidence",
+        "teacher_action_filter": "completing-seed-source-backfill",
+        "teacher_feature_preset": "seed-source-moderate-iou",
+        "min_component_observations": 2,
+        "max_applied_edits": 1,
+    }
+
+
 def test_track2p_fn_repair_preset_targets_teacher_extensions() -> None:
     kwargs = teacher_adjacent_repair_preset_kwargs("track2p-fn-high-confidence")
 
@@ -607,6 +673,7 @@ def test_completing_rescue_action_specific_preset_targets_complete_rows() -> Non
     kwargs = teacher_adjacent_repair_preset_kwargs("completing-rescue-action-specific")
 
     assert kwargs == {
+        "allow_teacher_complete_row_rescue": True,
         "allow_completing_rescue": True,
         "allow_source_backfill": False,
         "allow_seed_source_backfill": True,
@@ -625,6 +692,64 @@ def test_completing_rescue_action_specific_preset_targets_complete_rows() -> Non
         teacher_adjacent_repair_preset_kwargs("complete-row-rescue-action-specific")
         == kwargs
     )
+    assert teacher_adjacent_repair_preset_kwargs("complete-row-action-specific") == kwargs
+
+
+def test_teacher_rescue_parser_accepts_completing_rescue_preset() -> None:
+    args = build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--teacher-repair-preset",
+            "completing-rescue-action-specific",
+        ]
+    )
+
+    assert args.teacher_repair_preset == "completing-rescue-action-specific"
+
+
+def test_completing_rescue_action_specific_preset_applies_confirmed_completion() -> None:
+    predicted = np.asarray([[100, 20, 30, -1]], dtype=int)
+    teacher = np.asarray([[100, 20, 30, 40]], dtype=int)
+    kwargs = teacher_adjacent_repair_preset_kwargs("completing-rescue-action-specific")
+    target_gate = teacher_feature_gate_from_preset(
+        str(kwargs["target_extension_feature_preset"])
+    )
+    seed_gate = teacher_feature_gate_from_preset(
+        str(kwargs["seed_source_feature_preset"])
+    )
+
+    report = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_teacher_complete_row_rescue=bool(
+            kwargs["allow_teacher_complete_row_rescue"]
+        ),
+        allow_fragment_merges=bool(kwargs["allow_fragment_merges"]),
+        teacher_action_filter=str(kwargs["teacher_action_filter"]),
+        edge_order=str(kwargs["teacher_edge_order"]),
+        target_extension_feature_gate=target_gate,
+        seed_source_feature_gate=seed_gate,
+        edge_feature_index={
+            (2, 3, 30, 40): ResidualFeature(
+                registered_iou=0.25,
+                centroid_distance=2.0,
+                area_ratio=0.80,
+                cell_probability_a=0.92,
+                cell_probability_b=0.91,
+                threshold_margin=0.10,
+            )
+        },
+        min_component_observations=int(kwargs["min_component_observations"]),
+        max_applied_edits=int(kwargs["max_applied_edits"]),
+    )
+
+    np.testing.assert_array_equal(report.tracks, [[100, 20, 30, 40]])
+    applied_rows = tuple(row for row in report.rows if int(row["applied"]))
+    assert len(applied_rows) == 1
+    assert applied_rows[0]["reason"] == "accepted_insert_target"
+    assert applied_rows[0]["teacher_complete_row_supported"] == 1
 
 
 def test_seed_source_high_confidence_preset_accepts_seed_backfill_without_hungarian() -> (
@@ -1079,6 +1204,34 @@ def test_teacher_adjacent_rescue_dynamic_confidence_reorders_stale_slot_claims()
     assert output.rows[1]["roi_a"] == 100
     assert output.rows[1]["applied"] == 0
     assert output.rows[1]["reason"] == "target_has_source_conflict"
+
+
+def test_dynamic_teacher_rescue_revisits_action_filter_after_insert() -> None:
+    """A deferred teacher edge can become a target-extension after an insert.
+
+    The dynamic rescue loop is supposed to recompute structural eligibility after
+    accepted edits.  If action-filter rejections are treated as permanent, the
+    second teacher edge below is rejected as ``other`` before the first edge
+    inserts its source ROI, and the chain cannot grow.  The desired behavior is to
+    defer that rejection, apply the first edge, then revisit and apply the second.
+    """
+
+    predicted = np.asarray([[100, -1, -1, -1]], dtype=int)
+    teacher = np.asarray([[100, 200, 300, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        teacher_action_filter="target-extension",
+        edge_order="dynamic-structural",
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[100, 200, 300, -1]])
+    assert [row["reason"] for row in output.rows if int(row["applied"])] == [
+        "accepted_insert_target",
+        "accepted_insert_target",
+    ]
 
 
 def test_teacher_adjacent_rescue_feature_gate_rejects_weak_edge() -> None:

@@ -130,6 +130,47 @@ def test_motion_context_accepts_single_track_vector(monkeypatch) -> None:
     assert features["two_edge_acceleration"] == pytest.approx(0.0)
 
 
+def test_edge_growth_features_passes_prediction_matrix_to_motion_context(
+    monkeypatch,
+) -> None:
+    predicted = np.asarray([[10, 11, 12]], dtype=int)
+    centroids = {
+        (0, 10): np.asarray([0.0, 0.0]),
+        (1, 11): np.asarray([1.0, 0.0]),
+    }
+    captured: dict[str, object] = {}
+
+    def fake_centroid(_sessions: object, session: int, roi: int) -> np.ndarray | None:
+        return centroids.get((session, roi))
+
+    def fake_motion_context(
+        _sessions: object,
+        _edge: object,
+        predicted_arg: object,
+        _source: object,
+        _target: object,
+    ) -> dict[str, float]:
+        captured["predicted"] = predicted_arg
+        return {
+            "two_edge_motion_consistency": 0.0,
+            "two_edge_acceleration": 0.0,
+        }
+
+    monkeypatch.setattr(growth_audit, "_centroid_xy", fake_centroid)
+    monkeypatch.setattr(growth_audit, "_motion_context_features", fake_motion_context)
+    monkeypatch.setattr(growth_audit, "_radial_direction_cosine", lambda *args: 0.0)
+
+    growth_audit._edge_growth_features(
+        [],
+        (0, 1, 10, 11),
+        model=growth_audit._identity_growth_model(),
+        anchor_edges=(),
+        predicted=predicted,
+    )
+
+    assert captured["predicted"] is predicted
+
+
 def test_pad_track_matrix_fills_missing_sessions_with_minus_one() -> None:
     padded = growth_audit._pad_track_matrix(np.asarray([10, 11]), width=4)
 
