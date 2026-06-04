@@ -169,7 +169,9 @@ def test_growth_veto_gate_can_reject_high_registered_iou_true_edge_tail() -> Non
     )
 
     reason = cleanup.growth_veto_gate_reason(
-        _candidate_row(registered_iou=0.688, cell_probability_a=0.571), gate, n_sessions=7
+        _candidate_row(registered_iou=0.688, cell_probability_a=0.571),
+        gate,
+        n_sessions=7,
     )
 
     assert reason == "registered_iou_above_gate"
@@ -437,10 +439,12 @@ def test_growth_veto_selector_ignores_audit_only_gt_and_delta_columns() -> None:
     selected = cleanup._selected_growth_veto_rows(  # pylint: disable=protected-access
         rows, gate=cleanup.GrowthVetoGate(max_vetoes_per_subject=1), n_sessions=7
     )
-    sanitized_selected = cleanup._selected_growth_veto_rows(  # pylint: disable=protected-access
-        sanitized_rows,
-        gate=cleanup.GrowthVetoGate(max_vetoes_per_subject=1),
-        n_sessions=7,
+    sanitized_selected = (
+        cleanup._selected_growth_veto_rows(  # pylint: disable=protected-access
+            sanitized_rows,
+            gate=cleanup.GrowthVetoGate(max_vetoes_per_subject=1),
+            n_sessions=7,
+        )
     )
 
     assert [_edge_key(row) for row in selected] == [
