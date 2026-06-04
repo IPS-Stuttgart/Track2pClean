@@ -520,13 +520,12 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
                     "anchor_min_registered_iou": 0.5,
                     "anchor_min_shifted_iou": 0.3,
                     "anchor_min_cell_probability": 0.8,
-                    "min_growth_residual_mahalanobis": 25.0,
-                    "min_veto_anchor_count": 2,
-                    "min_veto_complete_component_size": 7,
-                    "min_veto_registered_iou": 0.2,
+                    "min_growth_residual_mahalanobis": 20.0,
+                    "min_veto_registered_iou": 0.45,
                     "max_veto_registered_iou": 0.6,
-                    "min_veto_shifted_iou": 0.3,
+                    "min_veto_shifted_iou": 0.6,
                     "max_veto_shifted_iou": 0.8,
+                    "max_veto_min_cell_probability": 0.65,
                     "max_vetoes_per_subject": 1,
                 }
             ],
@@ -542,9 +541,12 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     assert calls["kwargs"]["anchor_min_shifted_iou"] == 0.3
     assert calls["kwargs"]["anchor_min_cell_probability"] == 0.8
     growth_gate = calls["kwargs"]["growth_veto_gate"]
-    assert growth_gate.min_growth_residual_mahalanobis == 25.0
-    assert growth_gate.min_anchor_count == 2
-    assert growth_gate.min_complete_component_size == 7
+    assert growth_gate.min_growth_residual_mahalanobis == 20.0
+    assert growth_gate.min_registered_iou == 0.45
+    assert growth_gate.min_shifted_iou == 0.6
+    assert growth_gate.max_min_cell_probability == 0.65
+    assert growth_gate.min_anchor_count == 0
+    assert growth_gate.min_complete_component_size is None
     assert growth_gate.max_registered_iou == 0.6
     assert growth_gate.max_shifted_iou == 0.8
     assert growth_gate.max_vetoes_per_subject == 1

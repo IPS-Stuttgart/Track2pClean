@@ -134,6 +134,7 @@ TRACK2P_POLICY_GROWTH_VETO_FIELDS = TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESC
     "min_veto_shifted_iou",
     "max_veto_shifted_iou",
     "min_veto_cell_probability",
+    "max_veto_min_cell_probability",
     "min_veto_anchor_count",
     "min_veto_complete_component_size",
     "max_veto_row_rank",
@@ -151,6 +152,7 @@ TRACK2P_POLICY_GROWTH_VETO_FIELDS = TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESC
     "growth_veto_min_shifted_iou",
     "growth_veto_max_shifted_iou",
     "growth_veto_min_cell_probability",
+    "growth_veto_max_min_cell_probability",
     "growth_veto_min_anchor_count",
     "growth_veto_min_complete_component_size",
     "growth_veto_max_vetoes_per_subject",
@@ -1742,6 +1744,16 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
                 "growth_veto_min_cell_probability",
                 default=gate_defaults.min_cell_probability,
             ),
+        ),
+        max_min_cell_probability=(
+            _optional_float_option(
+                options,
+                "max_veto_min_cell_probability",
+                "growth_veto_max_min_cell_probability",
+            )
+            if "max_veto_min_cell_probability" in options
+            or "growth_veto_max_min_cell_probability" in options
+            else gate_defaults.max_min_cell_probability
         ),
         min_anchor_count=int(
             options.get(

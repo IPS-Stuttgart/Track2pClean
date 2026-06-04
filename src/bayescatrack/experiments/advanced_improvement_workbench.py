@@ -354,17 +354,16 @@ def track2p_result_improvement_manifest(
         "anchor_min_cell_probability": 0.80,
         # Growth-veto is intentionally a tiny post-teacher row: after the
         # CoherenceSuffixTeacherRescue lead, the growth-field audit exposed one
-        # extreme terminal false-continuation pocket.  Keep the generated suite
-        # in that moderate-local-evidence regime rather than making it a broad
+        # extreme terminal false-continuation pocket. Keep the generated suite
+        # aligned with the frozen strict gate rather than making it a broad
         # clean-up pass.
-        "min_growth_residual_mahalanobis": 25.0,
-        "min_veto_anchor_count": 2,
-        "min_veto_complete_component_size": 7,
+        "min_growth_residual_mahalanobis": 20.0,
         "min_veto_cell_probability": 0.50,
-        "min_veto_registered_iou": 0.20,
+        "min_veto_registered_iou": 0.45,
         "max_veto_registered_iou": 0.60,
-        "min_veto_shifted_iou": 0.30,
+        "min_veto_shifted_iou": 0.60,
         "max_veto_shifted_iou": 0.80,
+        "max_veto_min_cell_probability": 0.65,
         "max_vetoes_per_subject": 1,
     }
     teacher_prior_config = {

@@ -97,10 +97,12 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     assert growth_veto_cleanup["anchor_min_registered_iou"] == 0.5
     assert growth_veto_cleanup["anchor_min_shifted_iou"] == 0.3
     assert growth_veto_cleanup["anchor_min_cell_probability"] == 0.8
-    assert growth_veto_cleanup["min_growth_residual_mahalanobis"] == 25.0
-    assert growth_veto_cleanup["min_veto_anchor_count"] == 2
+    assert growth_veto_cleanup["min_growth_residual_mahalanobis"] == 20.0
+    assert growth_veto_cleanup["min_veto_registered_iou"] == 0.45
+    assert growth_veto_cleanup["min_veto_shifted_iou"] == 0.6
     assert growth_veto_cleanup["max_veto_registered_iou"] == 0.6
     assert growth_veto_cleanup["max_veto_shifted_iou"] == 0.8
+    assert growth_veto_cleanup["max_veto_min_cell_probability"] == 0.65
 
     teacher_rescue = next(
         run
