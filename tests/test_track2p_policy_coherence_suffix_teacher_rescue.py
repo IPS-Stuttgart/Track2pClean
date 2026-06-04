@@ -68,6 +68,39 @@ def test_coherence_suffix_teacher_rescue_exposes_action_specific_gates() -> None
     assert args.min_teacher_component_observations == 2
 
 
+def test_coherence_suffix_teacher_rescue_exposes_completing_seed_source_filter() -> None:
+    parser = track2p_policy_coherence_suffix_teacher_rescue.build_arg_parser()
+    args = parser.parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "scores.csv",
+            "--teacher-edge-order",
+            "dynamic-seed-cell-confidence",
+            "--teacher-action-filter",
+            "completing-seed-source-backfill",
+            "--seed-source-feature-preset",
+            "seed-source-cell-confident",
+            "--no-allow-source-backfill",
+            "--allow-seed-source-backfill",
+            "--allow-completing-seed-source-backfill",
+            "--no-allow-fragment-merges",
+            "--max-applied-teacher-edits",
+            "1",
+        ]
+    )
+
+    assert args.teacher_edge_order == "dynamic-seed-cell-confidence"
+    assert args.teacher_action_filter == "completing-seed-source-backfill"
+    assert args.seed_source_feature_preset == "seed-source-cell-confident"
+    assert args.allow_source_backfill is False
+    assert args.allow_seed_source_backfill is True
+    assert args.allow_completing_seed_source_backfill is True
+    assert args.allow_fragment_merges is False
+    assert args.max_applied_teacher_edits == 1
+
+
 def test_completing_filter_enables_completing_rescue_by_default() -> None:
     resolve = (
         track2p_policy_coherence_suffix_teacher_rescue._resolve_allow_completing_rescue
@@ -75,6 +108,8 @@ def test_completing_filter_enables_completing_rescue_by_default() -> None:
 
     assert resolve(None, "completing-rescue") is True
     assert resolve(None, "completing_rescue") is True
+    assert resolve(None, "completing-seed-source-backfill") is False
+    assert resolve(None, "completing_seed_source_backfill") is False
     assert resolve(None, "all") is False
     assert resolve(False, "completing-rescue") is False
     assert resolve(True, "all") is True

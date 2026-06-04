@@ -14,6 +14,21 @@
       "allow_fragment_merges": true,
       "min_teacher_component_observations": 2,
       "max_applied_teacher_edits": 2
+    },
+    {
+      "name": "coherence-teacher-completing-seed-source-cell",
+      "runner": "track2p-policy-coherence-suffix-teacher-rescue",
+      "teacher_edge_order": "dynamic-seed-cell-confidence",
+      "teacher_action_filter": "completing-seed-source-backfill",
+      "teacher_feature_preset": "none",
+      "target_extension_feature_preset": "none",
+      "seed_source_feature_preset": "seed-source-cell-confident",
+      "allow_source_backfill": false,
+      "allow_seed_source_backfill": true,
+      "allow_completing_seed_source_backfill": true,
+      "allow_fragment_merges": false,
+      "min_teacher_component_observations": 2,
+      "max_applied_teacher_edits": 1
     }
   ]
 }

@@ -419,6 +419,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "fragment-merge",
             "target-extension-or-seed-source-backfill",
             "completing-rescue",
+            "completing-seed-source-backfill",
         ),
         default="all",
     )
