@@ -40,7 +40,7 @@ def test_ranked_suffix_paths_skips_fragments_beyond_max_suffix_length() -> None:
     assert paths == ()
 
 
-def test_expand_paths_for_fragment_uses_pyrecest_completion(monkeypatch) -> None:
+def test_expand_paths_for_fragment_uses_local_beam_completion(monkeypatch) -> None:
     first = audit._EdgeCandidate(
         edge=(1, 2, 20, 30),
         registered_iou=0.8,

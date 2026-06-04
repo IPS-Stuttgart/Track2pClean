@@ -62,10 +62,6 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     emulate_track2p_pruned_tracks,
 )
 from bayescatrack.track2p_registration import register_plane_pair
-from pyrecest.utils import (
-    CompletionCandidate,
-    enumerate_fragment_completion_paths,
-)
 from scipy.optimize import linear_sum_assignment
 
 TRACK2P_POLICY_SUFFIX_STITCH_RANKING_AUDIT_METHOD = (
@@ -354,62 +350,30 @@ def _expand_paths_for_fragment(
     edge_top_k: int,
     path_beam_width: int,
 ) -> list[_PathCandidate]:
-    """Return suffix paths using PyRecEst's generic completion enumerator.
-
-    BayesCaTrack supplies domain-specific edge candidates and scores; PyRecEst
-    handles the generic fragment endpoint traversal and recursive suffix path
-    bookkeeping.  Duplicate handling stays permissive here to preserve the
-    ranking-audit semantics: duplicate-source/target conflicts are reported and
-    filtered by downstream gates instead of hidden during candidate enumeration.
-    """
-
-    del path_beam_width  # Beam pruning is handled by the domain edge top-k here.
-
-    completion_matrix = np.asarray([row], dtype=object)
-
-    def provider(
-        anchor_session: int,
-        anchor_observation: int,
-        candidate_session: int,
-    ) -> tuple[CompletionCandidate[_EdgeCandidate], ...]:
-        if int(candidate_session) != int(anchor_session) + 1:
-            return ()
-        return tuple(
-            CompletionCandidate(
-                observation=int(edge.edge[3]),
-                score=float(edge.edge_score),
-                payload=edge,
-            )
-            for edge in _top_edge_candidates(
-                feature_cache,
-                int(anchor_session),
-                int(anchor_observation),
-                top_k=int(edge_top_k),
-            )
-        )
-
+    active: list[tuple[int, int, tuple[_EdgeCandidate, ...]]] = [
+        (int(tail_session), int(row[int(tail_session)]), ())
+    ]
     output: list[_PathCandidate] = []
-    for completion_path in enumerate_fragment_completion_paths(
-        completion_matrix,
-        max_path_length=int(max_steps),
-        direction="suffix",
-        candidate_provider=provider,
-        allow_duplicate_source=True,
-        allow_duplicate_target=True,
-    ):
-        edges = tuple(step.payload for step in completion_path.steps)
-        if not all(isinstance(edge, _EdgeCandidate) for edge in edges):
-            continue
-        output.append(
-            _score_path(
-                _PathCandidate(
-                    component_id=component_id,
-                    fragment_row=row,
-                    fragment_span=fragment_span,
-                    edges=cast(tuple[_EdgeCandidate, ...], edges),
+    for _step in range(int(max_steps)):
+        expanded: list[tuple[int, int, tuple[_EdgeCandidate, ...]]] = []
+        for session_index, roi, edges in active:
+            for edge in _top_edge_candidates(
+                feature_cache, session_index, roi, top_k=int(edge_top_k)
+            ):
+                next_edges = (*edges, edge)
+                expanded.append((session_index + 1, edge.edge[3], next_edges))
+                output.append(
+                    _score_path(
+                        _PathCandidate(
+                            component_id=component_id,
+                            fragment_row=row,
+                            fragment_span=fragment_span,
+                            edges=next_edges,
+                        )
+                    )
                 )
-            )
-        )
+        expanded.sort(key=lambda item: _mean_edge_score(item[2]), reverse=True)
+        active = expanded[: int(path_beam_width)]
     return output
 
 
