@@ -55,9 +55,9 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
     _no_prune_config,
 )
 from bayescatrack.experiments.track2p_policy_growth_field_residual_audit import (
+    _EdgeGrowthFeatures,
     _as_track_matrix,
     _cell_probability,
-    _edge_growth_features,
     _growth_models_by_pair,
     _identity_growth_model,
     _pad_track_matrix,
@@ -107,6 +107,7 @@ class _SubjectState:
     edge_features: Mapping[TrackEdge, "_AcceptedEdgeFeature"]
     anchor_edges: Mapping[tuple[int, int], Sequence[TrackEdge]]
     growth_models: Mapping[tuple[int, int], Any]
+    growth_context: "_GrowthFeatureContext"
     baseline_scores: Mapping[str, Any]
 
 
@@ -125,6 +126,16 @@ class _AcceptedEdgeFeature:
     threshold: float = float("nan")
     threshold_margin: float = float("nan")
     assigned_by_hungarian: int = 0
+
+
+@dataclass(frozen=True)
+class _GrowthFeatureContext:
+    centroids: tuple[Mapping[int, np.ndarray], ...]
+    areas: tuple[Mapping[int, float], ...]
+    lower_left_anchors: tuple[np.ndarray, ...]
+    rows_by_observation: Mapping[tuple[int, int], tuple[int, ...]]
+    anchor_xy_by_pair: Mapping[tuple[int, int], tuple[np.ndarray, np.ndarray]]
+    predicted: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -334,6 +345,8 @@ def _subject_state(
         min_cell_probability=float(anchor_min_cell_probability),
     )
     _log_progress(progress, f"{METHOD}: {subject_dir.name}: growth anchors ready")
+    growth_models = _growth_models_by_pair(sessions, anchor_edges)
+    growth_context = _growth_feature_context(sessions, combined, anchor_edges)
     return _SubjectState(
         subject=subject_dir.name,
         sessions=sessions,
@@ -345,7 +358,8 @@ def _subject_state(
         reference=reference_eval,
         edge_features=edge_features,
         anchor_edges=anchor_edges,
-        growth_models=_growth_models_by_pair(sessions, anchor_edges),
+        growth_models=growth_models,
+        growth_context=growth_context,
         baseline_scores=dict(score_track_matrices(combined, reference_eval)),
     )
 
@@ -457,6 +471,256 @@ def _suffix_feature_index(
     return output
 
 
+def _growth_feature_context(
+    sessions: Sequence[Track2pSession],
+    predicted: np.ndarray,
+    anchor_edges: Mapping[tuple[int, int], Sequence[TrackEdge]],
+) -> _GrowthFeatureContext:
+    centroids = tuple(_session_centroid_lookup(session) for session in sessions)
+    areas = tuple(_session_area_lookup(session) for session in sessions)
+    lower_left_anchors = tuple(_session_lower_left_anchor(session) for session in sessions)
+    predicted = _as_track_matrix(predicted)
+    rows_by_observation: dict[tuple[int, int], list[int]] = defaultdict(list)
+    for row_index, row in enumerate(predicted):
+        for session_index, roi in enumerate(row):
+            if int(roi) >= 0:
+                rows_by_observation[(int(session_index), int(roi))].append(int(row_index))
+    anchor_xy_by_pair: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
+    for pair, edges in anchor_edges.items():
+        sources: list[np.ndarray] = []
+        targets: list[np.ndarray] = []
+        for edge in edges:
+            source = centroids[int(edge[0])].get(int(edge[2]))
+            target = centroids[int(edge[1])].get(int(edge[3]))
+            if source is None or target is None:
+                continue
+            sources.append(np.asarray(source, dtype=float))
+            targets.append(np.asarray(target, dtype=float))
+        anchor_xy_by_pair[pair] = (
+            np.vstack(sources) if sources else np.empty((0, 2), dtype=float),
+            np.vstack(targets) if targets else np.empty((0, 2), dtype=float),
+        )
+    return _GrowthFeatureContext(
+        centroids=centroids,
+        areas=areas,
+        lower_left_anchors=lower_left_anchors,
+        rows_by_observation={
+            key: tuple(values) for key, values in rows_by_observation.items()
+        },
+        anchor_xy_by_pair=anchor_xy_by_pair,
+        predicted=predicted,
+    )
+
+
+def _session_centroid_lookup(session: Track2pSession) -> dict[int, np.ndarray]:
+    roi_indices = _roi_indices(session)
+    centroids = np.asarray(session.plane_data.centroids(order="xy"), dtype=float).T
+    return {
+        int(roi): np.asarray(centroids[index], dtype=float)
+        for index, roi in enumerate(roi_indices)
+        if index < centroids.shape[0]
+    }
+
+
+def _session_area_lookup(session: Track2pSession) -> dict[int, float]:
+    roi_indices = _roi_indices(session)
+    areas = np.asarray(session.plane_data.roi_areas(), dtype=float)
+    return {
+        int(roi): float(areas[index])
+        for index, roi in enumerate(roi_indices)
+        if index < areas.size
+    }
+
+
+def _session_lower_left_anchor(session: Track2pSession) -> np.ndarray:
+    masks = np.asarray(session.plane_data.roi_masks)
+    height = masks.shape[-2] if masks.ndim >= 2 else 1
+    return np.asarray([0.0, float(max(0, height - 1))], dtype=float)
+
+
+def _edge_growth_features_fast(
+    context: _GrowthFeatureContext,
+    edge: TrackEdge,
+    *,
+    model: Any,
+) -> _EdgeGrowthFeatures:
+    source = _context_centroid(context, int(edge[0]), int(edge[2]))
+    target = _context_centroid(context, int(edge[1]), int(edge[3]))
+    if source is None or target is None:
+        return _EdgeGrowthFeatures(expected_area_ratio=float(model.expected_area_ratio))
+    predicted_xy = _apply_affine_fast(source, np.asarray(model.affine_xy, dtype=float))
+    residual_vector = target - predicted_xy
+    residual = float(np.linalg.norm(residual_vector))
+    mahalanobis = float(
+        np.sqrt(
+            max(
+                0.0,
+                float(residual_vector @ model.covariance_inverse @ residual_vector),
+            )
+        )
+    )
+    observed_area_ratio = _observed_area_ratio_fast(context, edge)
+    area_residual = _area_growth_residual_fast(
+        observed_area_ratio, float(model.expected_area_ratio)
+    )
+    motion = _motion_context_features_fast(context, edge, source, target)
+    return _EdgeGrowthFeatures(
+        centroid_a_x=float(source[0]),
+        centroid_a_y=float(source[1]),
+        centroid_b_x=float(target[0]),
+        centroid_b_y=float(target[1]),
+        predicted_b_x=float(predicted_xy[0]),
+        predicted_b_y=float(predicted_xy[1]),
+        growth_residual=residual,
+        growth_residual_mahalanobis=mahalanobis,
+        radial_direction_cosine=_radial_direction_cosine_fast(
+            context, edge, source, target
+        ),
+        expected_area_ratio=float(model.expected_area_ratio),
+        observed_area_ratio=observed_area_ratio,
+        area_growth_residual=area_residual,
+        local_neighbor_distortion=_local_neighbor_distortion_fast(
+            context,
+            edge,
+            expected_area_ratio=float(model.expected_area_ratio),
+        ),
+        two_edge_motion_consistency=motion["two_edge_motion_consistency"],
+        two_edge_acceleration=motion["two_edge_acceleration"],
+    )
+
+
+def _context_centroid(
+    context: _GrowthFeatureContext, session_index: int, suite2p_roi: int
+) -> np.ndarray | None:
+    if session_index < 0 or session_index >= len(context.centroids):
+        return None
+    value = context.centroids[int(session_index)].get(int(suite2p_roi))
+    return None if value is None else np.asarray(value, dtype=float)
+
+
+def _apply_affine_fast(point_xy: np.ndarray, affine_xy: np.ndarray) -> np.ndarray:
+    return np.asarray(point_xy, dtype=float) @ affine_xy[:, :2].T + affine_xy[:, 2]
+
+
+def _observed_area_ratio_fast(
+    context: _GrowthFeatureContext, edge: TrackEdge
+) -> float:
+    session_a, session_b, roi_a, roi_b = edge
+    if session_a < 0 or session_b < 0:
+        return float("nan")
+    if session_a >= len(context.areas) or session_b >= len(context.areas):
+        return float("nan")
+    area_a = float(context.areas[int(session_a)].get(int(roi_a), float("nan")))
+    area_b = float(context.areas[int(session_b)].get(int(roi_b), float("nan")))
+    if not np.isfinite(area_a) or not np.isfinite(area_b) or area_a <= 0.0:
+        return float("nan")
+    return float(area_b / area_a)
+
+
+def _area_growth_residual_fast(observed: float, expected: float) -> float:
+    if (
+        not np.isfinite(observed)
+        or not np.isfinite(expected)
+        or observed <= 0.0
+        or expected <= 0.0
+    ):
+        return float("nan")
+    return float(abs(np.log(observed / expected)))
+
+
+def _radial_direction_cosine_fast(
+    context: _GrowthFeatureContext,
+    edge: TrackEdge,
+    source: np.ndarray,
+    target: np.ndarray,
+) -> float:
+    if edge[0] < 0 or edge[0] >= len(context.lower_left_anchors):
+        return float("nan")
+    anchor = context.lower_left_anchors[int(edge[0])]
+    radial = np.asarray(source, dtype=float) - anchor
+    displacement = np.asarray(target, dtype=float) - np.asarray(source, dtype=float)
+    return _cosine_fast(radial, displacement)
+
+
+def _motion_context_features_fast(
+    context: _GrowthFeatureContext,
+    edge: TrackEdge,
+    source_xy: np.ndarray,
+    target_xy: np.ndarray,
+) -> dict[str, float]:
+    predicted = context.predicted
+    session_a, session_b, roi_a, roi_b = edge
+    if session_a >= predicted.shape[1] or session_b >= predicted.shape[1]:
+        return {
+            "two_edge_motion_consistency": float("nan"),
+            "two_edge_acceleration": float("nan"),
+        }
+    current = np.asarray(target_xy, dtype=float) - np.asarray(source_xy, dtype=float)
+    adjacent_vectors: list[np.ndarray] = []
+    source_rows = context.rows_by_observation.get((int(session_a), int(roi_a)), ())
+    if len(source_rows) == 1 and session_a > 0:
+        previous_roi = int(predicted[int(source_rows[0]), int(session_a) - 1])
+        previous = _context_centroid(context, int(session_a) - 1, previous_roi)
+        if previous is not None:
+            adjacent_vectors.append(np.asarray(source_xy, dtype=float) - previous)
+    target_rows = context.rows_by_observation.get((int(session_b), int(roi_b)), ())
+    if len(target_rows) == 1 and session_b + 1 < predicted.shape[1]:
+        next_roi = int(predicted[int(target_rows[0]), int(session_b) + 1])
+        next_xy = _context_centroid(context, int(session_b) + 1, next_roi)
+        if next_xy is not None:
+            adjacent_vectors.append(next_xy - np.asarray(target_xy, dtype=float))
+    cosines = [_cosine_fast(current, vector) for vector in adjacent_vectors]
+    finite_cosines = [value for value in cosines if np.isfinite(value)]
+    accelerations = [
+        float(np.linalg.norm(current - vector)) for vector in adjacent_vectors
+    ]
+    return {
+        "two_edge_motion_consistency": (
+            float(np.mean(finite_cosines)) if finite_cosines else float("nan")
+        ),
+        "two_edge_acceleration": (
+            float(np.mean(accelerations)) if accelerations else float("nan")
+        ),
+    }
+
+
+def _local_neighbor_distortion_fast(
+    context: _GrowthFeatureContext,
+    edge: TrackEdge,
+    *,
+    expected_area_ratio: float,
+) -> float:
+    source = _context_centroid(context, int(edge[0]), int(edge[2]))
+    target = _context_centroid(context, int(edge[1]), int(edge[3]))
+    sources, targets = context.anchor_xy_by_pair.get(
+        (int(edge[0]), int(edge[1])),
+        (np.empty((0, 2), dtype=float), np.empty((0, 2), dtype=float)),
+    )
+    if source is None or target is None or sources.shape[0] < 2:
+        return float("nan")
+    scale = float(np.sqrt(max(float(expected_area_ratio), 1.0e-12)))
+    source_distances = np.linalg.norm(sources - source[None, :], axis=1)
+    target_distances = np.linalg.norm(targets - target[None, :], axis=1)
+    valid = (source_distances > 1.0e-9) & (target_distances > 0.0)
+    if not np.any(valid):
+        return float("nan")
+    values = np.abs(
+        np.log((target_distances[valid] / source_distances[valid]) / scale)
+    )
+    if values.size == 0:
+        return float("nan")
+    if values.size > 8:
+        values = np.partition(values, 7)[:8]
+    return float(np.median(np.asarray(values, dtype=float)))
+
+
+def _cosine_fast(left: np.ndarray, right: np.ndarray) -> float:
+    denominator = float(np.linalg.norm(left) * np.linalg.norm(right))
+    if denominator <= 1.0e-12:
+        return float("nan")
+    return float(np.clip(float(np.dot(left, right)) / denominator, -1.0, 1.0))
+
+
 def _accepted_edge_rows(
     state: _SubjectState,
     *,
@@ -481,12 +745,10 @@ def _accepted_edge_rows(
             continue
         model = state.growth_models.get((edge[0], edge[1]), _identity_growth_model())
         for occurrence_index in range(int(combined_counts[edge])):
-            growth = _edge_growth_features(
-                state.sessions,
+            growth = _edge_growth_features_fast(
+                state.growth_context,
                 edge,
                 model=model,
-                anchor_edges=state.anchor_edges.get((edge[0], edge[1]), ()),
-                predicted=state.combined,
             )
             split = _remove_edge_occurrence(state.combined, edge, occurrence_index=occurrence_index)
             delta = _removal_score_delta(
