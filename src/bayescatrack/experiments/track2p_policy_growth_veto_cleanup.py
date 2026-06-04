@@ -384,6 +384,13 @@ def _needs_sparse_shifted_iou(
         n_sessions
     ):
         return False
+    if (
+        gate.min_complete_component_size is not None
+        and int(row.get("complete_component_size", 0)) < int(gate.min_complete_component_size)
+    ):
+        return False
+    if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
+        return False
     for key, threshold in (
         ("growth_residual_mahalanobis", gate.min_growth_residual_mahalanobis),
         ("registered_iou", gate.min_registered_iou),
@@ -552,10 +559,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--diagnostics-output", type=Path, default=None)
     parser.add_argument("--diagnostics-format", choices=("csv", "json"), default="csv")
-    parser.add_argument("--min-growth-residual-mahalanobis", "--growth-veto-min-mahalanobis", dest="min_growth_residual_mahalanobis", type=float, default=20.0)
-    parser.add_argument("--min-veto-registered-iou", "--growth-veto-min-registered-iou", dest="min_veto_registered_iou", type=float, default=0.45)
-    parser.add_argument("--min-veto-shifted-iou", "--growth-veto-min-shifted-iou", dest="min_veto_shifted_iou", type=float, default=0.60)
-    parser.add_argument("--min-veto-cell-probability", "--growth-veto-min-cell-probability", dest="min_veto_cell_probability", type=float, default=0.50)
+    parser.add_argument(
+        "--min-growth-residual-mahalanobis",
+        "--growth-veto-min-mahalanobis",
+        dest="min_growth_residual_mahalanobis",
+        type=float,
+        default=20.0,
+    )
+    parser.add_argument(
+        "--min-veto-registered-iou",
+        "--growth-veto-min-registered-iou",
+        dest="min_veto_registered_iou",
+        type=float,
+        default=0.45,
+    )
+    parser.add_argument(
+        "--min-veto-shifted-iou",
+        "--growth-veto-min-shifted-iou",
+        dest="min_veto_shifted_iou",
+        type=float,
+        default=0.60,
+    )
+    parser.add_argument(
+        "--min-veto-cell-probability",
+        "--growth-veto-min-cell-probability",
+        dest="min_veto_cell_probability",
+        type=float,
+        default=0.50,
+    )
     parser.add_argument(
         "--min-veto-anchor-count",
         "--growth-veto-min-anchor-count",
