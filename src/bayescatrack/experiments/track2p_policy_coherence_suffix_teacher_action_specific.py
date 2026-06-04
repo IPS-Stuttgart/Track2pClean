@@ -10,9 +10,9 @@ repair profile we have for the current Track2pPolicy-family lead:
 * use separate feature gates for target extensions and seed-source backfills;
 * keep a tiny per-subject edit budget.
 
-This is deliberately a candidate benchmark row, not a tuned default.  It makes
-the next accuracy probe reproducible without requiring long command lines or
-manual JSON assembly.
+This is deliberately a candidate benchmark row, not a tuned default.  It mirrors
+the checked-in ``benchmarks/coherence_teacher_action_specific.json`` probe and
+makes that accuracy candidate directly executable as a Python module.
 """
 
 from __future__ import annotations
@@ -42,7 +42,6 @@ _ARGS = (
     "--no-allow-source-backfill",
     "--allow-seed-source-backfill",
     "--allow-completing-seed-source-backfill",
-    "--no-allow-fragment-merges",
     "--min-teacher-component-observations",
     "2",
     "--max-applied-teacher-edits",
