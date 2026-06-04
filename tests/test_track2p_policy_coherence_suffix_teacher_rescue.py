@@ -68,7 +68,9 @@ def test_coherence_suffix_teacher_rescue_exposes_action_specific_gates() -> None
     assert args.min_teacher_component_observations == 2
 
 
-def test_coherence_suffix_teacher_rescue_exposes_completing_seed_source_filter() -> None:
+def test_coherence_suffix_teacher_rescue_exposes_completing_seed_source_filter() -> (
+    None
+):
     parser = track2p_policy_coherence_suffix_teacher_rescue.build_arg_parser()
     args = parser.parse_args(
         [
