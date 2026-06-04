@@ -407,6 +407,29 @@ def test_teacher_adjacent_rescue_can_filter_to_completing_rescues() -> None:
     assert output.rows[1]["reason"] == "accepted_insert_target"
 
 
+def test_dynamic_teacher_rescue_reconsiders_action_filter_after_edit() -> None:
+    predicted = np.asarray([[10, -1, -1]], dtype=int)
+    teacher = np.asarray([[10, 20, 30]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_completing_rescue=True,
+        teacher_action_filter="target-extension",
+        edge_order="dynamic-structural",
+        max_applied_edits=2,
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[10, 20, 30]])
+    applied_edges = [
+        (row["session_a"], row["session_b"], row["roi_a"], row["roi_b"])
+        for row in output.rows
+        if int(row["applied"])
+    ]
+    assert applied_edges == [(0, 1, 10, 20), (1, 2, 20, 30)]
+
+
 def test_teacher_adjacent_rescue_can_filter_to_completing_seed_source_backfills() -> (
     None
 ):
@@ -651,6 +674,10 @@ def test_completing_rescue_action_specific_preset_targets_complete_rows() -> Non
 
     assert kwargs == {
         "allow_teacher_complete_row_rescue": True,
+        "allow_completing_rescue": True,
+        "allow_source_backfill": False,
+        "allow_seed_source_backfill": True,
+        "allow_completing_seed_source_backfill": True,
         "allow_fragment_merges": False,
         "teacher_action_filter": "completing-rescue",
         "teacher_edge_order": "dynamic-seed-cell-confidence",
@@ -660,6 +687,12 @@ def test_completing_rescue_action_specific_preset_targets_complete_rows() -> Non
         "min_component_observations": 2,
         "max_applied_edits": 2,
     }
+
+    assert (
+        teacher_adjacent_repair_preset_kwargs("complete-row-rescue-action-specific")
+        == kwargs
+    )
+    assert teacher_adjacent_repair_preset_kwargs("complete-row-action-specific") == kwargs
 
 
 def test_teacher_rescue_parser_accepts_completing_rescue_preset() -> None:
