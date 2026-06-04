@@ -27,6 +27,12 @@ to choose edges.
 Action-specific feature gates allow a residual-union preset to be strict for
 ordinary target extensions while keeping a separate, seed-source-specific gate
 for the missing seed-session ROI bucket.
+
+The ``completing-seed-source-backfill`` action filter is narrower still: it
+spends a tiny teacher-edit budget only on seed-session source backfills that
+would immediately complete the affected predicted row.  This directly targets
+the residual audit's missing-seed complete-FN bucket without admitting ordinary
+target extensions, non-seed backfills, or non-completing seed insertions.
 """
 
 from __future__ import annotations
@@ -104,6 +110,7 @@ TeacherActionFilter = Literal[
     "fragment-merge",
     "target-extension-or-seed-source-backfill",
     "completing-rescue",
+    "completing-seed-source-backfill",
 ]
 TeacherFeaturePreset = Literal[
     "none",
@@ -124,11 +131,14 @@ TeacherRepairPreset = Literal[
     "missing-seed-high-confidence",
     "missing-seed-cell-confident",
     "missing-seed-moderate-iou",
+    "missing-seed-completing-cell-confident",
+    "missing-seed-completing-moderate-iou",
     "track2p-fn-high-confidence",
     "track2p-fn-moderate-iou-cell-confident",
     "track2p-fn-moderate-iou-cell-confidence",
     "residual-union-cell-confident",
     "residual-union-action-specific",
+    "completing-rescue-action-specific",
 ]
 
 
@@ -379,6 +389,30 @@ def teacher_adjacent_repair_preset_kwargs(
             "min_component_observations": 2,
             "max_applied_edits": 2,
         }
+    if normalized == "missing-seed-completing-cell-confident":
+        return {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_fragment_merges": False,
+            "teacher_edge_order": "dynamic-seed-cell-confidence",
+            "teacher_action_filter": "completing-seed-source-backfill",
+            "teacher_feature_preset": "seed-source-cell-confident",
+            "min_component_observations": 2,
+            "max_applied_edits": 1,
+        }
+    if normalized == "missing-seed-completing-moderate-iou":
+        return {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_fragment_merges": False,
+            "teacher_edge_order": "dynamic-seed-cell-confidence",
+            "teacher_action_filter": "completing-seed-source-backfill",
+            "teacher_feature_preset": "seed-source-moderate-iou",
+            "min_component_observations": 2,
+            "max_applied_edits": 1,
+        }
     if normalized in {"track2p-fn-high-confidence", "track2p-fn-target-extension"}:
         return {
             "teacher_action_filter": "target-extension",
@@ -427,6 +461,21 @@ def teacher_adjacent_repair_preset_kwargs(
             "seed_source_feature_preset": "seed-source-cell-confident",
             "min_component_observations": 2,
             "max_applied_edits": 3,
+        }
+    if normalized in {
+        "completing-rescue-action-specific",
+        "complete-row-action-specific",
+    }:
+        return {
+            "allow_teacher_complete_row_rescue": True,
+            "allow_fragment_merges": False,
+            "teacher_action_filter": "completing-rescue",
+            "teacher_edge_order": "dynamic-seed-cell-confidence",
+            "teacher_feature_preset": "none",
+            "target_extension_feature_preset": "moderate-iou-cell-confidence",
+            "seed_source_feature_preset": "seed-source-cell-confident",
+            "min_component_observations": 2,
+            "max_applied_edits": 2,
         }
     raise ValueError(f"Unsupported teacher repair preset: {preset!r}")
 
@@ -593,6 +642,26 @@ def run_track2p_policy_teacher_adjacent_rescue(
             allow_source_backfill = bool(repair_kwargs["allow_source_backfill"])
         if "allow_fragment_merges" in repair_kwargs:
             allow_fragment_merges = bool(repair_kwargs["allow_fragment_merges"])
+        allow_completing_rescue = bool(
+            allow_completing_rescue
+            or repair_kwargs.get("allow_completing_rescue", False)
+        )
+        allow_teacher_complete_row_rescue = bool(
+            allow_teacher_complete_row_rescue
+            or repair_kwargs.get("allow_teacher_complete_row_rescue", False)
+        )
+        allow_teacher_supported_completion = bool(
+            allow_teacher_supported_completion
+            or repair_kwargs.get("allow_teacher_supported_completion", False)
+        )
+        allow_teacher_supported_completing_rescue = bool(
+            allow_teacher_supported_completing_rescue
+            or repair_kwargs.get("allow_teacher_supported_completing_rescue", False)
+        )
+        allow_teacher_confirmed_completing_rescue = bool(
+            allow_teacher_confirmed_completing_rescue
+            or repair_kwargs.get("allow_teacher_confirmed_completing_rescue", False)
+        )
         allow_seed_source_backfill = bool(
             allow_seed_source_backfill
             or repair_kwargs.get("allow_seed_source_backfill", False)
@@ -1919,6 +1988,13 @@ def _teacher_edge_action_filter_reason(
             if _teacher_edge_would_complete_row(predicted, edge)
             else "action_filter_completing-rescue"
         )
+    if normalized == "completing-seed-source-backfill":
+        return (
+            "accepted"
+            if action == "seed-source-backfill"
+            and _teacher_edge_would_complete_row(predicted, edge)
+            else "action_filter_completing-seed-source-backfill"
+        )
     if normalized == "target-extension-or-seed-source-backfill" and action in {
         "target-extension",
         "seed-source-backfill",
@@ -1997,6 +2073,7 @@ def _normalize_teacher_action_filter(
         "fragment-merge",
         "target-extension-or-seed-source-backfill",
         "completing-rescue",
+        "completing-seed-source-backfill",
     }
     if normalized not in allowed:
         raise ValueError(f"Unsupported teacher action filter: {action_filter!r}")
@@ -2552,11 +2629,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "missing-seed-high-confidence",
             "missing-seed-cell-confident",
             "missing-seed-moderate-iou",
+            "missing-seed-completing-cell-confident",
+            "missing-seed-completing-moderate-iou",
             "track2p-fn-high-confidence",
             "track2p-fn-moderate-iou-cell-confident",
             "track2p-fn-moderate-iou-cell-confidence",
             "residual-union-cell-confident",
             "residual-union-action-specific",
+            "completing-rescue-action-specific",
         ),
         default="none",
         help=(
@@ -2569,6 +2649,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "three-edit cap; "
             "'missing-seed-moderate-iou' adds the same action restriction "
             "with a moderate-IoU cell-confidence gate; "
+            "'missing-seed-completing-moderate-iou' is stricter still: it "
+            "admits only seed-source backfills that would immediately complete "
+            "the predicted row, with dynamic seed-cell ordering and a one-edit "
+            "cap; "
             "'track2p-fn-high-confidence' restricts rescue to high-confidence "
             "target extensions; 'track2p-fn-moderate-iou-cell-confident' tests "
             "the same residual Track2p-FN target-extension bucket with a "
@@ -2581,6 +2665,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "filter but applies a stricter moderate-IoU/cell gate to target "
             "extensions and a seed-source cell-confident gate to missing-seed "
             "backfills. "
+            "'completing-rescue-action-specific' spends a tiny budget only on "
+            "teacher-confirmed adjacent edits that would complete a predicted "
+            "row, with the same action-specific target-extension and seed-source "
+            "feature gates, so non-completing teacher edits cannot consume the "
+            "budget. "
             "Explicit non-default CLI values for order, feature preset, edit "
             "cap, and component support are preserved."
         ),
@@ -2621,6 +2710,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "fragment-merge",
             "target-extension-or-seed-source-backfill",
             "completing-rescue",
+            "completing-seed-source-backfill",
         ),
         default="all",
         help=(

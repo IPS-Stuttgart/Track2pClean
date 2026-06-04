@@ -358,6 +358,16 @@ run_teacher_rescue teacher_adjacent_missing_seed_high_confidence_preset \
   --allow-fragment-merges \
   --teacher-repair-preset missing-seed-high-confidence
 
+# Missing-seed completion row: target only seed-session source backfills that
+# would immediately complete a predicted row.  This is narrower than the ordinary
+# missing-seed presets and directly tests the complete-FN residual bucket without
+# spending the tiny edit budget on non-completing seed inserts.
+run_teacher_rescue teacher_adjacent_missing_seed_completing_moderate_iou_preset \
+  --no-allow-completing-rescue \
+  --no-allow-source-backfill \
+  --allow-fragment-merges \
+  --teacher-repair-preset missing-seed-completing-moderate-iou
+
 run_teacher_rescue teacher_adjacent_completing \
   --allow-completing-rescue \
   --allow-source-backfill \
@@ -485,6 +495,7 @@ run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
   --input TeacherAdjacentSeedSourceOnlyHighConfidenceMax2="$OUT/teacher_adjacent_seed_source_only_high_confidence_max2.csv" \
   --input TeacherAdjacentMissingSeedCellConfidentPreset="$OUT/teacher_adjacent_missing_seed_cell_confident_preset.csv" \
   --input TeacherAdjacentMissingSeedHighConfidencePreset="$OUT/teacher_adjacent_missing_seed_high_confidence_preset.csv" \
+  --input TeacherAdjacentMissingSeedCompletingModerateIouPreset="$OUT/teacher_adjacent_missing_seed_completing_moderate_iou_preset.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
@@ -531,6 +542,7 @@ run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
   --input TeacherAdjacentSeedSourceOnlyHighConfidenceMax2="$OUT/teacher_adjacent_seed_source_only_high_confidence_max2.csv" \
   --input TeacherAdjacentMissingSeedCellConfidentPreset="$OUT/teacher_adjacent_missing_seed_cell_confident_preset.csv" \
   --input TeacherAdjacentMissingSeedHighConfidencePreset="$OUT/teacher_adjacent_missing_seed_high_confidence_preset.csv" \
+  --input TeacherAdjacentMissingSeedCompletingModerateIouPreset="$OUT/teacher_adjacent_missing_seed_completing_moderate_iou_preset.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
