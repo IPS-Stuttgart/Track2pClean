@@ -111,6 +111,7 @@ TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS = (
         "teacher_feature_preset",
         "target_extension_feature_preset",
         "seed_source_feature_preset",
+        "allow_completing_rescue",
         "allow_source_backfill",
         "allow_seed_source_backfill",
         "allow_completing_seed_source_backfill",
@@ -1451,6 +1452,11 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
     max_applied_teacher_edits = (
         None if raw_max_edits is None or int(raw_max_edits) < 0 else int(raw_max_edits)
     )
+    allow_completing_rescue = None
+    if "allow_completing_rescue" in options:
+        allow_completing_rescue = _bool_option(
+            options, "allow_completing_rescue", default=False
+        )
     output = run_track2p_policy_coherence_suffix_teacher_rescue(
         config,
         threshold_method=_policy_threshold_method(
@@ -1472,6 +1478,7 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
         teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
         target_extension_feature_preset=str(options.get("target_extension_feature_preset", "none")),
         seed_source_feature_preset=str(options.get("seed_source_feature_preset", "none")),
+        allow_completing_rescue=allow_completing_rescue,
         allow_source_backfill=_bool_option(options, "allow_source_backfill", default=True),
         allow_seed_source_backfill=_bool_option(options, "allow_seed_source_backfill", default=False),
         allow_completing_seed_source_backfill=_bool_option(

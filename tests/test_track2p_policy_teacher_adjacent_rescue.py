@@ -1034,6 +1034,34 @@ def test_teacher_adjacent_rescue_dynamic_confidence_reorders_stale_slot_claims()
     assert output.rows[1]["reason"] == "target_has_source_conflict"
 
 
+def test_dynamic_teacher_rescue_revisits_action_filter_after_insert() -> None:
+    """A deferred teacher edge can become a target-extension after an insert.
+
+    The dynamic rescue loop is supposed to recompute structural eligibility after
+    accepted edits.  If action-filter rejections are treated as permanent, the
+    second teacher edge below is rejected as ``other`` before the first edge
+    inserts its source ROI, and the chain cannot grow.  The desired behavior is to
+    defer that rejection, apply the first edge, then revisit and apply the second.
+    """
+
+    predicted = np.asarray([[100, -1, -1, -1]], dtype=int)
+    teacher = np.asarray([[100, 200, 300, -1]], dtype=int)
+
+    output = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        teacher_action_filter="target-extension",
+        edge_order="dynamic-structural",
+    )
+
+    np.testing.assert_array_equal(output.tracks, [[100, 200, 300, -1]])
+    assert [row["reason"] for row in output.rows if int(row["applied"])] == [
+        "accepted_insert_target",
+        "accepted_insert_target",
+    ]
+
+
 def test_teacher_adjacent_rescue_feature_gate_rejects_weak_edge() -> None:
     predicted = np.asarray([[10, -1, -1]], dtype=int)
     teacher = np.asarray([[10, 11, -1], [10, 12, -1]], dtype=int)
