@@ -447,7 +447,10 @@ def test_benchmark_manifest_dispatches_coherence_suffix_teacher_rescue_options(
     assert calls["kwargs"]["teacher_edge_order"] == "structural"
     assert calls["kwargs"]["teacher_action_filter"] == "all"
     assert calls["kwargs"]["teacher_feature_preset"] == "none"
-    assert calls["kwargs"]["target_extension_feature_preset"] == "moderate-iou-cell-confidence"
+    assert (
+        calls["kwargs"]["target_extension_feature_preset"]
+        == "moderate-iou-cell-confidence"
+    )
     assert calls["kwargs"]["seed_source_feature_preset"] == "seed-source-cell-confident"
     assert calls["kwargs"]["allow_source_backfill"] is False
     assert calls["kwargs"]["allow_seed_source_backfill"] is True

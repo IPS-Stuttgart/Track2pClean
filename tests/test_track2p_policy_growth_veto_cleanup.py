@@ -90,7 +90,9 @@ def test_growth_veto_gate_rejects_nonterminal_edges_by_default() -> None:
 
 def test_growth_veto_gate_rejects_incomplete_components_by_default() -> None:
     reason = cleanup.growth_veto_gate_reason(
-        _candidate_row(complete_component_size=6), cleanup.GrowthVetoGate(), n_sessions=7
+        _candidate_row(complete_component_size=6),
+        cleanup.GrowthVetoGate(),
+        n_sessions=7,
     )
 
     assert reason == "not_complete_component"

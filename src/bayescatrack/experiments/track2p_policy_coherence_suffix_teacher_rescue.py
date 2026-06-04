@@ -133,7 +133,9 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
             ),
             allow_source_backfill=bool(allow_source_backfill),
             allow_seed_source_backfill=bool(allow_seed_source_backfill),
-            allow_completing_seed_source_backfill=bool(allow_completing_seed_source_backfill),
+            allow_completing_seed_source_backfill=bool(
+                allow_completing_seed_source_backfill
+            ),
             allow_fragment_merges=bool(allow_fragment_merges),
             min_teacher_component_observations=int(min_teacher_component_observations),
             max_applied_teacher_edits=max_applied_teacher_edits,
@@ -226,9 +228,7 @@ def _subject_row(
         seed_source_feature_preset
     )
     edge_features = {}
-    if _teacher_edge_order_requires_feature_index(
-        teacher_edge_order
-    ) or any(
+    if _teacher_edge_order_requires_feature_index(teacher_edge_order) or any(
         _teacher_feature_gate_enabled(gate)
         for gate in (
             teacher_feature_gate,
@@ -584,7 +584,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
         allow_source_backfill=bool(args.allow_source_backfill),
         allow_seed_source_backfill=bool(args.allow_seed_source_backfill),
-        allow_completing_seed_source_backfill=bool(args.allow_completing_seed_source_backfill),
+        allow_completing_seed_source_backfill=bool(
+            args.allow_completing_seed_source_backfill
+        ),
         allow_fragment_merges=bool(args.allow_fragment_merges),
         min_teacher_component_observations=int(args.min_teacher_component_observations),
         max_applied_teacher_edits=(

@@ -110,7 +110,9 @@ def test_policy_teacher_adjacent_rescue_runner_kwargs_are_runner_specific() -> N
     }
 
 
-def test_coherence_suffix_teacher_rescue_manifest_accepts_teacher_completion_gates() -> None:
+def test_coherence_suffix_teacher_rescue_manifest_accepts_teacher_completion_gates() -> (
+    None
+):
     assert _runner_kwargs(
         {
             "allow_teacher_supported_completing_rescue": True,

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from bayescatrack.experiments import benchmark_manifest as bm
 from bayescatrack.experiments import _teacher_rescue_manifest_integration as base
-from bayescatrack.experiments import _teacher_rescue_repair_preset_manifest_integration as repair
+from bayescatrack.experiments import (
+    _teacher_rescue_repair_preset_manifest_integration as repair,
+)
+from bayescatrack.experiments import benchmark_manifest as bm
 from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
 
 
@@ -36,7 +38,9 @@ def test_teacher_repair_preset_manifest_runner_forwards_macro(monkeypatch, tmp_p
         captured.update(kwargs)
         return _FakeOutput()
 
-    from bayescatrack.experiments import track2p_policy_teacher_adjacent_rescue as rescue_module
+    from bayescatrack.experiments import (
+        track2p_policy_teacher_adjacent_rescue as rescue_module,
+    )
 
     monkeypatch.setattr(
         rescue_module,
