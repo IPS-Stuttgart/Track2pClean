@@ -31,6 +31,7 @@ AccuracyPresetName = Literal[
     "track2p-teacher-adjacent-rescue",
     "track2p-teacher-fn-rescue",
     "track2p-residual-union-action-specific-rescue",
+    "track2p-completing-rescue-action-specific",
 ]
 AccuracyPresetRunner = Literal[
     "benchmark",
@@ -232,6 +233,10 @@ def build_track2p_accuracy_presets(
         **teacher_rescue_runner_kwargs,
         "teacher_repair_preset": "residual-union-action-specific",
     }
+    completing_rescue_action_specific_runner_kwargs = {
+        **teacher_rescue_runner_kwargs,
+        "teacher_repair_preset": "completing-rescue-action-specific",
+    }
 
     return (
         AccuracyPreset(
@@ -340,6 +345,19 @@ def build_track2p_accuracy_presets(
             config=stability_cleanup,
             runner="teacher-adjacent-rescue",
             runner_kwargs=residual_union_action_specific_runner_kwargs,
+        ),
+        AccuracyPreset(
+            name="track2p-completing-rescue-action-specific",
+            description=(
+                "Component cleanup plus a completing-only Track2p-teacher rescue "
+                "preset: spend a tiny edit budget only on teacher edges that would "
+                "complete a seed-anchored row, with action-specific target-extension "
+                "and missing-seed source-backfill gates. This tests the residual "
+                "complete-FN bucket without admitting metric-neutral teacher edits."
+            ),
+            config=stability_cleanup,
+            runner="teacher-adjacent-rescue",
+            runner_kwargs=completing_rescue_action_specific_runner_kwargs,
         ),
     )
 

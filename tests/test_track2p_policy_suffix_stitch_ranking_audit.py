@@ -40,6 +40,68 @@ def test_ranked_suffix_paths_skips_fragments_beyond_max_suffix_length() -> None:
     assert paths == ()
 
 
+def test_expand_paths_for_fragment_uses_pyrecest_completion(monkeypatch) -> None:
+    first = audit._EdgeCandidate(
+        edge=(1, 2, 20, 30),
+        registered_iou=0.8,
+        shifted_iou=0.7,
+        roi_aware_score=0.6,
+        centroid_distance=2.0,
+        area_ratio=0.9,
+        cell_probability_a=1.0,
+        cell_probability_b=1.0,
+        row_rank=1,
+        column_rank=1,
+        row_margin=0.2,
+        column_margin=0.2,
+        threshold_margin=0.3,
+        activity_similarity=0.5,
+        edge_score=1.0,
+    )
+    second = audit._EdgeCandidate(
+        edge=(2, 3, 30, 40),
+        registered_iou=0.7,
+        shifted_iou=0.6,
+        roi_aware_score=0.5,
+        centroid_distance=2.0,
+        area_ratio=0.9,
+        cell_probability_a=1.0,
+        cell_probability_b=1.0,
+        row_rank=1,
+        column_rank=1,
+        row_margin=0.2,
+        column_margin=0.2,
+        threshold_margin=0.3,
+        activity_similarity=0.5,
+        edge_score=0.8,
+    )
+
+    def fake_top_edge_candidates(_cache, session_index, source_roi, *, top_k):
+        del top_k
+        if (session_index, source_roi) == (1, 20):
+            return (first,)
+        if (session_index, source_roi) == (2, 30):
+            return (second,)
+        return ()
+
+    monkeypatch.setattr(audit, "_top_edge_candidates", fake_top_edge_candidates)
+    paths = audit._expand_paths_for_fragment(
+        component_id=7,
+        row=(10, 20, -1, -1),
+        fragment_span="0-1",
+        tail_session=1,
+        feature_cache=object(),  # type: ignore[arg-type]
+        max_steps=2,
+        edge_top_k=5,
+        path_beam_width=5,
+    )
+
+    assert [tuple(edge.edge for edge in path.edges) for path in paths] == [
+        ((1, 2, 20, 30),),
+        ((1, 2, 20, 30), (2, 3, 30, 40)),
+    ]
+
+
 def test_rank_paths_orders_by_non_gt_score_before_label() -> None:
     high = audit._PathCandidate(
         component_id=0,

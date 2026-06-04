@@ -129,6 +129,8 @@ TeacherRepairPreset = Literal[
     "track2p-fn-moderate-iou-cell-confidence",
     "residual-union-cell-confident",
     "residual-union-action-specific",
+    "completing-rescue-action-specific",
+    "complete-row-rescue-action-specific",
 ]
 
 
@@ -428,6 +430,24 @@ def teacher_adjacent_repair_preset_kwargs(
             "min_component_observations": 2,
             "max_applied_edits": 3,
         }
+    if normalized in {
+        "completing-rescue-action-specific",
+        "complete-row-rescue-action-specific",
+    }:
+        return {
+            "allow_completing_rescue": True,
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_fragment_merges": False,
+            "teacher_action_filter": "completing-rescue",
+            "teacher_edge_order": "dynamic-seed-cell-confidence",
+            "teacher_feature_preset": "none",
+            "target_extension_feature_preset": "moderate-iou-cell-confidence",
+            "seed_source_feature_preset": "seed-source-cell-confident",
+            "min_component_observations": 2,
+            "max_applied_edits": 2,
+        }
     raise ValueError(f"Unsupported teacher repair preset: {preset!r}")
 
 
@@ -593,6 +613,22 @@ def run_track2p_policy_teacher_adjacent_rescue(
             allow_source_backfill = bool(repair_kwargs["allow_source_backfill"])
         if "allow_fragment_merges" in repair_kwargs:
             allow_fragment_merges = bool(repair_kwargs["allow_fragment_merges"])
+        allow_completing_rescue = bool(
+            allow_completing_rescue
+            or repair_kwargs.get("allow_completing_rescue", False)
+        )
+        allow_teacher_supported_completing_rescue = bool(
+            allow_teacher_supported_completing_rescue
+            or repair_kwargs.get("allow_teacher_supported_completing_rescue", False)
+        )
+        allow_completing_source_backfill = bool(
+            allow_completing_source_backfill
+            or repair_kwargs.get("allow_completing_source_backfill", False)
+        )
+        allow_completing_fragment_merges = bool(
+            allow_completing_fragment_merges
+            or repair_kwargs.get("allow_completing_fragment_merges", False)
+        )
         allow_seed_source_backfill = bool(
             allow_seed_source_backfill
             or repair_kwargs.get("allow_seed_source_backfill", False)
@@ -1324,6 +1360,14 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
         rows.append({**row, "occurrence_index": int(occurrence_index)})
 
     return TeacherAdjacentRescueReport(output, tuple(rows))
+
+
+def _teacher_action_filter_rejection_may_change_after_edit(reason: str) -> bool:
+    """Return whether a dynamic teacher edit can make this rejection stale."""
+
+    # Action classes are state-dependent: after one teacher edge inserts a source,
+    # the next edge from that source can become a target extension or completion.
+    return str(reason).startswith("action_filter_")
 
 
 def _normalized_max_applied_edits(max_applied_edits: int | None) -> int | None:
