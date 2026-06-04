@@ -60,6 +60,7 @@ def test_growth_veto_cleanup_parser_exposes_conservative_defaults() -> None:
     assert args.max_veto_registered_iou is None
     assert args.max_veto_shifted_iou is None
     assert args.min_veto_cell_probability == 0.50
+    assert args.max_veto_min_cell_probability is None
     assert args.max_veto_row_rank == 1
     assert args.max_veto_column_rank == 1
     assert args.require_veto_not_suffix_edge is True
@@ -72,6 +73,63 @@ def test_growth_veto_gate_accepts_extreme_terminal_complete_edge() -> None:
     )
 
     assert reason == "accepted"
+
+
+def test_growth_veto_gate_accepts_weak_local_evidence_pocket() -> None:
+    gate = cleanup.GrowthVetoGate(
+        min_growth_residual_mahalanobis=10.0,
+        min_registered_iou=0.0,
+        max_registered_iou=0.60,
+        min_shifted_iou=0.0,
+        min_cell_probability=0.0,
+        max_min_cell_probability=0.60,
+        min_anchor_count=2,
+    )
+
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(
+            growth_residual_mahalanobis=26.07,
+            registered_iou=0.552,
+            shifted_iou=0.50,
+            cell_probability_a=0.571,
+            cell_probability_b=0.806,
+        ),
+        gate,
+        n_sessions=7,
+    )
+
+    assert reason == "accepted"
+
+
+def test_growth_veto_gate_can_reject_high_registered_iou_true_edge_tail() -> None:
+    gate = cleanup.GrowthVetoGate(
+        min_growth_residual_mahalanobis=10.0,
+        min_registered_iou=0.0,
+        max_registered_iou=0.60,
+        min_shifted_iou=0.0,
+        min_cell_probability=0.0,
+        max_min_cell_probability=0.60,
+    )
+
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(registered_iou=0.688, cell_probability_a=0.571), gate, n_sessions=7
+    )
+
+    assert reason == "registered_iou_above_gate"
+
+
+def test_growth_veto_gate_can_reject_high_cell_confidence_true_edge_tail() -> None:
+    gate = cleanup.GrowthVetoGate(
+        max_min_cell_probability=0.60,
+    )
+
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(cell_probability_a=0.748, cell_probability_b=0.912),
+        gate,
+        n_sessions=7,
+    )
+
+    assert reason == "min_cell_probability_above_gate"
 
 
 def test_growth_veto_gate_rejects_coherence_suffix_edges_by_default() -> None:
@@ -181,6 +239,46 @@ def test_growth_veto_sparse_shifted_iou_fill_only_touches_prequalified_rows(
         rows,
         sessions,
         gate=cleanup.GrowthVetoGate(),
+        n_sessions=2,
+    )
+
+    assert augmented[0]["shifted_iou"] == 0.76
+    assert augmented[1]["shifted_iou"] != augmented[1]["shifted_iou"]
+
+
+def test_growth_veto_sparse_shifted_iou_prefilter_respects_upper_bounds(
+    monkeypatch,
+) -> None:
+    rows = [
+        _candidate_row(session_a=0, session_b=1, shifted_iou=float("nan"), roi_b=1210),
+        _candidate_row(
+            session_a=0,
+            session_b=1,
+            shifted_iou=float("nan"),
+            roi_b=1211,
+            registered_iou=0.80,
+        ),
+    ]
+    sessions = (_fake_session([2309], 0), _fake_session([1210, 1211], 1))
+
+    monkeypatch.setattr(cleanup, "_roi_indices", lambda session: session.roi_indices)
+    monkeypatch.setattr(
+        cleanup,
+        "register_plane_pair",
+        lambda _reference, moving, *, transform_type: moving,
+    )
+    monkeypatch.setattr(
+        cleanup,
+        "_pairwise_shifted_iou_from_support",
+        lambda _reference, measurement, *, radius: {
+            "shifted_iou": np.asarray([[0.76]], dtype=float)
+        },
+    )
+
+    augmented = cleanup._augment_growth_veto_candidate_shifted_iou(  # pylint: disable=protected-access
+        rows,
+        sessions,
+        gate=cleanup.GrowthVetoGate(max_registered_iou=0.60),
         n_sessions=2,
     )
 

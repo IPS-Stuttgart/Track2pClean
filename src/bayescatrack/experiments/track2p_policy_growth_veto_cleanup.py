@@ -13,7 +13,8 @@ then splits at accepted adjacent edges that pass a hard, label-free gate:
 * bounded local registered/shifted ROI evidence, so we do not split malformed
   or unmeasured edges, but can optionally avoid high-confidence local matches
   that are plausible true terminal continuations;
-* sufficient endpoint cell probability;
+* sufficient endpoint cell probability, plus an optional upper bound on the
+  weaker endpoint cell probability for weak-local-evidence veto candidates;
 * optionally terminal/last-session and complete-component structure.
 
 The defaults target the specific non-GT feature pocket identified by the audit:
@@ -71,6 +72,7 @@ class GrowthVetoGate:
     max_registered_iou: float | None = None
     max_shifted_iou: float | None = None
     min_cell_probability: float = 0.50
+    max_min_cell_probability: float | None = None
     min_anchor_count: int = 0
     min_complete_component_size: int | None = None
     max_row_rank: int = 1
@@ -200,6 +202,11 @@ def run_track2p_policy_growth_veto_cleanup(
                 "track2p_growth_veto_min_cell_probability": float(
                     growth_veto_gate.min_cell_probability
                 ),
+                "track2p_growth_veto_max_min_cell_probability": (
+                    float(growth_veto_gate.max_min_cell_probability)
+                    if growth_veto_gate.max_min_cell_probability is not None
+                    else float("nan")
+                ),
                 "track2p_growth_veto_min_anchor_count": int(
                     growth_veto_gate.min_anchor_count
                 ),
@@ -275,6 +282,11 @@ def run_track2p_policy_growth_veto_cleanup(
                     ),
                     "growth_veto_min_cell_probability": float(
                         growth_veto_gate.min_cell_probability
+                    ),
+                    "growth_veto_max_min_cell_probability": (
+                        float(growth_veto_gate.max_min_cell_probability)
+                        if growth_veto_gate.max_min_cell_probability is not None
+                        else float("nan")
                     ),
                     "growth_veto_min_anchor_count": int(
                         growth_veto_gate.min_anchor_count
@@ -352,6 +364,11 @@ def growth_veto_gate_reason(
         return "cell_probability_missing"
     if min(cell_a, cell_b) < float(gate.min_cell_probability):
         return "cell_probability_below_gate"
+    if (
+        gate.max_min_cell_probability is not None
+        and min(cell_a, cell_b) > float(gate.max_min_cell_probability)
+    ):
+        return "min_cell_probability_above_gate"
     return "accepted"
 
 
@@ -448,11 +465,14 @@ def _needs_sparse_shifted_iou(
         return False
     cell_a = _finite_float(row.get("cell_probability_a"), float("nan"))
     cell_b = _finite_float(row.get("cell_probability_b"), float("nan"))
-    return bool(
-        np.isfinite(cell_a)
-        and np.isfinite(cell_b)
-        and min(cell_a, cell_b) >= float(gate.min_cell_probability)
-    )
+    if not np.isfinite(cell_a) or not np.isfinite(cell_b):
+        return False
+    min_cell_probability = min(cell_a, cell_b)
+    if min_cell_probability < float(gate.min_cell_probability):
+        return False
+    if gate.max_min_cell_probability is not None:
+        return bool(min_cell_probability <= float(gate.max_min_cell_probability))
+    return True
 
 
 def _sparse_shifted_iou_for_edges(
@@ -678,6 +698,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=0.50,
     )
     parser.add_argument(
+        "--max-veto-min-cell-probability",
+        "--growth-veto-max-min-cell-probability",
+        dest="max_veto_min_cell_probability",
+        type=float,
+        default=None,
+        help=(
+            "Optional upper bound on min(cell_probability_a, cell_probability_b). "
+            "This lets a growth veto target weak-endpoint continuations instead "
+            "of high-confidence true terminal edges."
+        ),
+    )
+    parser.add_argument(
         "--min-veto-anchor-count",
         "--growth-veto-min-anchor-count",
         dest="min_veto_anchor_count",
@@ -793,6 +825,11 @@ def main(argv: list[str] | None = None) -> int:
             max_registered_iou=args.max_veto_registered_iou,
             max_shifted_iou=args.max_veto_shifted_iou,
             min_cell_probability=float(args.min_veto_cell_probability),
+            max_min_cell_probability=(
+                None
+                if args.max_veto_min_cell_probability is None
+                else float(args.max_veto_min_cell_probability)
+            ),
             min_anchor_count=max(0, int(args.min_veto_anchor_count)),
             min_complete_component_size=(
                 None
