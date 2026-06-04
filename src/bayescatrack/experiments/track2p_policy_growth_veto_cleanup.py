@@ -364,9 +364,8 @@ def growth_veto_gate_reason(
         return "cell_probability_missing"
     if min(cell_a, cell_b) < float(gate.min_cell_probability):
         return "cell_probability_below_gate"
-    if (
-        gate.max_min_cell_probability is not None
-        and min(cell_a, cell_b) > float(gate.max_min_cell_probability)
+    if gate.max_min_cell_probability is not None and min(cell_a, cell_b) > float(
+        gate.max_min_cell_probability
     ):
         return "min_cell_probability_above_gate"
     return "accepted"

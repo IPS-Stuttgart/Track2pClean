@@ -333,9 +333,7 @@ RUNNER_ALIASES = {
     TRACK2P_POLICY_GROWTH_VETO_RUNNER: TRACK2P_POLICY_GROWTH_VETO_RUNNER,
     "track2p-growth-veto-cleanup": TRACK2P_POLICY_GROWTH_VETO_RUNNER,
     "track2p-component-growth-veto-cleanup": TRACK2P_POLICY_GROWTH_VETO_RUNNER,
-    "track2p-coherence-suffix-teacher-growth-veto": (
-        TRACK2P_POLICY_GROWTH_VETO_RUNNER
-    ),
+    "track2p-coherence-suffix-teacher-growth-veto": (TRACK2P_POLICY_GROWTH_VETO_RUNNER),
     "track2p-policy-coherence-suffix-teacher-growth-veto": (
         TRACK2P_POLICY_GROWTH_VETO_RUNNER
     ),
@@ -1758,7 +1756,9 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
         min_anchor_count=int(
             options.get(
                 "min_veto_anchor_count",
-                options.get("growth_veto_min_anchor_count", gate_defaults.min_anchor_count),
+                options.get(
+                    "growth_veto_min_anchor_count", gate_defaults.min_anchor_count
+                ),
             )
         ),
         min_complete_component_size=(

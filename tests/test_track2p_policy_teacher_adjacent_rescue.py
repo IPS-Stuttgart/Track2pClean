@@ -716,9 +716,7 @@ def test_residual_union_action_balanced_preset_adds_action_caps() -> None:
         "max_target_extension_edits": 2,
     }
 
-    assert (
-        teacher_adjacent_repair_preset_kwargs("residual-union-balanced") == kwargs
-    )
+    assert teacher_adjacent_repair_preset_kwargs("residual-union-balanced") == kwargs
 
 
 def test_teacher_rescue_parser_accepts_completing_rescue_preset() -> None:
@@ -1113,8 +1111,7 @@ def test_teacher_adjacent_rescue_enforces_per_action_edit_caps() -> None:
     ]
     assert applied_edges == [(0, 1, 1, 10), (0, 1, 30, 31)]
     assert any(
-        row["reason"] == "max_seed_source_backfill_edits_reached"
-        for row in report.rows
+        row["reason"] == "max_seed_source_backfill_edits_reached" for row in report.rows
     )
 
 

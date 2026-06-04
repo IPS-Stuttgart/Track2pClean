@@ -428,7 +428,9 @@ def _anchor_edges_from_policy_diagnostics(
                 registered_iou = float(
                     matrices.registered_iou[feature_local_a, feature_local_b]
                 )
-                shifted_iou = float(matrices.shifted_iou[feature_local_a, feature_local_b])
+                shifted_iou = float(
+                    matrices.shifted_iou[feature_local_a, feature_local_b]
+                )
         if registered_iou < float(min_registered_iou):
             continue
         if float(min_shifted_iou) > 0.0 and (
