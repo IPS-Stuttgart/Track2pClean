@@ -195,3 +195,68 @@ def test_sparse_edge_feature_augmentation_keeps_existing_suffix_shifted_iou() ->
     assert augmented[0]["cell_probability_b"] == 0.85
     assert augmented[1]["shifted_iou"] != augmented[1]["shifted_iou"]
     assert augmented[1]["registered_iou"] != augmented[1]["registered_iou"]
+
+
+def test_removal_score_delta_matches_full_scorer_for_true_complete_edge() -> None:
+    predicted = np.asarray([[1, 2, 3]], dtype=int)
+    reference = np.asarray([[1, 2, 3]], dtype=int)
+
+    assert _fast_delta(predicted, reference, (1, 2, 2, 3)) == _full_delta(
+        predicted, reference, (1, 2, 2, 3)
+    )
+
+
+def test_removal_score_delta_matches_full_scorer_for_complete_false_positive() -> None:
+    predicted = np.asarray([[1, 2, 3], [4, 5, 6]], dtype=int)
+    reference = np.asarray([[1, 2, 3]], dtype=int)
+
+    assert _fast_delta(predicted, reference, (1, 2, 5, 6)) == _full_delta(
+        predicted, reference, (1, 2, 5, 6)
+    )
+
+
+def test_removal_score_delta_matches_full_scorer_for_duplicate_occurrence() -> None:
+    predicted = np.asarray([[1, 2, 3], [1, 2, 3]], dtype=int)
+    reference = np.asarray([[1, 2, 3]], dtype=int)
+
+    assert _fast_delta(
+        predicted, reference, (1, 2, 2, 3), occurrence_index=0
+    ) == _full_delta(predicted, reference, (1, 2, 2, 3), occurrence_index=0)
+
+
+def _fast_delta(
+    predicted: np.ndarray,
+    reference: np.ndarray,
+    edge: veto.TrackEdge,
+    *,
+    occurrence_index: int = 0,
+) -> dict[str, int]:
+    split = veto._remove_edge_occurrence(
+        predicted, edge, occurrence_index=occurrence_index
+    )
+    return veto._removal_score_delta(
+        predicted,
+        edge,
+        occurrence_index=occurrence_index,
+        split=split,
+        predicted_edge_counts=veto.track_edge_counter(predicted),
+        reference_edge_counts=veto.track_edge_counter(reference),
+        predicted_complete_counts=veto._complete_track_counter(predicted),
+        reference_complete_counts=veto._complete_track_counter(reference),
+    )
+
+
+def _full_delta(
+    predicted: np.ndarray,
+    reference: np.ndarray,
+    edge: veto.TrackEdge,
+    *,
+    occurrence_index: int = 0,
+) -> dict[str, int]:
+    split = veto._remove_edge_occurrence(
+        predicted, edge, occurrence_index=occurrence_index
+    )
+    return veto._score_delta(
+        dict(veto.score_track_matrices(predicted, reference)),
+        dict(veto.score_track_matrices(split.tracks, reference)),
+    )
