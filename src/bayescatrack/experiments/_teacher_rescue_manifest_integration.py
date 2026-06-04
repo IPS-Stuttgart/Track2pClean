@@ -51,6 +51,11 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
     "allow_fragment_merges",
     "min_component_observations",
     "max_applied_edits",
+    "max_target_extension_edits",
+    "max_source_backfill_edits",
+    "max_seed_source_backfill_edits",
+    "max_fragment_merge_edits",
+    "max_completing_rescue_edits",
     "teacher_edge_order",
     "teacher_action_filter",
     "teacher_repair_preset",
@@ -388,6 +393,21 @@ def _run_track2p_policy_teacher_adjacent_rows(
         ),
         min_component_observations=int(options.get("min_component_observations", 1)),
         max_applied_edits=_optional_int_option(options, "max_applied_edits"),
+        max_target_extension_edits=_optional_int_option(
+            options, "max_target_extension_edits"
+        ),
+        max_source_backfill_edits=_optional_int_option(
+            options, "max_source_backfill_edits"
+        ),
+        max_seed_source_backfill_edits=_optional_int_option(
+            options, "max_seed_source_backfill_edits"
+        ),
+        max_fragment_merge_edits=_optional_int_option(
+            options, "max_fragment_merge_edits"
+        ),
+        max_completing_rescue_edits=_optional_int_option(
+            options, "max_completing_rescue_edits"
+        ),
         teacher_feature_gate=teacher_feature_gate,
     )
     return [result.to_dict() for result in output.results]
