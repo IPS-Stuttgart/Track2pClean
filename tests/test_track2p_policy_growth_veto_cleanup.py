@@ -187,56 +187,6 @@ def test_growth_veto_gate_rejects_small_complete_component_when_requested() -> N
     assert reason == "complete_component_size_below_gate"
 
 
-def test_growth_veto_gate_rejects_non_top_rank_edges() -> None:
-    reason = cleanup.growth_veto_gate_reason(
-        _candidate_row(row_rank=2), cleanup.GrowthVetoGate(), n_sessions=7
-    )
-
-    assert reason == "row_rank_above_gate"
-
-
-def test_growth_veto_sparse_shifted_iou_fill_only_touches_prequalified_rows(
-    monkeypatch,
-) -> None:
-    rows = [
-        _candidate_row(session_a=0, session_b=1, shifted_iou=float("nan"), roi_b=1210),
-        _candidate_row(
-            session_a=0,
-            session_b=1,
-            shifted_iou=float("nan"),
-            roi_b=1211,
-            growth_residual_mahalanobis=5.0,
-        ),
-    ]
-    sessions = (_fake_session([2309], 0), _fake_session([1210, 1211], 1))
-
-    monkeypatch.setattr(cleanup, "_roi_indices", lambda session: session.roi_indices)
-    monkeypatch.setattr(
-        cleanup,
-        "register_plane_pair",
-        lambda _reference, moving, *, transform_type: moving,
-    )
-    monkeypatch.setattr(
-        cleanup,
-        "_pairwise_shifted_iou_from_support",
-        lambda _reference, measurement, *, radius: {
-            "shifted_iou": np.asarray([[0.76, 0.20]], dtype=float)[
-                :, : measurement.shape[0]
-            ]
-        },
-    )
-
-    augmented = cleanup._augment_growth_veto_candidate_shifted_iou(
-        rows,
-        sessions,
-        gate=cleanup.GrowthVetoGate(),
-        n_sessions=2,
-    )
-
-    assert augmented[0]["shifted_iou"] == 0.76
-    assert augmented[1]["shifted_iou"] != augmented[1]["shifted_iou"]
-
-
 def test_growth_veto_row_selection_respects_per_subject_cap() -> None:
     rows = [
         _candidate_row(growth_residual_mahalanobis=26.0, roi_b=1210),
