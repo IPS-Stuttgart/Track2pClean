@@ -64,6 +64,8 @@ class GrowthVetoGate:
     min_registered_iou: float = 0.45
     min_shifted_iou: float = 0.60
     min_cell_probability: float = 0.50
+    min_anchor_count: int = 0
+    min_complete_component_size: int | None = None
     max_row_rank: int = 1
     max_column_rank: int = 1
     require_not_suffix_edge: bool = True
@@ -179,6 +181,14 @@ def run_track2p_policy_growth_veto_cleanup(
                 "track2p_growth_veto_min_cell_probability": float(
                     growth_veto_gate.min_cell_probability
                 ),
+                "track2p_growth_veto_min_anchor_count": int(
+                    growth_veto_gate.min_anchor_count
+                ),
+                "track2p_growth_veto_min_complete_component_size": int(
+                    growth_veto_gate.min_complete_component_size
+                    if growth_veto_gate.min_complete_component_size is not None
+                    else 0
+                ),
                 "track2p_growth_veto_max_row_rank": int(
                     growth_veto_gate.max_row_rank
                 ),
@@ -239,6 +249,14 @@ def run_track2p_policy_growth_veto_cleanup(
                     "growth_veto_min_cell_probability": float(
                         growth_veto_gate.min_cell_probability
                     ),
+                    "growth_veto_min_anchor_count": int(
+                        growth_veto_gate.min_anchor_count
+                    ),
+                    "growth_veto_min_complete_component_size": int(
+                        growth_veto_gate.min_complete_component_size
+                        if growth_veto_gate.min_complete_component_size is not None
+                        else 0
+                    ),
                     "growth_veto_max_row_rank": int(growth_veto_gate.max_row_rank),
                     "growth_veto_max_column_rank": int(
                         growth_veto_gate.max_column_rank
@@ -272,6 +290,13 @@ def growth_veto_gate_reason(
         n_sessions
     ):
         return "not_complete_component"
+    if (
+        gate.min_complete_component_size is not None
+        and int(row.get("complete_component_size", 0)) < int(gate.min_complete_component_size)
+    ):
+        return "complete_component_size_below_gate"
+    if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
+        return "growth_anchor_count_below_gate"
     for key, threshold in (
         ("growth_residual_mahalanobis", gate.min_growth_residual_mahalanobis),
         ("registered_iou", gate.min_registered_iou),
@@ -527,10 +552,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--diagnostics-output", type=Path, default=None)
     parser.add_argument("--diagnostics-format", choices=("csv", "json"), default="csv")
-    parser.add_argument("--min-growth-residual-mahalanobis", type=float, default=20.0)
-    parser.add_argument("--min-veto-registered-iou", type=float, default=0.45)
-    parser.add_argument("--min-veto-shifted-iou", type=float, default=0.60)
-    parser.add_argument("--min-veto-cell-probability", type=float, default=0.50)
+    parser.add_argument("--min-growth-residual-mahalanobis", "--growth-veto-min-mahalanobis", dest="min_growth_residual_mahalanobis", type=float, default=20.0)
+    parser.add_argument("--min-veto-registered-iou", "--growth-veto-min-registered-iou", dest="min_veto_registered_iou", type=float, default=0.45)
+    parser.add_argument("--min-veto-shifted-iou", "--growth-veto-min-shifted-iou", dest="min_veto_shifted_iou", type=float, default=0.60)
+    parser.add_argument("--min-veto-cell-probability", "--growth-veto-min-cell-probability", dest="min_veto_cell_probability", type=float, default=0.50)
+    parser.add_argument(
+        "--min-veto-anchor-count",
+        "--growth-veto-min-anchor-count",
+        dest="min_veto_anchor_count",
+        type=int,
+        default=0,
+        help=(
+            "Require at least this many growth-field anchor edges for the "
+            "session pair before applying a veto."
+        ),
+    )
+    parser.add_argument(
+        "--min-veto-complete-component-size",
+        "--growth-veto-min-complete-component-size",
+        dest="min_veto_complete_component_size",
+        type=int,
+        default=None,
+        help=(
+            "Optional minimum complete-component size for veto candidates. "
+            "This is stricter than --require-veto-complete-component when set "
+            "above the number of sessions, and explicit enough for benchmark "
+            "scripts that record the intended operating point."
+        ),
+    )
     parser.add_argument("--max-veto-row-rank", type=int, default=1)
     parser.add_argument("--max-veto-column-rank", type=int, default=1)
     parser.add_argument(
@@ -553,7 +602,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
-    parser.add_argument("--max-vetoes-per-subject", type=int, default=1)
+    parser.add_argument(
+        "--max-vetoes-per-subject",
+        "--growth-veto-max-vetoes-per-subject",
+        dest="max_vetoes_per_subject",
+        type=int,
+        default=1,
+    )
     return parser
 
 
@@ -615,6 +670,12 @@ def main(argv: list[str] | None = None) -> int:
             min_registered_iou=float(args.min_veto_registered_iou),
             min_shifted_iou=float(args.min_veto_shifted_iou),
             min_cell_probability=float(args.min_veto_cell_probability),
+            min_anchor_count=max(0, int(args.min_veto_anchor_count)),
+            min_complete_component_size=(
+                None
+                if args.min_veto_complete_component_size is None
+                else max(0, int(args.min_veto_complete_component_size))
+            ),
             max_row_rank=int(args.max_veto_row_rank),
             max_column_rank=int(args.max_veto_column_rank),
             require_not_suffix_edge=bool(args.require_veto_not_suffix_edge),

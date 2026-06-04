@@ -20,6 +20,7 @@ def _candidate_row(**overrides: object) -> dict[str, object]:
         "is_terminal_edge": 1,
         "is_last_session_edge": 1,
         "complete_component_size": 7,
+        "growth_anchor_count": 2,
         "growth_residual_mahalanobis": 26.0,
         "registered_iou": 0.55,
         "shifted_iou": 0.76,
@@ -111,6 +112,29 @@ def test_growth_veto_gate_rejects_low_cell_probability() -> None:
     )
 
     assert reason == "cell_probability_below_gate"
+
+
+def test_growth_veto_gate_rejects_low_anchor_count() -> None:
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(growth_anchor_count=1),
+        cleanup.GrowthVetoGate(min_anchor_count=2),
+        n_sessions=7,
+    )
+
+    assert reason == "growth_anchor_count_below_gate"
+
+
+def test_growth_veto_gate_rejects_small_complete_component_when_requested() -> None:
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(complete_component_size=6),
+        cleanup.GrowthVetoGate(
+            require_complete_component=False,
+            min_complete_component_size=7,
+        ),
+        n_sessions=7,
+    )
+
+    assert reason == "complete_component_size_below_gate"
 
 
 def test_growth_veto_gate_rejects_non_top_rank_edges() -> None:
