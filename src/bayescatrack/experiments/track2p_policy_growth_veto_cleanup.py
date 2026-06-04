@@ -389,6 +389,13 @@ def _needs_sparse_shifted_iou(
         row.get("complete_component_size", 0)
     ) < int(n_sessions):
         return False
+    if (
+        gate.min_complete_component_size is not None
+        and int(row.get("complete_component_size", 0)) < int(gate.min_complete_component_size)
+    ):
+        return False
+    if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
+        return False
     for key, threshold in (
         ("growth_residual_mahalanobis", gate.min_growth_residual_mahalanobis),
         ("registered_iou", gate.min_registered_iou),

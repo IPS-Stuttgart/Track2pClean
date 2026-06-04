@@ -116,29 +116,6 @@ def test_growth_veto_gate_rejects_low_cell_probability() -> None:
     assert reason == "cell_probability_below_gate"
 
 
-def test_growth_veto_gate_rejects_low_anchor_count() -> None:
-    reason = cleanup.growth_veto_gate_reason(
-        _candidate_row(growth_anchor_count=1),
-        cleanup.GrowthVetoGate(min_anchor_count=2),
-        n_sessions=7,
-    )
-
-    assert reason == "growth_anchor_count_below_gate"
-
-
-def test_growth_veto_gate_rejects_small_complete_component_when_requested() -> None:
-    reason = cleanup.growth_veto_gate_reason(
-        _candidate_row(complete_component_size=6),
-        cleanup.GrowthVetoGate(
-            require_complete_component=False,
-            min_complete_component_size=7,
-        ),
-        n_sessions=7,
-    )
-
-    assert reason == "complete_component_size_below_gate"
-
-
 def test_growth_veto_gate_rejects_non_top_rank_edges() -> None:
     reason = cleanup.growth_veto_gate_reason(
         _candidate_row(row_rank=2), cleanup.GrowthVetoGate(), n_sessions=7
@@ -178,7 +155,7 @@ def test_growth_veto_sparse_shifted_iou_fill_only_touches_prequalified_rows(
         },
     )
 
-    augmented = cleanup._augment_growth_veto_candidate_shifted_iou(
+    augmented = cleanup._augment_growth_veto_candidate_shifted_iou(  # pylint: disable=protected-access
         rows,
         sessions,
         gate=cleanup.GrowthVetoGate(),
@@ -187,6 +164,29 @@ def test_growth_veto_sparse_shifted_iou_fill_only_touches_prequalified_rows(
 
     assert augmented[0]["shifted_iou"] == 0.76
     assert augmented[1]["shifted_iou"] != augmented[1]["shifted_iou"]
+
+
+def test_growth_veto_gate_rejects_low_anchor_count() -> None:
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(growth_anchor_count=1),
+        cleanup.GrowthVetoGate(min_anchor_count=2),
+        n_sessions=7,
+    )
+
+    assert reason == "growth_anchor_count_below_gate"
+
+
+def test_growth_veto_gate_rejects_small_complete_component_when_requested() -> None:
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(complete_component_size=6),
+        cleanup.GrowthVetoGate(
+            require_complete_component=False,
+            min_complete_component_size=7,
+        ),
+        n_sessions=7,
+    )
+
+    assert reason == "complete_component_size_below_gate"
 
 
 def test_growth_veto_row_selection_respects_per_subject_cap() -> None:
