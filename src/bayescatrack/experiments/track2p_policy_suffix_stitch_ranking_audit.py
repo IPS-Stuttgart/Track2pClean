@@ -19,10 +19,6 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
-from pyrecest.utils import (
-    CompletionCandidate,
-    enumerate_fragment_completion_paths,
-)
 from bayescatrack.association.activity_similarity import activity_similarity_components
 from bayescatrack.association.shifted_overlap import _pairwise_shifted_iou_from_support
 from bayescatrack.core.bridge import Track2pSession
@@ -66,6 +62,10 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     emulate_track2p_pruned_tracks,
 )
 from bayescatrack.track2p_registration import register_plane_pair
+from pyrecest.utils import (
+    CompletionCandidate,
+    enumerate_fragment_completion_paths,
+)
 from scipy.optimize import linear_sum_assignment
 
 TRACK2P_POLICY_SUFFIX_STITCH_RANKING_AUDIT_METHOD = (

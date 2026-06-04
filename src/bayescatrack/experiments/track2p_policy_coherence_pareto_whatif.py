@@ -26,11 +26,6 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
-from pyrecest.utils.track_edit_whatif import (
-    TrackEdit,
-    score_track_edit_delta,
-)
-
 from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments.track2p_benchmark import (
@@ -78,6 +73,10 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
 from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import (
     _rank_descending,
     _ranked_suffix_paths,
+)
+from pyrecest.utils.track_edit_whatif import (
+    TrackEdit,
+    score_track_edit_delta,
 )
 
 TRACK2P_POLICY_COHERENCE_PARETO_WHATIF_METHOD = "track2p-policy-coherence-pareto-whatif"

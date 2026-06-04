@@ -55,9 +55,9 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
     _no_prune_config,
 )
 from bayescatrack.experiments.track2p_policy_growth_field_residual_audit import (
-    _EdgeGrowthFeatures,
     _as_track_matrix,
     _cell_probability,
+    _EdgeGrowthFeatures,
     _growth_models_by_pair,
     _identity_growth_model,
     _pad_track_matrix,
@@ -176,7 +176,9 @@ def run_track2p_policy_growth_veto_whatif(
     suffix_gate = suffix_gate or suffix.CoherenceSuffixStitchGate()
     subject_dirs = discover_subject_dirs(policy_config.data)
     if not subject_dirs:
-        raise ValueError(f"No Track2p-style subject directories found under {policy_config.data}")
+        raise ValueError(
+            f"No Track2p-style subject directories found under {policy_config.data}"
+        )
 
     states: list[_SubjectState] = []
     for index, subject_dir in enumerate(subject_dirs, start=1):
@@ -218,7 +220,9 @@ def run_track2p_policy_growth_veto_whatif(
                 global_baseline_scores=global_baseline_scores,
                 threshold_method=threshold_method,
                 iou_distance_threshold=float(iou_distance_threshold),
-                cell_probability_threshold=float(policy_config.cell_probability_threshold),
+                cell_probability_threshold=float(
+                    policy_config.cell_probability_threshold
+                ),
                 transform_type=policy_config.transform_type,
             )
         )
@@ -245,7 +249,9 @@ def _subject_state(
     anchor_min_cell_probability: float,
     progress: bool,
 ) -> _SubjectState:
-    reference = _load_reference_for_subject(subject_dir, data_root=config.data, config=config)
+    reference = _load_reference_for_subject(
+        subject_dir, data_root=config.data, config=config
+    )
     _validate_reference_for_benchmark(reference, subject_dir=subject_dir, config=config)
     if reference.source != GROUND_TRUTH_REFERENCE_SOURCE:
         raise ValueError(f"{METHOD} requires independent manual-GT references")
@@ -262,7 +268,9 @@ def _subject_state(
         prune_config=_no_prune_config(),
     )
     policy_full = _normalize_int_track_matrix(policy_prediction.tracks)
-    policy_eval, reference_eval, _policy_ids = _evaluated_prediction_rows(policy_full, reference_tracks, config=config)
+    policy_eval, reference_eval, _policy_ids = _evaluated_prediction_rows(
+        policy_full, reference_tracks, config=config
+    )
     reference_eval = _as_track_matrix(reference_eval)
     n_sessions = int(reference_eval.shape[1])
     policy_eval = _pad_track_matrix(_as_track_matrix(policy_eval), width=n_sessions)
@@ -310,8 +318,12 @@ def _subject_state(
         width=n_sessions,
     )
 
-    teacher_full, _variant = _predict_subject_tracks(subject_dir, replace(config, method="track2p-baseline"))
-    teacher_eval, _reference_again, _teacher_ids = _evaluated_prediction_rows(_normalize_int_track_matrix(teacher_full), reference_tracks, config=config)
+    teacher_full, _variant = _predict_subject_tracks(
+        subject_dir, replace(config, method="track2p-baseline")
+    )
+    teacher_eval, _reference_again, _teacher_ids = _evaluated_prediction_rows(
+        _normalize_int_track_matrix(teacher_full), reference_tracks, config=config
+    )
     teacher_eval = _pad_track_matrix(_as_track_matrix(teacher_eval), width=n_sessions)
     _log_progress(progress, f"{METHOD}: {subject_dir.name}: teacher baseline ready")
     teacher_report = apply_teacher_adjacent_rescue_edges(
@@ -380,7 +392,9 @@ def _anchor_edges_from_policy_diagnostics(
     min_cell_probability: float,
 ) -> dict[tuple[int, int], tuple[TrackEdge, ...]]:
     track2p_edges = set(track_edge_counter(track2p))
-    cleanup_or_combined = set(track_edge_counter(component_cleanup)) | set(track_edge_counter(combined))
+    cleanup_or_combined = set(track_edge_counter(component_cleanup)) | set(
+        track_edge_counter(combined)
+    )
     roi_indices_by_session = [_roi_indices(session) for session in sessions]
     by_pair: dict[tuple[int, int], list[TrackEdge]] = defaultdict(list)
     for diagnostic in diagnostics:
@@ -411,7 +425,12 @@ def _anchor_edges_from_policy_diagnostics(
     for pair, edges in by_pair.items():
         source_counts = Counter((edge[0], edge[2]) for edge in edges)
         target_counts = Counter((edge[1], edge[3]) for edge in edges)
-        output[pair] = tuple(edge for edge in edges if source_counts[(edge[0], edge[2])] == 1 and target_counts[(edge[1], edge[3])] == 1)
+        output[pair] = tuple(
+            edge
+            for edge in edges
+            if source_counts[(edge[0], edge[2])] == 1
+            and target_counts[(edge[1], edge[3])] == 1
+        )
     return output
 
 
@@ -478,13 +497,17 @@ def _growth_feature_context(
 ) -> _GrowthFeatureContext:
     centroids = tuple(_session_centroid_lookup(session) for session in sessions)
     areas = tuple(_session_area_lookup(session) for session in sessions)
-    lower_left_anchors = tuple(_session_lower_left_anchor(session) for session in sessions)
+    lower_left_anchors = tuple(
+        _session_lower_left_anchor(session) for session in sessions
+    )
     predicted = _as_track_matrix(predicted)
     rows_by_observation: dict[tuple[int, int], list[int]] = defaultdict(list)
     for row_index, row in enumerate(predicted):
         for session_index, roi in enumerate(row):
             if int(roi) >= 0:
-                rows_by_observation[(int(session_index), int(roi))].append(int(row_index))
+                rows_by_observation[(int(session_index), int(roi))].append(
+                    int(row_index)
+                )
     anchor_xy_by_pair: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
     for pair, edges in anchor_edges.items():
         sources: list[np.ndarray] = []
@@ -602,9 +625,7 @@ def _apply_affine_fast(point_xy: np.ndarray, affine_xy: np.ndarray) -> np.ndarra
     return np.asarray(point_xy, dtype=float) @ affine_xy[:, :2].T + affine_xy[:, 2]
 
 
-def _observed_area_ratio_fast(
-    context: _GrowthFeatureContext, edge: TrackEdge
-) -> float:
+def _observed_area_ratio_fast(context: _GrowthFeatureContext, edge: TrackEdge) -> float:
     session_a, session_b, roi_a, roi_b = edge
     if session_a < 0 or session_b < 0:
         return float("nan")
@@ -704,9 +725,7 @@ def _local_neighbor_distortion_fast(
     valid = (source_distances > 1.0e-9) & (target_distances > 0.0)
     if not np.any(valid):
         return float("nan")
-    values = np.abs(
-        np.log((target_distances[valid] / source_distances[valid]) / scale)
-    )
+    values = np.abs(np.log((target_distances[valid] / source_distances[valid]) / scale))
     if values.size == 0:
         return float("nan")
     if values.size > 8:
@@ -750,7 +769,9 @@ def _accepted_edge_rows(
                 edge,
                 model=model,
             )
-            split = _remove_edge_occurrence(state.combined, edge, occurrence_index=occurrence_index)
+            split = _remove_edge_occurrence(
+                state.combined, edge, occurrence_index=occurrence_index
+            )
             delta = _removal_score_delta(
                 state.combined,
                 edge,
@@ -761,7 +782,9 @@ def _accepted_edge_rows(
                 predicted_complete_counts=predicted_complete_counts,
                 reference_complete_counts=reference_complete_counts,
             )
-            global_candidate_scores = _apply_subject_delta(global_baseline_scores, delta)
+            global_candidate_scores = _apply_subject_delta(
+                global_baseline_scores, delta
+            )
             edge_source = _edge_source(
                 edge,
                 occurrence_index=occurrence_index,
@@ -780,11 +803,21 @@ def _accepted_edge_rows(
                     "edge_source": edge_source,
                     "is_terminal_edge": int(split.is_terminal_edge),
                     "is_last_session_edge": int(split.is_last_session_edge),
-                    "track2p_supported": int(teacher_counts.get(edge, 0) > occurrence_index),
-                    "policy_supported": int(policy_counts.get(edge, 0) > occurrence_index),
-                    "teacher_supported": int(teacher_counts.get(edge, 0) > occurrence_index),
-                    "component_cleanup_supported": int(cleanup_counts.get(edge, 0) > occurrence_index),
-                    "coherence_suffix_supported": int(suffix_counts.get(edge, 0) > occurrence_index),
+                    "track2p_supported": int(
+                        teacher_counts.get(edge, 0) > occurrence_index
+                    ),
+                    "policy_supported": int(
+                        policy_counts.get(edge, 0) > occurrence_index
+                    ),
+                    "teacher_supported": int(
+                        teacher_counts.get(edge, 0) > occurrence_index
+                    ),
+                    "component_cleanup_supported": int(
+                        cleanup_counts.get(edge, 0) > occurrence_index
+                    ),
+                    "coherence_suffix_supported": int(
+                        suffix_counts.get(edge, 0) > occurrence_index
+                    ),
                     "growth_residual": growth.growth_residual,
                     "growth_residual_mahalanobis": growth.growth_residual_mahalanobis,
                     "growth_model_type": model.model_type,
@@ -793,17 +826,41 @@ def _accepted_edge_rows(
                     "complete_component_size": int(split.complete_component_size),
                     "component_risk": _component_risk(growth),
                     "would_split_component": int(split.would_split_component),
-                    "edge_status_against_gt": ("true_positive" if reference_counts.get(edge, 0) > occurrence_index else "false_positive"),
-                    "pairwise_tp_delta_if_removed": int(delta["pairwise_true_positives"]),
-                    "pairwise_fp_delta_if_removed": int(delta["pairwise_false_positives"]),
-                    "pairwise_fn_delta_if_removed": int(delta["pairwise_false_negatives"]),
-                    "complete_tp_delta_if_removed": int(delta["complete_track_true_positives"]),
-                    "complete_fp_delta_if_removed": int(delta["complete_track_false_positives"]),
-                    "complete_fn_delta_if_removed": int(delta["complete_track_false_negatives"]),
-                    "new_pairwise_f1_micro": float(global_candidate_scores["pairwise_f1"]),
-                    "new_complete_track_f1_micro": float(global_candidate_scores["complete_track_f1"]),
-                    "baseline_pairwise_f1_micro": float(global_baseline_scores["pairwise_f1"]),
-                    "baseline_complete_track_f1_micro": float(global_baseline_scores["complete_track_f1"]),
+                    "edge_status_against_gt": (
+                        "true_positive"
+                        if reference_counts.get(edge, 0) > occurrence_index
+                        else "false_positive"
+                    ),
+                    "pairwise_tp_delta_if_removed": int(
+                        delta["pairwise_true_positives"]
+                    ),
+                    "pairwise_fp_delta_if_removed": int(
+                        delta["pairwise_false_positives"]
+                    ),
+                    "pairwise_fn_delta_if_removed": int(
+                        delta["pairwise_false_negatives"]
+                    ),
+                    "complete_tp_delta_if_removed": int(
+                        delta["complete_track_true_positives"]
+                    ),
+                    "complete_fp_delta_if_removed": int(
+                        delta["complete_track_false_positives"]
+                    ),
+                    "complete_fn_delta_if_removed": int(
+                        delta["complete_track_false_negatives"]
+                    ),
+                    "new_pairwise_f1_micro": float(
+                        global_candidate_scores["pairwise_f1"]
+                    ),
+                    "new_complete_track_f1_micro": float(
+                        global_candidate_scores["complete_track_f1"]
+                    ),
+                    "baseline_pairwise_f1_micro": float(
+                        global_baseline_scores["pairwise_f1"]
+                    ),
+                    "baseline_complete_track_f1_micro": float(
+                        global_baseline_scores["complete_track_f1"]
+                    ),
                     "remove_reason": split.reason,
                     "threshold_method": str(threshold_method),
                     "iou_distance_threshold": float(iou_distance_threshold),
@@ -910,7 +967,9 @@ def _complete_track_counter(track_matrix: np.ndarray) -> Counter[tuple[int, ...]
     return counter
 
 
-def _remove_edge_occurrence(predicted: np.ndarray, edge: TrackEdge, *, occurrence_index: int) -> _SplitResult:
+def _remove_edge_occurrence(
+    predicted: np.ndarray, edge: TrackEdge, *, occurrence_index: int
+) -> _SplitResult:
     predicted = _as_track_matrix(predicted)
     session_a, session_b, roi_a, roi_b = edge
     if session_a >= predicted.shape[1] or session_b >= predicted.shape[1]:
@@ -923,7 +982,11 @@ def _remove_edge_occurrence(predicted: np.ndarray, edge: TrackEdge, *, occurrenc
             is_terminal_edge=0,
             is_last_session_edge=0,
         )
-    rows = [int(row_index) for row_index in np.flatnonzero(predicted[:, session_a] == roi_a) if int(predicted[int(row_index), session_b]) == int(roi_b)]
+    rows = [
+        int(row_index)
+        for row_index in np.flatnonzero(predicted[:, session_a] == roi_a)
+        if int(predicted[int(row_index), session_b]) == int(roi_b)
+    ]
     if int(occurrence_index) >= len(rows):
         return _SplitResult(
             tracks=predicted.copy(),
@@ -983,7 +1046,9 @@ def _component_risk(growth: Any) -> float:
     return value if np.isfinite(value) else float("nan")
 
 
-def _score_delta(baseline: Mapping[str, Any], candidate: Mapping[str, Any]) -> dict[str, int]:
+def _score_delta(
+    baseline: Mapping[str, Any], candidate: Mapping[str, Any]
+) -> dict[str, int]:
     return {key: int(candidate[key]) - int(baseline[key]) for key in _SCORE_KEYS}
 
 
@@ -1005,8 +1070,12 @@ def _global_scores(score_rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     return scores
 
 
-def _apply_subject_delta(global_baseline_scores: Mapping[str, Any], delta: Mapping[str, int]) -> dict[str, Any]:
-    scores = {key: int(global_baseline_scores[key]) + int(delta[key]) for key in _SCORE_KEYS}
+def _apply_subject_delta(
+    global_baseline_scores: Mapping[str, Any], delta: Mapping[str, int]
+) -> dict[str, Any]:
+    scores = {
+        key: int(global_baseline_scores[key]) + int(delta[key]) for key in _SCORE_KEYS
+    }
     scores["pairwise_f1"] = _f1(
         scores["pairwise_true_positives"],
         scores["pairwise_false_positives"],
@@ -1034,10 +1103,17 @@ def _summary_rows(
     rows: list[dict[str, Any]] = []
     subjects = sorted({str(row["subject"]) for row in edge_rows}) + ["ALL"]
     for subject in subjects:
-        subject_rows = [row for row in edge_rows if subject == "ALL" or str(row["subject"]) == subject]
+        subject_rows = [
+            row
+            for row in edge_rows
+            if subject == "ALL" or str(row["subject"]) == subject
+        ]
         for threshold in _RISK_THRESHOLDS:
             selected = [
-                row for row in subject_rows if np.isfinite(float(row.get("growth_residual_mahalanobis", np.nan))) and float(row["growth_residual_mahalanobis"]) >= float(threshold)
+                row
+                for row in subject_rows
+                if np.isfinite(float(row.get("growth_residual_mahalanobis", np.nan)))
+                and float(row["growth_residual_mahalanobis"]) >= float(threshold)
             ]
             rows.append(
                 {
@@ -1045,27 +1121,81 @@ def _summary_rows(
                     "growth_residual_mahalanobis_threshold": float(threshold),
                     "accepted_edges": int(len(subject_rows)),
                     "selected_edges": int(len(selected)),
-                    "selected_true_positive_edges": int(sum(str(row.get("edge_status_against_gt")) == "true_positive" for row in selected)),
-                    "selected_false_positive_edges": int(sum(str(row.get("edge_status_against_gt")) == "false_positive" for row in selected)),
-                    "selected_terminal_edges": int(sum(int(row.get("is_terminal_edge", 0)) for row in selected)),
-                    "selected_last_session_edges": int(sum(int(row.get("is_last_session_edge", 0)) for row in selected)),
-                    "selected_pairwise_tp_delta_sum": int(sum(int(row.get("pairwise_tp_delta_if_removed", 0)) for row in selected)),
-                    "selected_pairwise_fp_delta_sum": int(sum(int(row.get("pairwise_fp_delta_if_removed", 0)) for row in selected)),
-                    "selected_pairwise_fn_delta_sum": int(sum(int(row.get("pairwise_fn_delta_if_removed", 0)) for row in selected)),
-                    "selected_complete_tp_delta_sum": int(sum(int(row.get("complete_tp_delta_if_removed", 0)) for row in selected)),
-                    "selected_complete_fp_delta_sum": int(sum(int(row.get("complete_fp_delta_if_removed", 0)) for row in selected)),
-                    "selected_complete_fn_delta_sum": int(sum(int(row.get("complete_fn_delta_if_removed", 0)) for row in selected)),
-                    "baseline_pairwise_f1_micro": float(global_baseline_scores["pairwise_f1"]),
-                    "baseline_complete_track_f1_micro": float(global_baseline_scores["complete_track_f1"]),
-                    "best_single_veto_pairwise_f1_micro": _max_float(selected, "new_pairwise_f1_micro"),
-                    "best_single_veto_complete_track_f1_micro": _max_float(selected, "new_complete_track_f1_micro"),
+                    "selected_true_positive_edges": int(
+                        sum(
+                            str(row.get("edge_status_against_gt")) == "true_positive"
+                            for row in selected
+                        )
+                    ),
+                    "selected_false_positive_edges": int(
+                        sum(
+                            str(row.get("edge_status_against_gt")) == "false_positive"
+                            for row in selected
+                        )
+                    ),
+                    "selected_terminal_edges": int(
+                        sum(int(row.get("is_terminal_edge", 0)) for row in selected)
+                    ),
+                    "selected_last_session_edges": int(
+                        sum(int(row.get("is_last_session_edge", 0)) for row in selected)
+                    ),
+                    "selected_pairwise_tp_delta_sum": int(
+                        sum(
+                            int(row.get("pairwise_tp_delta_if_removed", 0))
+                            for row in selected
+                        )
+                    ),
+                    "selected_pairwise_fp_delta_sum": int(
+                        sum(
+                            int(row.get("pairwise_fp_delta_if_removed", 0))
+                            for row in selected
+                        )
+                    ),
+                    "selected_pairwise_fn_delta_sum": int(
+                        sum(
+                            int(row.get("pairwise_fn_delta_if_removed", 0))
+                            for row in selected
+                        )
+                    ),
+                    "selected_complete_tp_delta_sum": int(
+                        sum(
+                            int(row.get("complete_tp_delta_if_removed", 0))
+                            for row in selected
+                        )
+                    ),
+                    "selected_complete_fp_delta_sum": int(
+                        sum(
+                            int(row.get("complete_fp_delta_if_removed", 0))
+                            for row in selected
+                        )
+                    ),
+                    "selected_complete_fn_delta_sum": int(
+                        sum(
+                            int(row.get("complete_fn_delta_if_removed", 0))
+                            for row in selected
+                        )
+                    ),
+                    "baseline_pairwise_f1_micro": float(
+                        global_baseline_scores["pairwise_f1"]
+                    ),
+                    "baseline_complete_track_f1_micro": float(
+                        global_baseline_scores["complete_track_f1"]
+                    ),
+                    "best_single_veto_pairwise_f1_micro": _max_float(
+                        selected, "new_pairwise_f1_micro"
+                    ),
+                    "best_single_veto_complete_track_f1_micro": _max_float(
+                        selected, "new_complete_track_f1_micro"
+                    ),
                 }
             )
     return tuple(rows)
 
 
 def _max_float(rows: Sequence[Mapping[str, Any]], key: str) -> float:
-    values = [float(row[key]) for row in rows if key in row and np.isfinite(float(row[key]))]
+    values = [
+        float(row[key]) for row in rows if key in row and np.isfinite(float(row[key]))
+    ]
     if not values:
         return float("nan")
     return float(max(values))
@@ -1104,7 +1234,9 @@ def main(argv: list[str] | None = None) -> int:
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
         transform_type=args.transform_type,
-        allow_track2p_as_reference_for_smoke_test=(args.allow_track2p_as_reference_for_smoke_test),
+        allow_track2p_as_reference_for_smoke_test=(
+            args.allow_track2p_as_reference_for_smoke_test
+        ),
         include_behavior=args.include_behavior,
         include_non_cells=False,
         cell_probability_threshold=args.cell_probability_threshold,

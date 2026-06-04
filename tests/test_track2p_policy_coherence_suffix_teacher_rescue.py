@@ -83,9 +83,7 @@ def test_completing_filter_enables_completing_rescue_by_default() -> None:
 def test_coherence_suffix_teacher_rescue_exposes_completing_rescue_override() -> None:
     parser = track2p_policy_coherence_suffix_teacher_rescue.build_arg_parser()
 
-    auto_args = parser.parse_args(
-        ["--data", "track2p-root", "--output", "scores.csv"]
-    )
+    auto_args = parser.parse_args(["--data", "track2p-root", "--output", "scores.csv"])
     off_args = parser.parse_args(
         [
             "--data",

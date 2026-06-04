@@ -411,9 +411,7 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-growth-veto-whatif": ("track2p-policy-growth-veto-whatif"),
     "track2p-component-growth-veto-whatif": ("track2p-policy-growth-veto-whatif"),
     "track2p-growth-veto-cleanup": "track2p-policy-growth-veto-cleanup",
-    "track2p-component-growth-veto-cleanup": (
-        "track2p-policy-growth-veto-cleanup"
-    ),
+    "track2p-component-growth-veto-cleanup": ("track2p-policy-growth-veto-cleanup"),
     "track2p-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"
     ),

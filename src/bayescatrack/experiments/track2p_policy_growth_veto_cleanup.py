@@ -33,7 +33,9 @@ from typing import Any, Literal, cast
 import numpy as np
 from bayescatrack.association.shifted_overlap import _pairwise_shifted_iou_from_support
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
-from bayescatrack.experiments import track2p_policy_coherence_suffix_stitch_whatif as suffix
+from bayescatrack.experiments import (
+    track2p_policy_coherence_suffix_stitch_whatif as suffix,
+)
 from bayescatrack.experiments import track2p_policy_growth_veto_whatif as veto
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
@@ -49,7 +51,9 @@ from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
     track2p_policy_config,
 )
-from bayescatrack.experiments.track2p_policy_component_audit import ComponentCleanupConfig
+from bayescatrack.experiments.track2p_policy_component_audit import (
+    ComponentCleanupConfig,
+)
 from bayescatrack.experiments.track2p_policy_pruned_benchmark import _roi_indices
 from bayescatrack.track2p_registration import register_plane_pair
 
@@ -134,7 +138,9 @@ def run_track2p_policy_growth_veto_cleanup(
         )
         for subject_dir in subject_dirs
     ]
-    global_baseline_scores = veto._global_scores(state.baseline_scores for state in states)
+    global_baseline_scores = veto._global_scores(
+        state.baseline_scores for state in states
+    )
 
     results: list[SubjectBenchmarkResult] = []
     diagnostic_rows: list[dict[str, Any]] = []
@@ -189,9 +195,7 @@ def run_track2p_policy_growth_veto_cleanup(
                     if growth_veto_gate.min_complete_component_size is not None
                     else 0
                 ),
-                "track2p_growth_veto_max_row_rank": int(
-                    growth_veto_gate.max_row_rank
-                ),
+                "track2p_growth_veto_max_row_rank": int(growth_veto_gate.max_row_rank),
                 "track2p_growth_veto_max_column_rank": int(
                     growth_veto_gate.max_column_rank
                 ),
@@ -286,14 +290,13 @@ def growth_veto_gate_reason(
         return "not_terminal_edge"
     if gate.require_last_session_edge and int(row.get("is_last_session_edge", 0)) <= 0:
         return "not_last_session_edge"
-    if gate.require_complete_component and int(row.get("complete_component_size", 0)) < int(
-        n_sessions
-    ):
+    if gate.require_complete_component and int(
+        row.get("complete_component_size", 0)
+    ) < int(n_sessions):
         return "not_complete_component"
-    if (
-        gate.min_complete_component_size is not None
-        and int(row.get("complete_component_size", 0)) < int(gate.min_complete_component_size)
-    ):
+    if gate.min_complete_component_size is not None and int(
+        row.get("complete_component_size", 0)
+    ) < int(gate.min_complete_component_size):
         return "complete_component_size_below_gate"
     if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
         return "growth_anchor_count_below_gate"
@@ -339,7 +342,9 @@ def _augment_growth_veto_candidate_shifted_iou(
     gate: GrowthVetoGate,
     n_sessions: int,
 ) -> list[dict[str, Any]]:
-    requested_by_pair: dict[tuple[int, int, str], list[tuple[int, int, int]]] = defaultdict(list)
+    requested_by_pair: dict[tuple[int, int, str], list[tuple[int, int, int]]] = (
+        defaultdict(list)
+    )
     for row_index, row in enumerate(rows):
         if np.isfinite(_finite_float(row.get("shifted_iou"), float("nan"))):
             continue
@@ -380,9 +385,9 @@ def _needs_sparse_shifted_iou(
         return False
     if gate.require_last_session_edge and int(row.get("is_last_session_edge", 0)) <= 0:
         return False
-    if gate.require_complete_component and int(row.get("complete_component_size", 0)) < int(
-        n_sessions
-    ):
+    if gate.require_complete_component and int(
+        row.get("complete_component_size", 0)
+    ) < int(n_sessions):
         return False
     for key, threshold in (
         ("growth_residual_mahalanobis", gate.min_growth_residual_mahalanobis),
@@ -448,8 +453,12 @@ def _sparse_shifted_iou_for_edges(
         moving_masks,
         radius=2,
     )["shifted_iou"]
-    source_position = {int(source_indices[local]): pos for pos, local in enumerate(source_locs)}
-    target_position = {int(target_indices[local]): pos for pos, local in enumerate(target_locs)}
+    source_position = {
+        int(source_indices[local]): pos for pos, local in enumerate(source_locs)
+    }
+    target_position = {
+        int(target_indices[local]): pos for pos, local in enumerate(target_locs)
+    }
     output: dict[tuple[int, int], float] = {}
     for roi_a, roi_b in requested_edges:
         source_pos = source_position.get(int(roi_a))
@@ -468,7 +477,9 @@ def _apply_growth_veto_rows(
     for row in rows[: max(0, int(gate.max_vetoes_per_subject))]:
         edge = _edge_from_row(row)
         occurrence_index = int(row.get("occurrence_index", 0))
-        split = veto._remove_edge_occurrence(output, edge, occurrence_index=occurrence_index)
+        split = veto._remove_edge_occurrence(
+            output, edge, occurrence_index=occurrence_index
+        )
         if split.reason != "split_edge" or int(split.would_split_component) <= 0:
             continue
         output = veto._as_track_matrix(split.tracks)
@@ -476,7 +487,9 @@ def _apply_growth_veto_rows(
     return output, tuple(applied)
 
 
-def _growth_veto_sort_key(row: Mapping[str, Any]) -> tuple[float, float, float, int, int, int]:
+def _growth_veto_sort_key(
+    row: Mapping[str, Any],
+) -> tuple[float, float, float, int, int, int]:
     return (
         -_finite_float(row.get("growth_residual_mahalanobis"), 0.0),
         -_finite_float(row.get("shifted_iou"), 0.0),
@@ -494,8 +507,12 @@ def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     by_subject["ALL"] = list(rows)
     output: list[dict[str, Any]] = []
     for subject, subject_rows in sorted(by_subject.items()):
-        selected = [row for row in subject_rows if int(row.get("selected_by_growth_veto", 0))]
-        applied = [row for row in subject_rows if int(row.get("applied_by_growth_veto", 0))]
+        selected = [
+            row for row in subject_rows if int(row.get("selected_by_growth_veto", 0))
+        ]
+        applied = [
+            row for row in subject_rows if int(row.get("applied_by_growth_veto", 0))
+        ]
         output.append(
             {
                 "subject": subject,
@@ -503,16 +520,28 @@ def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                 "selected_by_growth_veto": int(len(selected)),
                 "applied_by_growth_veto": int(len(applied)),
                 "selected_true_positive_edges": int(
-                    sum(str(row.get("edge_status_against_gt")) == "true_positive" for row in selected)
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "true_positive"
+                        for row in selected
+                    )
                 ),
                 "selected_false_positive_edges": int(
-                    sum(str(row.get("edge_status_against_gt")) == "false_positive" for row in selected)
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "false_positive"
+                        for row in selected
+                    )
                 ),
                 "applied_true_positive_edges": int(
-                    sum(str(row.get("edge_status_against_gt")) == "true_positive" for row in applied)
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "true_positive"
+                        for row in applied
+                    )
                 ),
                 "applied_false_positive_edges": int(
-                    sum(str(row.get("edge_status_against_gt")) == "false_positive" for row in applied)
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "false_positive"
+                        for row in applied
+                    )
                 ),
             }
         )
@@ -552,10 +581,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--diagnostics-output", type=Path, default=None)
     parser.add_argument("--diagnostics-format", choices=("csv", "json"), default="csv")
-    parser.add_argument("--min-growth-residual-mahalanobis", "--growth-veto-min-mahalanobis", dest="min_growth_residual_mahalanobis", type=float, default=20.0)
-    parser.add_argument("--min-veto-registered-iou", "--growth-veto-min-registered-iou", dest="min_veto_registered_iou", type=float, default=0.45)
-    parser.add_argument("--min-veto-shifted-iou", "--growth-veto-min-shifted-iou", dest="min_veto_shifted_iou", type=float, default=0.60)
-    parser.add_argument("--min-veto-cell-probability", "--growth-veto-min-cell-probability", dest="min_veto_cell_probability", type=float, default=0.50)
+    parser.add_argument(
+        "--min-growth-residual-mahalanobis",
+        "--growth-veto-min-mahalanobis",
+        dest="min_growth_residual_mahalanobis",
+        type=float,
+        default=20.0,
+    )
+    parser.add_argument(
+        "--min-veto-registered-iou",
+        "--growth-veto-min-registered-iou",
+        dest="min_veto_registered_iou",
+        type=float,
+        default=0.45,
+    )
+    parser.add_argument(
+        "--min-veto-shifted-iou",
+        "--growth-veto-min-shifted-iou",
+        dest="min_veto_shifted_iou",
+        type=float,
+        default=0.60,
+    )
+    parser.add_argument(
+        "--min-veto-cell-probability",
+        "--growth-veto-min-cell-probability",
+        dest="min_veto_cell_probability",
+        type=float,
+        default=0.50,
+    )
     parser.add_argument(
         "--min-veto-anchor-count",
         "--growth-veto-min-anchor-count",

@@ -692,7 +692,9 @@ def test_completing_rescue_action_specific_preset_targets_complete_rows() -> Non
         teacher_adjacent_repair_preset_kwargs("complete-row-rescue-action-specific")
         == kwargs
     )
-    assert teacher_adjacent_repair_preset_kwargs("complete-row-action-specific") == kwargs
+    assert (
+        teacher_adjacent_repair_preset_kwargs("complete-row-action-specific") == kwargs
+    )
 
 
 def test_teacher_rescue_parser_accepts_completing_rescue_preset() -> None:
@@ -708,7 +710,9 @@ def test_teacher_rescue_parser_accepts_completing_rescue_preset() -> None:
     assert args.teacher_repair_preset == "completing-rescue-action-specific"
 
 
-def test_completing_rescue_action_specific_preset_applies_confirmed_completion() -> None:
+def test_completing_rescue_action_specific_preset_applies_confirmed_completion() -> (
+    None
+):
     predicted = np.asarray([[100, 20, 30, -1]], dtype=int)
     teacher = np.asarray([[100, 20, 30, 40]], dtype=int)
     kwargs = teacher_adjacent_repair_preset_kwargs("completing-rescue-action-specific")

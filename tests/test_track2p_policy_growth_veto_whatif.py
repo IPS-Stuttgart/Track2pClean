@@ -13,7 +13,10 @@ def test_growth_veto_whatif_is_registered() -> None:
 
     assert canonical == "track2p-policy-growth-veto-whatif"
     assert cli._BENCHMARK_ALIASES["track2p-component-growth-veto-whatif"] == canonical
-    assert cli._BENCHMARK_COMMANDS[canonical].module == "bayescatrack.experiments.track2p_policy_growth_veto_whatif"
+    assert (
+        cli._BENCHMARK_COMMANDS[canonical].module
+        == "bayescatrack.experiments.track2p_policy_growth_veto_whatif"
+    )
 
 
 def test_growth_veto_parser_exposes_defaults() -> None:
