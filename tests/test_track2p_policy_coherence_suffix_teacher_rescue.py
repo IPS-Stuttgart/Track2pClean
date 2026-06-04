@@ -28,6 +28,8 @@ def test_coherence_suffix_teacher_rescue_defaults_match_manifest_teacher_row() -
     assert args.teacher_feature_preset == "none"
     assert args.max_applied_teacher_edits == -1
     assert args.allow_completing_rescue is None
+    assert args.allow_teacher_supported_completing_rescue is False
+    assert args.allow_teacher_confirmed_completing_rescue is False
 
 
 def test_coherence_suffix_teacher_rescue_exposes_action_specific_gates() -> None:
@@ -106,3 +108,43 @@ def test_coherence_suffix_teacher_rescue_exposes_completing_rescue_override() ->
     assert auto_args.allow_completing_rescue is None
     assert off_args.allow_completing_rescue is False
     assert on_args.allow_completing_rescue is True
+
+
+def test_coherence_suffix_teacher_rescue_exposes_teacher_supported_completion() -> None:
+    parser = track2p_policy_coherence_suffix_teacher_rescue.build_arg_parser()
+
+    args = parser.parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "scores.csv",
+            "--no-allow-completing-rescue",
+            "--allow-teacher-supported-completing-rescue",
+            "--teacher-action-filter",
+            "completing-rescue",
+        ]
+    )
+
+    assert args.allow_completing_rescue is False
+    assert args.allow_teacher_supported_completing_rescue is True
+
+
+def test_coherence_suffix_teacher_rescue_exposes_teacher_confirmed_completion() -> None:
+    parser = track2p_policy_coherence_suffix_teacher_rescue.build_arg_parser()
+
+    args = parser.parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "scores.csv",
+            "--no-allow-completing-rescue",
+            "--allow-teacher-confirmed-completing-rescue",
+            "--teacher-action-filter",
+            "completing-rescue",
+        ]
+    )
+
+    assert args.allow_completing_rescue is False
+    assert args.allow_teacher_confirmed_completing_rescue is True

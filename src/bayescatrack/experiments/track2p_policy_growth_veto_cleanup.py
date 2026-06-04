@@ -1,0 +1,475 @@
+"""Apply a strict growth-field veto after CoherenceSuffixTeacherRescue.
+
+The growth-veto what-if audit found one high-residual complete-FP candidate after
+the current Track2p-teacher-assisted lead row.  That audit is label-aware in its
+diagnostic columns, but the signal itself is label-free: a fitted per-session
+growth field can mark an accepted adjacent edge as an extreme outlier.
+
+This module turns that diagnostic into a deliberately narrow benchmark row.  It
+starts from the same CoherenceSuffixTeacherRescue state as the what-if audit and
+then splits at accepted adjacent edges that pass a hard, label-free gate:
+
+* very high growth-field Mahalanobis residual;
+* sufficient local registered/shifted ROI evidence, so we do not split malformed
+  or unmeasured edges;
+* sufficient endpoint cell probability;
+* optionally terminal/last-session and complete-component structure.
+
+The defaults target the specific non-GT feature pocket identified by the audit:
+one extreme terminal continuation in a complete component.  Manual-GT labels are
+used only for final scoring and optional diagnostic columns inherited from the
+what-if rows; they are not used to select vetoes.
+"""
+
+from __future__ import annotations
+
+import argparse
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Literal, cast
+
+import numpy as np
+from bayescatrack.evaluation.complete_track_scores import score_track_matrices
+from bayescatrack.experiments import track2p_policy_coherence_suffix_stitch_whatif as suffix
+from bayescatrack.experiments import track2p_policy_growth_veto_whatif as veto
+from bayescatrack.experiments.track2p_benchmark import (
+    GROUND_TRUTH_REFERENCE_SOURCE,
+    OutputFormat,
+    SubjectBenchmarkResult,
+    Track2pBenchmarkConfig,
+    discover_subject_dirs,
+    write_results,
+)
+from bayescatrack.experiments.track2p_emulation_benchmark import ThresholdMethod
+from bayescatrack.experiments.track2p_policy_benchmark import (
+    TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+    TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    track2p_policy_config,
+)
+from bayescatrack.experiments.track2p_policy_component_audit import ComponentCleanupConfig
+
+METHOD = "track2p-policy-growth-veto-cleanup"
+
+
+@dataclass(frozen=True)
+class GrowthVetoGate:
+    """Label-free gate for applying one-edge growth-veto splits."""
+
+    min_growth_residual_mahalanobis: float = 25.0
+    min_registered_iou: float = 0.30
+    min_shifted_iou: float = 0.50
+    min_cell_probability: float = 0.50
+    require_terminal_edge: bool = True
+    require_last_session_edge: bool = True
+    require_complete_component: bool = True
+    max_vetoes_per_subject: int = 1
+
+
+@dataclass(frozen=True)
+class GrowthVetoCleanupResult:
+    """Benchmark rows plus growth-veto diagnostic ledger."""
+
+    results: tuple[SubjectBenchmarkResult, ...]
+    edge_rows: tuple[dict[str, Any], ...]
+    summary_rows: tuple[dict[str, Any], ...]
+
+
+def run_track2p_policy_growth_veto_cleanup(
+    config: Track2pBenchmarkConfig,
+    *,
+    threshold_method: ThresholdMethod = TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    iou_distance_threshold: float = TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+    transform_type: str | None = None,
+    cell_probability_threshold: float | None = None,
+    cleanup_config: ComponentCleanupConfig | None = None,
+    suffix_gate: suffix.CoherenceSuffixStitchGate | None = None,
+    edge_top_k: int = 25,
+    path_beam_width: int = 100,
+    anchor_min_registered_iou: float = 0.50,
+    anchor_min_shifted_iou: float = 0.30,
+    anchor_min_cell_probability: float = 0.80,
+    growth_veto_gate: GrowthVetoGate | None = None,
+    progress: bool = False,
+) -> GrowthVetoCleanupResult:
+    """Run CoherenceSuffixTeacherRescue followed by strict growth-veto splits."""
+
+    policy_config = track2p_policy_config(
+        config,
+        transform_type=transform_type,
+        cell_probability_threshold=cell_probability_threshold,
+    )
+    cleanup_config = cleanup_config or ComponentCleanupConfig()
+    suffix_gate = suffix_gate or suffix.CoherenceSuffixStitchGate()
+    growth_veto_gate = growth_veto_gate or GrowthVetoGate()
+    subject_dirs = discover_subject_dirs(policy_config.data)
+    if not subject_dirs:
+        raise ValueError(
+            f"No Track2p-style subject directories found under {policy_config.data}"
+        )
+
+    states = [
+        veto._subject_state(
+            subject_dir,
+            config=policy_config,
+            cleanup_config=cleanup_config,
+            suffix_gate=suffix_gate,
+            threshold_method=threshold_method,
+            iou_distance_threshold=float(iou_distance_threshold),
+            edge_top_k=int(edge_top_k),
+            path_beam_width=int(path_beam_width),
+            anchor_min_registered_iou=float(anchor_min_registered_iou),
+            anchor_min_shifted_iou=float(anchor_min_shifted_iou),
+            anchor_min_cell_probability=float(anchor_min_cell_probability),
+            progress=progress,
+        )
+        for subject_dir in subject_dirs
+    ]
+    global_baseline_scores = veto._global_scores(state.baseline_scores for state in states)
+
+    results: list[SubjectBenchmarkResult] = []
+    diagnostic_rows: list[dict[str, Any]] = []
+    for state in states:
+        edge_rows = veto._accepted_edge_rows(
+            state,
+            global_baseline_scores=global_baseline_scores,
+            threshold_method=threshold_method,
+            iou_distance_threshold=float(iou_distance_threshold),
+            cell_probability_threshold=float(policy_config.cell_probability_threshold),
+            transform_type=policy_config.transform_type,
+        )
+        selected = _selected_growth_veto_rows(
+            edge_rows,
+            gate=growth_veto_gate,
+            n_sessions=int(state.reference.shape[1]),
+        )
+        vetoed_tracks, applied_keys = _apply_growth_veto_rows(
+            state.combined,
+            selected,
+            gate=growth_veto_gate,
+        )
+        scores = dict(score_track_matrices(vetoed_tracks, state.reference))
+        scores.update(
+            {
+                "track2p_growth_veto_candidates": int(len(edge_rows)),
+                "track2p_growth_veto_selected": int(len(selected)),
+                "track2p_growth_veto_applied": int(len(applied_keys)),
+                "track2p_growth_veto_min_mahalanobis": float(
+                    growth_veto_gate.min_growth_residual_mahalanobis
+                ),
+                "track2p_growth_veto_min_registered_iou": float(
+                    growth_veto_gate.min_registered_iou
+                ),
+                "track2p_growth_veto_min_shifted_iou": float(
+                    growth_veto_gate.min_shifted_iou
+                ),
+                "track2p_growth_veto_min_cell_probability": float(
+                    growth_veto_gate.min_cell_probability
+                ),
+                "track2p_growth_veto_require_terminal_edge": int(
+                    growth_veto_gate.require_terminal_edge
+                ),
+                "track2p_growth_veto_require_last_session_edge": int(
+                    growth_veto_gate.require_last_session_edge
+                ),
+                "track2p_growth_veto_require_complete_component": int(
+                    growth_veto_gate.require_complete_component
+                ),
+                "track2p_growth_veto_max_vetoes_per_subject": int(
+                    growth_veto_gate.max_vetoes_per_subject
+                ),
+            }
+        )
+        results.append(
+            SubjectBenchmarkResult(
+                subject=state.subject,
+                variant="CoherenceSuffixTeacherRescue + growth-veto cleanup",
+                method=cast(Any, METHOD),
+                scores=scores,
+                n_sessions=int(state.reference.shape[1]),
+                reference_source=GROUND_TRUTH_REFERENCE_SOURCE,
+            )
+        )
+        applied_set = set(applied_keys)
+        selected_set = {_edge_row_key(row) for row in selected}
+        for row in edge_rows:
+            key = _edge_row_key(row)
+            reason = growth_veto_gate_reason(
+                row,
+                growth_veto_gate,
+                n_sessions=int(state.reference.shape[1]),
+            )
+            diagnostic_rows.append(
+                {
+                    **row,
+                    "selected_by_growth_veto": int(key in selected_set),
+                    "applied_by_growth_veto": int(key in applied_set),
+                    "growth_veto_reason": reason,
+                    "growth_veto_min_mahalanobis": float(
+                        growth_veto_gate.min_growth_residual_mahalanobis
+                    ),
+                    "growth_veto_min_registered_iou": float(
+                        growth_veto_gate.min_registered_iou
+                    ),
+                    "growth_veto_min_shifted_iou": float(
+                        growth_veto_gate.min_shifted_iou
+                    ),
+                    "growth_veto_min_cell_probability": float(
+                        growth_veto_gate.min_cell_probability
+                    ),
+                }
+            )
+
+    return GrowthVetoCleanupResult(
+        tuple(results),
+        tuple(diagnostic_rows),
+        tuple(_summary_rows(diagnostic_rows)),
+    )
+
+
+def growth_veto_gate_reason(
+    row: Mapping[str, Any], gate: GrowthVetoGate, *, n_sessions: int
+) -> str:
+    """Return ``accepted`` or the first label-free rejection reason for a row."""
+
+    if str(row.get("remove_reason", "")) != "split_edge":
+        return "not_splittable"
+    if int(row.get("would_split_component", 0)) <= 0:
+        return "does_not_split_component"
+    if gate.require_terminal_edge and int(row.get("is_terminal_edge", 0)) <= 0:
+        return "not_terminal_edge"
+    if gate.require_last_session_edge and int(row.get("is_last_session_edge", 0)) <= 0:
+        return "not_last_session_edge"
+    if gate.require_complete_component and int(row.get("complete_component_size", 0)) < int(
+        n_sessions
+    ):
+        return "not_complete_component"
+    for key, threshold in (
+        ("growth_residual_mahalanobis", gate.min_growth_residual_mahalanobis),
+        ("registered_iou", gate.min_registered_iou),
+        ("shifted_iou", gate.min_shifted_iou),
+    ):
+        value = _finite_float(row.get(key), float("nan"))
+        if not np.isfinite(value) or value < float(threshold):
+            return f"{key}_below_gate"
+    cell_a = _finite_float(row.get("cell_probability_a"), float("nan"))
+    cell_b = _finite_float(row.get("cell_probability_b"), float("nan"))
+    if not np.isfinite(cell_a) or not np.isfinite(cell_b):
+        return "cell_probability_missing"
+    if min(cell_a, cell_b) < float(gate.min_cell_probability):
+        return "cell_probability_below_gate"
+    return "accepted"
+
+
+def _selected_growth_veto_rows(
+    rows: Sequence[Mapping[str, Any]], *, gate: GrowthVetoGate, n_sessions: int
+) -> list[Mapping[str, Any]]:
+    selected = [
+        row
+        for row in rows
+        if growth_veto_gate_reason(row, gate, n_sessions=n_sessions) == "accepted"
+    ]
+    selected.sort(key=_growth_veto_sort_key)
+    return selected[: max(0, int(gate.max_vetoes_per_subject))]
+
+
+def _apply_growth_veto_rows(
+    tracks: np.ndarray, rows: Sequence[Mapping[str, Any]], *, gate: GrowthVetoGate
+) -> tuple[np.ndarray, tuple[tuple[int, int, int, int, int], ...]]:
+    output = veto._as_track_matrix(tracks)
+    applied: list[tuple[int, int, int, int, int]] = []
+    for row in rows[: max(0, int(gate.max_vetoes_per_subject))]:
+        edge = _edge_from_row(row)
+        occurrence_index = int(row.get("occurrence_index", 0))
+        split = veto._remove_edge_occurrence(output, edge, occurrence_index=occurrence_index)
+        if split.reason != "split_edge" or int(split.would_split_component) <= 0:
+            continue
+        output = veto._as_track_matrix(split.tracks)
+        applied.append((*edge, occurrence_index))
+    return output, tuple(applied)
+
+
+def _growth_veto_sort_key(row: Mapping[str, Any]) -> tuple[float, float, float, int, int, int]:
+    return (
+        -_finite_float(row.get("growth_residual_mahalanobis"), 0.0),
+        -_finite_float(row.get("shifted_iou"), 0.0),
+        -_finite_float(row.get("registered_iou"), 0.0),
+        int(row.get("session_a", 0)),
+        int(row.get("session_b", 0)),
+        int(row.get("roi_a", 0)),
+    )
+
+
+def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    by_subject: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_subject[str(row.get("subject", ""))].append(row)
+    by_subject["ALL"] = list(rows)
+    output: list[dict[str, Any]] = []
+    for subject, subject_rows in sorted(by_subject.items()):
+        selected = [row for row in subject_rows if int(row.get("selected_by_growth_veto", 0))]
+        applied = [row for row in subject_rows if int(row.get("applied_by_growth_veto", 0))]
+        output.append(
+            {
+                "subject": subject,
+                "accepted_edges": int(len(subject_rows)),
+                "selected_by_growth_veto": int(len(selected)),
+                "applied_by_growth_veto": int(len(applied)),
+                "selected_true_positive_edges": int(
+                    sum(str(row.get("edge_status_against_gt")) == "true_positive" for row in selected)
+                ),
+                "selected_false_positive_edges": int(
+                    sum(str(row.get("edge_status_against_gt")) == "false_positive" for row in selected)
+                ),
+                "applied_true_positive_edges": int(
+                    sum(str(row.get("edge_status_against_gt")) == "true_positive" for row in applied)
+                ),
+                "applied_false_positive_edges": int(
+                    sum(str(row.get("edge_status_against_gt")) == "false_positive" for row in applied)
+                ),
+            }
+        )
+    return output
+
+
+def _edge_from_row(row: Mapping[str, Any]) -> tuple[int, int, int, int]:
+    return (
+        int(row["session_a"]),
+        int(row["session_b"]),
+        int(row["roi_a"]),
+        int(row["roi_b"]),
+    )
+
+
+def _edge_row_key(row: Mapping[str, Any]) -> tuple[int, int, int, int, int]:
+    edge = _edge_from_row(row)
+    return (*edge, int(row.get("occurrence_index", 0)))
+
+
+def _finite_float(value: Any, fallback: float) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return float(fallback)
+    return numeric if np.isfinite(numeric) else float(fallback)
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Build the growth-veto cleanup parser."""
+
+    parser = veto.build_arg_parser()
+    parser.prog = "bayescatrack benchmark track2p-policy-growth-veto-cleanup"
+    parser.description = (
+        "Run CoherenceSuffixTeacherRescue and split accepted adjacent edges that "
+        "pass a strict label-free growth-veto gate."
+    )
+    parser.add_argument("--diagnostics-output", type=Path, default=None)
+    parser.add_argument("--diagnostics-format", choices=("csv", "json"), default="csv")
+    parser.add_argument("--min-growth-residual-mahalanobis", type=float, default=25.0)
+    parser.add_argument("--min-veto-registered-iou", type=float, default=0.30)
+    parser.add_argument("--min-veto-shifted-iou", type=float, default=0.50)
+    parser.add_argument("--min-veto-cell-probability", type=float, default=0.50)
+    parser.add_argument(
+        "--require-veto-terminal-edge",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--require-veto-last-session-edge",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--require-veto-complete-component",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument("--max-vetoes-per-subject", type=int, default=1)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the growth-veto cleanup benchmark."""
+
+    args = build_arg_parser().parse_args(argv)
+    config = Track2pBenchmarkConfig(
+        data=args.data,
+        method="global-assignment",
+        input_format=args.input_format,
+        reference=args.reference,
+        reference_kind=args.reference_kind,
+        plane_name=args.plane_name,
+        seed_session=args.seed_session,
+        restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        transform_type=args.transform_type,
+        allow_track2p_as_reference_for_smoke_test=(
+            args.allow_track2p_as_reference_for_smoke_test
+        ),
+        include_behavior=args.include_behavior,
+        include_non_cells=False,
+        cell_probability_threshold=args.cell_probability_threshold,
+        exclude_overlapping_pixels=False,
+        weighted_masks=False,
+        weighted_centroids=False,
+    )
+    cleanup_config = ComponentCleanupConfig(
+        split_risk_threshold=args.split_risk_threshold,
+        split_penalty=args.split_penalty,
+        min_side_observations=args.min_side_observations,
+        require_complete_track=args.require_complete_track,
+    )
+    suffix_gate = suffix.CoherenceSuffixStitchGate(
+        suffix_path_length=int(args.suffix_path_length),
+        min_cell_probability=float(args.min_cell_probability),
+        min_area_ratio=float(args.min_area_ratio),
+        max_centroid_distance=float(args.max_centroid_distance),
+        min_shifted_iou=float(args.min_shifted_iou),
+        min_motion_consistency=float(args.min_motion_consistency),
+        min_shape_consistency=float(args.min_shape_consistency),
+        max_stitches_per_subject=int(args.max_stitches_per_subject),
+    )
+    result = run_track2p_policy_growth_veto_cleanup(
+        config,
+        threshold_method=cast(ThresholdMethod, args.threshold_method),
+        iou_distance_threshold=float(args.iou_distance_threshold),
+        transform_type=args.transform_type,
+        cell_probability_threshold=float(args.cell_probability_threshold),
+        cleanup_config=cleanup_config,
+        suffix_gate=suffix_gate,
+        edge_top_k=int(args.edge_top_k),
+        path_beam_width=int(args.path_beam_width),
+        anchor_min_registered_iou=float(args.anchor_min_registered_iou),
+        anchor_min_shifted_iou=float(args.anchor_min_shifted_iou),
+        anchor_min_cell_probability=float(args.anchor_min_cell_probability),
+        growth_veto_gate=GrowthVetoGate(
+            min_growth_residual_mahalanobis=float(args.min_growth_residual_mahalanobis),
+            min_registered_iou=float(args.min_veto_registered_iou),
+            min_shifted_iou=float(args.min_veto_shifted_iou),
+            min_cell_probability=float(args.min_veto_cell_probability),
+            require_terminal_edge=bool(args.require_veto_terminal_edge),
+            require_last_session_edge=bool(args.require_veto_last_session_edge),
+            require_complete_component=bool(args.require_veto_complete_component),
+            max_vetoes_per_subject=int(args.max_vetoes_per_subject),
+        ),
+        progress=bool(args.progress),
+    )
+    rows = [benchmark_result.to_dict() for benchmark_result in result.results]
+    write_results(rows, args.output, cast(OutputFormat, args.format))
+    if args.diagnostics_output is not None:
+        veto.write_rows(
+            result.edge_rows,
+            args.diagnostics_output,
+            output_format=cast(Literal["csv", "json"], args.diagnostics_format),
+        )
+    if args.summary_output is not None:
+        veto.write_rows(
+            result.summary_rows,
+            args.summary_output,
+            output_format=cast(Literal["csv", "json"], args.format),
+        )
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

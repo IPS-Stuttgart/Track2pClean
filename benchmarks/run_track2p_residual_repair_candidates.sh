@@ -86,6 +86,19 @@ run_teacher_veto() {
     --diagnostics-format csv
 }
 
+run_growth_veto_cleanup() {
+  local label=$1
+  shift
+  "$PY" -m bayescatrack benchmark track2p-policy-growth-veto-cleanup \
+    "${COMMON[@]}" \
+    "${POLICY[@]}" \
+    "${CLEANUP[@]}" \
+    "$@" \
+    --output "$OUT/${label}.csv" \
+    --format csv \
+    --diagnostics-output "$OUT/${label}_edges.csv"
+}
+
 "$PY" -m bayescatrack benchmark track2p \
   "${COMMON[@]}" \
   --method track2p-baseline \
@@ -358,6 +371,16 @@ run_teacher_rescue teacher_adjacent_missing_seed_high_confidence_preset \
   --allow-fragment-merges \
   --teacher-repair-preset missing-seed-high-confidence
 
+# Missing-seed completion row: target only seed-session source backfills that
+# would immediately complete a predicted row.  This is narrower than the ordinary
+# missing-seed presets and directly tests the complete-FN residual bucket without
+# spending the tiny edit budget on non-completing seed inserts.
+run_teacher_rescue teacher_adjacent_missing_seed_completing_moderate_iou_preset \
+  --no-allow-completing-rescue \
+  --no-allow-source-backfill \
+  --allow-fragment-merges \
+  --teacher-repair-preset missing-seed-completing-moderate-iou
+
 run_teacher_rescue teacher_adjacent_completing \
   --allow-completing-rescue \
   --allow-source-backfill \
@@ -457,6 +480,22 @@ run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
   --min-veto-fragment-observations 2 \
   --max-applied-vetoes 1
 
+# Growth-field veto candidate: after CoherenceSuffixTeacherRescue, the residual
+# growth-field audit found one extreme terminal false continuation whose removal
+# would improve both official metrics. This row turns that label-free signal into
+# a real tiny-edit benchmark candidate instead of another oracle what-if table.
+run_growth_veto_cleanup growth_veto_cleanup_default \
+  --anchor-min-registered-iou 0.50 \
+  --anchor-min-shifted-iou 0.30 \
+  --anchor-min-cell-probability 0.80 \
+  --growth-veto-min-mahalanobis 25.0 \
+  --growth-veto-min-anchor-count 2 \
+  --growth-veto-min-complete-component-size 7 \
+  --growth-veto-min-cell-probability 0.50 \
+  --growth-veto-min-registered-iou 0.20 \
+  --growth-veto-min-shifted-iou 0.50 \
+  --growth-veto-max-vetoes-per-subject 1
+
 "$PY" -m bayescatrack benchmark compare \
   --input Track2p="$OUT/track2p_baseline.csv" \
   --input Track2pPolicyD12="$OUT/track2p_policy_d12.csv" \
@@ -485,6 +524,7 @@ run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
   --input TeacherAdjacentSeedSourceOnlyHighConfidenceMax2="$OUT/teacher_adjacent_seed_source_only_high_confidence_max2.csv" \
   --input TeacherAdjacentMissingSeedCellConfidentPreset="$OUT/teacher_adjacent_missing_seed_cell_confident_preset.csv" \
   --input TeacherAdjacentMissingSeedHighConfidencePreset="$OUT/teacher_adjacent_missing_seed_high_confidence_preset.csv" \
+  --input TeacherAdjacentMissingSeedCompletingModerateIouPreset="$OUT/teacher_adjacent_missing_seed_completing_moderate_iou_preset.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
@@ -495,6 +535,7 @@ run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
   --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
   --input TeacherVetoCompleteTrackRowAbsentMax1="$OUT/teacher_veto_complete_track_row_absent_max1.csv" \
+  --input GrowthVetoCleanupDefault="$OUT/growth_veto_cleanup_default.csv" \
   --output "$OUT/residual_repair_candidates_comparison.md" \
   --format markdown \
   --highlight-best \
@@ -531,6 +572,7 @@ run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
   --input TeacherAdjacentSeedSourceOnlyHighConfidenceMax2="$OUT/teacher_adjacent_seed_source_only_high_confidence_max2.csv" \
   --input TeacherAdjacentMissingSeedCellConfidentPreset="$OUT/teacher_adjacent_missing_seed_cell_confident_preset.csv" \
   --input TeacherAdjacentMissingSeedHighConfidencePreset="$OUT/teacher_adjacent_missing_seed_high_confidence_preset.csv" \
+  --input TeacherAdjacentMissingSeedCompletingModerateIouPreset="$OUT/teacher_adjacent_missing_seed_completing_moderate_iou_preset.csv" \
   --input TeacherAdjacentCompleting="$OUT/teacher_adjacent_completing.csv" \
   --input TeacherAdjacentCompletingSeedSource="$OUT/teacher_adjacent_completing_seed_source.csv" \
   --input TeacherAdjacentDynamicCompletingSeedSource="$OUT/teacher_adjacent_dynamic_completing_seed_source.csv" \
@@ -541,6 +583,7 @@ run_teacher_veto teacher_veto_complete_track_row_absent_max1 \
   --input TeacherVetoConflictGeometricMax1="$OUT/teacher_veto_conflict_geometric_max1.csv" \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
   --input TeacherVetoCompleteTrackRowAbsentMax1="$OUT/teacher_veto_complete_track_row_absent_max1.csv" \
+  --input GrowthVetoCleanupDefault="$OUT/growth_veto_cleanup_default.csv" \
   --output "$OUT/residual_repair_candidates_comparison.csv" \
   --format csv
 

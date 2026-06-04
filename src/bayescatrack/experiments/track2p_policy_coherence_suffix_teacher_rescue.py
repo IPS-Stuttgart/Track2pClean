@@ -5,6 +5,11 @@ This command starts from the current Track2pPolicy-family lead
 Track2p-teacher adjacent-rescue edit rule.  It is a teacher-hybrid ablation:
 Track2p output is an input signal, but manual-GT labels are not used to select
 edits.
+
+The wrapper also exposes the stricter teacher-supported completion gates from
+the underlying adjacent-rescue implementation.  That lets a benchmark row test
+complete-row repair only when the completed row is supported or exactly
+confirmed by Track2p, without turning on arbitrary completing rescue.
 """
 
 from __future__ import annotations
@@ -79,6 +84,8 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
     target_extension_feature_preset: str = "none",
     seed_source_feature_preset: str = "none",
     allow_completing_rescue: bool | None = None,
+    allow_teacher_supported_completing_rescue: bool = False,
+    allow_teacher_confirmed_completing_rescue: bool = False,
     allow_source_backfill: bool = True,
     allow_seed_source_backfill: bool = False,
     allow_completing_seed_source_backfill: bool = False,
@@ -118,6 +125,12 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
             target_extension_feature_preset=str(target_extension_feature_preset),
             seed_source_feature_preset=str(seed_source_feature_preset),
             allow_completing_rescue=resolved_allow_completing_rescue,
+            allow_teacher_supported_completing_rescue=bool(
+                allow_teacher_supported_completing_rescue
+            ),
+            allow_teacher_confirmed_completing_rescue=bool(
+                allow_teacher_confirmed_completing_rescue
+            ),
             allow_source_backfill=bool(allow_source_backfill),
             allow_seed_source_backfill=bool(allow_seed_source_backfill),
             allow_completing_seed_source_backfill=bool(allow_completing_seed_source_backfill),
@@ -146,6 +159,8 @@ def _subject_row(
     target_extension_feature_preset: str,
     seed_source_feature_preset: str,
     allow_completing_rescue: bool,
+    allow_teacher_supported_completing_rescue: bool,
+    allow_teacher_confirmed_completing_rescue: bool,
     allow_source_backfill: bool,
     allow_seed_source_backfill: bool,
     allow_completing_seed_source_backfill: bool,
@@ -242,6 +257,12 @@ def _subject_row(
         teacher_action_filter=teacher_action_filter,
         edge_feature_index=edge_features,
         teacher_feature_gate=teacher_feature_gate,
+        allow_teacher_supported_completing_rescue=bool(
+            allow_teacher_supported_completing_rescue
+        ),
+        allow_teacher_confirmed_completing_rescue=bool(
+            allow_teacher_confirmed_completing_rescue
+        ),
         target_extension_feature_gate=target_extension_feature_gate,
         seed_source_feature_gate=seed_source_feature_gate,
         min_component_observations=max(1, int(min_teacher_component_observations)),
@@ -264,6 +285,12 @@ def _subject_row(
             int(edit.get("applied", 0)) for edit in teacher_report.rows
         ),
         allow_completing_rescue=bool(allow_completing_rescue),
+        allow_teacher_supported_completing_rescue=bool(
+            allow_teacher_supported_completing_rescue
+        ),
+        allow_teacher_confirmed_completing_rescue=bool(
+            allow_teacher_confirmed_completing_rescue
+        ),
     )
     teacher_rows = [
         {**edit, "subject": subject_dir.name, "after_stage": "coherence_suffix"}
@@ -296,6 +323,8 @@ def _score_row(
     teacher_candidates: int,
     teacher_applied: int,
     allow_completing_rescue: bool,
+    allow_teacher_supported_completing_rescue: bool,
+    allow_teacher_confirmed_completing_rescue: bool,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "subject": subject,
@@ -307,6 +336,12 @@ def _score_row(
         "teacher_candidates": int(teacher_candidates),
         "teacher_applied": int(teacher_applied),
         "teacher_allow_completing_rescue": int(allow_completing_rescue),
+        "teacher_allow_teacher_supported_completing_rescue": int(
+            allow_teacher_supported_completing_rescue
+        ),
+        "teacher_allow_teacher_confirmed_completing_rescue": int(
+            allow_teacher_confirmed_completing_rescue
+        ),
     }
     for key in (
         "pairwise_true_positives",
@@ -427,6 +462,30 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--allow-teacher-supported-completing-rescue",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Allow teacher edits that complete a predicted row only when the "
+            "completed row is supported by a Track2p teacher row.  This is "
+            "narrower than --allow-completing-rescue and can be combined with "
+            "--no-allow-completing-rescue for label-free complete-row repair "
+            "ablation rows."
+        ),
+    )
+    parser.add_argument(
+        "--allow-teacher-confirmed-completing-rescue",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Allow teacher edits that complete a predicted row only when the "
+            "completed row is exactly present as a complete Track2p teacher row. "
+            "This is the strictest completion gate and is intended for testing "
+            "complete-track residual repair without admitting arbitrary "
+            "completions."
+        ),
+    )
+    parser.add_argument(
         "--allow-source-backfill",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -517,6 +576,12 @@ def main(argv: list[str] | None = None) -> int:
         target_extension_feature_preset=str(args.target_extension_feature_preset),
         seed_source_feature_preset=str(args.seed_source_feature_preset),
         allow_completing_rescue=args.allow_completing_rescue,
+        allow_teacher_supported_completing_rescue=bool(
+            args.allow_teacher_supported_completing_rescue
+        ),
+        allow_teacher_confirmed_completing_rescue=bool(
+            args.allow_teacher_confirmed_completing_rescue
+        ),
         allow_source_backfill=bool(args.allow_source_backfill),
         allow_seed_source_backfill=bool(args.allow_seed_source_backfill),
         allow_completing_seed_source_backfill=bool(args.allow_completing_seed_source_backfill),

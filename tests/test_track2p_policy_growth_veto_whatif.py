@@ -127,3 +127,185 @@ def test_anchor_edges_use_policy_diagnostics_without_feature_cache(monkeypatch) 
     )
 
     assert anchors == {(0, 1): ((0, 1, 10, 11),)}
+
+
+def test_policy_feature_index_from_diagnostics(monkeypatch) -> None:
+    sessions = (object(), object())
+    diagnostic = SimpleNamespace(
+        session_index=0,
+        local_roi_a=0,
+        local_roi_b=0,
+        assigned_iou=0.72,
+        centroid_distance=3.5,
+        area_ratio=0.91,
+        row_margin=0.12,
+        column_margin=0.08,
+        threshold=0.40,
+        threshold_margin=0.32,
+    )
+
+    def fake_roi_indices(session: object) -> np.ndarray:
+        return np.asarray([10]) if session is sessions[0] else np.asarray([11])
+
+    monkeypatch.setattr(veto, "_roi_indices", fake_roi_indices)
+    monkeypatch.setattr(veto, "_cell_probability", lambda *args: 0.90)
+
+    index = veto._policy_feature_index_from_diagnostics(
+        sessions,
+        diagnostics=(diagnostic,),
+    )
+
+    assert set(index) == {(0, 1, 10, 11)}
+    feature = index[(0, 1, 10, 11)]
+    assert feature.registered_iou == 0.72
+    assert feature.shifted_iou != feature.shifted_iou
+    assert feature.row_rank == 1
+    assert feature.column_rank == 1
+    assert feature.threshold_margin == 0.32
+
+
+def test_sparse_edge_feature_augmentation_keeps_existing_suffix_shifted_iou() -> None:
+    rows = [
+        {"session_a": 0, "session_b": 1, "roi_a": 10, "roi_b": 11},
+        {"session_a": 1, "session_b": 2, "roi_a": 11, "roi_b": 12},
+    ]
+    features = {
+        (0, 1, 10, 11): veto._AcceptedEdgeFeature(
+            registered_iou=0.4,
+            shifted_iou=0.5,
+            centroid_distance=2.0,
+            area_ratio=0.9,
+            cell_probability_a=0.8,
+            cell_probability_b=0.85,
+            row_rank=2,
+            column_rank=3,
+            row_margin=0.1,
+            column_margin=0.2,
+            threshold=0.3,
+            threshold_margin=0.1,
+            assigned_by_hungarian=0,
+        )
+    }
+
+    augmented = veto._augment_with_sparse_edge_features(rows, (), features)
+
+    assert augmented[0]["shifted_iou"] == 0.5
+    assert augmented[0]["registered_iou"] == 0.4
+    assert augmented[0]["cell_probability_a"] == 0.8
+    assert augmented[0]["cell_probability_b"] == 0.85
+    assert augmented[1]["shifted_iou"] != augmented[1]["shifted_iou"]
+    assert augmented[1]["registered_iou"] != augmented[1]["registered_iou"]
+
+
+def test_cached_growth_features_use_session_context() -> None:
+    sessions = (
+        _fake_session([10, 20], [(0.0, 0.0), (2.0, 0.0)]),
+        _fake_session([11, 21], [(1.0, 0.0), (3.0, 0.0)]),
+    )
+    predicted = np.asarray([[10, 11], [20, 21]], dtype=int)
+    context = veto._growth_feature_context(
+        sessions,
+        predicted,
+        {(0, 1): ((0, 1, 10, 11), (0, 1, 20, 21))},
+    )
+    model = SimpleNamespace(
+        affine_xy=np.asarray([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]], dtype=float),
+        covariance_inverse=np.eye(2, dtype=float),
+        expected_area_ratio=1.0,
+    )
+
+    features = veto._edge_growth_features_fast(
+        context,
+        (0, 1, 10, 11),
+        model=model,
+    )
+
+    assert features.growth_residual == 0.0
+    assert features.growth_residual_mahalanobis == 0.0
+    assert features.observed_area_ratio == 1.0
+    assert features.area_growth_residual == 0.0
+    assert features.local_neighbor_distortion == 0.0
+
+
+def test_removal_score_delta_matches_full_scorer_for_true_complete_edge() -> None:
+    predicted = np.asarray([[1, 2, 3]], dtype=int)
+    reference = np.asarray([[1, 2, 3]], dtype=int)
+
+    assert _fast_delta(predicted, reference, (1, 2, 2, 3)) == _full_delta(
+        predicted, reference, (1, 2, 2, 3)
+    )
+
+
+def test_removal_score_delta_matches_full_scorer_for_complete_false_positive() -> None:
+    predicted = np.asarray([[1, 2, 3], [4, 5, 6]], dtype=int)
+    reference = np.asarray([[1, 2, 3]], dtype=int)
+
+    assert _fast_delta(predicted, reference, (1, 2, 5, 6)) == _full_delta(
+        predicted, reference, (1, 2, 5, 6)
+    )
+
+
+def test_removal_score_delta_matches_full_scorer_for_duplicate_occurrence() -> None:
+    predicted = np.asarray([[1, 2, 3], [1, 2, 3]], dtype=int)
+    reference = np.asarray([[1, 2, 3]], dtype=int)
+
+    assert _fast_delta(
+        predicted, reference, (1, 2, 2, 3), occurrence_index=0
+    ) == _full_delta(predicted, reference, (1, 2, 2, 3), occurrence_index=0)
+
+
+def _fast_delta(
+    predicted: np.ndarray,
+    reference: np.ndarray,
+    edge: veto.TrackEdge,
+    *,
+    occurrence_index: int = 0,
+) -> dict[str, int]:
+    split = veto._remove_edge_occurrence(
+        predicted, edge, occurrence_index=occurrence_index
+    )
+    return veto._removal_score_delta(
+        predicted,
+        edge,
+        occurrence_index=occurrence_index,
+        split=split,
+        predicted_edge_counts=veto.track_edge_counter(predicted),
+        reference_edge_counts=veto.track_edge_counter(reference),
+        predicted_complete_counts=veto._complete_track_counter(predicted),
+        reference_complete_counts=veto._complete_track_counter(reference),
+    )
+
+
+def _full_delta(
+    predicted: np.ndarray,
+    reference: np.ndarray,
+    edge: veto.TrackEdge,
+    *,
+    occurrence_index: int = 0,
+) -> dict[str, int]:
+    split = veto._remove_edge_occurrence(
+        predicted, edge, occurrence_index=occurrence_index
+    )
+    return veto._score_delta(
+        dict(veto.score_track_matrices(predicted, reference)),
+        dict(veto.score_track_matrices(split.tracks, reference)),
+    )
+
+
+def _fake_session(
+    roi_indices: list[int],
+    centroids_xy: list[tuple[float, float]],
+    *,
+    areas: list[float] | None = None,
+) -> object:
+    areas = areas or [1.0 for _ in roi_indices]
+    centroid_array = np.asarray(centroids_xy, dtype=float).T
+    return SimpleNamespace(
+        plane_data=SimpleNamespace(
+            roi_indices=np.asarray(roi_indices, dtype=int),
+            n_rois=len(roi_indices),
+            roi_masks=np.ones((len(roi_indices), 3, 3), dtype=bool),
+            centroids=lambda order="xy": centroid_array,
+            roi_areas=lambda: np.asarray(areas, dtype=float),
+        )
+    )

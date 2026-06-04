@@ -26,6 +26,11 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+from pyrecest.utils.track_edit_whatif import (
+    TrackEdit,
+    score_track_edit_delta,
+)
+
 from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments.track2p_benchmark import (
@@ -564,18 +569,23 @@ def _candidate_row(
     occurrence_index: int = 0,
     swap_removed_edge: TrackEdge | None = None,
 ) -> dict[str, float | int | str]:
-    candidate_scores = dict(score_track_matrices(simulation.candidate, state.reference))
-    deltas = _score_deltas(state.base_scores, candidate_scores)
+    edit = _track_edit_for_candidate(
+        edit_type=edit_type,
+        edge=edge,
+        occurrence_index=occurrence_index,
+        swap_removed_edge=swap_removed_edge,
+    )
+    edit_delta = score_track_edit_delta(
+        state.predicted,
+        state.reference,
+        edit,
+        count_duplicates=True,
+    )
+    deltas = _edit_delta_counts(edit_delta)
     new_global = _apply_deltas(global_base, deltas)
     feature = _edge_feature_row(state, edge)
-    base_complete_tp = int(state.base_scores["complete_track_true_positives"])
-    base_complete_fp = int(state.base_scores["complete_track_false_positives"])
-    would_break_complete_tp = (
-        int(candidate_scores["complete_track_true_positives"]) < base_complete_tp
-    )
-    would_create_complete_fp = (
-        int(candidate_scores["complete_track_false_positives"]) > base_complete_fp
-    )
+    would_break_complete_tp = bool(edit_delta.breaks_complete_track)
+    would_create_complete_fp = bool(edit_delta.complete_fp_delta > 0)
     support = _support_flags(state, edge)
     structural_risk, risk_reason = _structural_risk(
         simulation,
@@ -630,6 +640,60 @@ def _candidate_row(
         ),
         "swap_removed_roi_a": int(swap_removed_edge[2]) if swap_removed_edge else -1,
         "swap_removed_roi_b": int(swap_removed_edge[3]) if swap_removed_edge else -1,
+    }
+
+
+def _track_edit_for_candidate(
+    *,
+    edit_type: str,
+    edge: TrackEdge,
+    occurrence_index: int = 0,
+    swap_removed_edge: TrackEdge | None = None,
+) -> TrackEdit:
+    session_a, session_b, roi_a, roi_b = edge
+    if edit_type == "remove_pairwise_fp":
+        return TrackEdit(
+            kind="remove_link",
+            session_a=session_a,
+            session_b=session_b,
+            source_observation=roi_a,
+            target_observation=roi_b,
+            metadata={"occurrence_index": int(occurrence_index)},
+        )
+    if edit_type == "add_pairwise_fn":
+        return TrackEdit(
+            kind="add_link",
+            session_a=session_a,
+            session_b=session_b,
+            source_observation=roi_a,
+            target_observation=roi_b,
+        )
+    if edit_type == "swap_conflict_coupled_edge" and swap_removed_edge is not None:
+        wrong_session_a, wrong_session_b, wrong_roi_a, wrong_roi_b = swap_removed_edge
+        return TrackEdit(
+            kind="swap_link",
+            session_a=session_a,
+            session_b=session_b,
+            source_observation=roi_a,
+            target_observation=roi_b,
+            metadata={
+                "remove_session_a": wrong_session_a,
+                "remove_session_b": wrong_session_b,
+                "remove_source_observation": wrong_roi_a,
+                "remove_target_observation": wrong_roi_b,
+            },
+        )
+    raise ValueError(f"Unsupported coherence Pareto edit type: {edit_type!r}")
+
+
+def _edit_delta_counts(edit_delta: Any) -> dict[str, int]:
+    return {
+        "pairwise_true_positives": int(edit_delta.pairwise_tp_delta),
+        "pairwise_false_positives": int(edit_delta.pairwise_fp_delta),
+        "pairwise_false_negatives": int(edit_delta.pairwise_fn_delta),
+        "complete_track_true_positives": int(edit_delta.complete_tp_delta),
+        "complete_track_false_positives": int(edit_delta.complete_fp_delta),
+        "complete_track_false_negatives": int(edit_delta.complete_fn_delta),
     }
 
 
@@ -734,13 +798,6 @@ def _structural_risk(
         risk += 1
         reasons.append("creates-complete-fp")
     return risk, ";".join(reasons) if reasons else "none"
-
-
-def _score_deltas(
-    baseline: Mapping[str, float | int],
-    candidate: Mapping[str, float | int],
-) -> dict[str, int]:
-    return {key: int(candidate[key]) - int(baseline[key]) for key in _COUNT_KEYS}
 
 
 def _sum_scores(scores: Sequence[Mapping[str, float | int]]) -> dict[str, int]:

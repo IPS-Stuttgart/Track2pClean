@@ -380,6 +380,12 @@ def _run_track2p_policy_teacher_adjacent_rows(
         ),
         teacher_repair_preset=str(options.get("teacher_repair_preset", "none")),
         teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
+        target_extension_feature_preset=str(
+            options.get("target_extension_feature_preset", "none")
+        ),
+        seed_source_feature_preset=str(
+            options.get("seed_source_feature_preset", "none")
+        ),
         min_component_observations=int(options.get("min_component_observations", 1)),
         max_applied_edits=_optional_int_option(options, "max_applied_edits"),
         teacher_feature_gate=teacher_feature_gate,

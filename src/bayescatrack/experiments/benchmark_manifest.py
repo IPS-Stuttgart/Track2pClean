@@ -112,6 +112,8 @@ TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS = (
         "target_extension_feature_preset",
         "seed_source_feature_preset",
         "allow_completing_rescue",
+        "allow_teacher_supported_completing_rescue",
+        "allow_teacher_confirmed_completing_rescue",
         "allow_source_backfill",
         "allow_seed_source_backfill",
         "allow_completing_seed_source_backfill",
@@ -1694,6 +1696,12 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
         teacher_feature_gate=teacher_feature_gate,
         teacher_repair_preset=str(options.get("teacher_repair_preset", "none")),
         teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
+        target_extension_feature_preset=str(
+            options.get("target_extension_feature_preset", "none")
+        ),
+        seed_source_feature_preset=str(
+            options.get("seed_source_feature_preset", "none")
+        ),
     )
     return [result.to_dict() for result in output.results]
 
