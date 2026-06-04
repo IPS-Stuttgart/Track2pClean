@@ -30,6 +30,7 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         "track2p-teacher-adjacent-rescue",
         "track2p-teacher-fn-rescue",
         "track2p-residual-union-action-specific-rescue",
+        "track2p-completing-rescue-action-specific",
     ]
     assert all(preset.config.method == "global-assignment" for preset in presets)
     assert all(preset.config.reference_kind == "manual-gt" for preset in presets)
@@ -46,6 +47,7 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         teacher,
         teacher_fn,
         teacher_residual_union,
+        teacher_completing_rescue,
     ) = presets
     assert shifted.config.cost == "registered-shifted-iou"
     assert shifted.config.higher_order_consistency_config is not None
@@ -117,6 +119,18 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         "cleanup_config_kwargs"
     ]
     assert isinstance(residual_union_cleanup_kwargs, dict)
+    assert teacher_completing_rescue.runner == "teacher-adjacent-rescue"
+    assert teacher_completing_rescue.config is stability.config
+    assert teacher_completing_rescue.runner_kwargs is not None
+    assert (
+        teacher_completing_rescue.runner_kwargs["teacher_repair_preset"]
+        == "completing-rescue-action-specific"
+    )
+    assert teacher_completing_rescue.runner_kwargs["threshold_method"] == "min"
+    completing_rescue_cleanup_kwargs = teacher_completing_rescue.runner_kwargs[
+        "cleanup_config_kwargs"
+    ]
+    assert isinstance(completing_rescue_cleanup_kwargs, dict)
 
 
 def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:
