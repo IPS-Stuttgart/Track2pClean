@@ -1211,6 +1211,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     while True:
         output_counts = track_edge_counter(output)
         pending: list[tuple[TrackEdge, int]] = []
+        deferred_action_rows: list[dict[str, int | str]] = []
         for edge, occurrence_index in occurrences:
             occurrence = (edge, occurrence_index)
             if occurrence in attempted:
@@ -1225,8 +1226,13 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                 action_filter=teacher_action_filter,
             )
             if action_reason != "accepted":
-                attempted.add(occurrence)
-                rows.append(
+                # Dynamic rescue changes the predicted matrix after each accepted
+                # edit.  An edge that is not in the requested action class now can
+                # become a valid target-extension/source-backfill/fragment-merge
+                # after an earlier teacher edit inserts one of its endpoints.  Do
+                # not mark action-filter misses as permanently attempted until the
+                # loop reaches a fixed point with no currently eligible edge.
+                deferred_action_rows.append(
                     {
                         **_teacher_edge_rejection_row(edge, action_reason),
                         "occurrence_index": int(occurrence_index),
@@ -1255,6 +1261,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                 continue
             pending.append(occurrence)
         if not pending:
+            rows.extend(deferred_action_rows)
             break
 
         edge, occurrence_index = min(

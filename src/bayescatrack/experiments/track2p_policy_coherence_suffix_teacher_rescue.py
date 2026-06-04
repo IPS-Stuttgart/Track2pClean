@@ -78,6 +78,7 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
     teacher_feature_preset: str = "none",
     target_extension_feature_preset: str = "none",
     seed_source_feature_preset: str = "none",
+    allow_completing_rescue: bool | None = None,
     allow_source_backfill: bool = True,
     allow_seed_source_backfill: bool = False,
     allow_completing_seed_source_backfill: bool = False,
@@ -97,6 +98,10 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
 
     rows: list[dict[str, Any]] = []
     teacher_rows: list[dict[str, Any]] = []
+    resolved_allow_completing_rescue = _resolve_allow_completing_rescue(
+        allow_completing_rescue,
+        teacher_action_filter,
+    )
     for subject_dir in discover_subject_dirs(policy_config.data):
         row, edits = _subject_row(
             subject_dir,
@@ -112,6 +117,7 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
             teacher_feature_preset=str(teacher_feature_preset),
             target_extension_feature_preset=str(target_extension_feature_preset),
             seed_source_feature_preset=str(seed_source_feature_preset),
+            allow_completing_rescue=resolved_allow_completing_rescue,
             allow_source_backfill=bool(allow_source_backfill),
             allow_seed_source_backfill=bool(allow_seed_source_backfill),
             allow_completing_seed_source_backfill=bool(allow_completing_seed_source_backfill),
@@ -139,6 +145,7 @@ def _subject_row(
     teacher_feature_preset: str,
     target_extension_feature_preset: str,
     seed_source_feature_preset: str,
+    allow_completing_rescue: bool,
     allow_source_backfill: bool,
     allow_seed_source_backfill: bool,
     allow_completing_seed_source_backfill: bool,
@@ -226,7 +233,7 @@ def _subject_row(
         stitched,
         teacher,
         seed_session=config.seed_session,
-        allow_completing_rescue=False,
+        allow_completing_rescue=bool(allow_completing_rescue),
         allow_source_backfill=allow_source_backfill,
         allow_seed_source_backfill=allow_seed_source_backfill,
         allow_completing_seed_source_backfill=allow_completing_seed_source_backfill,
@@ -256,12 +263,25 @@ def _subject_row(
         teacher_applied=sum(
             int(edit.get("applied", 0)) for edit in teacher_report.rows
         ),
+        allow_completing_rescue=bool(allow_completing_rescue),
     )
     teacher_rows = [
         {**edit, "subject": subject_dir.name, "after_stage": "coherence_suffix"}
         for edit in teacher_report.rows
     ]
     return row, teacher_rows
+
+
+def _resolve_allow_completing_rescue(
+    allow_completing_rescue: bool | None,
+    teacher_action_filter: TeacherActionFilter | str,
+) -> bool:
+    """Return whether the combined row should allow complete-row edits."""
+
+    if allow_completing_rescue is not None:
+        return bool(allow_completing_rescue)
+    normalized = str(teacher_action_filter).strip().lower().replace("_", "-")
+    return normalized == "completing-rescue"
 
 
 def _score_row(
@@ -275,6 +295,7 @@ def _score_row(
     suffix_candidates: int,
     teacher_candidates: int,
     teacher_applied: int,
+    allow_completing_rescue: bool,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "subject": subject,
@@ -285,6 +306,7 @@ def _score_row(
         "suffix_candidates": int(suffix_candidates),
         "teacher_candidates": int(teacher_candidates),
         "teacher_applied": int(teacher_applied),
+        "teacher_allow_completing_rescue": int(allow_completing_rescue),
     }
     for key in (
         "pairwise_true_positives",
@@ -396,6 +418,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="none",
     )
     parser.add_argument(
+        "--allow-completing-rescue",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Allow teacher edits that complete a predicted row. By default this "
+            "is enabled only when --teacher-action-filter=completing-rescue."
+        ),
+    )
+    parser.add_argument(
         "--allow-source-backfill",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -485,6 +516,7 @@ def main(argv: list[str] | None = None) -> int:
         teacher_feature_preset=str(args.teacher_feature_preset),
         target_extension_feature_preset=str(args.target_extension_feature_preset),
         seed_source_feature_preset=str(args.seed_source_feature_preset),
+        allow_completing_rescue=args.allow_completing_rescue,
         allow_source_backfill=bool(args.allow_source_backfill),
         allow_seed_source_backfill=bool(args.allow_seed_source_backfill),
         allow_completing_seed_source_backfill=bool(args.allow_completing_seed_source_backfill),
