@@ -57,6 +57,8 @@ def test_growth_veto_cleanup_parser_exposes_conservative_defaults() -> None:
     assert args.min_growth_residual_mahalanobis == 20.0
     assert args.min_veto_registered_iou == 0.45
     assert args.min_veto_shifted_iou == 0.60
+    assert args.max_veto_registered_iou is None
+    assert args.max_veto_shifted_iou is None
     assert args.min_veto_cell_probability == 0.50
     assert args.max_veto_row_rank == 1
     assert args.max_veto_column_rank == 1
@@ -124,6 +126,26 @@ def test_growth_veto_gate_rejects_non_top_rank_edges() -> None:
     assert reason == "row_rank_above_gate"
 
 
+def test_growth_veto_gate_rejects_too_strong_registered_iou_when_capped() -> None:
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(registered_iou=0.68),
+        cleanup.GrowthVetoGate(max_registered_iou=0.60),
+        n_sessions=7,
+    )
+
+    assert reason == "registered_iou_above_gate"
+
+
+def test_growth_veto_gate_rejects_too_strong_shifted_iou_when_capped() -> None:
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(shifted_iou=0.85),
+        cleanup.GrowthVetoGate(max_shifted_iou=0.80),
+        n_sessions=7,
+    )
+
+    assert reason == "shifted_iou_above_gate"
+
+
 def test_growth_veto_sparse_shifted_iou_fill_only_touches_prequalified_rows(
     monkeypatch,
 ) -> None:
@@ -164,6 +186,29 @@ def test_growth_veto_sparse_shifted_iou_fill_only_touches_prequalified_rows(
 
     assert augmented[0]["shifted_iou"] == 0.76
     assert augmented[1]["shifted_iou"] != augmented[1]["shifted_iou"]
+
+
+def test_growth_veto_sparse_shifted_iou_fill_respects_registered_iou_cap(
+    monkeypatch,
+) -> None:
+    rows = [
+        _candidate_row(shifted_iou=float("nan"), registered_iou=0.70),
+    ]
+    sessions = (_fake_session([2309], 0), _fake_session([1210], 1))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("shifted IoU should not be computed for capped edges")
+
+    monkeypatch.setattr(cleanup, "register_plane_pair", fail_if_called)
+
+    augmented = cleanup._augment_growth_veto_candidate_shifted_iou(  # pylint: disable=protected-access
+        rows,
+        sessions,
+        gate=cleanup.GrowthVetoGate(max_registered_iou=0.60),
+        n_sessions=2,
+    )
+
+    assert augmented[0]["shifted_iou"] != augmented[0]["shifted_iou"]
 
 
 def test_growth_veto_gate_rejects_low_anchor_count() -> None:

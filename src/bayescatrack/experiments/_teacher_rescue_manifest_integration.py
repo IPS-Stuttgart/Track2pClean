@@ -696,6 +696,36 @@ def _teacher_rescue_manifest_rows(output_root: str) -> tuple[dict[str, Any], ...
             "track2p_policy_teacher_adjacent_rescue_missing_seed_high_confidence.csv",
         ),
         (
+            (
+                "track2p-policy-teacher-adjacent-rescue-"
+                "complete-row-action-specific-max1"
+            ),
+            False,
+            True,
+            True,
+            False,
+            "dynamic-seed-cell-confidence",
+            {
+                # Residual audits show complete-track FNs are high-leverage, but
+                # previous gap/insert candidates often accepted safe edits that
+                # did not move official rows.  Keep this manifest candidate
+                # complete-row-only and spend at most one teacher edit so it can
+                # test the missing-seed / completing-rescue hypothesis without
+                # opening broad Track2p-teacher propagation.
+                "allow_teacher_complete_row_rescue": True,
+                "allow_source_backfill": False,
+                "allow_fragment_merges": False,
+                "teacher_action_filter": "completing-rescue",
+                "teacher_repair_preset": "complete-row-rescue-action-specific",
+                "teacher_feature_preset": "none",
+                "target_extension_feature_preset": "moderate-iou-cell-confidence",
+                "seed_source_feature_preset": "seed-source-cell-confident",
+                "min_component_observations": 2,
+                "max_applied_edits": 1,
+            },
+            "track2p_policy_teacher_adjacent_rescue_complete_row_action_specific_max1.csv",
+        ),
+        (
             "track2p-policy-teacher-adjacent-rescue-seed-source",
             False,
             True,

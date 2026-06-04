@@ -496,6 +496,24 @@ run_growth_veto_cleanup growth_veto_cleanup_default \
   --growth-veto-min-shifted-iou 0.50 \
   --growth-veto-max-vetoes-per-subject 1
 
+# Same growth-field signal, but explicitly test the narrower residual-audit
+# pocket that excludes high-confidence terminal matches.  The first method row
+# selected a high-IoU/high-shifted-IoU true edge; this row keeps the large growth
+# residual requirement while requiring only moderate local evidence.
+run_growth_veto_cleanup growth_veto_cleanup_moderate_local_evidence_max1 \
+  --anchor-min-registered-iou 0.50 \
+  --anchor-min-shifted-iou 0.30 \
+  --anchor-min-cell-probability 0.80 \
+  --growth-veto-min-mahalanobis 25.0 \
+  --growth-veto-min-anchor-count 2 \
+  --growth-veto-min-complete-component-size 7 \
+  --growth-veto-min-cell-probability 0.50 \
+  --growth-veto-min-registered-iou 0.20 \
+  --growth-veto-max-registered-iou 0.60 \
+  --growth-veto-min-shifted-iou 0.30 \
+  --growth-veto-max-shifted-iou 0.80 \
+  --growth-veto-max-vetoes-per-subject 1
+
 "$PY" -m bayescatrack benchmark compare \
   --input Track2p="$OUT/track2p_baseline.csv" \
   --input Track2pPolicyD12="$OUT/track2p_policy_d12.csv" \
@@ -536,6 +554,7 @@ run_growth_veto_cleanup growth_veto_cleanup_default \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
   --input TeacherVetoCompleteTrackRowAbsentMax1="$OUT/teacher_veto_complete_track_row_absent_max1.csv" \
   --input GrowthVetoCleanupDefault="$OUT/growth_veto_cleanup_default.csv" \
+  --input GrowthVetoCleanupModerateLocalEvidenceMax1="$OUT/growth_veto_cleanup_moderate_local_evidence_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.md" \
   --format markdown \
   --highlight-best \
@@ -584,6 +603,7 @@ run_growth_veto_cleanup growth_veto_cleanup_default \
   --input TeacherVetoCompleteTrackMax1="$OUT/teacher_veto_complete_track_max1.csv" \
   --input TeacherVetoCompleteTrackRowAbsentMax1="$OUT/teacher_veto_complete_track_row_absent_max1.csv" \
   --input GrowthVetoCleanupDefault="$OUT/growth_veto_cleanup_default.csv" \
+  --input GrowthVetoCleanupModerateLocalEvidenceMax1="$OUT/growth_veto_cleanup_moderate_local_evidence_max1.csv" \
   --output "$OUT/residual_repair_candidates_comparison.csv" \
   --format csv
 

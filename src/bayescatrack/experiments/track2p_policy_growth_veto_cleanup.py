@@ -10,8 +10,9 @@ starts from the same CoherenceSuffixTeacherRescue state as the what-if audit and
 then splits at accepted adjacent edges that pass a hard, label-free gate:
 
 * very high growth-field Mahalanobis residual;
-* sufficient local registered/shifted ROI evidence, so we do not split malformed
-  or unmeasured edges;
+* bounded local registered/shifted ROI evidence, so we do not split malformed
+  or unmeasured edges, but can optionally avoid high-confidence local matches
+  that are plausible true terminal continuations;
 * sufficient endpoint cell probability;
 * optionally terminal/last-session and complete-component structure.
 
@@ -67,6 +68,8 @@ class GrowthVetoGate:
     min_growth_residual_mahalanobis: float = 20.0
     min_registered_iou: float = 0.45
     min_shifted_iou: float = 0.60
+    max_registered_iou: float | None = None
+    max_shifted_iou: float | None = None
     min_cell_probability: float = 0.50
     min_anchor_count: int = 0
     min_complete_component_size: int | None = None
@@ -184,6 +187,16 @@ def run_track2p_policy_growth_veto_cleanup(
                 "track2p_growth_veto_min_shifted_iou": float(
                     growth_veto_gate.min_shifted_iou
                 ),
+                "track2p_growth_veto_max_registered_iou": (
+                    float(growth_veto_gate.max_registered_iou)
+                    if growth_veto_gate.max_registered_iou is not None
+                    else float("nan")
+                ),
+                "track2p_growth_veto_max_shifted_iou": (
+                    float(growth_veto_gate.max_shifted_iou)
+                    if growth_veto_gate.max_shifted_iou is not None
+                    else float("nan")
+                ),
                 "track2p_growth_veto_min_cell_probability": float(
                     growth_veto_gate.min_cell_probability
                 ),
@@ -250,6 +263,16 @@ def run_track2p_policy_growth_veto_cleanup(
                     "growth_veto_min_shifted_iou": float(
                         growth_veto_gate.min_shifted_iou
                     ),
+                    "growth_veto_max_registered_iou": (
+                        float(growth_veto_gate.max_registered_iou)
+                        if growth_veto_gate.max_registered_iou is not None
+                        else float("nan")
+                    ),
+                    "growth_veto_max_shifted_iou": (
+                        float(growth_veto_gate.max_shifted_iou)
+                        if growth_veto_gate.max_shifted_iou is not None
+                        else float("nan")
+                    ),
                     "growth_veto_min_cell_probability": float(
                         growth_veto_gate.min_cell_probability
                     ),
@@ -308,6 +331,15 @@ def growth_veto_gate_reason(
         value = _finite_float(row.get(key), float("nan"))
         if not np.isfinite(value) or value < float(threshold):
             return f"{key}_below_gate"
+    for key, threshold in (
+        ("registered_iou", gate.max_registered_iou),
+        ("shifted_iou", gate.max_shifted_iou),
+    ):
+        if threshold is None:
+            continue
+        value = _finite_float(row.get(key), float("nan"))
+        if not np.isfinite(value) or value > float(threshold):
+            return f"{key}_above_gate"
     row_rank = int(_finite_float(row.get("row_rank"), float("inf")))
     column_rank = int(_finite_float(row.get("column_rank"), float("inf")))
     if row_rank <= 0 or row_rank > int(gate.max_row_rank):
@@ -401,6 +433,12 @@ def _needs_sparse_shifted_iou(
     ):
         value = _finite_float(row.get(key), float("nan"))
         if not np.isfinite(value) or value < float(threshold):
+            return False
+    if gate.max_registered_iou is not None:
+        registered_iou = _finite_float(row.get("registered_iou"), float("nan"))
+        if not np.isfinite(registered_iou) or registered_iou > float(
+            gate.max_registered_iou
+        ):
             return False
     row_rank = int(_finite_float(row.get("row_rank"), float("inf")))
     column_rank = int(_finite_float(row.get("column_rank"), float("inf")))
@@ -602,11 +640,35 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=0.45,
     )
     parser.add_argument(
+        "--max-veto-registered-iou",
+        "--growth-veto-max-registered-iou",
+        dest="max_veto_registered_iou",
+        type=float,
+        default=None,
+        help=(
+            "Optional upper bound on registered IoU for growth-veto candidates. "
+            "This lets benchmark rows test the high-growth / moderate-local-evidence "
+            "pocket while avoiding very strong local matches."
+        ),
+    )
+    parser.add_argument(
         "--min-veto-shifted-iou",
         "--growth-veto-min-shifted-iou",
         dest="min_veto_shifted_iou",
         type=float,
         default=0.60,
+    )
+    parser.add_argument(
+        "--max-veto-shifted-iou",
+        "--growth-veto-max-shifted-iou",
+        dest="max_veto_shifted_iou",
+        type=float,
+        default=None,
+        help=(
+            "Optional upper bound on shifted IoU for growth-veto candidates. "
+            "Use with --growth-veto-max-registered-iou to avoid vetoing "
+            "high-confidence terminal true continuations."
+        ),
     )
     parser.add_argument(
         "--min-veto-cell-probability",
@@ -728,6 +790,8 @@ def main(argv: list[str] | None = None) -> int:
             min_growth_residual_mahalanobis=float(args.min_growth_residual_mahalanobis),
             min_registered_iou=float(args.min_veto_registered_iou),
             min_shifted_iou=float(args.min_veto_shifted_iou),
+            max_registered_iou=args.max_veto_registered_iou,
+            max_shifted_iou=args.max_veto_shifted_iou,
             min_cell_probability=float(args.min_veto_cell_probability),
             min_anchor_count=max(0, int(args.min_veto_anchor_count)),
             min_complete_component_size=(
