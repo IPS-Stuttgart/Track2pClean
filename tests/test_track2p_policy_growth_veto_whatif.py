@@ -197,6 +197,36 @@ def test_sparse_edge_feature_augmentation_keeps_existing_suffix_shifted_iou() ->
     assert augmented[1]["registered_iou"] != augmented[1]["registered_iou"]
 
 
+def test_cached_growth_features_use_session_context() -> None:
+    sessions = (
+        _fake_session([10, 20], [(0.0, 0.0), (2.0, 0.0)]),
+        _fake_session([11, 21], [(1.0, 0.0), (3.0, 0.0)]),
+    )
+    predicted = np.asarray([[10, 11], [20, 21]], dtype=int)
+    context = veto._growth_feature_context(
+        sessions,
+        predicted,
+        {(0, 1): ((0, 1, 10, 11), (0, 1, 20, 21))},
+    )
+    model = SimpleNamespace(
+        affine_xy=np.asarray([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]], dtype=float),
+        covariance_inverse=np.eye(2, dtype=float),
+        expected_area_ratio=1.0,
+    )
+
+    features = veto._edge_growth_features_fast(
+        context,
+        (0, 1, 10, 11),
+        model=model,
+    )
+
+    assert features.growth_residual == 0.0
+    assert features.growth_residual_mahalanobis == 0.0
+    assert features.observed_area_ratio == 1.0
+    assert features.area_growth_residual == 0.0
+    assert features.local_neighbor_distortion == 0.0
+
+
 def test_removal_score_delta_matches_full_scorer_for_true_complete_edge() -> None:
     predicted = np.asarray([[1, 2, 3]], dtype=int)
     reference = np.asarray([[1, 2, 3]], dtype=int)
@@ -259,4 +289,23 @@ def _full_delta(
     return veto._score_delta(
         dict(veto.score_track_matrices(predicted, reference)),
         dict(veto.score_track_matrices(split.tracks, reference)),
+    )
+
+
+def _fake_session(
+    roi_indices: list[int],
+    centroids_xy: list[tuple[float, float]],
+    *,
+    areas: list[float] | None = None,
+) -> object:
+    areas = areas or [1.0 for _ in roi_indices]
+    centroid_array = np.asarray(centroids_xy, dtype=float).T
+    return SimpleNamespace(
+        plane_data=SimpleNamespace(
+            roi_indices=np.asarray(roi_indices, dtype=int),
+            n_rois=len(roi_indices),
+            roi_masks=np.ones((len(roi_indices), 3, 3), dtype=bool),
+            centroids=lambda order="xy": centroid_array,
+            roi_areas=lambda: np.asarray(areas, dtype=float),
+        )
     )
