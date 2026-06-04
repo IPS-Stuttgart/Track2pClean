@@ -127,3 +127,71 @@ def test_anchor_edges_use_policy_diagnostics_without_feature_cache(monkeypatch) 
     )
 
     assert anchors == {(0, 1): ((0, 1, 10, 11),)}
+
+
+def test_policy_feature_index_from_diagnostics(monkeypatch) -> None:
+    sessions = (object(), object())
+    diagnostic = SimpleNamespace(
+        session_index=0,
+        local_roi_a=0,
+        local_roi_b=0,
+        assigned_iou=0.72,
+        centroid_distance=3.5,
+        area_ratio=0.91,
+        row_margin=0.12,
+        column_margin=0.08,
+        threshold=0.40,
+        threshold_margin=0.32,
+    )
+
+    def fake_roi_indices(session: object) -> np.ndarray:
+        return np.asarray([10]) if session is sessions[0] else np.asarray([11])
+
+    monkeypatch.setattr(veto, "_roi_indices", fake_roi_indices)
+    monkeypatch.setattr(veto, "_cell_probability", lambda *args: 0.90)
+
+    index = veto._policy_feature_index_from_diagnostics(
+        sessions,
+        diagnostics=(diagnostic,),
+    )
+
+    assert set(index) == {(0, 1, 10, 11)}
+    feature = index[(0, 1, 10, 11)]
+    assert feature.registered_iou == 0.72
+    assert feature.shifted_iou != feature.shifted_iou
+    assert feature.row_rank == 1
+    assert feature.column_rank == 1
+    assert feature.threshold_margin == 0.32
+
+
+def test_sparse_edge_feature_augmentation_keeps_existing_suffix_shifted_iou() -> None:
+    rows = [
+        {"session_a": 0, "session_b": 1, "roi_a": 10, "roi_b": 11},
+        {"session_a": 1, "session_b": 2, "roi_a": 11, "roi_b": 12},
+    ]
+    features = {
+        (0, 1, 10, 11): veto._AcceptedEdgeFeature(
+            registered_iou=0.4,
+            shifted_iou=0.5,
+            centroid_distance=2.0,
+            area_ratio=0.9,
+            cell_probability_a=0.8,
+            cell_probability_b=0.85,
+            row_rank=2,
+            column_rank=3,
+            row_margin=0.1,
+            column_margin=0.2,
+            threshold=0.3,
+            threshold_margin=0.1,
+            assigned_by_hungarian=0,
+        )
+    }
+
+    augmented = veto._augment_with_sparse_edge_features(rows, (), features)
+
+    assert augmented[0]["shifted_iou"] == 0.5
+    assert augmented[0]["registered_iou"] == 0.4
+    assert augmented[0]["cell_probability_a"] == 0.8
+    assert augmented[0]["cell_probability_b"] == 0.85
+    assert augmented[1]["shifted_iou"] != augmented[1]["shifted_iou"]
+    assert augmented[1]["registered_iou"] != augmented[1]["registered_iou"]

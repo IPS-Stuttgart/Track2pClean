@@ -56,7 +56,6 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
 )
 from bayescatrack.experiments.track2p_policy_growth_field_residual_audit import (
     _as_track_matrix,
-    _augment_with_shifted_iou_and_margins,
     _cell_probability,
     _edge_growth_features,
     _growth_models_by_pair,
@@ -105,10 +104,27 @@ class _SubjectState:
     teacher: np.ndarray
     combined: np.ndarray
     reference: np.ndarray
-    feature_cache: _FeatureCache
+    edge_features: Mapping[TrackEdge, "_AcceptedEdgeFeature"]
     anchor_edges: Mapping[tuple[int, int], Sequence[TrackEdge]]
     growth_models: Mapping[tuple[int, int], Any]
     baseline_scores: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class _AcceptedEdgeFeature:
+    registered_iou: float = float("nan")
+    shifted_iou: float = float("nan")
+    centroid_distance: float = float("nan")
+    area_ratio: float = float("nan")
+    cell_probability_a: float = float("nan")
+    cell_probability_b: float = float("nan")
+    row_rank: int = -1
+    column_rank: int = -1
+    row_margin: float = float("nan")
+    column_margin: float = float("nan")
+    threshold: float = float("nan")
+    threshold_margin: float = float("nan")
+    assigned_by_hungarian: int = 0
 
 
 @dataclass(frozen=True)
@@ -270,6 +286,10 @@ def _subject_state(
         path_beam_width=int(path_beam_width),
     )
     selected = suffix._select_paths(paths, cleaned, gate=suffix_gate)
+    edge_features = _policy_feature_index_from_diagnostics(
+        sessions, policy_prediction.diagnostics
+    )
+    edge_features.update(_suffix_feature_index(selected))
     _log_progress(
         progress,
         f"{METHOD}: {subject_dir.name}: suffix candidates={len(paths)} selected={len(selected)}",
@@ -323,7 +343,7 @@ def _subject_state(
         teacher=teacher_eval,
         combined=combined,
         reference=reference_eval,
-        feature_cache=feature_cache,
+        edge_features=edge_features,
         anchor_edges=anchor_edges,
         growth_models=_growth_models_by_pair(sessions, anchor_edges),
         baseline_scores=dict(score_track_matrices(combined, reference_eval)),
@@ -378,6 +398,62 @@ def _anchor_edges_from_policy_diagnostics(
         source_counts = Counter((edge[0], edge[2]) for edge in edges)
         target_counts = Counter((edge[1], edge[3]) for edge in edges)
         output[pair] = tuple(edge for edge in edges if source_counts[(edge[0], edge[2])] == 1 and target_counts[(edge[1], edge[3])] == 1)
+    return output
+
+
+def _policy_feature_index_from_diagnostics(
+    sessions: Sequence[Track2pSession], diagnostics: Sequence[Any]
+) -> dict[TrackEdge, _AcceptedEdgeFeature]:
+    roi_indices_by_session = [_roi_indices(session) for session in sessions]
+    output: dict[TrackEdge, _AcceptedEdgeFeature] = {}
+    for diagnostic in diagnostics:
+        session_index = int(diagnostic.session_index)
+        if session_index < 0 or session_index + 1 >= len(roi_indices_by_session):
+            continue
+        source_indices = roi_indices_by_session[session_index]
+        target_indices = roi_indices_by_session[session_index + 1]
+        local_a = int(diagnostic.local_roi_a)
+        local_b = int(diagnostic.local_roi_b)
+        if local_a >= len(source_indices) or local_b >= len(target_indices):
+            continue
+        roi_a = int(source_indices[local_a])
+        roi_b = int(target_indices[local_b])
+        output[(session_index, session_index + 1, roi_a, roi_b)] = _AcceptedEdgeFeature(
+            registered_iou=float(diagnostic.assigned_iou),
+            centroid_distance=float(diagnostic.centroid_distance),
+            area_ratio=float(diagnostic.area_ratio),
+            cell_probability_a=_cell_probability(sessions, session_index, roi_a),
+            cell_probability_b=_cell_probability(sessions, session_index + 1, roi_b),
+            row_rank=1,
+            column_rank=1,
+            row_margin=float(diagnostic.row_margin),
+            column_margin=float(diagnostic.column_margin),
+            threshold=float(diagnostic.threshold),
+            threshold_margin=float(diagnostic.threshold_margin),
+            assigned_by_hungarian=1,
+        )
+    return output
+
+
+def _suffix_feature_index(
+    paths: Sequence[Any],
+) -> dict[TrackEdge, _AcceptedEdgeFeature]:
+    output: dict[TrackEdge, _AcceptedEdgeFeature] = {}
+    for path in paths:
+        for edge in getattr(path, "edges", ()):
+            output[tuple(int(value) for value in edge.edge)] = _AcceptedEdgeFeature(
+                registered_iou=float(edge.registered_iou),
+                shifted_iou=float(edge.shifted_iou),
+                centroid_distance=float(edge.centroid_distance),
+                area_ratio=float(edge.area_ratio),
+                cell_probability_a=float(edge.cell_probability_a),
+                cell_probability_b=float(edge.cell_probability_b),
+                row_rank=int(edge.row_rank),
+                column_rank=int(edge.column_rank),
+                row_margin=float(edge.row_margin),
+                column_margin=float(edge.column_margin),
+                threshold_margin=float(edge.threshold_margin),
+            )
     return output
 
 
@@ -463,7 +539,57 @@ def _accepted_edge_rows(
                     "transform_type": str(transform_type),
                 }
             )
-    return _augment_with_shifted_iou_and_margins(rows, state.sessions, feature_cache=state.feature_cache)
+    return _augment_with_sparse_edge_features(rows, state.sessions, state.edge_features)
+
+
+def _augment_with_sparse_edge_features(
+    rows: list[dict[str, Any]],
+    sessions: Sequence[Track2pSession],
+    features: Mapping[TrackEdge, _AcceptedEdgeFeature],
+) -> list[dict[str, Any]]:
+    for row in rows:
+        edge = (
+            int(row["session_a"]),
+            int(row["session_b"]),
+            int(row["roi_a"]),
+            int(row["roi_b"]),
+        )
+        feature = features.get(edge, _AcceptedEdgeFeature())
+        row["registered_iou"] = float(feature.registered_iou)
+        row["shifted_iou"] = float(feature.shifted_iou)
+        row["centroid_distance"] = float(feature.centroid_distance)
+        row["area_ratio"] = float(feature.area_ratio)
+        row["row_rank"] = int(feature.row_rank)
+        row["column_rank"] = int(feature.column_rank)
+        row["row_margin"] = float(feature.row_margin)
+        row["column_margin"] = float(feature.column_margin)
+        row["threshold"] = float(feature.threshold)
+        row["threshold_margin"] = float(feature.threshold_margin)
+        row["assigned_by_hungarian"] = int(feature.assigned_by_hungarian)
+        row["cell_probability_a"] = _feature_or_cell_probability(
+            feature.cell_probability_a,
+            sessions,
+            int(row["session_a"]),
+            int(row["roi_a"]),
+        )
+        row["cell_probability_b"] = _feature_or_cell_probability(
+            feature.cell_probability_b,
+            sessions,
+            int(row["session_b"]),
+            int(row["roi_b"]),
+        )
+    return rows
+
+
+def _feature_or_cell_probability(
+    value: float,
+    sessions: Sequence[Track2pSession],
+    session_index: int,
+    roi: int,
+) -> float:
+    if np.isfinite(float(value)):
+        return float(value)
+    return _cell_probability(sessions, int(session_index), int(roi))
 
 
 def _remove_edge_occurrence(predicted: np.ndarray, edge: TrackEdge, *, occurrence_index: int) -> _SplitResult:
