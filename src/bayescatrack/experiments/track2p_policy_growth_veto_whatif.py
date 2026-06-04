@@ -468,6 +468,8 @@ def _accepted_edge_rows(
 ) -> list[dict[str, Any]]:
     combined_counts = track_edge_counter(state.combined)
     reference_counts = track_edge_counter(state.reference)
+    predicted_complete_counts = _complete_track_counter(state.combined)
+    reference_complete_counts = _complete_track_counter(state.reference)
     policy_counts = track_edge_counter(state.policy)
     cleanup_counts = track_edge_counter(state.component_cleanup)
     suffix_counts = track_edge_counter(state.coherence_suffix)
@@ -487,8 +489,16 @@ def _accepted_edge_rows(
                 predicted=state.combined,
             )
             split = _remove_edge_occurrence(state.combined, edge, occurrence_index=occurrence_index)
-            candidate_scores = dict(score_track_matrices(split.tracks, state.reference))
-            delta = _score_delta(state.baseline_scores, candidate_scores)
+            delta = _removal_score_delta(
+                state.combined,
+                edge,
+                occurrence_index=occurrence_index,
+                split=split,
+                predicted_edge_counts=combined_counts,
+                reference_edge_counts=reference_counts,
+                predicted_complete_counts=predicted_complete_counts,
+                reference_complete_counts=reference_complete_counts,
+            )
             global_candidate_scores = _apply_subject_delta(global_baseline_scores, delta)
             edge_source = _edge_source(
                 edge,
@@ -590,6 +600,52 @@ def _feature_or_cell_probability(
     if np.isfinite(float(value)):
         return float(value)
     return _cell_probability(sessions, int(session_index), int(roi))
+
+
+def _removal_score_delta(
+    predicted: np.ndarray,
+    edge: TrackEdge,
+    *,
+    occurrence_index: int,
+    split: _SplitResult,
+    predicted_edge_counts: Mapping[TrackEdge, int],
+    reference_edge_counts: Mapping[TrackEdge, int],
+    predicted_complete_counts: Mapping[tuple[int, ...], int],
+    reference_complete_counts: Mapping[tuple[int, ...], int],
+) -> dict[str, int]:
+    delta = {key: 0 for key in _SCORE_KEYS}
+    predicted_count = int(predicted_edge_counts.get(edge, 0))
+    reference_count = int(reference_edge_counts.get(edge, 0))
+    if int(occurrence_index) >= predicted_count:
+        return delta
+    if predicted_count <= reference_count:
+        delta["pairwise_true_positives"] -= 1
+        delta["pairwise_false_negatives"] += 1
+    else:
+        delta["pairwise_false_positives"] -= 1
+
+    if int(split.row_index) < 0:
+        return delta
+    row = np.asarray(predicted[int(split.row_index)], dtype=int)
+    if not np.all(row >= 0):
+        return delta
+    complete_track = tuple(int(value) for value in row)
+    predicted_complete_count = int(predicted_complete_counts.get(complete_track, 0))
+    reference_complete_count = int(reference_complete_counts.get(complete_track, 0))
+    if predicted_complete_count <= reference_complete_count:
+        delta["complete_track_true_positives"] -= 1
+        delta["complete_track_false_negatives"] += 1
+    else:
+        delta["complete_track_false_positives"] -= 1
+    return delta
+
+
+def _complete_track_counter(track_matrix: np.ndarray) -> Counter[tuple[int, ...]]:
+    counter: Counter[tuple[int, ...]] = Counter()
+    for row in _as_track_matrix(track_matrix):
+        if np.all(row >= 0):
+            counter[tuple(int(value) for value in row)] += 1
+    return counter
 
 
 def _remove_edge_occurrence(predicted: np.ndarray, edge: TrackEdge, *, occurrence_index: int) -> _SplitResult:
