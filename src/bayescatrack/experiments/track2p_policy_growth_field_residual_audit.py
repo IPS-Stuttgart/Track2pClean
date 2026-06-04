@@ -484,6 +484,7 @@ def _edge_growth_features(
     anchor_edges: Sequence[TrackEdge],
     predicted: np.ndarray | None = None,
 ) -> _EdgeGrowthFeatures:
+    predicted_tracks = predicted
     source = _centroid_xy(sessions, edge[0], edge[2])
     target = _centroid_xy(sessions, edge[1], edge[3])
     if source is None or target is None:
@@ -502,7 +503,7 @@ def _edge_growth_features(
     area_residual = _area_growth_residual(
         observed_area_ratio, model.expected_area_ratio
     )
-    motion = _motion_context_features(sessions, edge, predicted, source, target)
+    motion = _motion_context_features(sessions, edge, predicted_tracks, source, target)
     return _EdgeGrowthFeatures(
         centroid_a_x=float(source[0]),
         centroid_a_y=float(source[1]),
