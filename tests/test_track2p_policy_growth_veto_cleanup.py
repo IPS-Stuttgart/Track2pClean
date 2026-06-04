@@ -57,10 +57,10 @@ def test_growth_veto_cleanup_parser_exposes_conservative_defaults() -> None:
     assert args.min_growth_residual_mahalanobis == 20.0
     assert args.min_veto_registered_iou == 0.45
     assert args.min_veto_shifted_iou == 0.60
-    assert args.max_veto_registered_iou is None
-    assert args.max_veto_shifted_iou is None
+    assert args.max_veto_registered_iou == 0.60
+    assert args.max_veto_shifted_iou == 0.80
     assert args.min_veto_cell_probability == 0.50
-    assert args.max_veto_min_cell_probability is None
+    assert args.max_veto_min_cell_probability == 0.65
     assert args.max_veto_row_rank == 1
     assert args.max_veto_column_rank == 1
     assert args.require_veto_not_suffix_edge is True
