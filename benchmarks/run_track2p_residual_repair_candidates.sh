@@ -304,6 +304,17 @@ run_teacher_rescue teacher_adjacent_residual_union_action_specific_preset \
   --allow-fragment-merges \
   --teacher-repair-preset residual-union-action-specific
 
+# Balanced residual-union candidate: same action-specific target/seed gates, but
+# with per-action edit caps so the small teacher budget probes both residual
+# families instead of being consumed entirely by whichever action ranks first.
+run_teacher_rescue teacher_adjacent_residual_union_action_balanced_preset \
+  --no-allow-completing-rescue \
+  --allow-source-backfill \
+  --allow-seed-source-backfill \
+  --allow-completing-seed-source-backfill \
+  --allow-fragment-merges \
+  --teacher-repair-preset residual-union-action-balanced
+
 run_teacher_rescue teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2 \
   --no-allow-completing-rescue \
   --allow-source-backfill \
@@ -554,6 +565,7 @@ run_growth_veto_cleanup growth_veto_cleanup_weak_local_evidence \
   --input TeacherAdjacentTrack2pFnModerateIouCellConfidentPreset="$OUT/teacher_adjacent_track2p_fn_moderate_iou_cell_confident_preset.csv" \
   --input TeacherAdjacentResidualUnionCellConfidentPreset="$OUT/teacher_adjacent_residual_union_cell_confident_preset.csv" \
   --input TeacherAdjacentResidualUnionActionSpecificPreset="$OUT/teacher_adjacent_residual_union_action_specific_preset.csv" \
+  --input TeacherAdjacentResidualUnionActionBalancedPreset="$OUT/teacher_adjacent_residual_union_action_balanced_preset.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \
@@ -604,6 +616,7 @@ run_growth_veto_cleanup growth_veto_cleanup_weak_local_evidence \
   --input TeacherAdjacentTrack2pFnModerateIouCellConfidentPreset="$OUT/teacher_adjacent_track2p_fn_moderate_iou_cell_confident_preset.csv" \
   --input TeacherAdjacentResidualUnionCellConfidentPreset="$OUT/teacher_adjacent_residual_union_cell_confident_preset.csv" \
   --input TeacherAdjacentResidualUnionActionSpecificPreset="$OUT/teacher_adjacent_residual_union_action_specific_preset.csv" \
+  --input TeacherAdjacentResidualUnionActionBalancedPreset="$OUT/teacher_adjacent_residual_union_action_balanced_preset.csv" \
   --input TeacherAdjacentDynamicConfidenceHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellHighConfidenceSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_high_confidence_seed_source_max2.csv" \
   --input TeacherAdjacentDynamicConfidenceCellConfidentSeedSourceMax2="$OUT/teacher_adjacent_dynamic_confidence_cell_confident_seed_source_max2.csv" \

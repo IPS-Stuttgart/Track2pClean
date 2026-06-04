@@ -24,6 +24,11 @@ edit budget, high endpoint cell probability and shape support are stronger
 tie-breakers than raw registered IoU. The command does not use manual GT labels
 to choose edges.
 
+Residual-union runs can also use per-action edit caps.  Those caps keep a tiny
+teacher budget from being consumed entirely by one residual family, making it
+possible to test a balanced row that spends one slot on the missing-seed bucket
+and the remaining slots on Track2p-supported target-extension FNs.
+
 Action-specific feature gates allow a residual-union preset to be strict for
 ordinary target extensions while keeping a separate, seed-source-specific gate
 for the missing seed-session ROI bucket.
@@ -138,6 +143,8 @@ TeacherRepairPreset = Literal[
     "track2p-fn-moderate-iou-cell-confidence",
     "residual-union-cell-confident",
     "residual-union-action-specific",
+    "residual-union-action-balanced",
+    "residual-union-balanced",
     "completing-rescue-action-specific",
     "complete-row-rescue-action-specific",
 ]
@@ -463,6 +470,24 @@ def teacher_adjacent_repair_preset_kwargs(
             "min_component_observations": 2,
             "max_applied_edits": 3,
         }
+    if normalized in {"residual-union-action-balanced", "residual-union-balanced"}:
+        return {
+            "allow_source_backfill": False,
+            "allow_seed_source_backfill": True,
+            "allow_completing_seed_source_backfill": True,
+            "allow_fragment_merges": False,
+            "teacher_action_filter": "target-extension-or-seed-source-backfill",
+            "teacher_edge_order": "dynamic-seed-cell-confidence",
+            "teacher_feature_preset": "none",
+            "target_extension_feature_preset": "moderate-iou-cell-confidence",
+            "seed_source_feature_preset": "seed-source-cell-confident",
+            "min_component_observations": 2,
+            "max_applied_edits": 3,
+            # Reserve one slot for the missing-seed bucket while still allowing
+            # the residual Track2p-FN target-extension bucket to claim two edits.
+            "max_seed_source_backfill_edits": 1,
+            "max_target_extension_edits": 2,
+        }
     if normalized in {
         "completing-rescue-action-specific",
         "complete-row-rescue-action-specific",
@@ -617,6 +642,11 @@ def run_track2p_policy_teacher_adjacent_rescue(
     teacher_action_filter: TeacherActionFilter = "all",
     min_component_observations: int = 1,
     max_applied_edits: int | None = None,
+    max_target_extension_edits: int | None = None,
+    max_source_backfill_edits: int | None = None,
+    max_seed_source_backfill_edits: int | None = None,
+    max_fragment_merge_edits: int | None = None,
+    max_completing_rescue_edits: int | None = None,
     teacher_feature_gate: TeacherEdgeFeatureGate | None = None,
     edge_feature_gate: TeacherEdgeFeatureGate | None = None,
     teacher_repair_preset: str = "none",
@@ -718,6 +748,37 @@ def run_track2p_policy_teacher_adjacent_rescue(
             )
         if max_applied_edits is None and "max_applied_edits" in repair_kwargs:
             max_applied_edits = int(repair_kwargs["max_applied_edits"])
+        if (
+            max_target_extension_edits is None
+            and "max_target_extension_edits" in repair_kwargs
+        ):
+            max_target_extension_edits = int(
+                repair_kwargs["max_target_extension_edits"]
+            )
+        if (
+            max_source_backfill_edits is None
+            and "max_source_backfill_edits" in repair_kwargs
+        ):
+            max_source_backfill_edits = int(repair_kwargs["max_source_backfill_edits"])
+        if (
+            max_seed_source_backfill_edits is None
+            and "max_seed_source_backfill_edits" in repair_kwargs
+        ):
+            max_seed_source_backfill_edits = int(
+                repair_kwargs["max_seed_source_backfill_edits"]
+            )
+        if (
+            max_fragment_merge_edits is None
+            and "max_fragment_merge_edits" in repair_kwargs
+        ):
+            max_fragment_merge_edits = int(repair_kwargs["max_fragment_merge_edits"])
+        if (
+            max_completing_rescue_edits is None
+            and "max_completing_rescue_edits" in repair_kwargs
+        ):
+            max_completing_rescue_edits = int(
+                repair_kwargs["max_completing_rescue_edits"]
+            )
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
     )
@@ -818,6 +879,11 @@ def run_track2p_policy_teacher_adjacent_rescue(
             seed_source_feature_gate=seed_source_feature_gate,
             min_component_observations=min_component_observations,
             max_applied_edits=max_applied_edits,
+            max_target_extension_edits=max_target_extension_edits,
+            max_source_backfill_edits=max_source_backfill_edits,
+            max_seed_source_backfill_edits=max_seed_source_backfill_edits,
+            max_fragment_merge_edits=max_fragment_merge_edits,
+            max_completing_rescue_edits=max_completing_rescue_edits,
         )
         scores = _score_prediction_against_reference(
             rescue.tracks, reference, config=policy_config
@@ -892,6 +958,31 @@ def run_track2p_policy_teacher_adjacent_rescue(
             ),
             "track2p_teacher_adjacent_max_applied_edits": (
                 -1 if max_applied_edits is None else int(max_applied_edits)
+            ),
+            "track2p_teacher_adjacent_max_target_extension_edits": (
+                -1
+                if max_target_extension_edits is None
+                else int(max_target_extension_edits)
+            ),
+            "track2p_teacher_adjacent_max_source_backfill_edits": (
+                -1
+                if max_source_backfill_edits is None
+                else int(max_source_backfill_edits)
+            ),
+            "track2p_teacher_adjacent_max_seed_source_backfill_edits": (
+                -1
+                if max_seed_source_backfill_edits is None
+                else int(max_seed_source_backfill_edits)
+            ),
+            "track2p_teacher_adjacent_max_fragment_merge_edits": (
+                -1
+                if max_fragment_merge_edits is None
+                else int(max_fragment_merge_edits)
+            ),
+            "track2p_teacher_adjacent_max_completing_rescue_edits": (
+                -1
+                if max_completing_rescue_edits is None
+                else int(max_completing_rescue_edits)
             ),
             "track2p_teacher_adjacent_repair_preset": str(teacher_repair_preset),
             "track2p_teacher_adjacent_feature_preset": str(teacher_feature_preset),
@@ -1043,6 +1134,11 @@ def apply_teacher_adjacent_rescue_edges(
     seed_source_feature_gate: TeacherEdgeFeatureGate | None = None,
     min_component_observations: int = 1,
     max_applied_edits: int | None = None,
+    max_target_extension_edits: int | None = None,
+    max_source_backfill_edits: int | None = None,
+    max_seed_source_backfill_edits: int | None = None,
+    max_fragment_merge_edits: int | None = None,
+    max_completing_rescue_edits: int | None = None,
 ) -> TeacherAdjacentRescueReport:
     """Apply conflict-free adjacent Track2p-teacher edits.
 
@@ -1082,6 +1178,11 @@ def apply_teacher_adjacent_rescue_edges(
     ``max_applied_edits`` caps the number of accepted teacher edits per subject.
     This makes it possible to test the high-confidence first-edit regime without
     admitting a long tail of Track2p-teacher edges after the best rescue.
+    Per-action caps can additionally reserve the small edit budget across the
+    residual action families, e.g. one missing-seed source backfill plus two
+    target extensions.  They are evaluated on the current dynamic action of the
+    edge, so a target extension that would also complete a row can be limited by
+    either its target-extension cap or the completing-rescue cap.
     """
 
     output = _normalize_int_track_matrix(predicted_track_matrix)
@@ -1108,6 +1209,14 @@ def apply_teacher_adjacent_rescue_edges(
     allow_fragment_completion = bool(
         allow_completing_fragment_merge or allow_completing_fragment_merges
     )
+    action_edit_caps = _normalized_action_edit_caps(
+        max_target_extension_edits=max_target_extension_edits,
+        max_source_backfill_edits=max_source_backfill_edits,
+        max_seed_source_backfill_edits=max_seed_source_backfill_edits,
+        max_fragment_merge_edits=max_fragment_merge_edits,
+        max_completing_rescue_edits=max_completing_rescue_edits,
+    )
+    action_edit_counts = _initial_action_edit_counts(action_edit_caps)
     min_component_observations = max(1, int(min_component_observations))
     max_applied_edits = _normalized_max_applied_edits(max_applied_edits)
     teacher_feature_gate = _resolve_teacher_feature_gate(
@@ -1160,6 +1269,7 @@ def apply_teacher_adjacent_rescue_edges(
             target_extension_feature_gate=target_extension_feature_gate,
             seed_source_feature_gate=seed_source_feature_gate,
             max_applied_edits=max_applied_edits,
+            action_edit_caps=action_edit_caps,
         )
     edge_occurrences = _ordered_teacher_edge_occurrences(
         output,
@@ -1226,6 +1336,20 @@ def apply_teacher_adjacent_rescue_edges(
                 }
             )
             continue
+        action_cap_keys = _teacher_action_edit_cap_keys(
+            output, edge, seed_session=seed_session
+        )
+        cap_reason = _teacher_action_edit_cap_reason(
+            action_edit_counts, action_edit_caps, action_cap_keys
+        )
+        if cap_reason is not None:
+            rows.append(
+                {
+                    **_teacher_edge_limit_row(edge, reason=cap_reason),
+                    "occurrence_index": int(occurrence_index),
+                }
+            )
+            continue
         output, row = _try_apply_teacher_edge(
             output,
             edge,
@@ -1245,6 +1369,7 @@ def apply_teacher_adjacent_rescue_edges(
         )
         if int(row.get("applied", 0)):
             applied_count += 1
+            _record_teacher_action_edit(action_edit_counts, action_cap_keys)
         rows.append(
             {
                 **row,
@@ -1278,6 +1403,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     target_extension_feature_gate: TeacherEdgeFeatureGate | None,
     seed_source_feature_gate: TeacherEdgeFeatureGate | None,
     max_applied_edits: int | None,
+    action_edit_caps: Mapping[str, int],
 ) -> TeacherAdjacentRescueReport:
     """Apply teacher edits while recomputing structural priorities."""
 
@@ -1290,6 +1416,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
     attempted: set[tuple[TrackEdge, int]] = set()
     rows: list[dict[str, int | str]] = []
     applied_count = 0
+    action_edit_counts = _initial_action_edit_counts(action_edit_caps)
 
     while True:
         output_counts = track_edge_counter(output)
@@ -1383,6 +1510,20 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
                 }
             )
             continue
+        action_cap_keys = _teacher_action_edit_cap_keys(
+            output, edge, seed_session=seed_session
+        )
+        cap_reason = _teacher_action_edit_cap_reason(
+            action_edit_counts, action_edit_caps, action_cap_keys
+        )
+        if cap_reason is not None:
+            rows.append(
+                {
+                    **_teacher_edge_limit_row(edge, reason=cap_reason),
+                    "occurrence_index": int(occurrence_index),
+                }
+            )
+            continue
         output, row = _try_apply_teacher_edge(
             output,
             edge,
@@ -1404,6 +1545,7 @@ def _apply_teacher_adjacent_rescue_edges_dynamic(
         )
         if int(row.get("applied", 0)):
             applied_count += 1
+            _record_teacher_action_edit(action_edit_counts, action_cap_keys)
         rows.append({**row, "occurrence_index": int(occurrence_index)})
 
     return TeacherAdjacentRescueReport(output, tuple(rows))
@@ -1431,7 +1573,72 @@ def _max_applied_edits_reached(
     )
 
 
-def _teacher_edge_limit_row(edge: TrackEdge) -> dict[str, int | str]:
+def _normalized_action_edit_caps(
+    *,
+    max_target_extension_edits: int | None,
+    max_source_backfill_edits: int | None,
+    max_seed_source_backfill_edits: int | None,
+    max_fragment_merge_edits: int | None,
+    max_completing_rescue_edits: int | None,
+) -> dict[str, int]:
+    caps: dict[str, int] = {}
+    for key, value in (
+        ("target_extension", max_target_extension_edits),
+        ("source_backfill", max_source_backfill_edits),
+        ("seed_source_backfill", max_seed_source_backfill_edits),
+        ("fragment_merge", max_fragment_merge_edits),
+        ("completing_rescue", max_completing_rescue_edits),
+    ):
+        if value is not None:
+            caps[key] = max(0, int(value))
+    return caps
+
+
+def _initial_action_edit_counts(action_edit_caps: Mapping[str, int]) -> dict[str, int]:
+    return {key: 0 for key in action_edit_caps}
+
+
+def _teacher_action_edit_cap_keys(
+    predicted: np.ndarray, edge: TrackEdge, *, seed_session: int
+) -> tuple[str, ...]:
+    action = _teacher_edge_action(predicted, edge, seed_session=seed_session)
+    keys: list[str] = []
+    if action in {
+        "target-extension",
+        "source-backfill",
+        "seed-source-backfill",
+        "fragment-merge",
+    }:
+        keys.append(action.replace("-", "_"))
+    if _teacher_edge_would_complete_row(predicted, edge):
+        keys.append("completing_rescue")
+    return tuple(dict.fromkeys(keys))
+
+
+def _teacher_action_edit_cap_reason(
+    action_edit_counts: Mapping[str, int],
+    action_edit_caps: Mapping[str, int],
+    action_cap_keys: Sequence[str],
+) -> str | None:
+    for key in action_cap_keys:
+        if key in action_edit_caps and int(action_edit_counts.get(key, 0)) >= int(
+            action_edit_caps[key]
+        ):
+            return f"max_{key}_edits_reached"
+    return None
+
+
+def _record_teacher_action_edit(
+    action_edit_counts: dict[str, int], action_cap_keys: Sequence[str]
+) -> None:
+    for key in action_cap_keys:
+        if key in action_edit_counts:
+            action_edit_counts[key] = int(action_edit_counts[key]) + 1
+
+
+def _teacher_edge_limit_row(
+    edge: TrackEdge, *, reason: str = "max_applied_edits_reached"
+) -> dict[str, int | str]:
     session_a, session_b, roi_a, roi_b = edge
     return {
         "session_a": int(session_a),
@@ -1439,7 +1646,7 @@ def _teacher_edge_limit_row(edge: TrackEdge) -> dict[str, int | str]:
         "roi_a": int(roi_a),
         "roi_b": int(roi_b),
         "applied": 0,
-        "reason": "max_applied_edits_reached",
+        "reason": reason,
         "source_row": -1,
         "target_row": -1,
         "teacher_complete_row_supported": 0,
@@ -2645,6 +2852,36 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-target-extension-edits",
+        type=int,
+        default=None,
+        help="Cap accepted target-extension teacher edits per subject.",
+    )
+    parser.add_argument(
+        "--max-source-backfill-edits",
+        type=int,
+        default=None,
+        help="Cap accepted non-seed source-backfill teacher edits per subject.",
+    )
+    parser.add_argument(
+        "--max-seed-source-backfill-edits",
+        type=int,
+        default=None,
+        help="Cap accepted seed-session source-backfill teacher edits per subject.",
+    )
+    parser.add_argument(
+        "--max-fragment-merge-edits",
+        type=int,
+        default=None,
+        help="Cap accepted fragment-merge teacher edits per subject.",
+    )
+    parser.add_argument(
+        "--max-completing-rescue-edits",
+        type=int,
+        default=None,
+        help="Cap accepted teacher edits that would complete a predicted row.",
+    )
+    parser.add_argument(
         "--teacher-repair-preset",
         choices=(
             "none",
@@ -2658,6 +2895,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "track2p-fn-moderate-iou-cell-confidence",
             "residual-union-cell-confident",
             "residual-union-action-specific",
+            "residual-union-action-balanced",
+            "residual-union-balanced",
             "completing-rescue-action-specific",
         ),
         default="none",
@@ -2687,6 +2926,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "filter but applies a stricter moderate-IoU/cell gate to target "
             "extensions and a seed-source cell-confident gate to missing-seed "
             "backfills. "
+            "'residual-union-action-balanced' uses the same action-specific "
+            "feature gates but reserves the tiny edit budget across residual "
+            "families with per-action caps, so missing-seed backfills cannot "
+            "crowd out Track2p-FN target extensions or vice versa. "
             "'completing-rescue-action-specific' spends a tiny budget only on "
             "teacher-confirmed adjacent edits that would complete a predicted "
             "row, with the same action-specific target-extension and seed-source "
@@ -2975,6 +3218,11 @@ def main(argv: list[str] | None = None) -> int:
         teacher_action_filter=cast(TeacherActionFilter, args.teacher_action_filter),
         min_component_observations=args.min_component_observations,
         max_applied_edits=args.max_applied_edits,
+        max_target_extension_edits=args.max_target_extension_edits,
+        max_source_backfill_edits=args.max_source_backfill_edits,
+        max_seed_source_backfill_edits=args.max_seed_source_backfill_edits,
+        max_fragment_merge_edits=args.max_fragment_merge_edits,
+        max_completing_rescue_edits=args.max_completing_rescue_edits,
         teacher_feature_gate=teacher_feature_gate,
         teacher_repair_preset=args.teacher_repair_preset,
         teacher_feature_preset=str(args.teacher_feature_preset),

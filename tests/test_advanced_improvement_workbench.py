@@ -30,6 +30,7 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     assert "track2p-policy" in run_name_set
     assert "track2p-policy-component-cleanup" in run_name_set
     assert "track2p-policy-coherence-suffix-teacher-rescue" in run_name_set
+    assert "track2p-policy-growth-veto-cleanup" in run_name_set
     assert "track2p-policy-teacher-adjacent-rescue" in run_name_set
     assert "track2p-policy-dp" in run_name_set
     assert "track2p-policy-pruned" in run_name_set
@@ -81,6 +82,25 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     assert suffix_teacher_rescue["teacher_action_filter"] == "all"
     assert suffix_teacher_rescue["teacher_feature_preset"] == "none"
     assert suffix_teacher_rescue["max_applied_teacher_edits"] == -1
+
+    growth_veto_cleanup = next(
+        run
+        for run in manifest["runs"]
+        if run["name"] == "track2p-policy-growth-veto-cleanup"
+    )
+    assert growth_veto_cleanup["runner"] == "track2p-policy-growth-veto-cleanup"
+    assert growth_veto_cleanup["suffix_path_length"] == 2
+    assert growth_veto_cleanup["teacher_edge_order"] == "structural"
+    assert growth_veto_cleanup["teacher_action_filter"] == "all"
+    assert growth_veto_cleanup["teacher_feature_preset"] == "none"
+    assert growth_veto_cleanup["max_applied_teacher_edits"] == -1
+    assert growth_veto_cleanup["anchor_min_registered_iou"] == 0.5
+    assert growth_veto_cleanup["anchor_min_shifted_iou"] == 0.3
+    assert growth_veto_cleanup["anchor_min_cell_probability"] == 0.8
+    assert growth_veto_cleanup["min_growth_residual_mahalanobis"] == 25.0
+    assert growth_veto_cleanup["min_veto_anchor_count"] == 2
+    assert growth_veto_cleanup["max_veto_registered_iou"] == 0.6
+    assert growth_veto_cleanup["max_veto_shifted_iou"] == 0.8
 
     teacher_rescue = next(
         run

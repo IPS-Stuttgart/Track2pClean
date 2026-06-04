@@ -36,6 +36,7 @@ TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER = "track2p-policy-coherence-suffix-stitch
 TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER = (
     "track2p-policy-coherence-suffix-teacher-rescue"
 )
+TRACK2P_POLICY_GROWTH_VETO_RUNNER = "track2p-policy-growth-veto-cleanup"
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
 BenchmarkRunner = Literal[
     "track2p",
@@ -45,6 +46,7 @@ BenchmarkRunner = Literal[
     "track2p-policy-component-audit",
     "track2p-policy-coherence-suffix-stitch",
     "track2p-policy-coherence-suffix-teacher-rescue",
+    "track2p-policy-growth-veto-cleanup",
     "track2p-policy-teacher-adjacent-rescue",
     "track2p-loso-calibration",
     "track2p-monotone-loso",
@@ -122,6 +124,37 @@ TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS = (
         "max_applied_teacher_edits",
     }
 )
+TRACK2P_POLICY_GROWTH_VETO_FIELDS = TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS | {
+    "anchor_min_registered_iou",
+    "anchor_min_shifted_iou",
+    "anchor_min_cell_probability",
+    "min_growth_residual_mahalanobis",
+    "min_veto_registered_iou",
+    "max_veto_registered_iou",
+    "min_veto_shifted_iou",
+    "max_veto_shifted_iou",
+    "min_veto_cell_probability",
+    "min_veto_anchor_count",
+    "min_veto_complete_component_size",
+    "max_veto_row_rank",
+    "max_veto_column_rank",
+    "require_veto_not_suffix_edge",
+    "require_veto_terminal_edge",
+    "require_veto_last_session_edge",
+    "require_veto_complete_component",
+    "max_vetoes_per_subject",
+    # Allow manifest authors to use the CLI-style names as well as the internal
+    # dest names when they are writing benchmark JSON by hand.
+    "growth_veto_min_mahalanobis",
+    "growth_veto_min_registered_iou",
+    "growth_veto_max_registered_iou",
+    "growth_veto_min_shifted_iou",
+    "growth_veto_max_shifted_iou",
+    "growth_veto_min_cell_probability",
+    "growth_veto_min_anchor_count",
+    "growth_veto_min_complete_component_size",
+    "growth_veto_max_vetoes_per_subject",
+}
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = TRACK2P_POLICY_COMPONENT_FIELDS | {
     "allow_completing_rescue",
     "allow_teacher_complete_row_rescue",
@@ -232,6 +265,7 @@ RUNNER_SPECIFIC_FIELDS = (
     | TRACK2P_POLICY_COMPONENT_FIELDS
     | TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS
     | TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS
+    | TRACK2P_POLICY_GROWTH_VETO_FIELDS
     | TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS
     | CONFIGURABLE_LOSO_FIELDS
     | MONOTONE_LOSO_FIELDS
@@ -259,6 +293,9 @@ RUNNER_CONFIG_FIELDS: dict[str, set[str]] = {
     ),
     TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER: set(
         TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS
+    ),
+    TRACK2P_POLICY_GROWTH_VETO_RUNNER: set(
+        TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_GROWTH_VETO_FIELDS
     ),
     TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER: set(
         TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS
@@ -290,6 +327,15 @@ RUNNER_ALIASES = {
     ),
     "track2p-component-coherence-suffix-teacher-rescue": (
         TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER
+    ),
+    TRACK2P_POLICY_GROWTH_VETO_RUNNER: TRACK2P_POLICY_GROWTH_VETO_RUNNER,
+    "track2p-growth-veto-cleanup": TRACK2P_POLICY_GROWTH_VETO_RUNNER,
+    "track2p-component-growth-veto-cleanup": TRACK2P_POLICY_GROWTH_VETO_RUNNER,
+    "track2p-coherence-suffix-teacher-growth-veto": (
+        TRACK2P_POLICY_GROWTH_VETO_RUNNER
+    ),
+    "track2p-policy-coherence-suffix-teacher-growth-veto": (
+        TRACK2P_POLICY_GROWTH_VETO_RUNNER
     ),
     TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER: (
         TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER
@@ -578,6 +624,11 @@ def _run_benchmark_rows(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
+    if run_spec.runner == TRACK2P_POLICY_GROWTH_VETO_RUNNER:
+        return _run_track2p_policy_growth_veto_cleanup_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
     if run_spec.runner == TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER:
         return _run_track2p_policy_teacher_adjacent_rescue_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
@@ -644,6 +695,8 @@ def _runner_specific_fields(runner: str) -> set[str]:
         return set(TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS)
     if runner == TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER:
         return set(TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS)
+    if runner == TRACK2P_POLICY_GROWTH_VETO_RUNNER:
+        return set(TRACK2P_POLICY_GROWTH_VETO_FIELDS)
     if runner == TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER:
         return set(TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS)
     if runner == "track2p-loso-calibration":
@@ -688,6 +741,12 @@ def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
         return {
             key: run_data[key]
             for key in TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS
+            if key in run_data
+        }
+    if runner == TRACK2P_POLICY_GROWTH_VETO_RUNNER:
+        return {
+            key: run_data[key]
+            for key in TRACK2P_POLICY_GROWTH_VETO_FIELDS
             if key in run_data
         }
     if runner == TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER:
@@ -816,6 +875,7 @@ def _run_config(
         TRACK2P_POLICY_COMPONENT_RUNNER,
         TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER,
         TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER,
+        TRACK2P_POLICY_GROWTH_VETO_RUNNER,
         TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER,
     }:
         config_defaults = {
@@ -933,6 +993,11 @@ def _run_manifest_entry(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
         )
     if run_spec.runner == TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER:
         return _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == TRACK2P_POLICY_GROWTH_VETO_RUNNER:
+        return _run_track2p_policy_growth_veto_cleanup_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
@@ -1511,6 +1576,252 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
         max_applied_teacher_edits=max_applied_teacher_edits,
     )
     return [dict(row) for row in output.result_rows]
+
+
+def _run_track2p_policy_growth_veto_cleanup_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.track2p_policy_benchmark import (
+        TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
+    from bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif import (
+        CoherenceSuffixStitchGate,
+    )
+    from bayescatrack.experiments.track2p_policy_component_audit import (
+        ComponentCleanupConfig,
+    )
+    from bayescatrack.experiments.track2p_policy_growth_veto_cleanup import (
+        GrowthVetoGate,
+        run_track2p_policy_growth_veto_cleanup,
+    )
+
+    cleanup_defaults = ComponentCleanupConfig()
+    cleanup_config = ComponentCleanupConfig(
+        threshold_margin_scale=_float_option(
+            options,
+            "threshold_margin_scale",
+            default=cleanup_defaults.threshold_margin_scale,
+        ),
+        competition_margin_scale=_float_option(
+            options,
+            "competition_margin_scale",
+            default=cleanup_defaults.competition_margin_scale,
+        ),
+        area_ratio_floor=_float_option(
+            options,
+            "area_ratio_floor",
+            default=cleanup_defaults.area_ratio_floor,
+        ),
+        centroid_distance_scale=_float_option(
+            options,
+            "centroid_distance_scale",
+            default=cleanup_defaults.centroid_distance_scale,
+        ),
+        split_risk_threshold=_float_option(
+            options,
+            "split_risk_threshold",
+            default=cleanup_defaults.split_risk_threshold,
+        ),
+        split_penalty=_float_option(
+            options,
+            "split_penalty",
+            default=cleanup_defaults.split_penalty,
+        ),
+        min_side_observations=int(
+            options.get("min_side_observations", cleanup_defaults.min_side_observations)
+        ),
+        threshold_margin_weight=_float_option(
+            options,
+            "threshold_margin_weight",
+            default=cleanup_defaults.threshold_margin_weight,
+        ),
+        row_margin_weight=_float_option(
+            options,
+            "row_margin_weight",
+            default=cleanup_defaults.row_margin_weight,
+        ),
+        column_margin_weight=_float_option(
+            options,
+            "column_margin_weight",
+            default=cleanup_defaults.column_margin_weight,
+        ),
+        centroid_distance_weight=_float_option(
+            options,
+            "centroid_distance_weight",
+            default=cleanup_defaults.centroid_distance_weight,
+        ),
+        area_ratio_weight=_float_option(
+            options,
+            "area_ratio_weight",
+            default=cleanup_defaults.area_ratio_weight,
+        ),
+    )
+    suffix_defaults = CoherenceSuffixStitchGate()
+    suffix_gate = CoherenceSuffixStitchGate(
+        suffix_path_length=int(
+            options.get("suffix_path_length", suffix_defaults.suffix_path_length)
+        ),
+        min_cell_probability=_float_option(
+            options,
+            "min_cell_probability",
+            default=suffix_defaults.min_cell_probability,
+        ),
+        min_area_ratio=_float_option(
+            options,
+            "min_area_ratio",
+            default=suffix_defaults.min_area_ratio,
+        ),
+        max_centroid_distance=_float_option(
+            options,
+            "max_centroid_distance",
+            default=suffix_defaults.max_centroid_distance,
+        ),
+        min_shifted_iou=_float_option(
+            options,
+            "min_shifted_iou",
+            default=suffix_defaults.min_shifted_iou,
+        ),
+        min_motion_consistency=_float_option(
+            options,
+            "min_motion_consistency",
+            default=suffix_defaults.min_motion_consistency,
+        ),
+        min_shape_consistency=_float_option(
+            options,
+            "min_shape_consistency",
+            default=suffix_defaults.min_shape_consistency,
+        ),
+        max_stitches_per_subject=int(
+            options.get(
+                "max_stitches_per_subject",
+                suffix_defaults.max_stitches_per_subject,
+            )
+        ),
+    )
+    gate_defaults = GrowthVetoGate()
+    growth_veto_gate = GrowthVetoGate(
+        min_growth_residual_mahalanobis=_float_option(
+            options,
+            "min_growth_residual_mahalanobis",
+            default=_float_option(
+                options,
+                "growth_veto_min_mahalanobis",
+                default=gate_defaults.min_growth_residual_mahalanobis,
+            ),
+        ),
+        min_registered_iou=_float_option(
+            options,
+            "min_veto_registered_iou",
+            default=_float_option(
+                options,
+                "growth_veto_min_registered_iou",
+                default=gate_defaults.min_registered_iou,
+            ),
+        ),
+        min_shifted_iou=_float_option(
+            options,
+            "min_veto_shifted_iou",
+            default=_float_option(
+                options,
+                "growth_veto_min_shifted_iou",
+                default=gate_defaults.min_shifted_iou,
+            ),
+        ),
+        max_registered_iou=_optional_float_option(
+            options, "max_veto_registered_iou", "growth_veto_max_registered_iou"
+        ),
+        max_shifted_iou=_optional_float_option(
+            options, "max_veto_shifted_iou", "growth_veto_max_shifted_iou"
+        ),
+        min_cell_probability=_float_option(
+            options,
+            "min_veto_cell_probability",
+            default=_float_option(
+                options,
+                "growth_veto_min_cell_probability",
+                default=gate_defaults.min_cell_probability,
+            ),
+        ),
+        min_anchor_count=int(
+            options.get(
+                "min_veto_anchor_count",
+                options.get("growth_veto_min_anchor_count", gate_defaults.min_anchor_count),
+            )
+        ),
+        min_complete_component_size=(
+            None
+            if "min_veto_complete_component_size" not in options
+            and "growth_veto_min_complete_component_size" not in options
+            else int(
+                options.get(
+                    "min_veto_complete_component_size",
+                    options.get("growth_veto_min_complete_component_size"),
+                )
+            )
+        ),
+        max_row_rank=int(options.get("max_veto_row_rank", gate_defaults.max_row_rank)),
+        max_column_rank=int(
+            options.get("max_veto_column_rank", gate_defaults.max_column_rank)
+        ),
+        require_not_suffix_edge=_bool_option(
+            options,
+            "require_veto_not_suffix_edge",
+            default=gate_defaults.require_not_suffix_edge,
+        ),
+        require_terminal_edge=_bool_option(
+            options,
+            "require_veto_terminal_edge",
+            default=gate_defaults.require_terminal_edge,
+        ),
+        require_last_session_edge=_bool_option(
+            options,
+            "require_veto_last_session_edge",
+            default=gate_defaults.require_last_session_edge,
+        ),
+        require_complete_component=_bool_option(
+            options,
+            "require_veto_complete_component",
+            default=gate_defaults.require_complete_component,
+        ),
+        max_vetoes_per_subject=int(
+            options.get(
+                "max_vetoes_per_subject",
+                options.get(
+                    "growth_veto_max_vetoes_per_subject",
+                    gate_defaults.max_vetoes_per_subject,
+                ),
+            )
+        ),
+    )
+    output = run_track2p_policy_growth_veto_cleanup(
+        config,
+        threshold_method=_policy_threshold_method(
+            options.get("threshold_method", TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
+        ),
+        iou_distance_threshold=_float_option(
+            options,
+            "iou_distance_threshold",
+            default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        ),
+        transform_type=config.transform_type,
+        cell_probability_threshold=config.cell_probability_threshold,
+        cleanup_config=cleanup_config,
+        suffix_gate=suffix_gate,
+        edge_top_k=int(options.get("edge_top_k", 25)),
+        path_beam_width=int(options.get("path_beam_width", 100)),
+        anchor_min_registered_iou=_float_option(
+            options, "anchor_min_registered_iou", default=0.50
+        ),
+        anchor_min_shifted_iou=_float_option(
+            options, "anchor_min_shifted_iou", default=0.30
+        ),
+        anchor_min_cell_probability=_float_option(
+            options, "anchor_min_cell_probability", default=0.80
+        ),
+        growth_veto_gate=growth_veto_gate,
+    )
+    return [result.to_dict() for result in output.results]
 
 
 def _run_track2p_policy_teacher_adjacent_rescue_rows(

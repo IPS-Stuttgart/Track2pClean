@@ -697,6 +697,30 @@ def test_completing_rescue_action_specific_preset_targets_complete_rows() -> Non
     )
 
 
+def test_residual_union_action_balanced_preset_adds_action_caps() -> None:
+    kwargs = teacher_adjacent_repair_preset_kwargs("residual-union-action-balanced")
+
+    assert kwargs == {
+        "allow_source_backfill": False,
+        "allow_seed_source_backfill": True,
+        "allow_completing_seed_source_backfill": True,
+        "allow_fragment_merges": False,
+        "teacher_action_filter": "target-extension-or-seed-source-backfill",
+        "teacher_edge_order": "dynamic-seed-cell-confidence",
+        "teacher_feature_preset": "none",
+        "target_extension_feature_preset": "moderate-iou-cell-confidence",
+        "seed_source_feature_preset": "seed-source-cell-confident",
+        "min_component_observations": 2,
+        "max_applied_edits": 3,
+        "max_seed_source_backfill_edits": 1,
+        "max_target_extension_edits": 2,
+    }
+
+    assert (
+        teacher_adjacent_repair_preset_kwargs("residual-union-balanced") == kwargs
+    )
+
+
 def test_teacher_rescue_parser_accepts_completing_rescue_preset() -> None:
     args = build_arg_parser().parse_args(
         [
@@ -1041,6 +1065,57 @@ def test_residual_union_preset_spends_tiny_budget_on_cell_confident_seed_edge() 
     np.testing.assert_array_equal(report.tracks, [[10, 20, 22], [11, 21, 23]])
     assert report.rows[0]["roi_a"] == 11
     assert report.rows[0]["applied"] == 1
+
+
+def test_teacher_adjacent_rescue_enforces_per_action_edit_caps() -> None:
+    predicted = np.asarray(
+        [
+            [-1, 10, -1],
+            [-1, 20, -1],
+            [30, -1, -1],
+        ],
+        dtype=int,
+    )
+    teacher = np.asarray(
+        [
+            [1, 10, -1],
+            [2, 20, -1],
+            [30, 31, -1],
+        ],
+        dtype=int,
+    )
+
+    report = apply_teacher_adjacent_rescue_edges(
+        predicted,
+        teacher,
+        seed_session=0,
+        allow_source_backfill=False,
+        allow_seed_source_backfill=True,
+        teacher_action_filter="target-extension-or-seed-source-backfill",
+        edge_order="dynamic-seed-confidence",
+        max_applied_edits=3,
+        max_seed_source_backfill_edits=1,
+        max_target_extension_edits=1,
+    )
+
+    np.testing.assert_array_equal(
+        report.tracks,
+        [
+            [1, 10, -1],
+            [-1, 20, -1],
+            [30, 31, -1],
+        ],
+    )
+    applied_edges = [
+        (row["session_a"], row["session_b"], row["roi_a"], row["roi_b"])
+        for row in report.rows
+        if int(row["applied"])
+    ]
+    assert applied_edges == [(0, 1, 1, 10), (0, 1, 30, 31)]
+    assert any(
+        row["reason"] == "max_seed_source_backfill_edits_reached"
+        for row in report.rows
+    )
 
 
 def test_teacher_adjacent_rescue_accepts_seed_completing_backfill_alias() -> None:
