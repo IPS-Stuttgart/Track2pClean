@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -55,9 +55,9 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
     _no_prune_config,
 )
 from bayescatrack.experiments.track2p_policy_growth_field_residual_audit import (
-    _anchor_edges,
     _as_track_matrix,
     _augment_with_shifted_iou_and_margins,
+    _cell_probability,
     _edge_growth_features,
     _growth_models_by_pair,
     _identity_growth_model,
@@ -65,6 +65,7 @@ from bayescatrack.experiments.track2p_policy_growth_field_residual_audit import 
     write_rows,
 )
 from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
+    _roi_indices,
     emulate_track2p_pruned_tracks,
 )
 from bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit import (
@@ -303,15 +304,13 @@ def _subject_state(
         progress,
         f"{METHOD}: {subject_dir.name}: teacher edits={sum(int(row.get('applied', 0)) for row in teacher_report.rows)}",
     )
-    anchor_edges = _anchor_edges(
+    anchor_edges = _anchor_edges_from_policy_diagnostics(
         sessions,
-        feature_cache=feature_cache,
+        diagnostics=policy_prediction.diagnostics,
         track2p=teacher_eval,
-        policy=policy_eval,
         component_cleanup=cleaned,
         combined=combined,
         min_registered_iou=float(anchor_min_registered_iou),
-        min_shifted_iou=float(anchor_min_shifted_iou),
         min_cell_probability=float(anchor_min_cell_probability),
     )
     _log_progress(progress, f"{METHOD}: {subject_dir.name}: growth anchors ready")
@@ -334,6 +333,52 @@ def _subject_state(
 def _log_progress(enabled: bool, message: str) -> None:
     if enabled:
         print(message, file=sys.stderr, flush=True)
+
+
+def _anchor_edges_from_policy_diagnostics(
+    sessions: Sequence[Track2pSession],
+    *,
+    diagnostics: Sequence[Any],
+    track2p: np.ndarray,
+    component_cleanup: np.ndarray,
+    combined: np.ndarray,
+    min_registered_iou: float,
+    min_cell_probability: float,
+) -> dict[tuple[int, int], tuple[TrackEdge, ...]]:
+    track2p_edges = set(track_edge_counter(track2p))
+    cleanup_or_combined = set(track_edge_counter(component_cleanup)) | set(track_edge_counter(combined))
+    roi_indices_by_session = [_roi_indices(session) for session in sessions]
+    by_pair: dict[tuple[int, int], list[TrackEdge]] = defaultdict(list)
+    for diagnostic in diagnostics:
+        session_a = int(diagnostic.session_index)
+        session_b = session_a + 1
+        if session_a < 0 or session_b >= len(roi_indices_by_session):
+            continue
+        source_indices = roi_indices_by_session[session_a]
+        target_indices = roi_indices_by_session[session_b]
+        local_a = int(diagnostic.local_roi_a)
+        local_b = int(diagnostic.local_roi_b)
+        if local_a >= len(source_indices) or local_b >= len(target_indices):
+            continue
+        roi_a = int(source_indices[local_a])
+        roi_b = int(target_indices[local_b])
+        edge = (session_a, session_b, roi_a, roi_b)
+        if edge not in track2p_edges or edge not in cleanup_or_combined:
+            continue
+        if float(diagnostic.assigned_iou) < float(min_registered_iou):
+            continue
+        cell_a = _cell_probability(sessions, session_a, roi_a)
+        cell_b = _cell_probability(sessions, session_b, roi_b)
+        if min(cell_a, cell_b) < float(min_cell_probability):
+            continue
+        by_pair[(session_a, session_b)].append(edge)
+
+    output: dict[tuple[int, int], tuple[TrackEdge, ...]] = {}
+    for pair, edges in by_pair.items():
+        source_counts = Counter((edge[0], edge[2]) for edge in edges)
+        target_counts = Counter((edge[1], edge[3]) for edge in edges)
+        output[pair] = tuple(edge for edge in edges if source_counts[(edge[0], edge[2])] == 1 and target_counts[(edge[1], edge[3])] == 1)
+    return output
 
 
 def _accepted_edge_rows(
