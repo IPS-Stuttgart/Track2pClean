@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 from bayescatrack import cli
@@ -31,6 +33,61 @@ def _candidate_row(**overrides: object) -> dict[str, object]:
     }
     row.update(overrides)
     return row
+
+
+FORBIDDEN_AUDIT_COLUMNS = frozenset(
+    {
+        "edge_status_against_gt",
+        "pairwise_tp_delta_if_removed",
+        "pairwise_fp_delta_if_removed",
+        "pairwise_fn_delta_if_removed",
+        "complete_tp_delta_if_removed",
+        "complete_fp_delta_if_removed",
+        "complete_fn_delta_if_removed",
+        "reference_track_id",
+        "reference_track_identity",
+        "reference_identity",
+        "manual_gt_reference_identity",
+        "manual_gt_track_id",
+        "nearest_gt_track_id",
+        "new_pairwise_f1_micro",
+        "new_complete_track_f1_micro",
+        "score_delta",
+    }
+)
+
+
+def _is_audit_only_column(key: str) -> bool:
+    return (
+        key in FORBIDDEN_AUDIT_COLUMNS
+        or "against_gt" in key
+        or key.endswith("_delta_if_removed")
+        or key.startswith("manual_gt_")
+        or key.startswith("new_pairwise_")
+        or key.startswith("new_complete_")
+    )
+
+
+class _AuditGuardRow(dict[str, Any]):
+    def __getitem__(self, key: str) -> Any:
+        if _is_audit_only_column(key):
+            raise AssertionError(f"selector read audit-only column {key!r}")
+        return super().__getitem__(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if _is_audit_only_column(key):
+            raise AssertionError(f"selector read audit-only column {key!r}")
+        return super().get(key, default)
+
+
+def _edge_key(row: Mapping[str, Any]) -> tuple[int, int, int, int, int]:
+    return (
+        int(row["session_a"]),
+        int(row["session_b"]),
+        int(row["roi_a"]),
+        int(row["roi_b"]),
+        int(row.get("occurrence_index", 0)),
+    )
 
 
 def test_growth_veto_cleanup_is_registered() -> None:
@@ -339,6 +396,87 @@ def test_growth_veto_row_selection_respects_per_subject_cap() -> None:
     ]
 
     selected = cleanup._selected_growth_veto_rows(
+        rows, gate=cleanup.GrowthVetoGate(max_vetoes_per_subject=1), n_sessions=7
+    )
+
+    assert len(selected) == 1
+    assert selected[0]["roi_b"] == 1211
+
+
+def test_growth_veto_selector_ignores_audit_only_gt_and_delta_columns() -> None:
+    rows = [
+        _candidate_row(
+            growth_residual_mahalanobis=26.0,
+            roi_b=1210,
+            edge_status_against_gt="false_positive",
+            pairwise_fp_delta_if_removed=-1,
+            complete_fp_delta_if_removed=-1,
+            complete_tp_delta_if_removed=0,
+            reference_track_id="jm046:manual-fp",
+            new_pairwise_f1_micro=0.967213,
+            new_complete_track_f1_micro=0.957983,
+        ),
+        _candidate_row(
+            growth_residual_mahalanobis=30.0,
+            roi_b=1211,
+            edge_status_against_gt="true_positive",
+            pairwise_fp_delta_if_removed=0,
+            complete_fp_delta_if_removed=0,
+            complete_tp_delta_if_removed=-1,
+            manual_gt_reference_identity="jm046:true-track",
+            score_delta=-100.0,
+            new_pairwise_f1_micro=0.1,
+            new_complete_track_f1_micro=0.1,
+        ),
+    ]
+    sanitized_rows = [
+        {key: value for key, value in row.items() if not _is_audit_only_column(key)}
+        for row in rows
+    ]
+
+    selected = cleanup._selected_growth_veto_rows(  # pylint: disable=protected-access
+        rows, gate=cleanup.GrowthVetoGate(max_vetoes_per_subject=1), n_sessions=7
+    )
+    sanitized_selected = cleanup._selected_growth_veto_rows(  # pylint: disable=protected-access
+        sanitized_rows,
+        gate=cleanup.GrowthVetoGate(max_vetoes_per_subject=1),
+        n_sessions=7,
+    )
+
+    assert [_edge_key(row) for row in selected] == [
+        _edge_key(row) for row in sanitized_selected
+    ]
+
+
+def test_growth_veto_selector_does_not_access_audit_only_columns() -> None:
+    rows = [
+        _AuditGuardRow(
+            _candidate_row(
+                growth_residual_mahalanobis=30.0,
+                roi_b=1211,
+                edge_status_against_gt="true_positive",
+                pairwise_fp_delta_if_removed=0,
+                complete_fp_delta_if_removed=0,
+                complete_tp_delta_if_removed=-1,
+                reference_track_id="manual-track",
+                score_delta=-1.0,
+            )
+        ),
+        _AuditGuardRow(
+            _candidate_row(
+                growth_residual_mahalanobis=26.0,
+                roi_b=1210,
+                edge_status_against_gt="false_positive",
+                pairwise_fp_delta_if_removed=-1,
+                complete_fp_delta_if_removed=-1,
+                complete_tp_delta_if_removed=0,
+                reference_track_id="manual-fp",
+                score_delta=1.0,
+            )
+        ),
+    ]
+
+    selected = cleanup._selected_growth_veto_rows(  # pylint: disable=protected-access
         rows, gate=cleanup.GrowthVetoGate(max_vetoes_per_subject=1), n_sessions=7
     )
 
