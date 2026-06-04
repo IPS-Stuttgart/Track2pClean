@@ -461,6 +461,96 @@ def test_benchmark_manifest_dispatches_coherence_suffix_teacher_rescue_options(
     assert (tmp_path / "results" / "suffix-teacher-rescue.csv").exists()
 
 
+def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
+
+    calls = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {
+                "subject": "jm_growth_veto",
+                "variant": "fake growth veto cleanup",
+                "method": "track2p-policy-growth-veto-cleanup",
+                "n_sessions": 7,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+        edge_rows = ()
+        summary_rows = ()
+
+    def fake_growth_veto_cleanup(config, **kwargs):
+        calls["config"] = config
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_growth_veto_cleanup,
+        "run_track2p_policy_growth_veto_cleanup",
+        fake_growth_veto_cleanup,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-cleanup",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "output": "results/growth-veto-cleanup.csv",
+                    "threshold_method": "min",
+                    "iou_distance_threshold": 12.0,
+                    "split_risk_threshold": 1.5,
+                    "min_side_observations": 2,
+                    "suffix_path_length": 2,
+                    "min_cell_probability": 0.8,
+                    "min_area_ratio": 0.8,
+                    "max_centroid_distance": 6.0,
+                    "min_shifted_iou": 0.3,
+                    "min_motion_consistency": 0.5,
+                    "min_shape_consistency": 0.82,
+                    "max_stitches_per_subject": 1,
+                    "anchor_min_registered_iou": 0.5,
+                    "anchor_min_shifted_iou": 0.3,
+                    "anchor_min_cell_probability": 0.8,
+                    "min_growth_residual_mahalanobis": 25.0,
+                    "min_veto_anchor_count": 2,
+                    "min_veto_complete_component_size": 7,
+                    "min_veto_registered_iou": 0.2,
+                    "max_veto_registered_iou": 0.6,
+                    "min_veto_shifted_iou": 0.3,
+                    "max_veto_shifted_iou": 0.8,
+                    "max_vetoes_per_subject": 1,
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["kwargs"]["cleanup_config"].split_risk_threshold == 1.5
+    assert calls["kwargs"]["suffix_gate"].suffix_path_length == 2
+    assert calls["kwargs"]["anchor_min_registered_iou"] == 0.5
+    assert calls["kwargs"]["anchor_min_shifted_iou"] == 0.3
+    assert calls["kwargs"]["anchor_min_cell_probability"] == 0.8
+    growth_gate = calls["kwargs"]["growth_veto_gate"]
+    assert growth_gate.min_growth_residual_mahalanobis == 25.0
+    assert growth_gate.min_anchor_count == 2
+    assert growth_gate.min_complete_component_size == 7
+    assert growth_gate.max_registered_iou == 0.6
+    assert growth_gate.max_shifted_iou == 0.8
+    assert growth_gate.max_vetoes_per_subject == 1
+    assert (tmp_path / "results" / "growth-veto-cleanup.csv").exists()
+
+
 def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkeypatch):
     calls = {}
 

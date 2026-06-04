@@ -132,6 +132,58 @@ def test_anchor_edges_use_policy_diagnostics_without_feature_cache(monkeypatch) 
     assert anchors == {(0, 1): ((0, 1, 10, 11),)}
 
 
+def test_anchor_edges_respect_shifted_iou_feature_gate(monkeypatch) -> None:
+    sessions = (object(), object())
+    diagnostic = SimpleNamespace(
+        session_index=0,
+        local_roi_a=0,
+        local_roi_b=0,
+        assigned_iou=0.75,
+    )
+    matrices = SimpleNamespace(
+        source_indices=np.asarray([10]),
+        target_indices=np.asarray([11]),
+        registered_iou=np.asarray([[0.75]], dtype=float),
+        shifted_iou=np.asarray([[0.20]], dtype=float),
+    )
+    feature_cache = SimpleNamespace(pair=lambda _session_index: matrices)
+
+    def fake_roi_indices(session: object) -> np.ndarray:
+        return np.asarray([10]) if session is sessions[0] else np.asarray([11])
+
+    monkeypatch.setattr(veto, "_roi_indices", fake_roi_indices)
+    monkeypatch.setattr(veto, "_cell_probability", lambda *args: 0.90)
+
+    rejected = veto._anchor_edges_from_policy_diagnostics(
+        sessions,
+        feature_cache=feature_cache,
+        diagnostics=(diagnostic,),
+        track2p=np.asarray([[10, 11]], dtype=int),
+        component_cleanup=np.asarray([[10, 11]], dtype=int),
+        combined=np.asarray([[10, 11]], dtype=int),
+        min_registered_iou=0.50,
+        min_shifted_iou=0.30,
+        min_cell_probability=0.80,
+    )
+
+    assert rejected == {}
+
+    matrices.shifted_iou = np.asarray([[0.35]], dtype=float)
+    accepted = veto._anchor_edges_from_policy_diagnostics(
+        sessions,
+        feature_cache=feature_cache,
+        diagnostics=(diagnostic,),
+        track2p=np.asarray([[10, 11]], dtype=int),
+        component_cleanup=np.asarray([[10, 11]], dtype=int),
+        combined=np.asarray([[10, 11]], dtype=int),
+        min_registered_iou=0.50,
+        min_shifted_iou=0.30,
+        min_cell_probability=0.80,
+    )
+
+    assert accepted == {(0, 1): ((0, 1, 10, 11),)}
+
+
 def test_policy_feature_index_from_diagnostics(monkeypatch) -> None:
     sessions = (object(), object())
     diagnostic = SimpleNamespace(

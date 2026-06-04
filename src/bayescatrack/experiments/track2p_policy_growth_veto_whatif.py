@@ -349,11 +349,13 @@ def _subject_state(
     )
     anchor_edges = _anchor_edges_from_policy_diagnostics(
         sessions,
+        feature_cache=feature_cache,
         diagnostics=policy_prediction.diagnostics,
         track2p=teacher_eval,
         component_cleanup=cleaned,
         combined=combined,
         min_registered_iou=float(anchor_min_registered_iou),
+        min_shifted_iou=float(anchor_min_shifted_iou),
         min_cell_probability=float(anchor_min_cell_probability),
     )
     _log_progress(progress, f"{METHOD}: {subject_dir.name}: growth anchors ready")
@@ -384,11 +386,13 @@ def _log_progress(enabled: bool, message: str) -> None:
 def _anchor_edges_from_policy_diagnostics(
     sessions: Sequence[Track2pSession],
     *,
+    feature_cache: _FeatureCache | None = None,
     diagnostics: Sequence[Any],
     track2p: np.ndarray,
     component_cleanup: np.ndarray,
     combined: np.ndarray,
     min_registered_iou: float,
+    min_shifted_iou: float = 0.0,
     min_cell_probability: float,
 ) -> dict[tuple[int, int], tuple[TrackEdge, ...]]:
     track2p_edges = set(track_edge_counter(track2p))
@@ -413,7 +417,23 @@ def _anchor_edges_from_policy_diagnostics(
         edge = (session_a, session_b, roi_a, roi_b)
         if edge not in track2p_edges or edge not in cleanup_or_combined:
             continue
-        if float(diagnostic.assigned_iou) < float(min_registered_iou):
+
+        registered_iou = float(diagnostic.assigned_iou)
+        shifted_iou = float("nan")
+        if feature_cache is not None:
+            matrices = feature_cache.pair(session_a)
+            feature_local_a = _local_index_from_indices(matrices.source_indices, roi_a)
+            feature_local_b = _local_index_from_indices(matrices.target_indices, roi_b)
+            if feature_local_a >= 0 and feature_local_b >= 0:
+                registered_iou = float(
+                    matrices.registered_iou[feature_local_a, feature_local_b]
+                )
+                shifted_iou = float(matrices.shifted_iou[feature_local_a, feature_local_b])
+        if registered_iou < float(min_registered_iou):
+            continue
+        if float(min_shifted_iou) > 0.0 and (
+            not np.isfinite(shifted_iou) or shifted_iou < float(min_shifted_iou)
+        ):
             continue
         cell_a = _cell_probability(sessions, session_a, roi_a)
         cell_b = _cell_probability(sessions, session_b, roi_b)
@@ -432,6 +452,13 @@ def _anchor_edges_from_policy_diagnostics(
             and target_counts[(edge[1], edge[3])] == 1
         )
     return output
+
+
+def _local_index_from_indices(indices: Sequence[int] | np.ndarray, roi: int) -> int:
+    """Return the local index of ``roi`` in a Suite2p ROI-index vector."""
+
+    matches = np.flatnonzero(np.asarray(indices, dtype=int) == int(roi))
+    return int(matches[0]) if matches.size else -1
 
 
 def _policy_feature_index_from_diagnostics(

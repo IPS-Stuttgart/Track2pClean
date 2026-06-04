@@ -343,6 +343,30 @@ def track2p_result_improvement_manifest(
         "min_shape_consistency": 0.82,
         "max_stitches_per_subject": 1,
     }
+    track2p_policy_growth_veto_config = {
+        **track2p_policy_suffix_config,
+        "teacher_edge_order": "structural",
+        "teacher_action_filter": "all",
+        "teacher_feature_preset": "none",
+        "max_applied_teacher_edits": -1,
+        "anchor_min_registered_iou": 0.50,
+        "anchor_min_shifted_iou": 0.30,
+        "anchor_min_cell_probability": 0.80,
+        # Growth-veto is intentionally a tiny post-teacher row: after the
+        # CoherenceSuffixTeacherRescue lead, the growth-field audit exposed one
+        # extreme terminal false-continuation pocket.  Keep the generated suite
+        # in that moderate-local-evidence regime rather than making it a broad
+        # clean-up pass.
+        "min_growth_residual_mahalanobis": 25.0,
+        "min_veto_anchor_count": 2,
+        "min_veto_complete_component_size": 7,
+        "min_veto_cell_probability": 0.50,
+        "min_veto_registered_iou": 0.20,
+        "max_veto_registered_iou": 0.60,
+        "min_veto_shifted_iou": 0.30,
+        "max_veto_shifted_iou": 0.80,
+        "max_vetoes_per_subject": 1,
+    }
     teacher_prior_config = {
         "relief": 0.75,
         "teacher_cost_cap": 0.5,
@@ -421,6 +445,12 @@ def track2p_result_improvement_manifest(
             "output": (
                 f"{output_root}/" "track2p_policy_coherence_suffix_teacher_rescue.csv"
             ),
+        },
+        {
+            "name": "track2p-policy-growth-veto-cleanup",
+            "runner": "track2p-policy-growth-veto-cleanup",
+            **track2p_policy_growth_veto_config,
+            "output": f"{output_root}/track2p_policy_growth_veto_cleanup.csv",
         },
         {
             "name": "track2p-policy-teacher-adjacent-rescue",
