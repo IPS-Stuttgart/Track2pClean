@@ -69,10 +69,10 @@ class GrowthVetoGate:
     min_growth_residual_mahalanobis: float = 20.0
     min_registered_iou: float = 0.45
     min_shifted_iou: float = 0.60
-    max_registered_iou: float | None = None
-    max_shifted_iou: float | None = None
+    max_registered_iou: float | None = 0.60
+    max_shifted_iou: float | None = 0.80
     min_cell_probability: float = 0.50
-    max_min_cell_probability: float | None = None
+    max_min_cell_probability: float | None = 0.65
     min_anchor_count: int = 0
     min_complete_component_size: int | None = None
     max_row_rank: int = 1
@@ -664,7 +664,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--growth-veto-max-registered-iou",
         dest="max_veto_registered_iou",
         type=float,
-        default=None,
+        default=0.60,
         help=(
             "Optional upper bound on registered IoU for growth-veto candidates. "
             "This lets benchmark rows test the high-growth / moderate-local-evidence "
@@ -683,7 +683,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--growth-veto-max-shifted-iou",
         dest="max_veto_shifted_iou",
         type=float,
-        default=None,
+        default=0.80,
         help=(
             "Optional upper bound on shifted IoU for growth-veto candidates. "
             "Use with --growth-veto-max-registered-iou to avoid vetoing "
@@ -702,7 +702,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--growth-veto-max-min-cell-probability",
         dest="max_veto_min_cell_probability",
         type=float,
-        default=None,
+        default=0.65,
         help=(
             "Optional upper bound on min(cell_probability_a, cell_probability_b). "
             "This lets a growth veto target weak-endpoint continuations instead "
