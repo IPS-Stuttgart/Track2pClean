@@ -1481,6 +1481,12 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
         target_extension_feature_preset=str(options.get("target_extension_feature_preset", "none")),
         seed_source_feature_preset=str(options.get("seed_source_feature_preset", "none")),
         allow_completing_rescue=allow_completing_rescue,
+        allow_teacher_supported_completing_rescue=_bool_option(
+            options, "allow_teacher_supported_completing_rescue", default=False
+        ),
+        allow_teacher_confirmed_completing_rescue=_bool_option(
+            options, "allow_teacher_confirmed_completing_rescue", default=False
+        ),
         allow_source_backfill=_bool_option(options, "allow_source_backfill", default=True),
         allow_seed_source_backfill=_bool_option(options, "allow_seed_source_backfill", default=False),
         allow_completing_seed_source_backfill=_bool_option(
