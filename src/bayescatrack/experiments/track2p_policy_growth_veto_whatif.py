@@ -15,6 +15,7 @@ without reference labels.
 from __future__ import annotations
 
 import argparse
+import sys
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -134,6 +135,7 @@ def run_track2p_policy_growth_veto_whatif(
     anchor_min_registered_iou: float = 0.50,
     anchor_min_shifted_iou: float = 0.30,
     anchor_min_cell_probability: float = 0.80,
+    progress: bool = False,
 ) -> GrowthVetoWhatIfResult:
     """Return one growth-veto what-if row per accepted adjacent edge."""
 
@@ -148,26 +150,40 @@ def run_track2p_policy_growth_veto_whatif(
     if not subject_dirs:
         raise ValueError(f"No Track2p-style subject directories found under {policy_config.data}")
 
-    states = tuple(
-        _subject_state(
-            subject_dir,
-            config=policy_config,
-            cleanup_config=cleanup_config,
-            suffix_gate=suffix_gate,
-            threshold_method=threshold_method,
-            iou_distance_threshold=float(iou_distance_threshold),
-            edge_top_k=int(edge_top_k),
-            path_beam_width=int(path_beam_width),
-            anchor_min_registered_iou=float(anchor_min_registered_iou),
-            anchor_min_shifted_iou=float(anchor_min_shifted_iou),
-            anchor_min_cell_probability=float(anchor_min_cell_probability),
+    states: list[_SubjectState] = []
+    for index, subject_dir in enumerate(subject_dirs, start=1):
+        _log_progress(
+            progress,
+            f"{METHOD}: subject {index}/{len(subject_dirs)} {subject_dir.name}: build prediction",
         )
-        for subject_dir in subject_dirs
-    )
+        states.append(
+            _subject_state(
+                subject_dir,
+                config=policy_config,
+                cleanup_config=cleanup_config,
+                suffix_gate=suffix_gate,
+                threshold_method=threshold_method,
+                iou_distance_threshold=float(iou_distance_threshold),
+                edge_top_k=int(edge_top_k),
+                path_beam_width=int(path_beam_width),
+                anchor_min_registered_iou=float(anchor_min_registered_iou),
+                anchor_min_shifted_iou=float(anchor_min_shifted_iou),
+                anchor_min_cell_probability=float(anchor_min_cell_probability),
+                progress=progress,
+            )
+        )
+        _log_progress(
+            progress,
+            f"{METHOD}: subject {index}/{len(subject_dirs)} {subject_dir.name}: prediction ready",
+        )
     global_baseline_scores = _global_scores(state.baseline_scores for state in states)
 
     edge_rows: list[dict[str, Any]] = []
-    for state in states:
+    for index, state in enumerate(states, start=1):
+        _log_progress(
+            progress,
+            f"{METHOD}: subject {index}/{len(states)} {state.subject}: score accepted edges",
+        )
         edge_rows.extend(
             _accepted_edge_rows(
                 state,
@@ -177,6 +193,10 @@ def run_track2p_policy_growth_veto_whatif(
                 cell_probability_threshold=float(policy_config.cell_probability_threshold),
                 transform_type=policy_config.transform_type,
             )
+        )
+        _log_progress(
+            progress,
+            f"{METHOD}: subject {index}/{len(states)} {state.subject}: edge rows done",
         )
     summary_rows = _summary_rows(edge_rows, global_baseline_scores)
     return GrowthVetoWhatIfResult(tuple(edge_rows), tuple(summary_rows))
@@ -195,6 +215,7 @@ def _subject_state(
     anchor_min_registered_iou: float,
     anchor_min_shifted_iou: float,
     anchor_min_cell_probability: float,
+    progress: bool,
 ) -> _SubjectState:
     reference = _load_reference_for_subject(subject_dir, data_root=config.data, config=config)
     _validate_reference_for_benchmark(reference, subject_dir=subject_dir, config=config)
@@ -203,6 +224,7 @@ def _subject_state(
     sessions = _load_subject_sessions(subject_dir, config)
     _validate_reference_roi_indices(reference, sessions)
     reference_tracks = _reference_matrix(reference, curated_only=config.curated_only)
+    _log_progress(progress, f"{METHOD}: {subject_dir.name}: sessions/reference loaded")
 
     policy_prediction = emulate_track2p_pruned_tracks(
         sessions,
@@ -216,6 +238,7 @@ def _subject_state(
     reference_eval = _as_track_matrix(reference_eval)
     n_sessions = int(reference_eval.shape[1])
     policy_eval = _pad_track_matrix(_as_track_matrix(policy_eval), width=n_sessions)
+    _log_progress(progress, f"{METHOD}: {subject_dir.name}: policy reconstructed")
 
     cleaned, reference_eval = suffix._component_cleanup_eval(
         sessions,
@@ -227,6 +250,7 @@ def _subject_state(
         iou_distance_threshold=float(iou_distance_threshold),
     )
     cleaned = _pad_track_matrix(_as_track_matrix(cleaned), width=n_sessions)
+    _log_progress(progress, f"{METHOD}: {subject_dir.name}: component cleanup ready")
     feature_cache = _FeatureCache(
         sessions=sessions,
         transform_type=str(config.transform_type),
@@ -245,6 +269,10 @@ def _subject_state(
         path_beam_width=int(path_beam_width),
     )
     selected = suffix._select_paths(paths, cleaned, gate=suffix_gate)
+    _log_progress(
+        progress,
+        f"{METHOD}: {subject_dir.name}: suffix candidates={len(paths)} selected={len(selected)}",
+    )
     stitched = _pad_track_matrix(
         _as_track_matrix(suffix._apply_suffix_paths(cleaned, selected)),
         width=n_sessions,
@@ -253,6 +281,7 @@ def _subject_state(
     teacher_full, _variant = _predict_subject_tracks(subject_dir, replace(config, method="track2p-baseline"))
     teacher_eval, _reference_again, _teacher_ids = _evaluated_prediction_rows(_normalize_int_track_matrix(teacher_full), reference_tracks, config=config)
     teacher_eval = _pad_track_matrix(_as_track_matrix(teacher_eval), width=n_sessions)
+    _log_progress(progress, f"{METHOD}: {subject_dir.name}: teacher baseline ready")
     teacher_report = apply_teacher_adjacent_rescue_edges(
         stitched,
         teacher_eval,
@@ -270,6 +299,10 @@ def _subject_state(
         _as_track_matrix(_normalize_int_track_matrix(teacher_report.tracks)),
         width=n_sessions,
     )
+    _log_progress(
+        progress,
+        f"{METHOD}: {subject_dir.name}: teacher edits={sum(int(row.get('applied', 0)) for row in teacher_report.rows)}",
+    )
     anchor_edges = _anchor_edges(
         sessions,
         feature_cache=feature_cache,
@@ -281,6 +314,7 @@ def _subject_state(
         min_shifted_iou=float(anchor_min_shifted_iou),
         min_cell_probability=float(anchor_min_cell_probability),
     )
+    _log_progress(progress, f"{METHOD}: {subject_dir.name}: growth anchors ready")
     return _SubjectState(
         subject=subject_dir.name,
         sessions=sessions,
@@ -295,6 +329,11 @@ def _subject_state(
         growth_models=_growth_models_by_pair(sessions, anchor_edges),
         baseline_scores=dict(score_track_matrices(combined, reference_eval)),
     )
+
+
+def _log_progress(enabled: bool, message: str) -> None:
+    if enabled:
+        print(message, file=sys.stderr, flush=True)
 
 
 def _accepted_edge_rows(
@@ -553,6 +592,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--anchor-min-registered-iou", type=float, default=0.50)
     parser.add_argument("--anchor-min-shifted-iou", type=float, default=0.30)
     parser.add_argument("--anchor-min-cell-probability", type=float, default=0.80)
+    parser.add_argument(
+        "--progress",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Print per-subject growth-veto audit progress to stderr.",
+    )
     return parser
 
 
@@ -607,6 +652,7 @@ def main(argv: list[str] | None = None) -> int:
         anchor_min_registered_iou=float(args.anchor_min_registered_iou),
         anchor_min_shifted_iou=float(args.anchor_min_shifted_iou),
         anchor_min_cell_probability=float(args.anchor_min_cell_probability),
+        progress=bool(args.progress),
     )
     write_rows(
         result.edge_rows,

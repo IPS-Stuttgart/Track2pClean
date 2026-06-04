@@ -30,6 +30,7 @@ def test_growth_veto_parser_exposes_defaults() -> None:
     assert args.anchor_min_registered_iou == 0.50
     assert args.anchor_min_shifted_iou == 0.30
     assert args.anchor_min_cell_probability == 0.80
+    assert args.progress is False
 
 
 def test_remove_edge_occurrence_splits_component_without_gt_guard() -> None:
