@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+from bayescatrack.association.shifted_overlap import _pairwise_shifted_iou_from_support
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import track2p_policy_coherence_suffix_stitch_whatif as suffix
 from bayescatrack.experiments import track2p_policy_growth_veto_whatif as veto
@@ -49,6 +50,8 @@ from bayescatrack.experiments.track2p_policy_benchmark import (
     track2p_policy_config,
 )
 from bayescatrack.experiments.track2p_policy_component_audit import ComponentCleanupConfig
+from bayescatrack.experiments.track2p_policy_pruned_benchmark import _roi_indices
+from bayescatrack.track2p_registration import register_plane_pair
 
 METHOD = "track2p-policy-growth-veto-cleanup"
 
@@ -57,12 +60,15 @@ METHOD = "track2p-policy-growth-veto-cleanup"
 class GrowthVetoGate:
     """Label-free gate for applying one-edge growth-veto splits."""
 
-    min_growth_residual_mahalanobis: float = 25.0
-    min_registered_iou: float = 0.30
-    min_shifted_iou: float = 0.50
+    min_growth_residual_mahalanobis: float = 20.0
+    min_registered_iou: float = 0.45
+    min_shifted_iou: float = 0.60
     min_cell_probability: float = 0.50
     min_anchor_count: int = 0
     min_complete_component_size: int | None = None
+    max_row_rank: int = 1
+    max_column_rank: int = 1
+    require_not_suffix_edge: bool = True
     require_terminal_edge: bool = True
     require_last_session_edge: bool = True
     require_complete_component: bool = True
@@ -141,6 +147,12 @@ def run_track2p_policy_growth_veto_cleanup(
             cell_probability_threshold=float(policy_config.cell_probability_threshold),
             transform_type=policy_config.transform_type,
         )
+        edge_rows = _augment_growth_veto_candidate_shifted_iou(
+            edge_rows,
+            state.sessions,
+            gate=growth_veto_gate,
+            n_sessions=int(state.reference.shape[1]),
+        )
         selected = _selected_growth_veto_rows(
             edge_rows,
             gate=growth_veto_gate,
@@ -176,6 +188,15 @@ def run_track2p_policy_growth_veto_cleanup(
                     growth_veto_gate.min_complete_component_size
                     if growth_veto_gate.min_complete_component_size is not None
                     else 0
+                ),
+                "track2p_growth_veto_max_row_rank": int(
+                    growth_veto_gate.max_row_rank
+                ),
+                "track2p_growth_veto_max_column_rank": int(
+                    growth_veto_gate.max_column_rank
+                ),
+                "track2p_growth_veto_require_not_suffix_edge": int(
+                    growth_veto_gate.require_not_suffix_edge
                 ),
                 "track2p_growth_veto_require_terminal_edge": int(
                     growth_veto_gate.require_terminal_edge
@@ -236,6 +257,10 @@ def run_track2p_policy_growth_veto_cleanup(
                         if growth_veto_gate.min_complete_component_size is not None
                         else 0
                     ),
+                    "growth_veto_max_row_rank": int(growth_veto_gate.max_row_rank),
+                    "growth_veto_max_column_rank": int(
+                        growth_veto_gate.max_column_rank
+                    ),
                 }
             )
 
@@ -251,6 +276,8 @@ def growth_veto_gate_reason(
 ) -> str:
     """Return ``accepted`` or the first label-free rejection reason for a row."""
 
+    if gate.require_not_suffix_edge and str(row.get("edge_source", "")) == "suffix":
+        return "coherence_suffix_edge"
     if str(row.get("remove_reason", "")) != "split_edge":
         return "not_splittable"
     if int(row.get("would_split_component", 0)) <= 0:
@@ -278,6 +305,12 @@ def growth_veto_gate_reason(
         value = _finite_float(row.get(key), float("nan"))
         if not np.isfinite(value) or value < float(threshold):
             return f"{key}_below_gate"
+    row_rank = int(_finite_float(row.get("row_rank"), float("inf")))
+    column_rank = int(_finite_float(row.get("column_rank"), float("inf")))
+    if row_rank <= 0 or row_rank > int(gate.max_row_rank):
+        return "row_rank_above_gate"
+    if column_rank <= 0 or column_rank > int(gate.max_column_rank):
+        return "column_rank_above_gate"
     cell_a = _finite_float(row.get("cell_probability_a"), float("nan"))
     cell_b = _finite_float(row.get("cell_probability_b"), float("nan"))
     if not np.isfinite(cell_a) or not np.isfinite(cell_b):
@@ -297,6 +330,134 @@ def _selected_growth_veto_rows(
     ]
     selected.sort(key=_growth_veto_sort_key)
     return selected[: max(0, int(gate.max_vetoes_per_subject))]
+
+
+def _augment_growth_veto_candidate_shifted_iou(
+    rows: list[dict[str, Any]],
+    sessions: Sequence[Any],
+    *,
+    gate: GrowthVetoGate,
+    n_sessions: int,
+) -> list[dict[str, Any]]:
+    requested_by_pair: dict[tuple[int, int, str], list[tuple[int, int, int]]] = defaultdict(list)
+    for row_index, row in enumerate(rows):
+        if np.isfinite(_finite_float(row.get("shifted_iou"), float("nan"))):
+            continue
+        if not _needs_sparse_shifted_iou(row, gate, n_sessions=n_sessions):
+            continue
+        session_a = int(row["session_a"])
+        session_b = int(row["session_b"])
+        transform_type = str(row.get("transform_type", "affine"))
+        requested_by_pair[(session_a, session_b, transform_type)].append(
+            (row_index, int(row["roi_a"]), int(row["roi_b"]))
+        )
+    for (session_a, session_b, transform_type), requested in requested_by_pair.items():
+        if session_a < 0 or session_b >= len(sessions):
+            continue
+        shifted_values = _sparse_shifted_iou_for_edges(
+            sessions,
+            session_a=session_a,
+            session_b=session_b,
+            transform_type=transform_type,
+            requested_edges=[(roi_a, roi_b) for _index, roi_a, roi_b in requested],
+        )
+        for row_index, roi_a, roi_b in requested:
+            value = shifted_values.get((int(roi_a), int(roi_b)), float("nan"))
+            rows[int(row_index)]["shifted_iou"] = float(value)
+    return rows
+
+
+def _needs_sparse_shifted_iou(
+    row: Mapping[str, Any], gate: GrowthVetoGate, *, n_sessions: int
+) -> bool:
+    if gate.require_not_suffix_edge and str(row.get("edge_source", "")) == "suffix":
+        return False
+    if str(row.get("remove_reason", "")) != "split_edge":
+        return False
+    if int(row.get("would_split_component", 0)) <= 0:
+        return False
+    if gate.require_terminal_edge and int(row.get("is_terminal_edge", 0)) <= 0:
+        return False
+    if gate.require_last_session_edge and int(row.get("is_last_session_edge", 0)) <= 0:
+        return False
+    if gate.require_complete_component and int(row.get("complete_component_size", 0)) < int(
+        n_sessions
+    ):
+        return False
+    for key, threshold in (
+        ("growth_residual_mahalanobis", gate.min_growth_residual_mahalanobis),
+        ("registered_iou", gate.min_registered_iou),
+    ):
+        value = _finite_float(row.get(key), float("nan"))
+        if not np.isfinite(value) or value < float(threshold):
+            return False
+    row_rank = int(_finite_float(row.get("row_rank"), float("inf")))
+    column_rank = int(_finite_float(row.get("column_rank"), float("inf")))
+    if row_rank <= 0 or row_rank > int(gate.max_row_rank):
+        return False
+    if column_rank <= 0 or column_rank > int(gate.max_column_rank):
+        return False
+    cell_a = _finite_float(row.get("cell_probability_a"), float("nan"))
+    cell_b = _finite_float(row.get("cell_probability_b"), float("nan"))
+    return bool(
+        np.isfinite(cell_a)
+        and np.isfinite(cell_b)
+        and min(cell_a, cell_b) >= float(gate.min_cell_probability)
+    )
+
+
+def _sparse_shifted_iou_for_edges(
+    sessions: Sequence[Any],
+    *,
+    session_a: int,
+    session_b: int,
+    transform_type: str,
+    requested_edges: Sequence[tuple[int, int]],
+) -> dict[tuple[int, int], float]:
+    source_indices = _roi_indices(sessions[int(session_a)])
+    target_indices = _roi_indices(sessions[int(session_b)])
+    source_local = {int(roi): index for index, roi in enumerate(source_indices)}
+    target_local = {int(roi): index for index, roi in enumerate(target_indices)}
+    source_locs = sorted(
+        {
+            int(source_local[int(roi_a)])
+            for roi_a, _roi_b in requested_edges
+            if int(roi_a) in source_local
+        }
+    )
+    target_locs = sorted(
+        {
+            int(target_local[int(roi_b)])
+            for _roi_a, roi_b in requested_edges
+            if int(roi_b) in target_local
+        }
+    )
+    if not source_locs or not target_locs:
+        return {}
+    registered = register_plane_pair(
+        sessions[int(session_a)].plane_data,
+        sessions[int(session_b)].plane_data,
+        transform_type=str(transform_type),
+    )
+    reference_masks = (
+        np.asarray(sessions[int(session_a)].plane_data.roi_masks)[source_locs] > 0
+    )
+    moving_masks = np.asarray(registered.roi_masks)[target_locs] > 0
+    shifted = _pairwise_shifted_iou_from_support(
+        reference_masks,
+        moving_masks,
+        radius=2,
+    )["shifted_iou"]
+    source_position = {int(source_indices[local]): pos for pos, local in enumerate(source_locs)}
+    target_position = {int(target_indices[local]): pos for pos, local in enumerate(target_locs)}
+    output: dict[tuple[int, int], float] = {}
+    for roi_a, roi_b in requested_edges:
+        source_pos = source_position.get(int(roi_a))
+        target_pos = target_position.get(int(roi_b))
+        if source_pos is None or target_pos is None:
+            continue
+        output[(int(roi_a), int(roi_b))] = float(shifted[source_pos, target_pos])
+    return output
 
 
 def _apply_growth_veto_rows(
@@ -391,34 +552,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--diagnostics-output", type=Path, default=None)
     parser.add_argument("--diagnostics-format", choices=("csv", "json"), default="csv")
-    parser.add_argument(
-        "--min-growth-residual-mahalanobis",
-        "--growth-veto-min-mahalanobis",
-        dest="min_growth_residual_mahalanobis",
-        type=float,
-        default=25.0,
-    )
-    parser.add_argument(
-        "--min-veto-registered-iou",
-        "--growth-veto-min-registered-iou",
-        dest="min_veto_registered_iou",
-        type=float,
-        default=0.30,
-    )
-    parser.add_argument(
-        "--min-veto-shifted-iou",
-        "--growth-veto-min-shifted-iou",
-        dest="min_veto_shifted_iou",
-        type=float,
-        default=0.50,
-    )
-    parser.add_argument(
-        "--min-veto-cell-probability",
-        "--growth-veto-min-cell-probability",
-        dest="min_veto_cell_probability",
-        type=float,
-        default=0.50,
-    )
+    parser.add_argument("--min-growth-residual-mahalanobis", "--growth-veto-min-mahalanobis", dest="min_growth_residual_mahalanobis", type=float, default=20.0)
+    parser.add_argument("--min-veto-registered-iou", "--growth-veto-min-registered-iou", dest="min_veto_registered_iou", type=float, default=0.45)
+    parser.add_argument("--min-veto-shifted-iou", "--growth-veto-min-shifted-iou", dest="min_veto_shifted_iou", type=float, default=0.60)
+    parser.add_argument("--min-veto-cell-probability", "--growth-veto-min-cell-probability", dest="min_veto_cell_probability", type=float, default=0.50)
     parser.add_argument(
         "--min-veto-anchor-count",
         "--growth-veto-min-anchor-count",
@@ -442,6 +579,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "above the number of sessions, and explicit enough for benchmark "
             "scripts that record the intended operating point."
         ),
+    )
+    parser.add_argument("--max-veto-row-rank", type=int, default=1)
+    parser.add_argument("--max-veto-column-rank", type=int, default=1)
+    parser.add_argument(
+        "--require-veto-not-suffix-edge",
+        action=argparse.BooleanOptionalAction,
+        default=True,
     )
     parser.add_argument(
         "--require-veto-terminal-edge",
@@ -532,6 +676,9 @@ def main(argv: list[str] | None = None) -> int:
                 if args.min_veto_complete_component_size is None
                 else max(0, int(args.min_veto_complete_component_size))
             ),
+            max_row_rank=int(args.max_veto_row_rank),
+            max_column_rank=int(args.max_veto_column_rank),
+            require_not_suffix_edge=bool(args.require_veto_not_suffix_edge),
             require_terminal_edge=bool(args.require_veto_terminal_edge),
             require_last_session_edge=bool(args.require_veto_last_session_edge),
             require_complete_component=bool(args.require_veto_complete_component),
