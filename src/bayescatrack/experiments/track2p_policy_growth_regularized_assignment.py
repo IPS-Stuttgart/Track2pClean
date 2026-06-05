@@ -86,6 +86,12 @@ class GrowthRegularizedAssignmentPrediction:
     anchor_counts: Mapping[tuple[int, int], int]
 
 
+@dataclass(frozen=True)
+class _SimpleGrowthContext:
+    centroids: tuple[Mapping[int, np.ndarray], ...]
+    areas: tuple[Mapping[int, float], ...]
+
+
 def run_track2p_policy_growth_regularized_assignment_benchmark(
     config: Track2pBenchmarkConfig,
     *,
@@ -212,7 +218,7 @@ def emulate_track2p_growth_regularized_tracks(
         min_cell_probability=float(growth_config.anchor_min_cell_probability),
     )
     growth_models = _growth_models_by_pair(sessions, anchor_edges)
-    growth_context = veto._growth_feature_context(sessions, baseline.tracks, anchor_edges)
+    growth_context = _simple_growth_context(sessions)
 
     pair_links: list[np.ndarray] = []
     diagnostics: list[Track2pPolicyLinkDiagnostic] = []
@@ -234,6 +240,39 @@ def emulate_track2p_growth_regularized_tracks(
         tracks=_tracks_from_pair_links(sessions, pair_links),
         diagnostics=tuple(diagnostics),
         anchor_counts={pair: len(edges) for pair, edges in anchor_edges.items()},
+    )
+
+
+def _simple_growth_context(
+    sessions: Sequence[Track2pSession],
+) -> _SimpleGrowthContext:
+    """Return only the ROI centroid/area lookup needed by assignment costs."""
+
+    all_centroids: list[dict[int, np.ndarray]] = []
+    all_areas: list[dict[int, float]] = []
+    for session in sessions:
+        roi_indices = _roi_indices(session)
+        masks = np.asarray(session.plane_data.roi_masks) > 0
+        centroids: dict[int, np.ndarray] = {}
+        areas: dict[int, float] = {}
+        for local_index, suite2p_roi in enumerate(roi_indices):
+            mask = masks[int(local_index)]
+            area = float(mask.sum())
+            areas[int(suite2p_roi)] = area
+            if area <= 0.0:
+                continue
+            ys, xs = np.nonzero(mask)
+            if xs.size == 0:
+                continue
+            centroids[int(suite2p_roi)] = np.asarray(
+                [float(np.mean(xs)), float(np.mean(ys))],
+                dtype=float,
+            )
+        all_centroids.append(centroids)
+        all_areas.append(areas)
+    return _SimpleGrowthContext(
+        centroids=tuple(all_centroids),
+        areas=tuple(all_areas),
     )
 
 
