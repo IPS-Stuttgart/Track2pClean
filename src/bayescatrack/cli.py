@@ -144,6 +144,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run exact one-edit Pareto what-ifs after CoherenceSuffixStitch",
     ),
     (
+        "track2p-policy-growth-regularized-assignment",
+        "bayescatrack.experiments.track2p_policy_growth_regularized_assignment",
+        "Run Track2pPolicy with growth-regularized Hungarian assignment",
+    ),
+    (
         "track2p-policy-teacher-free-adjacent-rescue-ranking-audit",
         (
             "bayescatrack.experiments."
@@ -440,6 +445,12 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-coherence-pareto-whatif": ("track2p-policy-coherence-pareto-whatif"),
     "track2p-component-coherence-pareto-whatif": (
         "track2p-policy-coherence-pareto-whatif"
+    ),
+    "track2p-growth-regularized-assignment": (
+        "track2p-policy-growth-regularized-assignment"
+    ),
+    "track2p-component-growth-regularized-assignment": (
+        "track2p-policy-growth-regularized-assignment"
     ),
     "track2p-teacher-free-adjacent-rescue-ranking-audit": (
         "track2p-policy-teacher-free-adjacent-rescue-ranking-audit"
