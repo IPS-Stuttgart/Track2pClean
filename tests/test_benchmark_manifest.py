@@ -257,6 +257,11 @@ def test_benchmark_manifest_accepts_teacher_adjacent_rescue_options(tmp_path):
                     "allow_seed_completing_rescue": True,
                     "min_component_observations": 3,
                     "max_applied_edits": 2,
+                    "max_target_extension_edits": 1,
+                    "max_source_backfill_edits": 0,
+                    "max_seed_source_backfill_edits": 1,
+                    "max_fragment_merge_edits": 0,
+                    "max_completing_rescue_edits": 1,
                     "teacher_edge_order": "dynamic-confidence",
                     "teacher_feature_preset": "high-confidence",
                     "teacher_gate_min_registered_iou": 0.25,
@@ -342,6 +347,9 @@ def test_benchmark_manifest_dispatches_teacher_adjacent_rescue_options(
                     "teacher_gate_require_hungarian": True,
                     "min_component_observations": 3,
                     "max_applied_edits": 2,
+                    "max_target_extension_edits": 1,
+                    "max_seed_source_backfill_edits": 1,
+                    "max_completing_rescue_edits": 1,
                 }
             ],
         },
@@ -357,6 +365,9 @@ def test_benchmark_manifest_dispatches_teacher_adjacent_rescue_options(
     assert calls["kwargs"]["teacher_feature_preset"] == "high-confidence"
     assert calls["kwargs"]["min_component_observations"] == 3
     assert calls["kwargs"]["max_applied_edits"] == 2
+    assert calls["kwargs"]["max_target_extension_edits"] == 1
+    assert calls["kwargs"]["max_seed_source_backfill_edits"] == 1
+    assert calls["kwargs"]["max_completing_rescue_edits"] == 1
     assert gate.min_registered_iou == 0.25
     assert gate.min_cell_probability == 0.8
     assert gate.require_hungarian is True
