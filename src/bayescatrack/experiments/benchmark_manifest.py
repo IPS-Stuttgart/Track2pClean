@@ -129,6 +129,7 @@ TRACK2P_POLICY_GROWTH_VETO_FIELDS = TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESC
     "anchor_min_shifted_iou",
     "anchor_min_cell_probability",
     "min_growth_residual_mahalanobis",
+    "min_growth_residual",
     "min_veto_registered_iou",
     "max_veto_registered_iou",
     "min_veto_shifted_iou",
@@ -147,6 +148,7 @@ TRACK2P_POLICY_GROWTH_VETO_FIELDS = TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESC
     # Allow manifest authors to use the CLI-style names as well as the internal
     # dest names when they are writing benchmark JSON by hand.
     "growth_veto_min_mahalanobis",
+    "growth_veto_min_residual",
     "growth_veto_min_registered_iou",
     "growth_veto_max_registered_iou",
     "growth_veto_min_shifted_iou",
