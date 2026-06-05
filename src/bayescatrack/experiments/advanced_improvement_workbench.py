@@ -453,6 +453,17 @@ def track2p_result_improvement_manifest(
             "output": f"{output_root}/track2p_policy_growth_veto_cleanup.csv",
         },
         {
+            "name": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+            "runner": "track2p-policy-growth-veto-cleanup",
+            **track2p_policy_growth_veto_config,
+            "growth_veto_base": "coherence-suffix",
+            "max_veto_local_neighbor_distortion": None,
+            "output": (
+                f"{output_root}/"
+                "track2p_policy_coherence_suffix_growth_veto_cleanup.csv"
+            ),
+        },
+        {
             "name": "track2p-policy-teacher-adjacent-rescue",
             "runner": "track2p-policy-teacher-adjacent-rescue",
             "transform_type": "affine",

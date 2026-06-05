@@ -60,6 +60,8 @@ from bayescatrack.experiments.track2p_policy_pruned_benchmark import _roi_indice
 from bayescatrack.track2p_registration import register_plane_pair
 
 METHOD = "track2p-policy-growth-veto-cleanup"
+COHERENCE_SUFFIX_METHOD = "track2p-policy-coherence-suffix-growth-veto-cleanup"
+GrowthVetoPredictionBase = Literal["teacher-rescue", "coherence-suffix"]
 
 
 @dataclass(frozen=True)
@@ -110,9 +112,10 @@ def run_track2p_policy_growth_veto_cleanup(
     anchor_min_shifted_iou: float = 0.30,
     anchor_min_cell_probability: float = 0.80,
     growth_veto_gate: GrowthVetoGate | None = None,
+    prediction_base: GrowthVetoPredictionBase = "teacher-rescue",
     progress: bool = False,
 ) -> GrowthVetoCleanupResult:
-    """Run CoherenceSuffixTeacherRescue followed by strict growth-veto splits."""
+    """Run a coherence-suffix-family prediction followed by growth-veto splits."""
 
     policy_config = track2p_policy_config(
         config,
@@ -141,6 +144,7 @@ def run_track2p_policy_growth_veto_cleanup(
             anchor_min_registered_iou=float(anchor_min_registered_iou),
             anchor_min_shifted_iou=float(anchor_min_shifted_iou),
             anchor_min_cell_probability=float(anchor_min_cell_probability),
+            prediction_base=prediction_base,
             progress=progress,
         )
         for subject_dir in subject_dirs
@@ -249,8 +253,8 @@ def run_track2p_policy_growth_veto_cleanup(
         results.append(
             SubjectBenchmarkResult(
                 subject=state.subject,
-                variant="CoherenceSuffixTeacherRescue + growth-veto cleanup",
-                method=cast(Any, METHOD),
+                variant=_variant_for_prediction_base(prediction_base),
+                method=cast(Any, _method_for_prediction_base(prediction_base)),
                 scores=scores,
                 n_sessions=int(state.reference.shape[1]),
                 reference_source=GROUND_TRUTH_REFERENCE_SOURCE,
@@ -326,6 +330,18 @@ def run_track2p_policy_growth_veto_cleanup(
         tuple(diagnostic_rows),
         tuple(_summary_rows(diagnostic_rows)),
     )
+
+
+def _method_for_prediction_base(prediction_base: GrowthVetoPredictionBase) -> str:
+    if prediction_base == "coherence-suffix":
+        return COHERENCE_SUFFIX_METHOD
+    return METHOD
+
+
+def _variant_for_prediction_base(prediction_base: GrowthVetoPredictionBase) -> str:
+    if prediction_base == "coherence-suffix":
+        return "CoherenceSuffixStitch + growth-veto cleanup"
+    return "CoherenceSuffixTeacherRescue + growth-veto cleanup"
 
 
 def growth_veto_gate_reason(
@@ -674,6 +690,12 @@ def _finite_float(value: Any, fallback: float) -> float:
     return numeric if np.isfinite(numeric) else float(fallback)
 
 
+def _optional_float_arg(value: str) -> float | None:
+    if str(value).strip().lower() in {"none", "null", "off", "disabled"}:
+        return None
+    return float(value)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the growth-veto cleanup parser."""
 
@@ -765,12 +787,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--max-veto-local-neighbor-distortion",
         "--growth-veto-max-local-neighbor-distortion",
         dest="max_veto_local_neighbor_distortion",
-        type=float,
+        type=_optional_float_arg,
         default=0.05,
         help=(
             "Optional upper bound on the local neighbor-distance distortion for "
             "growth-veto candidates. This keeps the veto focused on edges that "
-            "are globally growth-field outliers but still locally coherent."
+            "are globally growth-field outliers but still locally coherent. "
+            "Use 'none' to disable this optional cap."
         ),
     )
     parser.add_argument(
@@ -825,6 +848,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         dest="max_vetoes_per_subject",
         type=int,
         default=1,
+    )
+    parser.add_argument(
+        "--growth-veto-base",
+        choices=("teacher-rescue", "coherence-suffix"),
+        default="teacher-rescue",
+        help=(
+            "Prediction matrix to audit and split. The default preserves the "
+            "teacher-assisted top row; coherence-suffix tests growth veto after "
+            "CoherenceSuffixStitch without applying teacher-adjacent rescue."
+        ),
     )
     return parser
 
@@ -914,6 +947,7 @@ def main(argv: list[str] | None = None) -> int:
             require_complete_component=bool(args.require_veto_complete_component),
             max_vetoes_per_subject=int(args.max_vetoes_per_subject),
         ),
+        prediction_base=cast(GrowthVetoPredictionBase, args.growth_veto_base),
         progress=bool(args.progress),
     )
     rows = [benchmark_result.to_dict() for benchmark_result in result.results]

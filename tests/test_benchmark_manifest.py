@@ -538,6 +538,7 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
                     "max_veto_shifted_iou": 0.8,
                     "max_veto_min_cell_probability": 0.65,
                     "max_vetoes_per_subject": 1,
+                    "growth_veto_base": "coherence-suffix",
                 }
             ],
         },
@@ -551,6 +552,7 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     assert calls["kwargs"]["anchor_min_registered_iou"] == 0.5
     assert calls["kwargs"]["anchor_min_shifted_iou"] == 0.3
     assert calls["kwargs"]["anchor_min_cell_probability"] == 0.8
+    assert calls["kwargs"]["prediction_base"] == "coherence-suffix"
     growth_gate = calls["kwargs"]["growth_veto_gate"]
     assert growth_gate.min_growth_residual_mahalanobis == 20.0
     assert growth_gate.min_registered_iou == 0.45

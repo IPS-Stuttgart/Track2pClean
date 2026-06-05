@@ -98,8 +98,18 @@ def test_growth_veto_cleanup_is_registered() -> None:
     assert canonical == "track2p-policy-growth-veto-cleanup"
     assert cli._BENCHMARK_ALIASES["track2p-component-growth-veto-cleanup"] == canonical
     assert (
+        cli._BENCHMARK_ALIASES["track2p-coherence-suffix-growth-veto-cleanup"]
+        == "track2p-policy-coherence-suffix-growth-veto-cleanup"
+    )
+    assert (
         cli._BENCHMARK_COMMANDS[canonical].module
         == "bayescatrack.experiments.track2p_policy_growth_veto_cleanup"
+    )
+    assert (
+        cli._BENCHMARK_COMMANDS[
+            "track2p-policy-coherence-suffix-growth-veto-cleanup"
+        ].module
+        == "bayescatrack.experiments.track2p_policy_coherence_suffix_growth_veto_cleanup"
     )
 
 
@@ -126,6 +136,37 @@ def test_growth_veto_cleanup_parser_exposes_conservative_defaults() -> None:
     assert args.max_veto_column_rank == 1
     assert args.require_veto_not_suffix_edge is True
     assert args.max_vetoes_per_subject == 1
+    assert args.growth_veto_base == "teacher-rescue"
+
+
+def test_growth_veto_cleanup_parser_accepts_coherence_suffix_base() -> None:
+    args = cleanup.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "growth_veto_cleanup.csv",
+            "--growth-veto-base",
+            "coherence-suffix",
+        ]
+    )
+
+    assert args.growth_veto_base == "coherence-suffix"
+
+
+def test_growth_veto_cleanup_parser_can_disable_distortion_cap() -> None:
+    args = cleanup.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "growth_veto_cleanup.csv",
+            "--growth-veto-max-local-neighbor-distortion",
+            "none",
+        ]
+    )
+
+    assert args.max_veto_local_neighbor_distortion is None
 
 
 def test_growth_veto_gate_accepts_extreme_terminal_complete_edge() -> None:
