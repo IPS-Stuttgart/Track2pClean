@@ -74,6 +74,7 @@ class GrowthVetoGate:
     max_shifted_iou: float | None = 0.80
     min_cell_probability: float = 0.50
     max_min_cell_probability: float | None = 0.65
+    max_local_neighbor_distortion: float | None = 0.05
     min_anchor_count: int = 0
     min_complete_component_size: int | None = None
     max_row_rank: int = 1
@@ -211,6 +212,11 @@ def run_track2p_policy_growth_veto_cleanup(
                     if growth_veto_gate.max_min_cell_probability is not None
                     else float("nan")
                 ),
+                "track2p_growth_veto_max_local_neighbor_distortion": (
+                    float(growth_veto_gate.max_local_neighbor_distortion)
+                    if growth_veto_gate.max_local_neighbor_distortion is not None
+                    else float("nan")
+                ),
                 "track2p_growth_veto_min_anchor_count": int(
                     growth_veto_gate.min_anchor_count
                 ),
@@ -293,6 +299,11 @@ def run_track2p_policy_growth_veto_cleanup(
                     "growth_veto_max_min_cell_probability": (
                         float(growth_veto_gate.max_min_cell_probability)
                         if growth_veto_gate.max_min_cell_probability is not None
+                        else float("nan")
+                    ),
+                    "growth_veto_max_local_neighbor_distortion": (
+                        float(growth_veto_gate.max_local_neighbor_distortion)
+                        if growth_veto_gate.max_local_neighbor_distortion is not None
                         else float("nan")
                     ),
                     "growth_veto_min_anchor_count": int(
@@ -380,6 +391,12 @@ def growth_veto_gate_reason(
         gate.max_min_cell_probability
     ):
         return "min_cell_probability_above_gate"
+    if gate.max_local_neighbor_distortion is not None:
+        distortion = _finite_float(row.get("local_neighbor_distortion"), float("nan"))
+        if not np.isfinite(distortion) or distortion > float(
+            gate.max_local_neighbor_distortion
+        ):
+            return "local_neighbor_distortion_above_gate"
     return "accepted"
 
 
@@ -487,7 +504,14 @@ def _needs_sparse_shifted_iou(
     if min_cell_probability < float(gate.min_cell_probability):
         return False
     if gate.max_min_cell_probability is not None:
-        return bool(min_cell_probability <= float(gate.max_min_cell_probability))
+        if min_cell_probability > float(gate.max_min_cell_probability):
+            return False
+    if gate.max_local_neighbor_distortion is not None:
+        distortion = _finite_float(row.get("local_neighbor_distortion"), float("nan"))
+        if not np.isfinite(distortion) or distortion > float(
+            gate.max_local_neighbor_distortion
+        ):
+            return False
     return True
 
 
@@ -738,6 +762,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--max-veto-local-neighbor-distortion",
+        "--growth-veto-max-local-neighbor-distortion",
+        dest="max_veto_local_neighbor_distortion",
+        type=float,
+        default=0.05,
+        help=(
+            "Optional upper bound on the local neighbor-distance distortion for "
+            "growth-veto candidates. This keeps the veto focused on edges that "
+            "are globally growth-field outliers but still locally coherent."
+        ),
+    )
+    parser.add_argument(
         "--min-veto-anchor-count",
         "--growth-veto-min-anchor-count",
         dest="min_veto_anchor_count",
@@ -858,6 +894,11 @@ def main(argv: list[str] | None = None) -> int:
                 None
                 if args.max_veto_min_cell_probability is None
                 else float(args.max_veto_min_cell_probability)
+            ),
+            max_local_neighbor_distortion=(
+                None
+                if args.max_veto_local_neighbor_distortion is None
+                else float(args.max_veto_local_neighbor_distortion)
             ),
             min_anchor_count=max(0, int(args.min_veto_anchor_count)),
             min_complete_component_size=(

@@ -31,6 +31,7 @@ def _candidate_row(**overrides: object) -> dict[str, object]:
         "column_rank": 1,
         "cell_probability_a": 0.57,
         "cell_probability_b": 0.81,
+        "local_neighbor_distortion": 0.008,
     }
     row.update(overrides)
     return row
@@ -120,6 +121,7 @@ def test_growth_veto_cleanup_parser_exposes_conservative_defaults() -> None:
     assert args.max_veto_shifted_iou == 0.80
     assert args.min_veto_cell_probability == 0.50
     assert args.max_veto_min_cell_probability == 0.65
+    assert args.max_veto_local_neighbor_distortion == 0.05
     assert args.max_veto_row_rank == 1
     assert args.max_veto_column_rank == 1
     assert args.require_veto_not_suffix_edge is True
@@ -258,6 +260,16 @@ def test_growth_veto_gate_rejects_non_top_rank_edges() -> None:
     assert reason == "row_rank_above_gate"
 
 
+def test_growth_veto_gate_rejects_high_local_neighbor_distortion() -> None:
+    reason = cleanup.growth_veto_gate_reason(
+        _candidate_row(local_neighbor_distortion=0.20),
+        cleanup.GrowthVetoGate(max_local_neighbor_distortion=0.05),
+        n_sessions=7,
+    )
+
+    assert reason == "local_neighbor_distortion_above_gate"
+
+
 def test_growth_veto_gate_rejects_too_strong_registered_iou_when_capped() -> None:
     reason = cleanup.growth_veto_gate_reason(
         _candidate_row(registered_iou=0.68),
@@ -377,6 +389,31 @@ def test_growth_veto_sparse_shifted_iou_fill_respects_registered_iou_cap(
         rows,
         sessions,
         gate=cleanup.GrowthVetoGate(max_registered_iou=0.60),
+        n_sessions=2,
+    )
+
+    assert augmented[0]["shifted_iou"] != augmented[0]["shifted_iou"]
+
+
+def test_growth_veto_sparse_shifted_iou_fill_respects_local_distortion_cap(
+    monkeypatch,
+) -> None:
+    rows = [
+        _candidate_row(shifted_iou=float("nan"), local_neighbor_distortion=0.20),
+    ]
+    sessions = (_fake_session([2309], 0), _fake_session([1210], 1))
+
+    def fail_if_called(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError(
+            "shifted IoU should not be computed for high-distortion edges"
+        )
+
+    monkeypatch.setattr(cleanup, "register_plane_pair", fail_if_called)
+
+    augmented = cleanup._augment_growth_veto_candidate_shifted_iou(  # pylint: disable=protected-access
+        rows,
+        sessions,
+        gate=cleanup.GrowthVetoGate(max_local_neighbor_distortion=0.05),
         n_sessions=2,
     )
 
