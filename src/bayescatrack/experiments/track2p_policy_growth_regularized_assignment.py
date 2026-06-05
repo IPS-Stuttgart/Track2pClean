@@ -395,28 +395,31 @@ def _growth_penalty_matrices(
     source_indices = np.asarray(source_indices, dtype=int)
     target_indices = np.asarray(target_indices, dtype=int)
 
-    source_points: list[np.ndarray] = []
-    target_points: list[np.ndarray] = []
-    area_a: list[float] = []
-    area_b: list[float] = []
-    valid_positions: list[tuple[int, int]] = []
-    for row, col in zip(rows, cols, strict=True):
-        roi_a = int(source_indices[int(row)])
-        roi_b = int(target_indices[int(col)])
-        source = source_centroids.get(roi_a)
-        target = target_centroids.get(roi_b)
-        if source is None or target is None:
-            continue
-        source_points.append(np.asarray(source, dtype=float))
-        target_points.append(np.asarray(target, dtype=float))
-        area_a.append(float(source_areas.get(roi_a, float("nan"))))
-        area_b.append(float(target_areas.get(roi_b, float("nan"))))
-        valid_positions.append((int(row), int(col)))
-    if not valid_positions:
+    source_xy = np.full((len(source_indices), 2), np.nan, dtype=float)
+    target_xy = np.full((len(target_indices), 2), np.nan, dtype=float)
+    source_area = np.full(len(source_indices), np.nan, dtype=float)
+    target_area = np.full(len(target_indices), np.nan, dtype=float)
+    for row, roi in enumerate(source_indices):
+        source = source_centroids.get(int(roi))
+        if source is not None:
+            source_xy[int(row)] = np.asarray(source, dtype=float)
+        source_area[int(row)] = float(source_areas.get(int(roi), float("nan")))
+    for col, roi in enumerate(target_indices):
+        target = target_centroids.get(int(roi))
+        if target is not None:
+            target_xy[int(col)] = np.asarray(target, dtype=float)
+        target_area[int(col)] = float(target_areas.get(int(roi), float("nan")))
+
+    sources = source_xy[rows]
+    targets = target_xy[cols]
+    valid = np.isfinite(sources).all(axis=1) & np.isfinite(targets).all(axis=1)
+    if not np.any(valid):
         return mahalanobis, area_residual
 
-    sources = np.vstack(source_points)
-    targets = np.vstack(target_points)
+    valid_rows = rows[valid]
+    valid_cols = cols[valid]
+    sources = sources[valid]
+    targets = targets[valid]
     affine_xy = np.asarray(growth_model.affine_xy, dtype=float)
     predicted = sources @ affine_xy[:, :2].T + affine_xy[:, 2]
     residual = targets - predicted
@@ -427,8 +430,8 @@ def _growth_penalty_matrices(
             np.einsum("ij,jk,ik->i", residual, covariance_inverse, residual),
         )
     )
-    area_a_array = np.asarray(area_a, dtype=float)
-    area_b_array = np.asarray(area_b, dtype=float)
+    area_a_array = source_area[valid_rows]
+    area_b_array = target_area[valid_cols]
     observed = np.divide(
         area_b_array,
         area_a_array,
@@ -438,9 +441,8 @@ def _growth_penalty_matrices(
     expected = float(growth_model.expected_area_ratio)
     area_values = np.abs(np.log(observed / expected))
     area_values[~np.isfinite(area_values)] = 1.0
-    for index, (row, col) in enumerate(valid_positions):
-        mahalanobis[row, col] = float(distances[index])
-        area_residual[row, col] = float(area_values[index])
+    mahalanobis[valid_rows, valid_cols] = distances
+    area_residual[valid_rows, valid_cols] = area_values
     return mahalanobis, area_residual
 
 def build_arg_parser() -> argparse.ArgumentParser:
