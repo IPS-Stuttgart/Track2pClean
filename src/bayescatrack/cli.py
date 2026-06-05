@@ -144,6 +144,14 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run exact one-edit Pareto what-ifs after CoherenceSuffixStitch",
     ),
     (
+        "track2p-policy-teacher-free-adjacent-rescue-ranking-audit",
+        (
+            "bayescatrack.experiments."
+            "track2p_policy_teacher_free_adjacent_rescue_ranking_audit"
+        ),
+        "Rank teacher-free adjacent-rescue candidates after CoherenceSuffixGrowthVeto",
+    ),
+    (
         "track2p-policy-teacher-fn-audit",
         "bayescatrack.experiments.track2p_policy_teacher_fn_audit",
         "Audit Track2p-supported false negatives after component cleanup",
@@ -432,6 +440,12 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-coherence-pareto-whatif": ("track2p-policy-coherence-pareto-whatif"),
     "track2p-component-coherence-pareto-whatif": (
         "track2p-policy-coherence-pareto-whatif"
+    ),
+    "track2p-teacher-free-adjacent-rescue-ranking-audit": (
+        "track2p-policy-teacher-free-adjacent-rescue-ranking-audit"
+    ),
+    "track2p-component-teacher-free-adjacent-rescue-ranking-audit": (
+        "track2p-policy-teacher-free-adjacent-rescue-ranking-audit"
     ),
     "track2p-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
     "track2p-component-teacher-fn-audit": "track2p-policy-teacher-fn-audit",
