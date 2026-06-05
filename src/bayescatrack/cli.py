@@ -129,6 +129,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run CoherenceSuffixTeacherRescue plus a strict label-free growth veto",
     ),
     (
+        "track2p-policy-coherence-suffix-growth-veto-cleanup",
+        "bayescatrack.experiments.track2p_policy_coherence_suffix_growth_veto_cleanup",
+        "Run CoherenceSuffixStitch plus a strict label-free growth veto",
+    ),
+    (
         "track2p-policy-coherence-suffix-exposure-audit",
         "bayescatrack.experiments.track2p_policy_coherence_suffix_exposure_audit",
         "Audit coherence suffix gate exposure without manual GT labels",
@@ -412,6 +417,12 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-growth-veto-whatif": ("track2p-policy-growth-veto-whatif"),
     "track2p-growth-veto-cleanup": "track2p-policy-growth-veto-cleanup",
     "track2p-component-growth-veto-cleanup": ("track2p-policy-growth-veto-cleanup"),
+    "track2p-coherence-suffix-growth-veto-cleanup": (
+        "track2p-policy-coherence-suffix-growth-veto-cleanup"
+    ),
+    "track2p-component-coherence-suffix-growth-veto-cleanup": (
+        "track2p-policy-coherence-suffix-growth-veto-cleanup"
+    ),
     "track2p-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"
     ),

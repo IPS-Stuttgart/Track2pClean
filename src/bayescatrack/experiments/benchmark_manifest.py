@@ -146,6 +146,7 @@ TRACK2P_POLICY_GROWTH_VETO_FIELDS = TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESC
     "require_veto_last_session_edge",
     "require_veto_complete_component",
     "max_vetoes_per_subject",
+    "growth_veto_base",
     # Allow manifest authors to use the CLI-style names as well as the internal
     # dest names when they are writing benchmark JSON by hand.
     "growth_veto_min_mahalanobis",
@@ -1841,6 +1842,10 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
             options, "anchor_min_cell_probability", default=0.80
         ),
         growth_veto_gate=growth_veto_gate,
+        prediction_base=cast(
+            Literal["teacher-rescue", "coherence-suffix"],
+            options.get("growth_veto_base", "teacher-rescue"),
+        ),
     )
     return [result.to_dict() for result in output.results]
 

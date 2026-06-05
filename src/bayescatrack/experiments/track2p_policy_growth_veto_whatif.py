@@ -75,6 +75,7 @@ from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
 )
 
 METHOD = "track2p-policy-growth-veto-whatif"
+GrowthVetoPredictionBase = Literal["teacher-rescue", "coherence-suffix"]
 _SCORE_KEYS = (
     "pairwise_true_positives",
     "pairwise_false_positives",
@@ -248,6 +249,7 @@ def _subject_state(
     anchor_min_shifted_iou: float,
     anchor_min_cell_probability: float,
     progress: bool,
+    prediction_base: GrowthVetoPredictionBase = "teacher-rescue",
 ) -> _SubjectState:
     reference = _load_reference_for_subject(
         subject_dir, data_root=config.data, config=config
@@ -326,32 +328,43 @@ def _subject_state(
     )
     teacher_eval = _pad_track_matrix(_as_track_matrix(teacher_eval), width=n_sessions)
     _log_progress(progress, f"{METHOD}: {subject_dir.name}: teacher baseline ready")
-    teacher_report = apply_teacher_adjacent_rescue_edges(
-        stitched,
-        teacher_eval,
-        seed_session=config.seed_session,
-        allow_completing_rescue=False,
-        allow_source_backfill=True,
-        allow_fragment_merges=True,
-        edge_order="structural",
-        teacher_action_filter="all",
-        teacher_feature_gate=None,
-        min_component_observations=1,
-        max_applied_edits=None,
-    )
-    combined = _pad_track_matrix(
-        _as_track_matrix(_normalize_int_track_matrix(teacher_report.tracks)),
-        width=n_sessions,
-    )
-    _log_progress(
-        progress,
-        f"{METHOD}: {subject_dir.name}: teacher edits={sum(int(row.get('applied', 0)) for row in teacher_report.rows)}",
-    )
+    if prediction_base == "teacher-rescue":
+        teacher_report = apply_teacher_adjacent_rescue_edges(
+            stitched,
+            teacher_eval,
+            seed_session=config.seed_session,
+            allow_completing_rescue=False,
+            allow_source_backfill=True,
+            allow_fragment_merges=True,
+            edge_order="structural",
+            teacher_action_filter="all",
+            teacher_feature_gate=None,
+            min_component_observations=1,
+            max_applied_edits=None,
+        )
+        combined = _pad_track_matrix(
+            _as_track_matrix(_normalize_int_track_matrix(teacher_report.tracks)),
+            width=n_sessions,
+        )
+        anchor_track2p = teacher_eval
+        _log_progress(
+            progress,
+            f"{METHOD}: {subject_dir.name}: teacher edits={sum(int(row.get('applied', 0)) for row in teacher_report.rows)}",
+        )
+    elif prediction_base == "coherence-suffix":
+        combined = stitched
+        anchor_track2p = stitched
+        _log_progress(
+            progress,
+            f"{METHOD}: {subject_dir.name}: using coherence suffix base without teacher rescue",
+        )
+    else:
+        raise ValueError(f"Unsupported growth-veto prediction base: {prediction_base}")
     anchor_edges = _anchor_edges_from_policy_diagnostics(
         sessions,
         feature_cache=feature_cache,
         diagnostics=policy_prediction.diagnostics,
-        track2p=teacher_eval,
+        track2p=anchor_track2p,
         component_cleanup=cleaned,
         combined=combined,
         min_registered_iou=float(anchor_min_registered_iou),
