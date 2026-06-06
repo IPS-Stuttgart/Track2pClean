@@ -1,5 +1,4 @@
 import numpy as np
-
 from bayescatrack import cli
 from bayescatrack.experiments.track2p_policy_growth_regularized_assignment import (
     growth_regularized_cost_matrix,

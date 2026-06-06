@@ -232,7 +232,9 @@ def emulate_track2p_growth_regularized_tracks(
             iou_distance_threshold=float(iou_distance_threshold),
             growth_config=growth_config,
             growth_context=growth_context,
-            growth_model=growth_models.get((index, index + 1), _identity_growth_model()),
+            growth_model=growth_models.get(
+                (index, index + 1), _identity_growth_model()
+            ),
         )
         pair_links.append(links)
         diagnostics.extend(pair_diagnostics)
@@ -291,7 +293,11 @@ def growth_regularized_cost_matrix(
     mahalanobis = np.asarray(growth_mahalanobis, dtype=float)
     area_residual = np.asarray(area_growth_residual, dtype=float)
     capped = np.minimum(
-        np.nan_to_num(mahalanobis, nan=float(growth_mahalanobis_cap), posinf=float(growth_mahalanobis_cap)),
+        np.nan_to_num(
+            mahalanobis,
+            nan=float(growth_mahalanobis_cap),
+            posinf=float(growth_mahalanobis_cap),
+        ),
         float(growth_mahalanobis_cap),
     )
     normalized_growth = capped / max(float(growth_mahalanobis_cap), 1.0e-12)
@@ -445,6 +451,7 @@ def _growth_penalty_matrices(
     area_residual[valid_rows, valid_cols] = area_values
     return mahalanobis, area_residual
 
+
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the growth-regularized assignment parser."""
 
@@ -463,7 +470,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--input-format", choices=("auto", "suite2p", "npy"), default="suite2p"
     )
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
     parser.add_argument(
         "--threshold-method",
         choices=("otsu", "min"),

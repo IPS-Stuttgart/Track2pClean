@@ -232,7 +232,9 @@ def _subject_rows(
             continue
         candidate_scores = dict(score_track_matrices(candidate_tracks, state.reference))
         delta = suffix._score_delta(baseline_scores, candidate_scores)
-        path_score = _path_ranking_score(path_edges, state.growth_context, state.growth_models)
+        path_score = _path_ranking_score(
+            path_edges, state.growth_context, state.growth_models
+        )
         for step_index, (edge_candidate, attempt) in enumerate(
             zip(path_edges, attempts, strict=True), start=1
         ):
@@ -337,7 +339,9 @@ def _apply_growth_veto_base(
     selected = cleanup._selected_growth_veto_rows(
         edge_rows, gate=gate, n_sessions=int(state.reference.shape[1])
     )
-    vetoed, _applied = cleanup._apply_growth_veto_rows(state.combined, selected, gate=gate)
+    vetoed, _applied = cleanup._apply_growth_veto_rows(
+        state.combined, selected, gate=gate
+    )
     return vetoed
 
 
@@ -461,12 +465,8 @@ def _path_ranking_score(
                 column_margin=edge_candidate.column_margin,
                 threshold_margin=edge_candidate.threshold_margin,
                 activity_similarity=edge_candidate.activity_similarity,
-                growth_residual_mahalanobis=float(
-                    growth.growth_residual_mahalanobis
-                ),
-                two_edge_motion_consistency=float(
-                    growth.two_edge_motion_consistency
-                ),
+                growth_residual_mahalanobis=float(growth.growth_residual_mahalanobis),
+                two_edge_motion_consistency=float(growth.two_edge_motion_consistency),
                 would_complete_predicted_row=0,
                 would_merge_components=0,
             )
@@ -485,7 +485,11 @@ def _mean_ranking_score(edges: Sequence[rank._EdgeCandidate]) -> float:
 
 
 def _top_reverse_edge_candidates(
-    feature_cache: rank._FeatureCache, session_index: int, target_roi: int, *, top_k: int
+    feature_cache: rank._FeatureCache,
+    session_index: int,
+    target_roi: int,
+    *,
+    top_k: int,
 ) -> tuple[rank._EdgeCandidate, ...]:
     if session_index < 0 or session_index + 1 >= len(feature_cache.sessions):
         return ()
@@ -537,7 +541,9 @@ def _candidate_row(
     target_row = int(attempt.get("target_row", -1))
     source_observations = _row_observations(predicted, source_row)
     target_observations = _row_observations(predicted, target_row)
-    would_complete = int(_would_complete_predicted_row(predicted, source_row, target_row, edge))
+    would_complete = int(
+        _would_complete_predicted_row(predicted, source_row, target_row, edge)
+    )
     would_merge = int(source_row >= 0 and target_row >= 0 and source_row != target_row)
     score = teacher_free_adjacent_ranking_score(
         registered_iou=edge_candidate.registered_iou,
@@ -646,10 +652,14 @@ def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     output: list[dict[str, Any]] = []
     for subject, subject_rows in sorted(by_subject.items()):
         target_rows = [
-            row for row in subject_rows if int(row.get("is_target_teacher_rescue_edge", 0))
+            row
+            for row in subject_rows
+            if int(row.get("is_target_teacher_rescue_edge", 0))
         ]
         gt_rows = [
-            row for row in subject_rows if str(row.get("edge_status_against_gt")) == "true_positive"
+            row
+            for row in subject_rows
+            if str(row.get("edge_status_against_gt")) == "true_positive"
         ]
         track2p_rows = [
             row for row in subject_rows if int(row.get("track2p_supported", 0)) > 0
@@ -668,10 +678,14 @@ def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                     tuple(int(row.get("subject_rank", -1)) for row in target_rows)
                 ),
                 "target_teacher_edges_top1": int(
-                    any(int(row.get("subject_rank", 999999)) <= 1 for row in target_rows)
+                    any(
+                        int(row.get("subject_rank", 999999)) <= 1 for row in target_rows
+                    )
                 ),
                 "target_teacher_edges_top3": int(
-                    sum(int(row.get("subject_rank", 999999)) <= 3 for row in target_rows)
+                    sum(
+                        int(row.get("subject_rank", 999999)) <= 3 for row in target_rows
+                    )
                 ),
                 "non_gt_top3_candidates": int(
                     sum(
