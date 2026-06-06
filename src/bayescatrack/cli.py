@@ -134,6 +134,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run CoherenceSuffixStitch plus a strict label-free growth veto",
     ),
     (
+        "track2p-policy-pyrecest-residual-mht-cleanup",
+        "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup",
+        "Run PyRecEst bounded residual MHT over growth-veto hypotheses",
+    ),
+    (
         "track2p-policy-coherence-suffix-exposure-audit",
         "bayescatrack.experiments.track2p_policy_coherence_suffix_exposure_audit",
         "Audit coherence suffix gate exposure without manual GT labels",
@@ -435,6 +440,12 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     ),
     "track2p-component-coherence-suffix-growth-veto-cleanup": (
         "track2p-policy-coherence-suffix-growth-veto-cleanup"
+    ),
+    "track2p-pyrecest-residual-mht-cleanup": (
+        "track2p-policy-pyrecest-residual-mht-cleanup"
+    ),
+    "track2p-component-pyrecest-residual-mht-cleanup": (
+        "track2p-policy-pyrecest-residual-mht-cleanup"
     ),
     "track2p-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"
