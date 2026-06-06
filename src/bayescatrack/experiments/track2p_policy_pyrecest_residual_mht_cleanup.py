@@ -17,10 +17,10 @@ import argparse
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import (
     track2p_policy_coherence_suffix_stitch_whatif as suffix,
@@ -184,7 +184,9 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
         )
         selected_ids = set(selected_hypothesis.candidate_ids)
         selected_rows = [
-            row for row in candidate_rows if str(row["pyrecest_candidate_id"]) in selected_ids
+            row
+            for row in candidate_rows
+            if str(row["pyrecest_candidate_id"]) in selected_ids
         ]
         apply_gate = replace(
             growth_veto_gate,
@@ -202,21 +204,15 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
                 "track2p_pyrecest_mht_hypotheses": int(len(hypotheses)),
                 "track2p_pyrecest_mht_selected": int(len(selected_rows)),
                 "track2p_pyrecest_mht_applied": int(len(applied_keys)),
-                "track2p_pyrecest_mht_selected_score": float(
-                    selected_hypothesis.score
-                ),
+                "track2p_pyrecest_mht_selected_score": float(selected_hypothesis.score),
                 "track2p_pyrecest_mht_candidate_top_k": int(
                     mht_options.candidate_top_k
                 ),
                 "track2p_pyrecest_mht_max_edits_per_subject": int(
                     mht_options.max_edits_per_subject
                 ),
-                "track2p_pyrecest_mht_max_hypotheses": int(
-                    mht_options.max_hypotheses
-                ),
-                "track2p_pyrecest_mht_edit_penalty": float(
-                    mht_options.edit_penalty
-                ),
+                "track2p_pyrecest_mht_max_hypotheses": int(mht_options.max_hypotheses),
+                "track2p_pyrecest_mht_edit_penalty": float(mht_options.edit_penalty),
                 "track2p_pyrecest_mht_score_threshold": float(
                     mht_options.score_threshold
                 ),
@@ -377,7 +373,9 @@ def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     by_subject["ALL"] = list(rows)
     output: list[dict[str, Any]] = []
     for subject, subject_rows in sorted(by_subject.items()):
-        candidates = [row for row in subject_rows if int(row.get("pyrecest_candidate", 0))]
+        candidates = [
+            row for row in subject_rows if int(row.get("pyrecest_candidate", 0))
+        ]
         selected = [
             row for row in subject_rows if int(row.get("selected_by_pyrecest_mht", 0))
         ]
