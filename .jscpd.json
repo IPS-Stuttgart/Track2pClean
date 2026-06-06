@@ -37,6 +37,8 @@
         "src/bayescatrack/experiments/track2p_policy_growth_field_residual_audit.py",
         "src/bayescatrack/experiments/track2p_policy_growth_veto_whatif.py",
         "src/bayescatrack/experiments/track2p_policy_coherence_pareto_whatif.py",
+        "src/bayescatrack/experiments/track2p_policy_pyrecest_residual_mht_cleanup.py",
+        "**/src/bayescatrack/experiments/track2p_policy_pyrecest_residual_mht_cleanup.py",
         "**/src/bayescatrack/experiments/track2p_policy_coherence_suffix_teacher_rescue.py",
         "**/src/bayescatrack/experiments/track2p_policy_coherence_teacher_overlay_audit.py",
         "**/src/bayescatrack/experiments/track2p_policy_growth_field_residual_audit.py",
