@@ -537,6 +537,7 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
                     "min_veto_shifted_iou": 0.6,
                     "max_veto_shifted_iou": 0.8,
                     "max_veto_min_cell_probability": 0.65,
+                    "max_veto_local_neighbor_distortion": None,
                     "max_vetoes_per_subject": 1,
                     "growth_veto_base": "coherence-suffix",
                 }
@@ -560,6 +561,7 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     assert growth_gate.max_min_cell_probability == 0.65
     assert growth_gate.min_anchor_count == 0
     assert growth_gate.min_complete_component_size is None
+    assert growth_gate.max_local_neighbor_distortion is None
     assert growth_gate.max_registered_iou == 0.6
     assert growth_gate.max_shifted_iou == 0.8
     assert growth_gate.max_vetoes_per_subject == 1
