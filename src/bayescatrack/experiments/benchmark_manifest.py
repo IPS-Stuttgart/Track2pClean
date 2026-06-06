@@ -1763,6 +1763,16 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
             or "growth_veto_max_min_cell_probability" in options
             else gate_defaults.max_min_cell_probability
         ),
+        max_local_neighbor_distortion=(
+            _optional_float_option(
+                options,
+                "max_veto_local_neighbor_distortion",
+                "growth_veto_max_local_neighbor_distortion",
+            )
+            if "max_veto_local_neighbor_distortion" in options
+            or "growth_veto_max_local_neighbor_distortion" in options
+            else gate_defaults.max_local_neighbor_distortion
+        ),
         min_anchor_count=int(
             options.get(
                 "min_veto_anchor_count",
