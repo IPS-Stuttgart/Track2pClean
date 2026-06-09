@@ -24,7 +24,6 @@ from bayescatrack.experiments import (
     track2p_policy_pyrecest_residual_mht_cleanup as residual_mht,
 )
 
-
 # The preset is conservative relative to a full sweep, but broader than the
 # strict growth-veto pocket:
 # - lower Mahalanobis/residual thresholds;
