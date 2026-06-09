@@ -107,3 +107,16 @@ def test_pyrecest_residual_mht_cleanup_is_registered():
     assert cli._BENCHMARK_COMMANDS[canonical].module == (
         "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup"
     )
+
+
+def test_pyrecest_frontier_mht_cleanup_is_registered():
+    canonical = cli._BENCHMARK_ALIASES["track2p-pyrecest-frontier-mht-cleanup"]
+
+    assert canonical == "track2p-policy-pyrecest-frontier-mht-cleanup"
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-component-pyrecest-frontier-mht-cleanup"]
+        == canonical
+    )
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_pyrecest_frontier_mht_cleanup"
+    )
