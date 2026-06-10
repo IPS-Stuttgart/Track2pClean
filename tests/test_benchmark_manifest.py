@@ -532,10 +532,9 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
                     "anchor_min_shifted_iou": 0.3,
                     "anchor_min_cell_probability": 0.8,
                     "min_growth_residual_mahalanobis": 20.0,
+                    "min_growth_residual": 3.5,
                     "min_veto_registered_iou": 0.45,
-                    "max_veto_registered_iou": 0.6,
                     "min_veto_shifted_iou": 0.6,
-                    "max_veto_shifted_iou": 0.8,
                     "max_veto_min_cell_probability": 0.65,
                     "max_veto_local_neighbor_distortion": None,
                     "max_vetoes_per_subject": 1,
@@ -556,6 +555,7 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     assert calls["kwargs"]["prediction_base"] == "coherence-suffix"
     growth_gate = calls["kwargs"]["growth_veto_gate"]
     assert growth_gate.min_growth_residual_mahalanobis == 20.0
+    assert growth_gate.min_growth_residual == 3.5
     assert growth_gate.min_registered_iou == 0.45
     assert growth_gate.min_shifted_iou == 0.6
     assert growth_gate.max_min_cell_probability == 0.65
@@ -566,6 +566,142 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     assert growth_gate.max_shifted_iou == 0.8
     assert growth_gate.max_vetoes_per_subject == 1
     assert (tmp_path / "results" / "growth-veto-cleanup.csv").exists()
+
+
+def test_benchmark_manifest_accepts_coherence_suffix_growth_veto_runner(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
+
+    calls = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {
+                "subject": "jm_growth_veto",
+                "variant": "fake coherence suffix growth veto cleanup",
+                "method": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                "n_sessions": 7,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+        edge_rows = ()
+        summary_rows = ()
+
+    def fake_growth_veto_cleanup(config, **kwargs):
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_growth_veto_cleanup,
+        "run_track2p_policy_growth_veto_cleanup",
+        fake_growth_veto_cleanup,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "coherence-suffix-growth-veto",
+                    "runner": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                    "data": "data",
+                    "output": "results/coherence-suffix-growth-veto.csv",
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["kwargs"]["prediction_base"] == "coherence-suffix"
+    assert (tmp_path / "results" / "coherence-suffix-growth-veto.csv").exists()
+
+
+def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import track2p_policy_pyrecest_residual_mht_cleanup
+
+    calls = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {
+                "subject": "jm_mht",
+                "variant": "fake residual mht",
+                "method": "track2p-policy-pyrecest-residual-mht-cleanup",
+                "n_sessions": 7,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+        candidate_rows = ()
+        summary_rows = ()
+
+    def fake_residual_mht(config, **kwargs):
+        calls["config"] = config
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_pyrecest_residual_mht_cleanup,
+        "run_track2p_policy_pyrecest_residual_mht_cleanup",
+        fake_residual_mht,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-residual-mht",
+                    "runner": "track2p-policy-pyrecest-residual-mht-cleanup",
+                    "data": "data",
+                    "output": "results/pyrecest-residual-mht.csv",
+                    "threshold_method": "min",
+                    "iou_distance_threshold": 12.0,
+                    "suffix_path_length": 2,
+                    "min_growth_residual_mahalanobis": 20.0,
+                    "min_growth_residual": 2.5,
+                    "max_veto_local_neighbor_distortion": None,
+                    "mht_candidate_top_k": 1,
+                    "mht_max_edits_per_subject": 1,
+                    "mht_max_hypotheses": 8,
+                    "mht_edit_penalty": 0.5,
+                    "mht_score_threshold": 1.25,
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["kwargs"]["threshold_method"] == "min"
+    assert calls["kwargs"]["iou_distance_threshold"] == 12.0
+    assert calls["kwargs"]["suffix_gate"].suffix_path_length == 2
+    growth_gate = calls["kwargs"]["growth_veto_gate"]
+    assert growth_gate.min_growth_residual_mahalanobis == 20.0
+    assert growth_gate.min_growth_residual == 2.5
+    assert growth_gate.max_registered_iou == 0.6
+    assert growth_gate.max_shifted_iou == 0.8
+    assert growth_gate.max_local_neighbor_distortion is None
+    mht_options = calls["kwargs"]["mht_options"]
+    assert mht_options.candidate_top_k == 1
+    assert mht_options.max_edits_per_subject == 1
+    assert mht_options.max_hypotheses == 8
+    assert mht_options.edit_penalty == 0.5
+    assert mht_options.score_threshold == 1.25
+    assert (tmp_path / "results" / "pyrecest-residual-mht.csv").exists()
 
 
 def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkeypatch):
