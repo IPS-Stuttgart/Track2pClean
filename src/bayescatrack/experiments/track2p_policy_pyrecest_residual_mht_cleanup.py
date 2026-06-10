@@ -73,6 +73,36 @@ class PyRecEstResidualMHTOptions:
     edit_penalty: float = 0.25
     score_threshold: float = 1.0
 
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "candidate_top_k",
+            _positive_integer(self.candidate_top_k, name="candidate_top_k"),
+        )
+        object.__setattr__(
+            self,
+            "max_edits_per_subject",
+            _nonnegative_integer(
+                self.max_edits_per_subject,
+                name="max_edits_per_subject",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "max_hypotheses",
+            _positive_integer(self.max_hypotheses, name="max_hypotheses"),
+        )
+        object.__setattr__(
+            self,
+            "edit_penalty",
+            _nonnegative_finite_float(self.edit_penalty, name="edit_penalty"),
+        )
+        object.__setattr__(
+            self,
+            "score_threshold",
+            _validated_numeric_float(self.score_threshold, name="score_threshold"),
+        )
+
 
 @dataclass(frozen=True)
 class PyRecEstResidualMHTResult:
@@ -291,7 +321,7 @@ def _candidate_rows(
             str(row["pyrecest_candidate_id"]),
         )
     )
-    return candidates[: max(0, int(options.candidate_top_k))]
+    return candidates[: int(options.candidate_top_k)]
 
 
 def _to_pyrecest_candidate(
@@ -412,6 +442,36 @@ def _finite_float(value: Any, fallback: float) -> float:
     except (TypeError, ValueError):
         return float(fallback)
     return numeric if np.isfinite(numeric) else float(fallback)
+
+
+def _validated_numeric_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _nonnegative_finite_float(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)
+
+
+def _nonnegative_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 0.0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return int(numeric)
 
 
 def _option_present(args: Sequence[str], option: str) -> bool:

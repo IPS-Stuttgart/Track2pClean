@@ -40,14 +40,35 @@ class EdgeUncertaintyConfig:
     max_penalty: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if self.temperature <= 0.0:
-            raise ValueError("temperature must be positive")
-        if self.uncertainty_penalty_weight < 0.0:
-            raise ValueError("uncertainty_penalty_weight must be non-negative")
-        if self.min_reliability <= 0.0 or self.min_reliability > 1.0:
-            raise ValueError("min_reliability must lie in (0, 1]")
-        if self.max_penalty <= 0.0:
-            raise ValueError("max_penalty must be positive")
+        object.__setattr__(
+            self,
+            "temperature",
+            _validate_positive(self.temperature, name="temperature"),
+        )
+        for name in (
+            "uncertainty_penalty_weight",
+            "registration_rmse_weight",
+            "invalid_warp_fraction_weight",
+            "empty_registered_roi_weight",
+            "gated_edge_weight",
+            "covariance_logdet_weight",
+            "local_margin_weight",
+            "activity_missing_weight",
+        ):
+            object.__setattr__(
+                self, name, _validate_nonnegative(getattr(self, name), name=name)
+            )
+        min_reliability = _validated_float(
+            self.min_reliability, name="min_reliability"
+        )
+        if min_reliability <= 0.0 or min_reliability > 1.0:
+            raise ValueError("min_reliability must be a finite value in (0, 1]")
+        object.__setattr__(self, "min_reliability", min_reliability)
+        object.__setattr__(
+            self,
+            "max_penalty",
+            _validate_positive(self.max_penalty, name="max_penalty"),
+        )
 
 
 @dataclass(frozen=True)
@@ -223,8 +244,7 @@ def posterior_probability_matrix(
     reliability yield higher row-wise probabilities.
     """
 
-    if temperature <= 0.0:
-        raise ValueError("temperature must be positive")
+    temperature = _validate_positive(temperature, name="temperature")
     costs = _as_cost_matrix(cost_matrix)
     finite = np.isfinite(costs)
     shifted = np.where(finite, costs, np.inf)
@@ -236,6 +256,7 @@ def posterior_probability_matrix(
         reliability = np.asarray(reliability_matrix, dtype=float)
         if reliability.shape != costs.shape:
             raise ValueError("reliability_matrix must match cost_matrix shape")
+        reliability = np.nan_to_num(reliability, nan=0.0, posinf=1.0, neginf=0.0)
         scores *= np.clip(reliability, 0.0, 1.0)
     row_sums = np.sum(scores, axis=1, keepdims=True)
     probabilities = np.zeros_like(scores, dtype=float)
@@ -255,13 +276,18 @@ def candidate_mask_from_posteriors(
     probs = np.asarray(probabilities, dtype=float)
     if probs.ndim != 2:
         raise ValueError("probabilities must be a two-dimensional matrix")
-    if min_probability < 0.0 or min_probability > 1.0:
-        raise ValueError("min_probability must lie in [0, 1]")
-    mask = probs >= float(min_probability)
+    min_probability = _validate_probability(min_probability, name="min_probability")
+    mask = probs >= min_probability
     if row_top_k is not None:
-        mask |= _top_k_mask(probs, axis=1, k=int(row_top_k))
+        mask |= _top_k_mask(
+            probs, axis=1, k=_validate_positive_integer(row_top_k, name="row_top_k")
+        )
     if column_top_k is not None:
-        mask |= _top_k_mask(probs, axis=0, k=int(column_top_k))
+        mask |= _top_k_mask(
+            probs,
+            axis=0,
+            k=_validate_positive_integer(column_top_k, name="column_top_k"),
+        )
     return mask
 
 
@@ -318,6 +344,43 @@ def _as_cost_matrix(values: Any) -> np.ndarray:
     if matrix.ndim != 2:
         raise ValueError("cost_matrix must be two-dimensional")
     return matrix
+
+
+def _validated_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _validate_positive(value: Any, *, name: str) -> float:
+    numeric = _validated_float(value, name=name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return numeric
+
+
+def _validate_nonnegative(value: Any, *, name: str) -> float:
+    numeric = _validated_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return numeric
+
+
+def _validate_probability(value: Any, *, name: str) -> float:
+    numeric = _validated_float(value, name=name)
+    if numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must be a finite value in [0, 1]")
+    return numeric
+
+
+def _validate_positive_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_float(value, name=name)
+    if not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)
 
 
 def _finite_costs(values: np.ndarray, *, large_cost: float) -> np.ndarray:
