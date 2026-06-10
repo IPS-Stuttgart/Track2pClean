@@ -602,6 +602,34 @@ def test_growth_veto_row_selection_respects_per_subject_cap() -> None:
     assert selected[0]["roi_b"] == 1211
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {"max_vetoes_per_subject": 0},
+            "max_vetoes_per_subject must be a positive integer",
+        ),
+        (
+            {"max_vetoes_per_subject": 1.5},
+            "max_vetoes_per_subject must be a positive integer",
+        ),
+        ({"max_vetoes_per_subject": True}, "max_vetoes_per_subject must be finite"),
+        ({"max_row_rank": 0}, "max_row_rank must be a positive integer"),
+        ({"max_column_rank": 1.5}, "max_column_rank must be a positive integer"),
+        ({"min_anchor_count": -1}, "min_anchor_count must be a non-negative integer"),
+        (
+            {"min_complete_component_size": 1.5},
+            "min_complete_component_size must be a non-negative integer",
+        ),
+    ],
+)
+def test_growth_veto_gate_rejects_silent_cap_coercions(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        cleanup.GrowthVetoGate(**kwargs)
+
+
 def test_growth_veto_selector_ignores_audit_only_gt_and_delta_columns() -> None:
     rows = [
         _candidate_row(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from bayescatrack.experiments import (
     track2p_policy_pyrecest_residual_mht_cleanup as residual_mht,
@@ -129,3 +130,25 @@ def test_mht_specific_caps_override_legacy_veto_cap(monkeypatch, tmp_path) -> No
     mht_options = captured["mht_options"]
     assert mht_options.candidate_top_k == 3
     assert mht_options.max_edits_per_subject == 2
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"candidate_top_k": 0}, "candidate_top_k must be a positive integer"),
+        ({"candidate_top_k": 1.5}, "candidate_top_k must be a positive integer"),
+        ({"candidate_top_k": True}, "candidate_top_k must be finite"),
+        (
+            {"max_edits_per_subject": -1},
+            "max_edits_per_subject must be a non-negative integer",
+        ),
+        ({"max_hypotheses": np.inf}, "max_hypotheses must be finite"),
+        ({"edit_penalty": -0.1}, "edit_penalty must be finite and non-negative"),
+        ({"score_threshold": np.nan}, "score_threshold must be finite"),
+    ],
+)
+def test_mht_options_reject_silent_candidate_knob_coercions(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        residual_mht.PyRecEstResidualMHTOptions(**kwargs)

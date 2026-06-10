@@ -7,7 +7,9 @@ import numpy as np
 import pytest
 from bayescatrack.association.advanced_uncertainty import (
     EdgeUncertaintyConfig,
+    candidate_mask_from_posteriors,
     edge_uncertainty_config_from_mapping,
+    posterior_probability_matrix,
     uncertainty_aware_cost_matrix,
 )
 from bayescatrack.association.teacher_priors import (
@@ -95,6 +97,48 @@ def test_uncertainty_mapping_penalizes_unreliable_edges() -> None:
     assert result.adjusted_cost_matrix[0, 0] == pytest.approx(0.0)
     assert result.adjusted_cost_matrix[0, 1] > result.adjusted_cost_matrix[0, 0]
     assert result.reliability_matrix[0, 1] < result.reliability_matrix[0, 0]
+
+
+def test_uncertainty_config_rejects_nonfinite_runtime_values() -> None:
+    with pytest.raises(ValueError, match="temperature must be finite"):
+        EdgeUncertaintyConfig(temperature=np.nan)
+    with pytest.raises(
+        ValueError, match="registration_rmse_weight must be finite"
+    ):
+        EdgeUncertaintyConfig(registration_rmse_weight=np.inf)
+    with pytest.raises(ValueError, match="min_reliability must be finite"):
+        EdgeUncertaintyConfig(min_reliability=np.nan)
+    with pytest.raises(ValueError, match="max_penalty must be finite"):
+        EdgeUncertaintyConfig(max_penalty=np.inf)
+    with pytest.raises(ValueError, match="gated_edge_weight must be finite"):
+        EdgeUncertaintyConfig(gated_edge_weight=True)
+
+
+def test_posterior_probabilities_ignore_nonfinite_reliability_entries() -> None:
+    probabilities = posterior_probability_matrix(
+        np.asarray([[0.0, 1.0]], dtype=float),
+        reliability_matrix=np.asarray([[1.0, np.nan]], dtype=float),
+    )
+
+    assert np.all(np.isfinite(probabilities))
+    assert probabilities[0, 0] == pytest.approx(1.0)
+    assert probabilities[0, 1] == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"min_probability": np.nan}, "min_probability must be finite"),
+        ({"min_probability": 1.5}, "min_probability must be a finite value"),
+        ({"row_top_k": 1.5}, "row_top_k must be a positive integer"),
+        ({"column_top_k": True}, "column_top_k must be finite"),
+    ],
+)
+def test_candidate_mask_from_posteriors_rejects_invalid_pruning_knobs(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        candidate_mask_from_posteriors(np.asarray([[0.5, 0.25]]), **kwargs)
 
 
 def test_uncertainty_penalizes_empty_registered_roi_columns() -> None:

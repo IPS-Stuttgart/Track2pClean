@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
@@ -32,17 +33,25 @@ class CandidateHardNegativeOptions:
     hardness_feature_names: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        ratio = float(self.negative_to_positive_ratio)
+        ratio = _finite_float(
+            self.negative_to_positive_ratio, name="negative_to_positive_ratio"
+        )
         if not np.isfinite(ratio) or ratio < 0.0:
             raise ValueError(
                 "negative_to_positive_ratio must be finite and non-negative"
             )
         object.__setattr__(self, "negative_to_positive_ratio", ratio)
         if self.candidate_top_k_per_anchor is not None:
-            top_k = int(self.candidate_top_k_per_anchor)
-            if top_k <= 0:
-                raise ValueError("candidate_top_k_per_anchor must be positive or None")
-            object.__setattr__(self, "candidate_top_k_per_anchor", top_k)
+            object.__setattr__(
+                self,
+                "candidate_top_k_per_anchor",
+                _positive_integer_or_none(
+                    self.candidate_top_k_per_anchor,
+                    name="candidate_top_k_per_anchor",
+                ),
+            )
+        if not isinstance(self.include_column_candidates, bool):
+            raise ValueError("include_column_candidates must be a boolean")
         object.__setattr__(
             self,
             "hardness_feature_names",
@@ -52,6 +61,24 @@ class CandidateHardNegativeOptions:
                 else self.hardness_feature_names
             ),
         )
+
+
+def _finite_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _positive_integer_or_none(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be positive or None")
+    numeric = _finite_float(value, name=name)
+    if not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be positive or None")
+    return int(numeric)
 
 
 def collect_candidate_limited_training_examples(
