@@ -71,6 +71,11 @@ class PyRecEstResidualMHTOptions:
     max_hypotheses: int = 16
     edit_penalty: float = 0.25
     score_threshold: float = 1.0
+    include_high_overlap_low_motion: bool = False
+    high_overlap_min_registered_iou: float = 0.85
+    high_overlap_max_growth_residual: float = 0.50
+    high_overlap_min_growth_residual_mahalanobis: float = 1.0
+    high_overlap_score_bonus: float = 2.0
 
 
 @dataclass(frozen=True)
@@ -230,21 +235,30 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
 
         selected_keys = {cleanup._edge_row_key(row) for row in selected_rows}
         applied_set = set(applied_keys)
+        candidates_by_id = {
+            str(row["pyrecest_candidate_id"]): row for row in candidate_rows
+        }
         hypothesis_ids = [";".join(h.candidate_ids) for h in hypotheses]
         for row in edge_rows:
             key = cleanup._edge_row_key(row)
             candidate_id = _candidate_id(row)
-            is_candidate = any(
-                str(candidate_row["pyrecest_candidate_id"]) == candidate_id
-                for candidate_row in candidate_rows
-            )
+            candidate_row = candidates_by_id.get(candidate_id)
+            is_candidate = candidate_row is not None
             ledger_rows.append(
                 {
                     **row,
                     "pyrecest_candidate_id": candidate_id,
                     "pyrecest_candidate": int(is_candidate),
                     "pyrecest_candidate_score": float(
-                        _candidate_score(row, options=mht_options)
+                        _candidate_score(
+                            candidate_row or row,
+                            options=mht_options,
+                        )
+                    ),
+                    "pyrecest_candidate_family": (
+                        str(candidate_row.get("pyrecest_candidate_family", ""))
+                        if candidate_row is not None
+                        else ""
                     ),
                     "selected_by_pyrecest_mht": int(key in selected_keys),
                     "applied_by_pyrecest_mht": int(key in applied_set),
@@ -256,9 +270,10 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
                     ),
                     "pyrecest_hypothesis_count": int(len(hypotheses)),
                     "pyrecest_top_hypotheses": "|".join(hypothesis_ids[:5]),
-                    "pyrecest_mht_gate_reason": cleanup.growth_veto_gate_reason(
+                    "pyrecest_mht_gate_reason": _candidate_gate_reason(
                         row,
-                        growth_veto_gate,
+                        gate=growth_veto_gate,
+                        options=mht_options,
                         n_sessions=int(state.reference.shape[1]),
                     ),
                 }
@@ -278,19 +293,138 @@ def _candidate_rows(
     options: PyRecEstResidualMHTOptions,
     n_sessions: int,
 ) -> list[Mapping[str, Any]]:
-    candidates = [
-        {**dict(row), "pyrecest_candidate_id": _candidate_id(row)}
-        for row in rows
-        if cleanup.growth_veto_gate_reason(row, gate, n_sessions=n_sessions)
-        == "accepted"
-    ]
-    candidates.sort(
+    candidates: dict[str, Mapping[str, Any]] = {}
+    for row in rows:
+        growth_reason = cleanup.growth_veto_gate_reason(
+            row,
+            gate,
+            n_sessions=n_sessions,
+        )
+        high_overlap_reason = _high_overlap_low_motion_reason(
+            row,
+            gate=gate,
+            options=options,
+            n_sessions=n_sessions,
+        )
+        if growth_reason == "accepted":
+            candidate = {
+                **dict(row),
+                "pyrecest_candidate_id": _candidate_id(row),
+                "pyrecest_candidate_family": "growth_veto",
+            }
+            candidates[str(candidate["pyrecest_candidate_id"])] = candidate
+            continue
+        if high_overlap_reason == "accepted":
+            candidate = {
+                **dict(row),
+                "pyrecest_candidate_id": _candidate_id(row),
+                "pyrecest_candidate_family": "high_overlap_low_motion",
+            }
+            candidates[str(candidate["pyrecest_candidate_id"])] = candidate
+    sorted_candidates = list(candidates.values())
+    sorted_candidates.sort(
         key=lambda row: (
             -_candidate_score(row, options=options),
             str(row["pyrecest_candidate_id"]),
         )
     )
-    return candidates[: max(0, int(options.candidate_top_k))]
+    return sorted_candidates[: max(0, int(options.candidate_top_k))]
+
+
+def _candidate_gate_reason(
+    row: Mapping[str, Any],
+    *,
+    gate: cleanup.GrowthVetoGate,
+    options: PyRecEstResidualMHTOptions,
+    n_sessions: int,
+) -> str:
+    growth_reason = cleanup.growth_veto_gate_reason(
+        row,
+        gate,
+        n_sessions=n_sessions,
+    )
+    if growth_reason == "accepted":
+        return "accepted"
+    high_overlap_reason = _high_overlap_low_motion_reason(
+        row,
+        gate=gate,
+        options=options,
+        n_sessions=n_sessions,
+    )
+    if high_overlap_reason == "accepted":
+        return "high_overlap_low_motion_accepted"
+    return growth_reason
+
+
+def _high_overlap_low_motion_reason(
+    row: Mapping[str, Any],
+    *,
+    gate: cleanup.GrowthVetoGate,
+    options: PyRecEstResidualMHTOptions,
+    n_sessions: int,
+) -> str:
+    """Return accepted for an opt-in high-overlap/low-motion anomaly pocket."""
+
+    if not options.include_high_overlap_low_motion:
+        return "high_overlap_low_motion_disabled"
+    if gate.require_not_suffix_edge and str(row.get("edge_source", "")) == "suffix":
+        return "coherence_suffix_edge"
+    if str(row.get("remove_reason", "")) != "split_edge":
+        return "not_splittable"
+    if int(row.get("would_split_component", 0)) <= 0:
+        return "does_not_split_component"
+    if gate.require_terminal_edge and int(row.get("is_terminal_edge", 0)) <= 0:
+        return "not_terminal_edge"
+    if gate.require_last_session_edge and int(row.get("is_last_session_edge", 0)) <= 0:
+        return "not_last_session_edge"
+    if gate.require_complete_component and int(
+        row.get("complete_component_size", 0)
+    ) < int(n_sessions):
+        return "not_complete_component"
+    if gate.min_complete_component_size is not None and int(
+        row.get("complete_component_size", 0)
+    ) < int(gate.min_complete_component_size):
+        return "complete_component_size_below_gate"
+
+    row_rank = int(_finite_float(row.get("row_rank"), float("inf")))
+    column_rank = int(_finite_float(row.get("column_rank"), float("inf")))
+    if row_rank <= 0 or row_rank > int(gate.max_row_rank):
+        return "row_rank_above_gate"
+    if column_rank <= 0 or column_rank > int(gate.max_column_rank):
+        return "column_rank_above_gate"
+
+    registered_iou = _finite_float(row.get("registered_iou"), float("nan"))
+    if not np.isfinite(registered_iou) or registered_iou < float(
+        options.high_overlap_min_registered_iou
+    ):
+        return "high_overlap_registered_iou_below_gate"
+    growth_residual = _finite_float(row.get("growth_residual"), float("nan"))
+    if not np.isfinite(growth_residual) or growth_residual > float(
+        options.high_overlap_max_growth_residual
+    ):
+        return "high_overlap_growth_residual_above_gate"
+    growth_mahalanobis = _finite_float(
+        row.get("growth_residual_mahalanobis"),
+        float("nan"),
+    )
+    if not np.isfinite(growth_mahalanobis) or growth_mahalanobis < float(
+        options.high_overlap_min_growth_residual_mahalanobis
+    ):
+        return "high_overlap_mahalanobis_below_gate"
+
+    cell_a = _finite_float(row.get("cell_probability_a"), float("nan"))
+    cell_b = _finite_float(row.get("cell_probability_b"), float("nan"))
+    if not np.isfinite(cell_a) or not np.isfinite(cell_b):
+        return "cell_probability_missing"
+    if min(cell_a, cell_b) < float(gate.min_cell_probability):
+        return "cell_probability_below_gate"
+    if gate.max_local_neighbor_distortion is not None:
+        distortion = _finite_float(row.get("local_neighbor_distortion"), float("nan"))
+        if not np.isfinite(distortion) or distortion > float(
+            gate.max_local_neighbor_distortion
+        ):
+            return "local_neighbor_distortion_above_gate"
+    return "accepted"
 
 
 def _to_pyrecest_candidate(
@@ -339,7 +473,6 @@ def _candidate_score(
 ) -> float:
     """Label-free residual-MHT score; ignores all GT/status/delta columns."""
 
-    del options
     growth_mahal = _finite_float(row.get("growth_residual_mahalanobis"), 0.0)
     growth_residual = _finite_float(row.get("growth_residual"), 0.0)
     registered_iou = _finite_float(row.get("registered_iou"), 0.0)
@@ -362,6 +495,8 @@ def _candidate_score(
     score -= 0.10 * float(row_rank - 1)
     score -= 0.10 * float(column_rank - 1)
     score -= 1.00 * max(0.0, local_distortion)
+    if str(row.get("pyrecest_candidate_family", "")) == "high_overlap_low_motion":
+        score += float(options.high_overlap_score_bonus)
     return float(score)
 
 
@@ -426,6 +561,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mht-max-hypotheses", type=int, default=16)
     parser.add_argument("--mht-edit-penalty", type=float, default=0.25)
     parser.add_argument("--mht-score-threshold", type=float, default=1.0)
+    parser.add_argument(
+        "--mht-include-high-overlap-low-motion-candidates",
+        action="store_true",
+        help=(
+            "Also expose a high-registered-IoU, low-growth-motion residual "
+            "candidate pocket to PyRecEst MHT."
+        ),
+    )
+    parser.add_argument("--mht-high-overlap-min-registered-iou", type=float, default=0.85)
+    parser.add_argument("--mht-high-overlap-max-growth-residual", type=float, default=0.50)
+    parser.add_argument(
+        "--mht-high-overlap-min-growth-residual-mahalanobis",
+        type=float,
+        default=1.0,
+    )
+    parser.add_argument("--mht-high-overlap-score-bonus", type=float, default=2.0)
     return parser
 
 
@@ -518,6 +669,19 @@ def main(argv: list[str] | None = None) -> int:
             max_hypotheses=int(args.mht_max_hypotheses),
             edit_penalty=float(args.mht_edit_penalty),
             score_threshold=float(args.mht_score_threshold),
+            include_high_overlap_low_motion=bool(
+                args.mht_include_high_overlap_low_motion_candidates
+            ),
+            high_overlap_min_registered_iou=float(
+                args.mht_high_overlap_min_registered_iou
+            ),
+            high_overlap_max_growth_residual=float(
+                args.mht_high_overlap_max_growth_residual
+            ),
+            high_overlap_min_growth_residual_mahalanobis=float(
+                args.mht_high_overlap_min_growth_residual_mahalanobis
+            ),
+            high_overlap_score_bonus=float(args.mht_high_overlap_score_bonus),
         ),
         progress=bool(args.progress),
     )
