@@ -14,6 +14,7 @@ are never passed into the PyRecEst candidate score or conflict keys.
 from __future__ import annotations
 
 import argparse
+import sys
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -413,6 +414,11 @@ def _finite_float(value: Any, fallback: float) -> float:
     return numeric if np.isfinite(numeric) else float(fallback)
 
 
+def _option_present(args: Sequence[str], option: str) -> bool:
+    prefix = f"{option}="
+    return any(arg == option or arg.startswith(prefix) for arg in args)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = cleanup.build_arg_parser()
     parser.prog = "bayescatrack benchmark track2p-policy-pyrecest-residual-mht-cleanup"
@@ -421,6 +427,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "after CoherenceSuffixStitch."
     )
     parser.set_defaults(growth_veto_base="coherence-suffix")
+    for action in parser._actions:
+        if action.dest == "growth_veto_base":
+            action.choices = ("coherence-suffix",)
+            action.default = "coherence-suffix"
+            action.help = (
+                "Residual-MHT always starts from the non-teacher "
+                "CoherenceSuffixStitch state."
+            )
     parser.add_argument("--mht-candidate-top-k", type=int, default=4)
     parser.add_argument("--mht-max-edits-per-subject", type=int, default=2)
     parser.add_argument("--mht-max-hypotheses", type=int, default=16)
@@ -430,7 +444,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    parser = build_arg_parser()
+    args = parser.parse_args(raw_args)
+    if args.growth_veto_base != "coherence-suffix":
+        parser.error(
+            "PyRecEst residual MHT always starts from CoherenceSuffixStitch; "
+            "use --growth-veto-base coherence-suffix."
+        )
+    mht_candidate_top_k = int(args.mht_candidate_top_k)
+    mht_max_edits_per_subject = int(args.mht_max_edits_per_subject)
+    legacy_veto_cap_present = any(
+        _option_present(raw_args, option)
+        for option in (
+            "--max-vetoes-per-subject",
+            "--growth-veto-max-vetoes-per-subject",
+        )
+    )
+    if legacy_veto_cap_present:
+        legacy_veto_cap = int(args.max_vetoes_per_subject)
+        if not _option_present(raw_args, "--mht-candidate-top-k"):
+            mht_candidate_top_k = legacy_veto_cap
+        if not _option_present(raw_args, "--mht-max-edits-per-subject"):
+            mht_max_edits_per_subject = legacy_veto_cap
     config = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -510,11 +546,11 @@ def main(argv: list[str] | None = None) -> int:
             require_terminal_edge=bool(args.require_veto_terminal_edge),
             require_last_session_edge=bool(args.require_veto_last_session_edge),
             require_complete_component=bool(args.require_veto_complete_component),
-            max_vetoes_per_subject=int(args.mht_candidate_top_k),
+            max_vetoes_per_subject=int(mht_candidate_top_k),
         ),
         mht_options=PyRecEstResidualMHTOptions(
-            candidate_top_k=int(args.mht_candidate_top_k),
-            max_edits_per_subject=int(args.mht_max_edits_per_subject),
+            candidate_top_k=int(mht_candidate_top_k),
+            max_edits_per_subject=int(mht_max_edits_per_subject),
             max_hypotheses=int(args.mht_max_hypotheses),
             edit_penalty=float(args.mht_edit_penalty),
             score_threshold=float(args.mht_score_threshold),
