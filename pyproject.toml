@@ -11,6 +11,8 @@ requires-python = ">=3.11,<3.15"
 dependencies = [
     "numpy",
     "scipy",
+    "scikit-image==0.24.0; python_version < '3.13'",
+    "scikit-image>=0.25.2; python_version >= '3.13'",
     "pyrecest @ git+https://github.com/FlorianPfaff/PyRecEst.git@b08e94ad68ab073cf57a3932d56c0698c2de3f77",
 ]
 
@@ -19,7 +21,7 @@ calibration = [
     "scikit-learn",
 ]
 track2p = [
-    "track2p==0.6.2",
+    "track2p==0.6.2; python_version < '3.13'",
 ]
 
 [project.scripts]

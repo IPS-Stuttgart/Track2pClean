@@ -5,8 +5,16 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+import pytest
 from bayescatrack import cli
+from bayescatrack.experiments import (
+    track2p_policy_coherence_suffix_growth_veto_cleanup as coherence_cleanup,
+)
 from bayescatrack.experiments import track2p_policy_growth_veto_cleanup as cleanup
+from bayescatrack.experiments.track2p_benchmark import (
+    GROUND_TRUTH_REFERENCE_SOURCE,
+    SubjectBenchmarkResult,
+)
 
 
 def _candidate_row(**overrides: object) -> dict[str, object]:
@@ -152,6 +160,102 @@ def test_growth_veto_cleanup_parser_accepts_coherence_suffix_base() -> None:
     )
 
     assert args.growth_veto_base == "coherence-suffix"
+
+
+def test_growth_veto_cleanup_writes_candidate_output(monkeypatch, tmp_path) -> None:
+    result = cleanup.GrowthVetoCleanupResult(
+        results=(
+            SubjectBenchmarkResult(
+                subject="jm046",
+                variant="test",
+                method="global-assignment",
+                scores={"pairwise_f1_micro": 1.0},
+                n_sessions=7,
+                reference_source=GROUND_TRUTH_REFERENCE_SOURCE,
+            ),
+        ),
+        edge_rows=(
+            {
+                "subject": "jm046",
+                "session_a": 5,
+                "session_b": 6,
+                "roi_a": 2309,
+                "roi_b": 1210,
+                "selected_by_growth_veto": 1,
+            },
+        ),
+        summary_rows=(),
+    )
+    monkeypatch.setattr(
+        cleanup,
+        "run_track2p_policy_growth_veto_cleanup",
+        lambda *args, **kwargs: result,
+    )
+    candidates = tmp_path / "growth_veto_candidates.csv"
+
+    exit_status = cleanup.main(
+        [
+            "--data",
+            str(tmp_path),
+            "--reference",
+            str(tmp_path),
+            "--reference-kind",
+            "manual-gt",
+            "--output",
+            str(tmp_path / "scores.csv"),
+            "--candidate-output",
+            str(candidates),
+            "--format",
+            "csv",
+        ]
+    )
+
+    assert exit_status == 0
+    assert candidates.exists()
+    assert "2309" in candidates.read_text(encoding="utf-8")
+
+
+def test_coherence_suffix_growth_veto_wrapper_forces_non_teacher_base(
+    monkeypatch,
+) -> None:
+    captured = {}
+
+    def fake_main(args):
+        captured["args"] = args
+        return 0
+
+    monkeypatch.setattr(
+        coherence_cleanup.cleanup,
+        "main",
+        fake_main,
+    )
+
+    exit_status = coherence_cleanup.main(["--data", "track2p-root"])
+
+    assert exit_status == 0
+    assert captured["args"][-2:] == ["--growth-veto-base", "coherence-suffix"]
+
+
+def test_coherence_suffix_growth_veto_wrapper_rejects_teacher_rescue_base() -> None:
+    with pytest.raises(SystemExit):
+        coherence_cleanup.main(["--growth-veto-base", "teacher-rescue"])
+
+
+def test_coherence_suffix_growth_veto_wrapper_rejects_teacher_rescue_equals() -> None:
+    with pytest.raises(SystemExit):
+        coherence_cleanup.main(["--growth-veto-base=teacher-rescue"])
+
+
+def test_coherence_suffix_growth_veto_wrapper_rejects_later_teacher_rescue() -> None:
+    with pytest.raises(SystemExit):
+        coherence_cleanup.main(
+            [
+                "--growth-veto-base",
+                "coherence-suffix",
+                "--growth-veto-base",
+                "teacher-rescue",
+            ]
+        )
 
 
 def test_growth_veto_cleanup_parser_can_disable_distortion_cap() -> None:
