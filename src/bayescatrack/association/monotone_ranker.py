@@ -40,22 +40,80 @@ class MonotoneRankerOptions:
         object.__setattr__(
             self, "monotone_feature_names", tuple(self.monotone_feature_names or ())
         )
-        if self.margin <= 0.0:
-            raise ValueError("margin must be positive")
-        if self.max_negatives_per_positive <= 0:
-            raise ValueError("max_negatives_per_positive must be positive")
+        object.__setattr__(
+            self, "margin", _finite_positive_float(self.margin, name="margin")
+        )
+        object.__setattr__(
+            self,
+            "max_negatives_per_positive",
+            _positive_integer(
+                self.max_negatives_per_positive,
+                name="max_negatives_per_positive",
+            ),
+        )
+        if not isinstance(self.include_row_negatives, bool):
+            raise ValueError("include_row_negatives must be a boolean")
+        if not isinstance(self.include_column_negatives, bool):
+            raise ValueError("include_column_negatives must be a boolean")
         if not self.include_row_negatives and not self.include_column_negatives:
             raise ValueError("At least one negative source must be enabled")
-        if self.max_iter <= 0:
-            raise ValueError("max_iter must be positive")
-        if self.learning_rate <= 0.0:
-            raise ValueError("learning_rate must be positive")
-        if self.l2_regularization < 0.0:
-            raise ValueError("l2_regularization must be non-negative")
-        if self.binary_loss_weight < 0.0:
-            raise ValueError("binary_loss_weight must be non-negative")
-        if self.tolerance < 0.0:
-            raise ValueError("tolerance must be non-negative")
+        object.__setattr__(
+            self, "max_iter", _positive_integer(self.max_iter, name="max_iter")
+        )
+        object.__setattr__(
+            self,
+            "learning_rate",
+            _finite_positive_float(self.learning_rate, name="learning_rate"),
+        )
+        object.__setattr__(
+            self,
+            "l2_regularization",
+            _finite_nonnegative_float(
+                self.l2_regularization, name="l2_regularization"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "binary_loss_weight",
+            _finite_nonnegative_float(
+                self.binary_loss_weight, name="binary_loss_weight"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "tolerance",
+            _finite_nonnegative_float(self.tolerance, name="tolerance"),
+        )
+
+
+def _validated_numeric_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be finite and positive")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)
 
 
 @dataclass(frozen=True)

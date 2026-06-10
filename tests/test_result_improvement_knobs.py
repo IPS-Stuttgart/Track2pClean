@@ -172,6 +172,25 @@ def test_track2p_teacher_prior_reliefs_suite2p_edges() -> None:
     assert adjusted[(0, 1)][0, 0] == pytest.approx(5.0)
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"relief": True}, "relief must be finite"),
+        ({"teacher_cost_cap": -0.1}, "teacher_cost_cap must be finite and non-negative"),
+        ({"non_teacher_penalty": np.nan}, "non_teacher_penalty must be finite"),
+        ({"min_cost": np.inf}, "min_cost must be finite"),
+        ({"max_gap": 1.5}, "max_gap must be a positive integer"),
+        ({"consecutive_only": 1}, "consecutive_only must be a boolean"),
+        ({"large_cost": 0.0}, "large_cost must be finite and positive"),
+    ],
+)
+def test_teacher_prior_config_rejects_silent_runtime_knob_coercions(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        TeacherEdgePriorConfig(**kwargs)
+
+
 def _fake_session(roi_indices: list[int]) -> SimpleNamespace:
     return SimpleNamespace(
         plane_data=SimpleNamespace(

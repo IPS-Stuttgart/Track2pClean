@@ -50,23 +50,35 @@ class MonotoneRankerOptions:
 
     def __post_init__(self) -> None:
         for name in ("row_negatives_per_positive", "column_negatives_per_positive"):
-            value = int(getattr(self, name))
-            if value < 0:
-                raise ValueError(f"{name} must be non-negative")
-            object.__setattr__(self, name, value)
+            object.__setattr__(
+                self, name, _nonnegative_integer(getattr(self, name), name=name)
+            )
         if self.max_preference_pairs is not None:
-            max_pairs = int(self.max_preference_pairs)
-            if max_pairs <= 0:
-                raise ValueError("max_preference_pairs must be positive or None")
-            object.__setattr__(self, "max_preference_pairs", max_pairs)
-        if self.learning_rate <= 0.0 or not np.isfinite(self.learning_rate):
-            raise ValueError("learning_rate must be finite and positive")
-        if self.l2_regularization < 0.0 or not np.isfinite(self.l2_regularization):
-            raise ValueError("l2_regularization must be finite and non-negative")
-        if int(self.max_iter) <= 0:
-            raise ValueError("max_iter must be positive")
-        object.__setattr__(self, "max_iter", int(self.max_iter))
-        object.__setattr__(self, "random_seed", int(self.random_seed))
+            object.__setattr__(
+                self,
+                "max_preference_pairs",
+                _positive_integer(
+                    self.max_preference_pairs, name="max_preference_pairs"
+                ),
+            )
+        object.__setattr__(
+            self,
+            "learning_rate",
+            _finite_positive_float(self.learning_rate, name="learning_rate"),
+        )
+        object.__setattr__(
+            self,
+            "l2_regularization",
+            _finite_nonnegative_float(
+                self.l2_regularization, name="l2_regularization"
+            ),
+        )
+        object.__setattr__(
+            self, "max_iter", _positive_integer(self.max_iter, name="max_iter")
+        )
+        object.__setattr__(
+            self, "random_seed", _integer(self.random_seed, name="random_seed")
+        )
         object.__setattr__(
             self,
             "hardness_feature_names",
@@ -78,16 +90,61 @@ class MonotoneRankerOptions:
         )
         if self.feature_directions is not None:
             directions = {
-                str(key): float(value) for key, value in self.feature_directions.items()
+                str(key): _finite_nonzero_float(value, name="feature_directions")
+                for key, value in self.feature_directions.items()
             }
-            if any(
-                (not np.isfinite(value)) or value == 0.0
-                for value in directions.values()
-            ):
-                raise ValueError(
-                    "feature_directions values must be finite and non-zero"
-                )
             object.__setattr__(self, "feature_directions", directions)
+
+
+def _validated_numeric_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be finite and positive")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _finite_nonzero_float(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric == 0.0:
+        raise ValueError(f"{name} values must be finite and non-zero")
+    return numeric
+
+
+def _integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer():
+        raise ValueError(f"{name} must be an integer")
+    return int(numeric)
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)
+
+
+def _nonnegative_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 0.0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return int(numeric)
 
 
 @dataclass(frozen=True)
