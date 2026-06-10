@@ -102,9 +102,7 @@ def test_uncertainty_mapping_penalizes_unreliable_edges() -> None:
 def test_uncertainty_config_rejects_nonfinite_runtime_values() -> None:
     with pytest.raises(ValueError, match="temperature must be finite"):
         EdgeUncertaintyConfig(temperature=np.nan)
-    with pytest.raises(
-        ValueError, match="registration_rmse_weight must be finite"
-    ):
+    with pytest.raises(ValueError, match="registration_rmse_weight must be finite"):
         EdgeUncertaintyConfig(registration_rmse_weight=np.inf)
     with pytest.raises(ValueError, match="min_reliability must be finite"):
         EdgeUncertaintyConfig(min_reliability=np.nan)
