@@ -246,6 +246,18 @@ def test_coherence_suffix_growth_veto_wrapper_rejects_teacher_rescue_equals() ->
         coherence_cleanup.main(["--growth-veto-base=teacher-rescue"])
 
 
+def test_coherence_suffix_growth_veto_wrapper_rejects_later_teacher_rescue() -> None:
+    with pytest.raises(SystemExit):
+        coherence_cleanup.main(
+            [
+                "--growth-veto-base",
+                "coherence-suffix",
+                "--growth-veto-base",
+                "teacher-rescue",
+            ]
+        )
+
+
 def test_growth_veto_cleanup_parser_can_disable_distortion_cap() -> None:
     args = cleanup.build_arg_parser().parse_args(
         [
