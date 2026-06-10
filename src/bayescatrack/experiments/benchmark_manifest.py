@@ -2888,6 +2888,13 @@ def _optional_float_option(options: ManifestObject, *keys: str) -> float | None:
     for key in keys:
         if key not in options or options[key] is None:
             continue
+        if isinstance(options[key], str) and options[key].casefold() in {
+            "",
+            "none",
+            "null",
+            "nan",
+        }:
+            continue
         value = float(options[key])
         if not math.isfinite(value):
             raise ValueError(f"{key} must be finite")

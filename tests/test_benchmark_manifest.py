@@ -235,6 +235,44 @@ def test_benchmark_manifest_rejects_runner_options_for_default_track2p(tmp_path)
         load_benchmark_manifest(manifest_path)
 
 
+def test_manifest_optional_float_helpers_accept_cli_null_strings() -> None:
+    from bayescatrack.experiments import _teacher_rescue_manifest_integration
+
+    assert bm._optional_float_option({"value": "none"}, "value") is None
+    assert bm._optional_float_option({"value": "null"}, "value") is None
+    assert bm._optional_float_option({"value": "nan"}, "value") is None
+    assert (
+        _teacher_rescue_manifest_integration._optional_float_option(
+            {"value": "none"}, "value"
+        )
+        is None
+    )
+    with pytest.raises(ValueError, match="value must be finite"):
+        bm._optional_float_option({"value": "inf"}, "value")
+    with pytest.raises(ValueError, match="value must be finite"):
+        _teacher_rescue_manifest_integration._optional_float_option(
+            {"value": "inf"}, "value"
+        )
+    assert (
+        _teacher_rescue_manifest_integration._optional_int_option(
+            {"value": "none"}, "value"
+        )
+        is None
+    )
+    assert (
+        _teacher_rescue_manifest_integration._optional_int_option(
+            {"value": "null"}, "value"
+        )
+        is None
+    )
+    assert (
+        _teacher_rescue_manifest_integration._optional_int_option(
+            {"value": "all"}, "value"
+        )
+        is None
+    )
+
+
 def test_benchmark_manifest_accepts_teacher_adjacent_rescue_options(tmp_path):
     manifest_path = tmp_path / "benchmarks.json"
     _write_manifest(
@@ -343,11 +381,13 @@ def test_benchmark_manifest_dispatches_teacher_adjacent_rescue_options(
                     "teacher_edge_order": "dynamic-confidence",
                     "teacher_feature_preset": "high-confidence",
                     "teacher_gate_min_registered_iou": 0.25,
+                    "teacher_gate_max_registered_iou": "none",
                     "teacher_gate_min_cell_probability": 0.8,
                     "teacher_gate_require_hungarian": True,
                     "min_component_observations": 3,
                     "max_applied_edits": 2,
                     "max_target_extension_edits": 1,
+                    "max_source_backfill_edits": "all",
                     "max_seed_source_backfill_edits": 1,
                     "max_completing_rescue_edits": 1,
                 }
@@ -366,9 +406,11 @@ def test_benchmark_manifest_dispatches_teacher_adjacent_rescue_options(
     assert calls["kwargs"]["min_component_observations"] == 3
     assert calls["kwargs"]["max_applied_edits"] == 2
     assert calls["kwargs"]["max_target_extension_edits"] == 1
+    assert calls["kwargs"]["max_source_backfill_edits"] is None
     assert calls["kwargs"]["max_seed_source_backfill_edits"] == 1
     assert calls["kwargs"]["max_completing_rescue_edits"] == 1
     assert gate.min_registered_iou == 0.25
+    assert gate.max_registered_iou is None
     assert gate.min_cell_probability == 0.8
     assert gate.require_hungarian is True
     assert (tmp_path / "results" / "teacher-rescue.csv").exists()
@@ -536,7 +578,7 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
                     "min_veto_registered_iou": 0.45,
                     "min_veto_shifted_iou": 0.6,
                     "max_veto_min_cell_probability": 0.65,
-                    "max_veto_local_neighbor_distortion": None,
+                    "max_veto_local_neighbor_distortion": "none",
                     "max_vetoes_per_subject": 1,
                     "growth_veto_base": "coherence-suffix",
                 }
@@ -672,7 +714,7 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
                     "suffix_path_length": 2,
                     "min_growth_residual_mahalanobis": 20.0,
                     "min_growth_residual": 2.5,
-                    "max_veto_local_neighbor_distortion": None,
+                    "max_veto_local_neighbor_distortion": "none",
                     "mht_candidate_top_k": 1,
                     "mht_max_edits_per_subject": 1,
                     "mht_max_hypotheses": 8,
