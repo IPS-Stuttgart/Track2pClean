@@ -5,7 +5,6 @@ import sys
 import types
 
 import pytest
-
 from bayescatrack import cli
 
 # pylint: disable=protected-access
