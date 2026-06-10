@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import pytest
-
-from bayescatrack.experiments import track2p_policy_pyrecest_residual_mht_cleanup as residual_mht
+from bayescatrack.experiments import (
+    track2p_policy_pyrecest_residual_mht_cleanup as residual_mht,
+)
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
     SubjectBenchmarkResult,
