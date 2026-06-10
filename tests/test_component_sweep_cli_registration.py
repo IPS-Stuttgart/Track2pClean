@@ -123,9 +123,7 @@ def test_pyrecest_frontier_mht_cleanup_is_registered():
 
 
 def test_pyrecest_safe_frontier_mht_cleanup_is_registered():
-    canonical = cli._BENCHMARK_ALIASES[
-        "track2p-pyrecest-safe-frontier-mht-cleanup"
-    ]
+    canonical = cli._BENCHMARK_ALIASES["track2p-pyrecest-safe-frontier-mht-cleanup"]
 
     assert canonical == "track2p-policy-pyrecest-safe-frontier-mht-cleanup"
     assert (
