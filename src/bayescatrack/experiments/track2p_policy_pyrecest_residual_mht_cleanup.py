@@ -532,6 +532,12 @@ def main(argv: list[str] | None = None) -> int:
             args.diagnostics_output,
             output_format=cast(Literal["csv", "json"], args.diagnostics_format),
         )
+    if args.candidate_output is not None:
+        veto.write_rows(
+            result.candidate_rows,
+            args.candidate_output,
+            output_format=cast(Literal["csv", "json"], args.format),
+        )
     if args.summary_output is not None:
         veto.write_rows(
             result.summary_rows,
