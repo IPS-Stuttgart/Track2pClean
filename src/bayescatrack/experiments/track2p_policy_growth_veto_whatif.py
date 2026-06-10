@@ -1250,6 +1250,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.prog = "python -m bayescatrack.experiments.track2p_policy_growth_veto_whatif"
     parser.description = "Audit growth-veto one-edge removal what-ifs over every accepted CoherenceSuffixTeacherRescue edge."
     parser.add_argument("--summary-output", type=Path, default=None)
+    parser.add_argument(
+        "--growth-veto-base",
+        choices=("teacher-rescue", "coherence-suffix"),
+        default="teacher-rescue",
+        help=(
+            "Prediction row to audit before hypothetical growth-veto removals. "
+            "teacher-rescue matches the original audit; coherence-suffix tests "
+            "the non-teacher row."
+        ),
+    )
     parser.add_argument("--anchor-min-registered-iou", type=float, default=0.50)
     parser.add_argument("--anchor-min-shifted-iou", type=float, default=0.30)
     parser.add_argument("--anchor-min-cell-probability", type=float, default=0.80)
@@ -1315,6 +1325,7 @@ def main(argv: list[str] | None = None) -> int:
         anchor_min_registered_iou=float(args.anchor_min_registered_iou),
         anchor_min_shifted_iou=float(args.anchor_min_shifted_iou),
         anchor_min_cell_probability=float(args.anchor_min_cell_probability),
+        prediction_base=cast(GrowthVetoPredictionBase, args.growth_veto_base),
         progress=bool(args.progress),
     )
     write_rows(
@@ -1322,6 +1333,12 @@ def main(argv: list[str] | None = None) -> int:
         args.output,
         output_format=cast(Literal["csv", "json"], args.format),
     )
+    if args.candidate_output is not None:
+        write_rows(
+            result.edge_rows,
+            args.candidate_output,
+            output_format=cast(Literal["csv", "json"], args.format),
+        )
     if args.summary_output is not None:
         write_rows(
             result.summary_rows,
