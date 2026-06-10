@@ -8,6 +8,7 @@ the frozen Track2pPolicy component-cleanup row.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Any, cast
 
@@ -86,18 +87,35 @@ TEACHER_ADJACENT_RESCUE_FIELDS = {
 
 def _optional_float_option(options: Mapping[str, Any], *names: str) -> float | None:
     for name in names:
-        if name in options and options[name] not in {None, ""}:
-            return float(options[name])
+        if name not in options or options[name] in {None, ""}:
+            continue
+        if isinstance(options[name], str) and options[name].casefold() in {
+            "none",
+            "null",
+            "nan",
+        }:
+            continue
+        value = float(options[name])
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite")
+        return value
     return None
 
 
 def _optional_int_option(options: Mapping[str, Any], *names: str) -> int | None:
     for name in names:
-        if name in options and options[name] not in {None, ""}:
-            value = int(options[name])
-            if value < 0:
-                raise ValueError(f"{name} must be non-negative when provided")
-            return value
+        if name not in options or options[name] in {None, ""}:
+            continue
+        if isinstance(options[name], str) and options[name].casefold() in {
+            "none",
+            "null",
+            "all",
+        }:
+            continue
+        value = int(options[name])
+        if value < 0:
+            raise ValueError(f"{name} must be non-negative when provided")
+        return value
     return None
 
 

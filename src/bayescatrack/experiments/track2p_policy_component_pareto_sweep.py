@@ -149,9 +149,9 @@ def rank_component_sweep_aggregates(
         enriched,
         key=lambda row: (
             -int(row["component_sweep_baseline_safe_feasible"]),
-            -float(row["component_sweep_objective"]),
-            -float(row["complete_track_f1_micro"]),
-            -float(row["pairwise_f1_micro"]),
+            -_finite_rank_value(row["component_sweep_objective"]),
+            -_finite_rank_value(row["complete_track_f1_micro"]),
+            -_finite_rank_value(row["pairwise_f1_micro"]),
             str(row["approach"]),
         ),
     )
@@ -293,7 +293,10 @@ def _baseline_floor(
 ) -> float | None:
     if baseline is None or delta is None:
         return None
-    return float(baseline[metric]) + _finite_delta(delta, name=f"{metric}_floor_delta")
+    baseline_value = float(baseline[metric])
+    if not math.isfinite(baseline_value):
+        return None
+    return baseline_value + _finite_delta(delta, name=f"{metric}_floor_delta")
 
 
 def _finite_delta(value: float, *, name: str) -> float:
@@ -312,7 +315,10 @@ def _floor_feasible(
 ) -> bool:
     if floor is None or baseline_approach:
         return True
-    return float(row[metric]) >= floor - 1e-12
+    value = float(row[metric])
+    if not math.isfinite(value) or not math.isfinite(floor):
+        return False
+    return value >= floor - 1e-12
 
 
 def _floor_metadata(value: float | None) -> float | str:
@@ -327,6 +333,13 @@ def _objective_value(
             float(row["complete_track_f1_micro"]) + float(row["pairwise_f1_micro"])
         )
     return float(row[objective])
+
+
+def _finite_rank_value(value: float | int | str) -> float:
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        return float("-inf")
+    return numeric
 
 
 def _safety_metadata(

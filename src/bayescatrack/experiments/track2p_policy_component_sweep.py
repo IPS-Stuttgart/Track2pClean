@@ -474,6 +474,7 @@ def _rank_aggregates(
     objective: ComponentSweepObjective,
     pairwise_f1_floor: float | None = None,
 ) -> list[dict[str, float | int | str]]:
+    pairwise_f1_floor = _finite_floor_or_none(pairwise_f1_floor)
     enriched = []
     for row in rows:
         approach = str(row["approach"])
@@ -497,9 +498,9 @@ def _rank_aggregates(
         enriched,
         key=lambda row: (
             -int(row["component_sweep_pairwise_floor_feasible"]),
-            -float(row["component_sweep_objective"]),
-            -float(row["complete_track_f1_micro"]),
-            -float(row["pairwise_f1_micro"]),
+            -_finite_rank_value(row["component_sweep_objective"]),
+            -_finite_rank_value(row["complete_track_f1_micro"]),
+            -_finite_rank_value(row["pairwise_f1_micro"]),
             str(row["approach"]),
         ),
     )
@@ -521,7 +522,10 @@ def _pairwise_f1_floor(
     )
     if baseline is None:
         return None
-    return float(baseline["pairwise_f1_micro"]) + float(config.pairwise_f1_floor_delta)
+    baseline_value = float(baseline["pairwise_f1_micro"])
+    if not math.isfinite(baseline_value):
+        return None
+    return baseline_value + float(config.pairwise_f1_floor_delta)
 
 
 def _objective_value(
@@ -532,6 +536,22 @@ def _objective_value(
             float(row["complete_track_f1_micro"]) + float(row["pairwise_f1_micro"])
         )
     return float(row[objective])
+
+
+def _finite_rank_value(value: float | int | str) -> float:
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        return float("-inf")
+    return numeric
+
+
+def _finite_floor_or_none(value: float | None) -> float | None:
+    if value is None:
+        return None
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        return None
+    return numeric
 
 
 def _annotate_subject_rows(

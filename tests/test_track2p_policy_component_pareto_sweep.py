@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from bayescatrack.experiments.track2p_policy_component_pareto_sweep import (
     rank_component_sweep_aggregates,
     rerank_component_sweep_output,
@@ -49,6 +51,50 @@ def test_pareto_sweep_can_disable_complete_track_floor() -> None:
 
     assert ranked[0]["approach"] == "component-cleanup-risky"
     assert ranked[0]["component_sweep_complete_track_f1_floor"] == ""
+
+
+def test_pareto_sweep_ranker_places_nonfinite_candidates_last() -> None:
+    rows = (
+        _aggregate_row(NO_SPLIT_COMPONENT_CANDIDATE, pairwise=0.80, complete=0.80),
+        _aggregate_row("component-cleanup-nan", pairwise=float("nan"), complete=0.90),
+        _aggregate_row("component-cleanup-safe", pairwise=0.82, complete=0.82),
+    )
+
+    ranked = rank_component_sweep_aggregates(
+        rows,
+        objective="pairwise_f1_micro",
+        pairwise_f1_floor_delta=0.0,
+        complete_track_f1_floor_delta=0.0,
+    )
+    nan_row = next(row for row in ranked if row["approach"] == "component-cleanup-nan")
+
+    assert ranked[0]["approach"] == "component-cleanup-safe"
+    assert nan_row["component_sweep_pairwise_floor_feasible"] == 0
+    assert nan_row["component_sweep_baseline_safe_feasible"] == 0
+    assert math.isnan(float(nan_row["component_sweep_objective"]))
+
+
+def test_pareto_sweep_ignores_nonfinite_baseline_floor_metric() -> None:
+    rows = (
+        _aggregate_row(
+            NO_SPLIT_COMPONENT_CANDIDATE,
+            pairwise=float("nan"),
+            complete=0.80,
+        ),
+        _aggregate_row("component-cleanup-safe", pairwise=0.82, complete=0.82),
+    )
+
+    ranked = rank_component_sweep_aggregates(
+        rows,
+        objective="complete_track_f1_micro",
+        pairwise_f1_floor_delta=0.0,
+        complete_track_f1_floor_delta=0.0,
+    )
+
+    assert ranked[0]["approach"] == "component-cleanup-safe"
+    assert ranked[0]["component_sweep_pairwise_f1_floor"] == ""
+    assert ranked[0]["component_sweep_pairwise_floor_feasible"] == 1
+    assert ranked[0]["component_sweep_complete_floor_feasible"] == 1
 
 
 def test_pareto_sweep_rerank_updates_subject_rows() -> None:
