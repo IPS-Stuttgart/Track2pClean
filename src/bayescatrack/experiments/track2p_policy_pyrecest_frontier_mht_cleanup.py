@@ -24,29 +24,27 @@ from bayescatrack.experiments import (
     track2p_policy_pyrecest_residual_mht_cleanup as residual_mht,
 )
 
-# The preset is conservative relative to a full sweep, but broader than the
-# strict growth-veto pocket:
-# - lower Mahalanobis/residual thresholds;
-# - allow rank-2 local candidates;
-# - allow a wider moderate-overlap window;
-# - allow two selected edits per subject, but with a larger edit penalty.
+# The preset is broader than the strict one-edge growth-veto pocket, but keeps
+# the local-confidence caps from the TP-safe frontier run. The first relaxed
+# frontier default selected a known true-positive terminal edge; these caps keep
+# the public frontier command on the verified safe operating point.
 _FRONTIER_DEFAULTS: tuple[tuple[str, str], ...] = (
     ("--min-growth-residual-mahalanobis", "12"),
     ("--min-growth-residual", "2.0"),
     ("--min-veto-registered-iou", "0.35"),
-    ("--max-veto-registered-iou", "0.75"),
+    ("--max-veto-registered-iou", "0.60"),
     ("--min-veto-shifted-iou", "0.45"),
-    ("--max-veto-shifted-iou", "0.90"),
+    ("--max-veto-shifted-iou", "0.80"),
     ("--min-veto-cell-probability", "0.50"),
-    ("--max-veto-min-cell-probability", "0.80"),
+    ("--max-veto-min-cell-probability", "0.65"),
     ("--max-veto-local-neighbor-distortion", "none"),
     ("--max-veto-row-rank", "2"),
     ("--max-veto-column-rank", "2"),
     ("--mht-candidate-top-k", "8"),
     ("--mht-max-edits-per-subject", "2"),
     ("--mht-max-hypotheses", "32"),
-    ("--mht-edit-penalty", "0.40"),
-    ("--mht-score-threshold", "1.40"),
+    ("--mht-edit-penalty", "0.55"),
+    ("--mht-score-threshold", "1.60"),
 )
 
 _BOOLEAN_DEFAULTS: tuple[str, ...] = (
@@ -60,25 +58,28 @@ _BOOLEAN_DEFAULTS: tuple[str, ...] = (
 def _option_present(args: list[str], option: str) -> bool:
     """Return whether ``option`` or an explicit ``--no-`` form is present."""
 
-    if option in args:
+    prefix = f"{option}="
+    if any(arg == option or arg.startswith(prefix) for arg in args):
         return True
     if option.startswith("--"):
         negative = "--no-" + option[2:]
-        if negative in args:
+        negative_prefix = f"{negative}="
+        if any(arg == negative or arg.startswith(negative_prefix) for arg in args):
             return True
     return False
 
 
 def _with_frontier_defaults(args: list[str]) -> list[str]:
-    """Append frontier defaults for options absent from ``args``."""
+    """Prepend frontier defaults for options absent from ``args``."""
 
-    output = list(args)
+    output: list[str] = []
     for option, value in _FRONTIER_DEFAULTS:
-        if not _option_present(output, option):
+        if not _option_present(args, option):
             output.extend([option, value])
     for option in _BOOLEAN_DEFAULTS:
-        if not _option_present(output, option):
+        if not _option_present(args, option):
             output.append(option)
+    output.extend(args)
     return output
 
 
