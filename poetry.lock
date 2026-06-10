@@ -1593,8 +1593,8 @@ pytorch-support = ["torch (>=2.4,<3.0)"]
 [package.source]
 type = "git"
 url = "https://github.com/FlorianPfaff/PyRecEst.git"
-reference = "6ad4680a187f13b88e2cd6e4485e16c7f115962a"
-resolved_reference = "6ad4680a187f13b88e2cd6e4485e16c7f115962a"
+reference = "b08e94ad68ab073cf57a3932d56c0698c2de3f77"
+resolved_reference = "b08e94ad68ab073cf57a3932d56c0698c2de3f77"
 
 [[package]]
 name = "pyshtools"
@@ -2264,4 +2264,4 @@ track2p = ["track2p"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.15"
-content-hash = "078b18cc97e3aacc7cb396d4a7f68c6a6944f8ba6c1784b37497d10d0a958722"
+content-hash = "13a94499eade8ee001e6a11656669bd0939639160b0254461214fe1a0a5508d0"
