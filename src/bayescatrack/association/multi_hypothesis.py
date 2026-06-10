@@ -21,12 +21,29 @@ class HypothesisConfig:
     fill_value: int = -1
 
     def __post_init__(self) -> None:
-        if self.edge_top_k <= 0:
-            raise ValueError("edge_top_k must be positive")
-        if self.beam_width <= 0:
-            raise ValueError("beam_width must be positive")
-        if self.min_consensus_votes <= 0:
-            raise ValueError("min_consensus_votes must be positive")
+        object.__setattr__(
+            self, "edge_top_k", _positive_integer(self.edge_top_k, name="edge_top_k")
+        )
+        object.__setattr__(
+            self, "beam_width", _positive_integer(self.beam_width, name="beam_width")
+        )
+        object.__setattr__(
+            self,
+            "min_consensus_votes",
+            _positive_integer(
+                self.min_consensus_votes,
+                name="min_consensus_votes",
+            ),
+        )
+        if self.max_edge_cost is not None:
+            object.__setattr__(
+                self,
+                "max_edge_cost",
+                _finite_nonnegative_float(self.max_edge_cost, name="max_edge_cost"),
+            )
+        object.__setattr__(
+            self, "fill_value", _integer(self.fill_value, name="fill_value")
+        )
 
 
 @dataclass(frozen=True)
@@ -46,8 +63,9 @@ def top_k_edge_candidates(
 ) -> tuple[Edge, ...]:
     """Return top-k target candidates for each source row on one session edge."""
 
-    if row_top_k <= 0:
-        raise ValueError("row_top_k must be positive")
+    row_top_k = _positive_integer(row_top_k, name="row_top_k")
+    if max_cost is not None:
+        max_cost = _finite_nonnegative_float(max_cost, name="max_cost")
     costs = np.asarray(cost_matrix, dtype=float)
     if costs.ndim != 2:
         raise ValueError("cost_matrix must be two-dimensional")
@@ -56,7 +74,7 @@ def top_k_edge_candidates(
     for row_index, row in enumerate(costs):
         finite = np.isfinite(row)
         if max_cost is not None:
-            finite &= row <= float(max_cost)
+            finite &= row <= max_cost
         cols = np.flatnonzero(finite)
         if cols.size == 0:
             continue
@@ -176,11 +194,15 @@ def consensus_edges(
     """Return edges that appear in enough prediction matrices or edge sets."""
 
     inputs = tuple(track_matrices)
-    threshold = (
-        int(np.ceil(float(min_support_fraction) * len(inputs)))
-        if min_support_fraction is not None
-        else int(min_votes or 1)
-    )
+    if min_support_fraction is not None:
+        support_fraction = _probability(
+            min_support_fraction,
+            name="min_support_fraction",
+            allow_zero=False,
+        )
+        threshold = int(np.ceil(support_fraction * len(inputs)))
+    else:
+        threshold = 1 if min_votes is None else _positive_integer(min_votes, name="min_votes")
     counts: dict[Edge, int] = {}
     for matrix_values in inputs:
         matrix = np.asarray(matrix_values, dtype=int)
@@ -235,5 +257,46 @@ def edge_union_costs(edge_sets: Sequence[Mapping[Edge, int]]) -> dict[Edge, floa
     votes: dict[Edge, int] = {}
     for edge_set in edge_sets:
         for edge, vote_count in edge_set.items():
-            votes[edge] = votes.get(edge, 0) + int(vote_count)
+            votes[edge] = votes.get(edge, 0) + _positive_integer(
+                vote_count, name="vote_count"
+            )
     return {edge: 1.0 / max(vote_count, 1) for edge, vote_count in votes.items()}
+
+
+def _validated_numeric_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _probability(value: Any, *, name: str, allow_zero: bool = True) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    lower_ok = numeric >= 0.0 if allow_zero else numeric > 0.0
+    if not lower_ok or numeric > 1.0:
+        interval = "[0, 1]" if allow_zero else "(0, 1]"
+        raise ValueError(f"{name} must be a finite value in {interval}")
+    return numeric
+
+
+def _integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer():
+        raise ValueError(f"{name} must be an integer")
+    return int(numeric)
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)

@@ -19,16 +19,32 @@ class SegmentationEventConfig:
     max_children: int = 4
 
     def __post_init__(self) -> None:
-        if not 0.0 <= self.min_overlap_fraction <= 1.0:
-            raise ValueError("min_overlap_fraction must lie in [0, 1]")
-        if not 0.0 <= self.min_weighted_dice <= 1.0:
-            raise ValueError("min_weighted_dice must lie in [0, 1]")
-        if self.max_area_ratio_cost < 0.0:
-            raise ValueError("max_area_ratio_cost must be non-negative")
-        if self.min_children < 2:
+        object.__setattr__(
+            self,
+            "min_overlap_fraction",
+            _probability(self.min_overlap_fraction, name="min_overlap_fraction"),
+        )
+        object.__setattr__(
+            self,
+            "min_weighted_dice",
+            _probability(self.min_weighted_dice, name="min_weighted_dice"),
+        )
+        object.__setattr__(
+            self,
+            "max_area_ratio_cost",
+            _finite_nonnegative_float(
+                self.max_area_ratio_cost,
+                name="max_area_ratio_cost",
+            ),
+        )
+        min_children = _positive_integer(self.min_children, name="min_children")
+        max_children = _positive_integer(self.max_children, name="max_children")
+        if min_children < 2:
             raise ValueError("min_children must be at least two")
-        if self.max_children < self.min_children:
+        if max_children < min_children:
             raise ValueError("max_children must be >= min_children")
+        object.__setattr__(self, "min_children", min_children)
+        object.__setattr__(self, "max_children", max_children)
 
 
 @dataclass(frozen=True)
@@ -68,9 +84,19 @@ def detect_segmentation_events(
         max_children = config.max_children
     else:
         options = {} if config is None else dict(config)
-        min_similarity = float(options.get("min_similarity", 0.20))
-        min_children = int(options.get("min_children", 2))
-        max_children = int(options.get("max_children", 4))
+        min_similarity = _probability(
+            options.get("min_similarity", 0.20), name="min_similarity"
+        )
+        min_children = _positive_integer(
+            options.get("min_children", 2), name="min_children"
+        )
+        max_children = _positive_integer(
+            options.get("max_children", 4), name="max_children"
+        )
+        if min_children < 2:
+            raise ValueError("min_children must be at least two")
+        if max_children < min_children:
+            raise ValueError("max_children must be >= min_children")
     events: list[SegmentationEvent] = []
     for row_index, row in enumerate(similarity):
         positions = np.flatnonzero(row >= min_similarity)
@@ -281,3 +307,33 @@ def _plausible_child_mask(
     return (
         (overlap >= config.min_overlap_fraction) | (dice >= config.min_weighted_dice)
     ) & (area <= config.max_area_ratio_cost)
+
+
+def _validated_numeric_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _probability(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must be a finite value in [0, 1]")
+    return numeric
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)

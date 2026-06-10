@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import json
 
+import numpy as np
+import pytest
 from bayescatrack.experiments.advanced_improvement_workbench import (
+    ActiveLabelConfig,
+    precision_recall_threshold_table,
+    select_active_label_candidates,
     track2p_result_improvement_manifest,
 )
 
@@ -156,3 +161,38 @@ def test_track2p_result_improvement_manifest_adds_experimental_policy_dp_once():
     )
     assert experimental["row_top_k"] == 3
     assert experimental["path_selection_beam_width"] == 512
+
+
+def test_active_label_config_rejects_invalid_selection_knobs() -> None:
+    with pytest.raises(ValueError, match="max_rows must be a positive integer"):
+        ActiveLabelConfig(max_rows=0)
+    with pytest.raises(ValueError, match="margin_weight must be finite"):
+        ActiveLabelConfig(margin_weight=np.nan)
+    with pytest.raises(ValueError, match="uncertainty_weight must be finite"):
+        ActiveLabelConfig(uncertainty_weight=True)
+
+
+def test_active_label_selection_uses_validated_row_cap() -> None:
+    rows = (
+        {"row_margin": "0.1", "true_score": "0.2"},
+        {"row_margin": "0.2", "true_score": "0.2"},
+    )
+
+    selected = select_active_label_candidates(rows, config=ActiveLabelConfig(max_rows=1))
+
+    assert len(selected) == 1
+
+
+@pytest.mark.parametrize(
+    ("thresholds", "message"),
+    [
+        ((0.0, np.nan), "thresholds must be finite"),
+        ((), "thresholds must not be empty"),
+        ((0.0, 1.5), "thresholds values must be finite values in \\[0, 1\\]"),
+    ],
+)
+def test_precision_recall_threshold_table_rejects_invalid_thresholds(
+    thresholds, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        precision_recall_threshold_table([0.5], [1], thresholds=thresholds)
