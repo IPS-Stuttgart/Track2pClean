@@ -32,3 +32,9 @@ def test_pyrecest_pin_is_documented_for_benchmarks() -> None:
     assert "PYRECEST_COMMIT" in benchmark
     assert "pyrecest_commit" in benchmark
     assert PYRECEST_COMMIT in PYRECEST_DIRECT_URL
+
+
+def test_pyrecest_pin_includes_residual_mht_primitives() -> None:
+    # 6ad4680 predates pyrecest.tracking.ResidualEditCandidate and made the
+    # BayesCaTrack residual/frontier MHT benchmark commands fail at import time.
+    assert PYRECEST_COMMIT != "6ad4680a187f13b88e2cd6e4485e16c7f115962a"

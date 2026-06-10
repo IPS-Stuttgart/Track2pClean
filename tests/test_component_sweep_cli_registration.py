@@ -163,23 +163,26 @@ def test_pyrecest_frontier_mht_user_equals_option_overrides_default(
 
 @pytest.fixture()
 def frontier_mht_module(monkeypatch):
-    tracking = types.ModuleType("pyrecest.tracking")
-    tracking.ResidualEditCandidate = object
-    tracking.ResidualMHTConfig = object
-    tracking.enumerate_residual_hypotheses = lambda *args, **kwargs: ()
-    tracking.select_residual_hypothesis = lambda *args, **kwargs: None
+    from bayescatrack import experiments
 
-    pyrecest = types.ModuleType("pyrecest")
-    pyrecest.tracking = tracking
+    residual_mht = types.ModuleType(
+        "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup"
+    )
+    residual_mht.main = lambda args: args
 
-    monkeypatch.setitem(sys.modules, "pyrecest", pyrecest)
-    monkeypatch.setitem(sys.modules, "pyrecest.tracking", tracking)
     module_names = (
         "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup",
         "bayescatrack.experiments.track2p_policy_pyrecest_frontier_mht_cleanup",
     )
     for module_name in module_names:
         sys.modules.pop(module_name, None)
+    monkeypatch.setitem(sys.modules, module_names[0], residual_mht)
+    monkeypatch.setattr(
+        experiments,
+        "track2p_policy_pyrecest_residual_mht_cleanup",
+        residual_mht,
+        raising=False,
+    )
 
     module = importlib.import_module(
         "bayescatrack.experiments.track2p_policy_pyrecest_frontier_mht_cleanup"
