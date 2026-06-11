@@ -139,11 +139,12 @@ def split_event_candidates(
 ) -> list[SegmentationEventCandidate]:
     """Return candidate one-reference-to-many-measurement split events."""
 
-    cfg = config or SegmentationEventConfig()
-    matrices = _event_matrices(pairwise_components)
-    ref_indices = np.asarray(reference_roi_indices, dtype=int).reshape(-1)
-    meas_indices = np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
-    _validate_shape(matrices["score"], ref_indices, meas_indices)
+    cfg, matrices, ref_indices, meas_indices = _candidate_inputs(
+        pairwise_components,
+        reference_roi_indices=reference_roi_indices,
+        measurement_roi_indices=measurement_roi_indices,
+        config=config,
+    )
 
     candidates: list[SegmentationEventCandidate] = []
     for row_index, source_roi in enumerate(ref_indices):
@@ -178,11 +179,12 @@ def merge_event_candidates(
 ) -> list[SegmentationEventCandidate]:
     """Return candidate many-reference-to-one-measurement merge events."""
 
-    cfg = config or SegmentationEventConfig()
-    matrices = _event_matrices(pairwise_components)
-    ref_indices = np.asarray(reference_roi_indices, dtype=int).reshape(-1)
-    meas_indices = np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
-    _validate_shape(matrices["score"], ref_indices, meas_indices)
+    cfg, matrices, ref_indices, meas_indices = _candidate_inputs(
+        pairwise_components,
+        reference_roi_indices=reference_roi_indices,
+        measurement_roi_indices=measurement_roi_indices,
+        config=config,
+    )
 
     candidates: list[SegmentationEventCandidate] = []
     for col_index, target_roi in enumerate(meas_indices):
@@ -271,6 +273,21 @@ def _event_matrices(pairwise_components: Mapping[str, Any]) -> dict[str, np.ndar
         raise ValueError("segmentation event components must have matching shapes")
     score = 0.5 * np.clip(overlap, 0.0, 1.0) + 0.5 * np.clip(dice, 0.0, 1.0)
     return {"overlap": overlap, "dice": dice, "area": area, "score": score}
+
+
+def _candidate_inputs(
+    pairwise_components: Mapping[str, Any],
+    *,
+    reference_roi_indices: Sequence[int],
+    measurement_roi_indices: Sequence[int],
+    config: SegmentationEventConfig | None,
+) -> tuple[SegmentationEventConfig, dict[str, np.ndarray], np.ndarray, np.ndarray]:
+    cfg = config or SegmentationEventConfig()
+    matrices = _event_matrices(pairwise_components)
+    ref_indices = np.asarray(reference_roi_indices, dtype=int).reshape(-1)
+    meas_indices = np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
+    _validate_shape(matrices["score"], ref_indices, meas_indices)
+    return cfg, matrices, ref_indices, meas_indices
 
 
 def _first_available(
