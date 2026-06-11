@@ -14,6 +14,12 @@ from typing import Any
 
 import numpy as np
 
+from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
+from ._numeric_validation import finite_positive_float as _finite_positive_float
+from ._numeric_validation import integer as _integer
+from ._numeric_validation import nonnegative_integer as _nonnegative_integer
+from ._numeric_validation import positive_integer as _positive_integer
+
 SessionEdge = tuple[int, int]
 
 
@@ -303,45 +309,3 @@ def _coerce_config(
     return HigherOrderConsistencyConfig(**dict(config))
 
 
-def _validated_numeric_float(value: Any, *, name: str) -> float:
-    if isinstance(value, bool):
-        raise ValueError(f"{name} must be finite")
-    numeric = float(value)
-    if not np.isfinite(numeric):
-        raise ValueError(f"{name} must be finite")
-    return numeric
-
-
-def _finite_positive_float(value: Any, *, name: str) -> float:
-    numeric = _validated_numeric_float(value, name=name)
-    if numeric <= 0.0:
-        raise ValueError(f"{name} must be finite and positive")
-    return numeric
-
-
-def _finite_nonnegative_float(value: Any, *, name: str) -> float:
-    numeric = _validated_numeric_float(value, name=name)
-    if numeric < 0.0:
-        raise ValueError(f"{name} must be finite and non-negative")
-    return numeric
-
-
-def _integer(value: Any, *, name: str) -> int:
-    numeric = _validated_numeric_float(value, name=name)
-    if not numeric.is_integer():
-        raise ValueError(f"{name} must be an integer")
-    return int(numeric)
-
-
-def _positive_integer(value: Any, *, name: str) -> int:
-    numeric = _validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 1.0:
-        raise ValueError(f"{name} must be a positive integer")
-    return int(numeric)
-
-
-def _nonnegative_integer(value: Any, *, name: str) -> int:
-    numeric = _validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 0.0:
-        raise ValueError(f"{name} must be a non-negative integer")
-    return int(numeric)

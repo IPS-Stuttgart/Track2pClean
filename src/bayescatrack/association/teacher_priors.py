@@ -17,6 +17,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+
+from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
+from ._numeric_validation import finite_positive_float as _finite_positive_float
+from ._numeric_validation import positive_integer as _positive_integer
+from ._numeric_validation import validated_numeric_float as _validated_numeric_float
 from bayescatrack.core.bridge import Track2pSession
 
 SessionEdge = tuple[int, int]
@@ -85,36 +90,6 @@ class TeacherEdgePriorConfig:
             "large_cost",
             _finite_positive_float(self.large_cost, name="large_cost"),
         )
-
-
-def _validated_numeric_float(value: Any, *, name: str) -> float:
-    if isinstance(value, bool):
-        raise ValueError(f"{name} must be finite")
-    numeric = float(value)
-    if not np.isfinite(numeric):
-        raise ValueError(f"{name} must be finite")
-    return numeric
-
-
-def _finite_positive_float(value: Any, *, name: str) -> float:
-    numeric = _validated_numeric_float(value, name=name)
-    if numeric <= 0.0:
-        raise ValueError(f"{name} must be finite and positive")
-    return numeric
-
-
-def _finite_nonnegative_float(value: Any, *, name: str) -> float:
-    numeric = _validated_numeric_float(value, name=name)
-    if numeric < 0.0:
-        raise ValueError(f"{name} must be finite and non-negative")
-    return numeric
-
-
-def _positive_integer(value: Any, *, name: str) -> int:
-    numeric = _validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 1.0:
-        raise ValueError(f"{name} must be a positive integer")
-    return int(numeric)
 
 
 def teacher_edge_prior_config_from_mapping(
