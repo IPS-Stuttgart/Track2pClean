@@ -58,9 +58,7 @@ class EdgeUncertaintyConfig:
             object.__setattr__(
                 self, name, _validate_nonnegative(getattr(self, name), name=name)
             )
-        min_reliability = _validated_float(
-            self.min_reliability, name="min_reliability"
-        )
+        min_reliability = _validated_float(self.min_reliability, name="min_reliability")
         if min_reliability <= 0.0 or min_reliability > 1.0:
             raise ValueError("min_reliability must be a finite value in (0, 1]")
         object.__setattr__(self, "min_reliability", min_reliability)
