@@ -2,6 +2,7 @@
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack.association.higher_order_consistency import (
     HigherOrderConsistencyConfig,
     apply_higher_order_consistency,
@@ -71,3 +72,36 @@ def test_zero_weight_returns_numeric_copies_without_changes():
     for edge, matrix in costs.items():
         npt.assert_allclose(adjusted[edge], matrix)
         assert adjusted[edge] is not matrix
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"triplet_weight": True}, "triplet_weight must be finite"),
+        ({"support_top_k": 1.5}, "support_top_k must be a positive integer"),
+        ({"support_cost_cap": np.nan}, "support_cost_cap must be finite"),
+        ({"max_penalty": -0.1}, "max_penalty must be finite and non-negative"),
+        ({"large_cost": 0.0}, "large_cost must be finite and positive"),
+    ],
+)
+def test_higher_order_config_rejects_silent_candidate_knob_coercions(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        HigherOrderConsistencyConfig(**kwargs)
+
+
+def test_higher_order_rejects_fractional_session_sizes_and_edges() -> None:
+    with pytest.raises(ValueError, match="session_sizes must be a non-negative integer"):
+        apply_higher_order_consistency(
+            {(0, 1): np.zeros((2, 2), dtype=float)},
+            session_sizes=(2.5, 2),
+            config=HigherOrderConsistencyConfig(triplet_weight=1.0),
+        )
+
+    with pytest.raises(ValueError, match="source_session must be an integer"):
+        apply_higher_order_consistency(
+            {(0.5, 1): np.zeros((2, 2), dtype=float)},
+            session_sizes=(2, 2),
+            config=HigherOrderConsistencyConfig(triplet_weight=1.0),
+        )

@@ -16,10 +16,24 @@ def validated_numeric_float(value: Any, *, name: str) -> float:
     return numeric
 
 
+def finite_positive_float(value: Any, *, name: str) -> float:
+    numeric = validated_numeric_float(value, name=name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be finite and positive")
+    return numeric
+
+
 def finite_nonnegative_float(value: Any, *, name: str) -> float:
     numeric = validated_numeric_float(value, name=name)
     if numeric < 0.0:
         raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def finite_nonzero_float(value: Any, *, name: str) -> float:
+    numeric = validated_numeric_float(value, name=name)
+    if numeric == 0.0:
+        raise ValueError(f"{name} values must be finite and non-zero")
     return numeric
 
 
@@ -43,4 +57,11 @@ def positive_integer(value: Any, *, name: str) -> int:
     numeric = validated_numeric_float(value, name=name)
     if not numeric.is_integer() or numeric < 1.0:
         raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)
+
+
+def nonnegative_integer(value: Any, *, name: str) -> int:
+    numeric = validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 0.0:
+        raise ValueError(f"{name} must be a non-negative integer")
     return int(numeric)
