@@ -93,7 +93,10 @@ def test_monotone_ranker_cost_is_monotone_in_badness_features():
         ({"max_iter": True}, "max_iter must be finite"),
         ({"learning_rate": 0.0}, "learning_rate must be finite and positive"),
         ({"l2_regularization": np.nan}, "l2_regularization must be finite"),
-        ({"binary_loss_weight": -0.1}, "binary_loss_weight must be finite and non-negative"),
+        (
+            {"binary_loss_weight": -0.1},
+            "binary_loss_weight must be finite and non-negative",
+        ),
         ({"tolerance": True}, "tolerance must be finite"),
     ],
 )

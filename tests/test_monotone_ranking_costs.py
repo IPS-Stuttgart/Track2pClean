@@ -91,7 +91,10 @@ def test_monotone_ranker_treats_raw_similarity_features_as_benefits():
             "max_preference_pairs must be a positive integer",
         ),
         ({"learning_rate": np.nan}, "learning_rate must be finite"),
-        ({"l2_regularization": -0.1}, "l2_regularization must be finite and non-negative"),
+        (
+            {"l2_regularization": -0.1},
+            "l2_regularization must be finite and non-negative",
+        ),
         ({"max_iter": 1.5}, "max_iter must be a positive integer"),
         ({"random_seed": 1.5}, "random_seed must be an integer"),
         (
