@@ -28,6 +28,20 @@ class ActiveLabelConfig:
     missing_edge_weight: float = 1.0
     max_rows: int = 500
 
+    def __post_init__(self) -> None:
+        for name in (
+            "uncertainty_weight",
+            "disagreement_weight",
+            "margin_weight",
+            "missing_edge_weight",
+        ):
+            object.__setattr__(
+                self, name, _finite_nonnegative_float(getattr(self, name), name=name)
+            )
+        object.__setattr__(
+            self, "max_rows", _positive_integer(self.max_rows, name="max_rows")
+        )
+
 
 @dataclass(frozen=True)
 class StratifiedMetricConfig:
@@ -52,7 +66,7 @@ def select_active_label_candidates(
         out["active_label_score"] = score
         scored.append(out)
     scored.sort(key=lambda item: (-float(item["active_label_score"]), str(item)))
-    return scored[: int(cfg.max_rows)]
+    return scored[: cfg.max_rows]
 
 
 def active_label_score(
@@ -779,6 +793,7 @@ def precision_recall_threshold_table(
         raise ValueError("probabilities and labels must have the same length")
     if thresholds is None:
         thresholds = np.linspace(0.0, 1.0, 101)
+    thresholds = _probability_sequence(thresholds, name="thresholds")
     rows: list[dict[str, float | int]] = []
     for threshold in thresholds:
         pred = probs >= float(threshold)
@@ -933,6 +948,38 @@ def _safe_float(value: Any, default: float) -> float:
     except (TypeError, ValueError):
         return float(default)
     return numeric if np.isfinite(numeric) else float(default)
+
+
+def _validated_numeric_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    numeric = _validated_numeric_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)
+
+
+def _probability_sequence(values: Sequence[float], *, name: str) -> tuple[float, ...]:
+    parsed = tuple(_validated_numeric_float(value, name=name) for value in values)
+    if not parsed:
+        raise ValueError(f"{name} must not be empty")
+    if any(value < 0.0 or value > 1.0 for value in parsed):
+        raise ValueError(f"{name} values must be finite values in [0, 1]")
+    return parsed
 
 
 def _ratio(numerator: float, denominator: float) -> float:

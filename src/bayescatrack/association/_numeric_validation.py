@@ -37,6 +37,15 @@ def finite_nonzero_float(value: Any, *, name: str) -> float:
     return numeric
 
 
+def probability(value: Any, *, name: str, allow_zero: bool = True) -> float:
+    numeric = validated_numeric_float(value, name=name)
+    lower_ok = numeric >= 0.0 if allow_zero else numeric > 0.0
+    if not lower_ok or numeric > 1.0:
+        interval = "[0, 1]" if allow_zero else "(0, 1]"
+        raise ValueError(f"{name} must be a finite value in {interval}")
+    return numeric
+
+
 def integer(value: Any, *, name: str) -> int:
     numeric = validated_numeric_float(value, name=name)
     if not numeric.is_integer():
