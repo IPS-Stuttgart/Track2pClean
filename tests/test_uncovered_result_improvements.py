@@ -156,8 +156,14 @@ def test_multi_hypothesis_edge_set_consensus_respects_min_votes() -> None:
 @pytest.mark.parametrize(
     ("factory", "message"),
     [
-        (lambda: HypothesisConfig(edge_top_k=1.5), "edge_top_k must be a positive integer"),
-        (lambda: HypothesisConfig(max_edge_cost=np.nan), "max_edge_cost must be finite"),
+        (
+            lambda: HypothesisConfig(edge_top_k=1.5),
+            "edge_top_k must be a positive integer",
+        ),
+        (
+            lambda: HypothesisConfig(max_edge_cost=np.nan),
+            "max_edge_cost must be finite",
+        ),
         (
             lambda: top_k_edge_candidates([[1.0]], edge=(0, 1), row_top_k=True),
             "row_top_k must be finite",
@@ -171,9 +177,7 @@ def test_multi_hypothesis_edge_set_consensus_respects_min_votes() -> None:
             "min_votes must be a positive integer",
         ),
         (
-            lambda: consensus_edges(
-                (((0, 1, 0, 1),),), min_support_fraction=0.0
-            ),
+            lambda: consensus_edges((((0, 1, 0, 1),),), min_support_fraction=0.0),
             "min_support_fraction must be a finite value in \\(0, 1\\]",
         ),
         (

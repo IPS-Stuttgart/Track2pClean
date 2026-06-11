@@ -207,7 +207,9 @@ def consensus_edges(
         )
         threshold = int(np.ceil(support_fraction * len(inputs)))
     else:
-        threshold = 1 if min_votes is None else _positive_integer(min_votes, name="min_votes")
+        threshold = (
+            1 if min_votes is None else _positive_integer(min_votes, name="min_votes")
+        )
     counts: dict[Edge, int] = {}
     for matrix_values in inputs:
         matrix = np.asarray(matrix_values, dtype=int)
@@ -266,5 +268,3 @@ def edge_union_costs(edge_sets: Sequence[Mapping[Edge, int]]) -> dict[Edge, floa
                 vote_count, name="vote_count"
             )
     return {edge: 1.0 / max(vote_count, 1) for edge, vote_count in votes.items()}
-
-
