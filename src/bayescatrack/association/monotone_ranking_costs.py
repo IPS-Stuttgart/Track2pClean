@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+from bayescatrack.association.calibrated_costs import (
+    CalibratedAssociationModel,
+    ReferencePairwiseExamples,
+)
 
 from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
 from ._numeric_validation import finite_nonzero_float as _finite_nonzero_float
@@ -21,10 +25,6 @@ from ._numeric_validation import finite_positive_float as _finite_positive_float
 from ._numeric_validation import integer as _integer
 from ._numeric_validation import nonnegative_integer as _nonnegative_integer
 from ._numeric_validation import positive_integer as _positive_integer
-from bayescatrack.association.calibrated_costs import (
-    CalibratedAssociationModel,
-    ReferencePairwiseExamples,
-)
 
 _EPSILON = 1.0e-12
 _DEFAULT_HARDNESS_FEATURES = (
@@ -76,9 +76,7 @@ class MonotoneRankerOptions:
         object.__setattr__(
             self,
             "l2_regularization",
-            _finite_nonnegative_float(
-                self.l2_regularization, name="l2_regularization"
-            ),
+            _finite_nonnegative_float(self.l2_regularization, name="l2_regularization"),
         )
         object.__setattr__(
             self, "max_iter", _positive_integer(self.max_iter, name="max_iter")

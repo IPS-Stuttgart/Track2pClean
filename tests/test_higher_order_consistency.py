@@ -92,7 +92,9 @@ def test_higher_order_config_rejects_silent_candidate_knob_coercions(
 
 
 def test_higher_order_rejects_fractional_session_sizes_and_edges() -> None:
-    with pytest.raises(ValueError, match="session_sizes must be a non-negative integer"):
+    with pytest.raises(
+        ValueError, match="session_sizes must be a non-negative integer"
+    ):
         apply_higher_order_consistency(
             {(0, 1): np.zeros((2, 2), dtype=float)},
             session_sizes=(2.5, 2),

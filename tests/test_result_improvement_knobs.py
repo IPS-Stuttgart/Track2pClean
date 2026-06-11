@@ -174,7 +174,10 @@ def test_track2p_teacher_prior_reliefs_suite2p_edges() -> None:
     ("kwargs", "message"),
     [
         ({"relief": True}, "relief must be finite"),
-        ({"teacher_cost_cap": -0.1}, "teacher_cost_cap must be finite and non-negative"),
+        (
+            {"teacher_cost_cap": -0.1},
+            "teacher_cost_cap must be finite and non-negative",
+        ),
         ({"non_teacher_penalty": np.nan}, "non_teacher_penalty must be finite"),
         ({"min_cost": np.inf}, "min_cost must be finite"),
         ({"max_gap": 1.5}, "max_gap must be a positive integer"),

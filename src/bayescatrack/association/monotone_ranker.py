@@ -7,16 +7,16 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
-from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
-from ._numeric_validation import finite_positive_float as _finite_positive_float
-from ._numeric_validation import positive_integer as _positive_integer
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     ReferencePairwiseExamples,
     pairwise_components_from_bundle,
     pairwise_feature_tensor,
 )
+
+from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
+from ._numeric_validation import finite_positive_float as _finite_positive_float
+from ._numeric_validation import positive_integer as _positive_integer
 
 DEFAULT_MONOTONE_BADNESS_FEATURES = tuple(
     name
@@ -72,9 +72,7 @@ class MonotoneRankerOptions:
         object.__setattr__(
             self,
             "l2_regularization",
-            _finite_nonnegative_float(
-                self.l2_regularization, name="l2_regularization"
-            ),
+            _finite_nonnegative_float(self.l2_regularization, name="l2_regularization"),
         )
         object.__setattr__(
             self,

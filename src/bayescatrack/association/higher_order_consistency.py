@@ -307,5 +307,3 @@ def _coerce_config(
     if isinstance(config, HigherOrderConsistencyConfig):
         return config
     return HigherOrderConsistencyConfig(**dict(config))
-
-

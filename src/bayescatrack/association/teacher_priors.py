@@ -17,12 +17,12 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+from bayescatrack.core.bridge import Track2pSession
 
 from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
 from ._numeric_validation import finite_positive_float as _finite_positive_float
 from ._numeric_validation import positive_integer as _positive_integer
 from ._numeric_validation import validated_numeric_float as _validated_numeric_float
-from bayescatrack.core.bridge import Track2pSession
 
 SessionEdge = tuple[int, int]
 
