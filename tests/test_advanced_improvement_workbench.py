@@ -178,7 +178,9 @@ def test_active_label_selection_uses_validated_row_cap() -> None:
         {"row_margin": "0.2", "true_score": "0.2"},
     )
 
-    selected = select_active_label_candidates(rows, config=ActiveLabelConfig(max_rows=1))
+    selected = select_active_label_candidates(
+        rows, config=ActiveLabelConfig(max_rows=1)
+    )
 
     assert len(selected) == 1
 

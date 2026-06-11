@@ -328,5 +328,3 @@ def _plausible_child_mask(
     return (
         (overlap >= config.min_overlap_fraction) | (dice >= config.min_weighted_dice)
     ) & (area <= config.max_area_ratio_cost)
-
-
