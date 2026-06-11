@@ -14,6 +14,12 @@ from typing import Any
 
 import numpy as np
 
+from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
+from ._numeric_validation import finite_positive_float as _finite_positive_float
+from ._numeric_validation import integer as _integer
+from ._numeric_validation import nonnegative_integer as _nonnegative_integer
+from ._numeric_validation import positive_integer as _positive_integer
+
 SessionEdge = tuple[int, int]
 
 
@@ -28,16 +34,34 @@ class HigherOrderConsistencyConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if not np.isfinite(self.triplet_weight) or self.triplet_weight < 0.0:
-            raise ValueError("triplet_weight must be a non-negative finite number")
-        if int(self.support_top_k) < 1:
-            raise ValueError("support_top_k must be at least 1")
-        if not np.isfinite(self.support_cost_cap) or self.support_cost_cap < 0.0:
-            raise ValueError("support_cost_cap must be a non-negative finite number")
-        if not np.isfinite(self.max_penalty) or self.max_penalty < 0.0:
-            raise ValueError("max_penalty must be a non-negative finite number")
-        if not np.isfinite(self.large_cost) or self.large_cost <= 0.0:
-            raise ValueError("large_cost must be a positive finite number")
+        object.__setattr__(
+            self,
+            "triplet_weight",
+            _finite_nonnegative_float(self.triplet_weight, name="triplet_weight"),
+        )
+        object.__setattr__(
+            self,
+            "support_top_k",
+            _positive_integer(self.support_top_k, name="support_top_k"),
+        )
+        object.__setattr__(
+            self,
+            "support_cost_cap",
+            _finite_nonnegative_float(
+                self.support_cost_cap,
+                name="support_cost_cap",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "max_penalty",
+            _finite_nonnegative_float(self.max_penalty, name="max_penalty"),
+        )
+        object.__setattr__(
+            self,
+            "large_cost",
+            _finite_positive_float(self.large_cost, name="large_cost"),
+        )
 
     @property
     def enabled(self) -> bool:
@@ -246,7 +270,9 @@ def _validate_pairwise_shapes(
     *,
     session_sizes: Sequence[int],
 ) -> None:
-    sizes = tuple(int(size) for size in session_sizes)
+    sizes = tuple(
+        _nonnegative_integer(size, name="session_sizes") for size in session_sizes
+    )
     if any(size < 0 for size in sizes):
         raise ValueError("session_sizes must be non-negative")
     for edge, matrix in pairwise_costs.items():
@@ -266,7 +292,8 @@ def _validate_pairwise_shapes(
 def _normalise_edge(edge: SessionEdge) -> SessionEdge:
     if len(edge) != 2:
         raise ValueError("Session edges must contain exactly two indices")
-    source, target = int(edge[0]), int(edge[1])
+    source = _integer(edge[0], name="source_session")
+    target = _integer(edge[1], name="target_session")
     if source < 0 or target <= source:
         raise ValueError("Session edges must be forward edges with source < target")
     return source, target
@@ -280,3 +307,5 @@ def _coerce_config(
     if isinstance(config, HigherOrderConsistencyConfig):
         return config
     return HigherOrderConsistencyConfig(**dict(config))
+
+

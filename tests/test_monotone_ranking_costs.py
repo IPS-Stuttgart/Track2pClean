@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
 from bayescatrack.association.monotone_ranking_costs import (
     MonotoneRankerOptions,
@@ -72,3 +73,35 @@ def test_monotone_ranker_treats_raw_similarity_features_as_benefits():
     assert ranker.feature_directions == (-1.0,)
     assert ranker.predict_score(features)[0, 0] < ranker.predict_score(features)[0, 1]
     assert ranker.predict_score(features)[1, 1] < ranker.predict_score(features)[1, 0]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {"row_negatives_per_positive": 1.5},
+            "row_negatives_per_positive must be a non-negative integer",
+        ),
+        (
+            {"column_negatives_per_positive": True},
+            "column_negatives_per_positive must be finite",
+        ),
+        (
+            {"max_preference_pairs": 0},
+            "max_preference_pairs must be a positive integer",
+        ),
+        ({"learning_rate": np.nan}, "learning_rate must be finite"),
+        ({"l2_regularization": -0.1}, "l2_regularization must be finite and non-negative"),
+        ({"max_iter": 1.5}, "max_iter must be a positive integer"),
+        ({"random_seed": 1.5}, "random_seed must be an integer"),
+        (
+            {"feature_directions": {"centroid_distance": 0.0}},
+            "feature_directions values must be finite and non-zero",
+        ),
+    ],
+)
+def test_monotone_ranking_cost_options_reject_silent_training_knob_coercions(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        MonotoneRankerOptions(**kwargs)
