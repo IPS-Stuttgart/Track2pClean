@@ -7,6 +7,10 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
+from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
+from ._numeric_validation import positive_integer as _positive_integer
+from ._numeric_validation import probability as _probability
+
 
 @dataclass(frozen=True)
 class SegmentationEventConfig:
@@ -309,31 +313,3 @@ def _plausible_child_mask(
     ) & (area <= config.max_area_ratio_cost)
 
 
-def _validated_numeric_float(value: Any, *, name: str) -> float:
-    if isinstance(value, bool):
-        raise ValueError(f"{name} must be finite")
-    numeric = float(value)
-    if not np.isfinite(numeric):
-        raise ValueError(f"{name} must be finite")
-    return numeric
-
-
-def _finite_nonnegative_float(value: Any, *, name: str) -> float:
-    numeric = _validated_numeric_float(value, name=name)
-    if numeric < 0.0:
-        raise ValueError(f"{name} must be finite and non-negative")
-    return numeric
-
-
-def _probability(value: Any, *, name: str) -> float:
-    numeric = _validated_numeric_float(value, name=name)
-    if numeric < 0.0 or numeric > 1.0:
-        raise ValueError(f"{name} must be a finite value in [0, 1]")
-    return numeric
-
-
-def _positive_integer(value: Any, *, name: str) -> int:
-    numeric = _validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 1.0:
-        raise ValueError(f"{name} must be a positive integer")
-    return int(numeric)
