@@ -75,6 +75,7 @@ class PyRecEstResidualMHTOptions:
     high_overlap_min_registered_iou: float = 0.85
     high_overlap_max_growth_residual: float = 0.50
     high_overlap_min_growth_residual_mahalanobis: float = 1.0
+    high_overlap_min_cell_probability: float | None = None
     high_overlap_score_bonus: float = 2.0
 
 
@@ -416,8 +417,13 @@ def _high_overlap_low_motion_reason(
     cell_b = _finite_float(row.get("cell_probability_b"), float("nan"))
     if not np.isfinite(cell_a) or not np.isfinite(cell_b):
         return "cell_probability_missing"
-    if min(cell_a, cell_b) < float(gate.min_cell_probability):
-        return "cell_probability_below_gate"
+    min_cell_probability = (
+        float(gate.min_cell_probability)
+        if options.high_overlap_min_cell_probability is None
+        else float(options.high_overlap_min_cell_probability)
+    )
+    if min(cell_a, cell_b) < min_cell_probability:
+        return "high_overlap_cell_probability_below_gate"
     if gate.max_local_neighbor_distortion is not None:
         distortion = _finite_float(row.get("local_neighbor_distortion"), float("nan"))
         if not np.isfinite(distortion) or distortion > float(
@@ -576,6 +582,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=1.0,
     )
+    parser.add_argument(
+        "--mht-high-overlap-min-cell-probability",
+        type=float,
+        default=None,
+        help=(
+            "Optional high-overlap-pocket endpoint cell-probability floor. "
+            "When omitted, the pocket uses --min-veto-cell-probability."
+        ),
+    )
     parser.add_argument("--mht-high-overlap-score-bonus", type=float, default=2.0)
     return parser
 
@@ -680,6 +695,11 @@ def main(argv: list[str] | None = None) -> int:
             ),
             high_overlap_min_growth_residual_mahalanobis=float(
                 args.mht_high_overlap_min_growth_residual_mahalanobis
+            ),
+            high_overlap_min_cell_probability=(
+                None
+                if args.mht_high_overlap_min_cell_probability is None
+                else float(args.mht_high_overlap_min_cell_probability)
             ),
             high_overlap_score_bonus=float(args.mht_high_overlap_score_bonus),
         ),

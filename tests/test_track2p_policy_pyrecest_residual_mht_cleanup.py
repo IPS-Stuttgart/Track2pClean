@@ -142,6 +142,45 @@ def test_high_overlap_pocket_is_opt_in(residual_mht_module) -> None:
     assert reason == "high_overlap_low_motion_disabled"
 
 
+def test_high_overlap_pocket_exposes_cell_probability_gate(
+    residual_mht_module,
+) -> None:
+    args = residual_mht_module.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "mht.csv",
+            "--mht-high-overlap-min-cell-probability",
+            "0.75",
+        ]
+    )
+
+    assert args.mht_high_overlap_min_cell_probability == 0.75
+
+
+def test_high_overlap_pocket_can_require_stronger_endpoint_cell_probability(
+    residual_mht_module,
+) -> None:
+    options = residual_mht_module.PyRecEstResidualMHTOptions(
+        include_high_overlap_low_motion=True,
+        high_overlap_min_cell_probability=0.75,
+    )
+    gate = cleanup.GrowthVetoGate(
+        min_cell_probability=0.50,
+        max_local_neighbor_distortion=None,
+    )
+
+    reason = residual_mht_module._high_overlap_low_motion_reason(  # pylint: disable=protected-access
+        _candidate_row(cell_probability_a=0.74, cell_probability_b=0.91),
+        gate=gate,
+        options=options,
+        n_sessions=7,
+    )
+
+    assert reason == "high_overlap_cell_probability_below_gate"
+
+
 def test_high_overlap_pocket_does_not_read_audit_only_columns(
     residual_mht_module,
 ) -> None:
@@ -164,6 +203,7 @@ def test_high_overlap_pocket_does_not_read_audit_only_columns(
         high_overlap_min_registered_iou=0.85,
         high_overlap_max_growth_residual=0.50,
         high_overlap_min_growth_residual_mahalanobis=1.0,
+        high_overlap_min_cell_probability=0.75,
         high_overlap_score_bonus=2.0,
     )
     gate = cleanup.GrowthVetoGate(
