@@ -139,6 +139,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run PyRecEst bounded residual MHT over growth-veto hypotheses",
     ),
     (
+        "track2p-policy-pyrecest-calibrated-mht-cleanup",
+        "bayescatrack.experiments.track2p_policy_pyrecest_calibrated_mht_cleanup",
+        "Run LOSO-calibrated PyRecEst residual MHT over structural edit hypotheses",
+    ),
+    (
         "track2p-policy-pyrecest-frontier-mht-cleanup",
         "bayescatrack.experiments.track2p_policy_pyrecest_frontier_mht_cleanup",
         "Run relaxed/frontier PyRecEst residual MHT over growth-veto hypotheses",
@@ -456,6 +461,12 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     ),
     "track2p-component-pyrecest-residual-mht-cleanup": (
         "track2p-policy-pyrecest-residual-mht-cleanup"
+    ),
+    "track2p-pyrecest-calibrated-mht-cleanup": (
+        "track2p-policy-pyrecest-calibrated-mht-cleanup"
+    ),
+    "track2p-component-pyrecest-calibrated-mht-cleanup": (
+        "track2p-policy-pyrecest-calibrated-mht-cleanup"
     ),
     "track2p-pyrecest-frontier-mht-cleanup": (
         "track2p-policy-pyrecest-frontier-mht-cleanup"

@@ -127,6 +127,35 @@ def residual_mht_module(monkeypatch: pytest.MonkeyPatch):
     sys.modules.pop(module_name, None)
 
 
+@pytest.fixture()
+def calibrated_mht_module(monkeypatch: pytest.MonkeyPatch):
+    tracking = types.ModuleType("pyrecest.tracking")
+    tracking.ResidualEditCandidate = _ResidualEditCandidate
+    tracking.ResidualMHTConfig = _ResidualMHTConfig
+    tracking.enumerate_residual_hypotheses = lambda *args, **kwargs: ()
+    tracking.select_residual_hypothesis = lambda *args, **kwargs: None
+
+    pyrecest = types.ModuleType("pyrecest")
+    pyrecest.tracking = tracking
+
+    monkeypatch.setitem(sys.modules, "pyrecest", pyrecest)
+    monkeypatch.setitem(sys.modules, "pyrecest.tracking", tracking)
+    residual_module = (
+        "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup"
+    )
+    module_name = (
+        "bayescatrack.experiments.track2p_policy_pyrecest_calibrated_mht_cleanup"
+    )
+    sys.modules.pop(residual_module, None)
+    sys.modules.pop(module_name, None)
+
+    module = importlib.import_module(module_name)
+    yield module
+
+    sys.modules.pop(module_name, None)
+    sys.modules.pop(residual_module, None)
+
+
 def test_high_overlap_pocket_is_opt_in(residual_mht_module) -> None:
     options = residual_mht_module.PyRecEstResidualMHTOptions(
         include_high_overlap_low_motion=False,
@@ -305,3 +334,109 @@ def test_high_overlap_selection_matches_sanitized_rows(residual_mht_module) -> N
     assert [row["pyrecest_candidate_id"] for row in selected] == [
         row["pyrecest_candidate_id"] for row in sanitized_selected
     ]
+
+
+def test_calibrated_mht_cli_exposes_fold_calibration_knobs(
+    calibrated_mht_module,
+) -> None:
+    args = calibrated_mht_module.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "mht.csv",
+            "--calibrated-fp-logistic-c",
+            "0.25",
+            "--mht-score-threshold",
+            "0",
+        ]
+    )
+
+    assert args.calibrated_fp_logistic_c == 0.25
+    assert args.mht_score_threshold == 0.0
+
+
+def test_calibrated_threshold_is_single_training_fold_decision(
+    calibrated_mht_module,
+) -> None:
+    false_positive = _candidate_row(
+        edge_status_against_gt="false_positive",
+        pairwise_fp_delta_if_removed=-1,
+        pairwise_tp_delta_if_removed=0,
+        pairwise_fn_delta_if_removed=0,
+        complete_fp_delta_if_removed=-1,
+        complete_tp_delta_if_removed=0,
+        complete_fn_delta_if_removed=0,
+    )
+    unsafe_true_positive = _candidate_row(
+        roi_b=100,
+        edge_status_against_gt="true_positive",
+        pairwise_fp_delta_if_removed=0,
+        pairwise_tp_delta_if_removed=-1,
+        pairwise_fn_delta_if_removed=1,
+        complete_fp_delta_if_removed=0,
+        complete_tp_delta_if_removed=-1,
+        complete_fn_delta_if_removed=1,
+    )
+
+    threshold = calibrated_mht_module._select_training_probability_threshold(  # pylint: disable=protected-access
+        [false_positive, unsafe_true_positive],
+        [0.8, 0.7],
+    )
+
+    assert threshold == pytest.approx(0.8)
+
+
+def test_calibrated_heldout_scoring_does_not_read_audit_only_columns(
+    calibrated_mht_module,
+) -> None:
+    row = _AuditGuardRow(
+        _candidate_row(
+            edge_status_against_gt="false_positive",
+            pairwise_fp_delta_if_removed=-1,
+            pairwise_tp_delta_if_removed=0,
+            complete_fp_delta_if_removed=-1,
+            complete_tp_delta_if_removed=0,
+            manual_gt_reference_identity="jm038:true-track",
+            new_complete_track_f1_micro=0.974,
+            score_delta=100.0,
+        )
+    )
+    calibrator = calibrated_mht_module._constant_false_positive_calibrator(  # pylint: disable=protected-access
+        0.8
+    )
+
+    candidates = calibrated_mht_module._calibrated_candidate_rows(  # pylint: disable=protected-access
+        [row],
+        gate=cleanup.GrowthVetoGate(max_local_neighbor_distortion=None),
+        n_sessions=7,
+        calibrator=calibrator,
+        threshold=0.5,
+    )
+    pyrecest_candidate = (
+        calibrated_mht_module._to_calibrated_pyrecest_candidate(  # pylint: disable=protected-access
+            candidates[0],
+        )
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["pyrecest_candidate_family"] == "calibrated_fp_probability"
+    assert candidates[0]["calibrated_fp_probability"] == pytest.approx(0.8)
+    assert pyrecest_candidate.score > 0.0
+    assert "calibrated_fp_probability" in pyrecest_candidate.metadata
+
+
+def test_calibrated_score_is_threshold_relative_log_likelihood(
+    calibrated_mht_module,
+) -> None:
+    score_at_threshold = calibrated_mht_module._calibrated_log_likelihood_score(  # pylint: disable=protected-access
+        0.75,
+        0.75,
+    )
+    score_above_threshold = calibrated_mht_module._calibrated_log_likelihood_score(  # pylint: disable=protected-access
+        0.9,
+        0.75,
+    )
+
+    assert score_at_threshold == pytest.approx(0.0)
+    assert score_above_threshold > 0.0
