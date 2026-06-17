@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
 )
@@ -194,6 +195,19 @@ def test_multisplit_respects_complete_track_guard() -> None:
 
     assert guarded == {}
     assert unguarded == {0: (0, 1)}
+
+
+@pytest.mark.parametrize(
+    "max_splits_per_component",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_multisplit_cleanup_config_rejects_invalid_max_splits(
+    max_splits_per_component: object,
+) -> None:
+    with pytest.raises(ValueError, match="max_splits_per_component"):
+        MultiSplitCleanupConfig(
+            max_splits_per_component=max_splits_per_component  # type: ignore[arg-type]
+        )
 
 
 def _diagnostic(

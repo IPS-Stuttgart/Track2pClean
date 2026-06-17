@@ -20,6 +20,7 @@ import argparse
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -99,10 +100,12 @@ class ConsensusSplitConfig:
     mode: ConsensusMode = "risk-and-stability"
 
     def __post_init__(self) -> None:
-        if int(self.required_support_votes) < 1:
-            raise ValueError("required_support_votes must be at least 1")
-        if int(self.max_splits_per_component) < 1:
-            raise ValueError("max_splits_per_component must be at least 1")
+        _require_positive_int(
+            self.required_support_votes, name="required_support_votes"
+        )
+        _require_positive_int(
+            self.max_splits_per_component, name="max_splits_per_component"
+        )
         if self.mode not in CONSENSUS_MODES:
             raise ValueError("unsupported consensus mode")
 
@@ -117,8 +120,9 @@ class ConsensusCleanupConfig:
     mode: ConsensusMode = "risk-and-stability"
 
     def __post_init__(self) -> None:
-        if int(self.max_splits_per_component) < 1:
-            raise ValueError("max_splits_per_component must be at least 1")
+        _require_positive_int(
+            self.max_splits_per_component, name="max_splits_per_component"
+        )
         if self.mode not in CONSENSUS_MODES:
             raise ValueError("unsupported consensus mode")
 
@@ -675,6 +679,13 @@ def _float_tuple_arg(value: str | Sequence[float]) -> tuple[float, ...]:
         except ValueError as exc:  # pragma: no cover - argparse reports this path
             raise argparse.ArgumentTypeError(str(exc)) from exc
     return tuple(float(item) for item in value)
+
+
+def _require_positive_int(value: int, *, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    if int(value) < 1:
+        raise ValueError(f"{name} must be at least 1")
 
 
 __all__ = (
