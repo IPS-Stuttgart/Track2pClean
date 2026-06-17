@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import (
     track2p_policy_coherence_suffix_growth_veto_cleanup as suffix_cleanup,
@@ -38,6 +39,13 @@ def _candidate_row(**overrides: object) -> dict[str, object]:
     }
     row.update(overrides)
     return row
+
+
+def test_coherence_suffix_growth_veto_wrapper_rejects_teacher_base() -> None:
+    with pytest.raises(ValueError, match="coherence-suffix"):
+        suffix_cleanup._with_coherence_suffix_default(  # pylint: disable=protected-access
+            ["--growth-veto-base", "teacher-rescue"]
+        )
 
 
 FORBIDDEN_AUDIT_COLUMNS = frozenset(
@@ -157,12 +165,12 @@ def test_growth_veto_cleanup_parser_accepts_coherence_suffix_base() -> None:
     assert args.growth_veto_base == "coherence-suffix"
 
 
-def test_coherence_suffix_growth_veto_wrapper_honors_equals_override() -> None:
+def test_coherence_suffix_growth_veto_wrapper_honors_equals_coherence_override() -> None:
     args = suffix_cleanup._with_coherence_suffix_default(
-        ["--growth-veto-base=teacher-rescue"]
+        ["--growth-veto-base=coherence-suffix"]
     )
 
-    assert args == ["--growth-veto-base=teacher-rescue"]
+    assert args == ["--growth-veto-base=coherence-suffix"]
 
 
 def test_coherence_suffix_growth_veto_wrapper_adds_default_base() -> None:

@@ -417,6 +417,8 @@ def _high_overlap_low_motion_reason(
         row.get("complete_component_size", 0)
     ) < int(gate.min_complete_component_size):
         return "complete_component_size_below_gate"
+    if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
+        return "growth_anchor_count_below_gate"
 
     row_rank = int(_finite_float(row.get("row_rank"), float("inf")))
     column_rank = int(_finite_float(row.get("column_rank"), float("inf")))
@@ -455,6 +457,10 @@ def _high_overlap_low_motion_reason(
     )
     if min(cell_a, cell_b) < min_cell_probability:
         return "high_overlap_cell_probability_below_gate"
+    if gate.max_min_cell_probability is not None and min(cell_a, cell_b) > float(
+        gate.max_min_cell_probability
+    ):
+        return "min_cell_probability_above_gate"
     if gate.max_local_neighbor_distortion is not None:
         distortion = _finite_float(row.get("local_neighbor_distortion"), float("nan"))
         if not np.isfinite(distortion) or distortion > float(
@@ -797,7 +803,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    if args.growth_veto_base != "coherence-suffix":
+        parser.error(
+            "track2p-policy-pyrecest-residual-mht-cleanup requires "
+            "--growth-veto-base coherence-suffix"
+        )
     config = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",

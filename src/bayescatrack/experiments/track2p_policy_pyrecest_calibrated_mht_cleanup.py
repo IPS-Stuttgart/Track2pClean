@@ -366,6 +366,8 @@ def _structural_candidate_gate_reason(
         row.get("complete_component_size", 0)
     ) < int(gate.min_complete_component_size):
         return "complete_component_size_below_gate"
+    if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
+        return "growth_anchor_count_below_gate"
 
     row_rank = int(residual_mht._finite_float(row.get("row_rank"), float("inf")))
     column_rank = int(
@@ -375,6 +377,18 @@ def _structural_candidate_gate_reason(
         return "row_rank_above_gate"
     if column_rank <= 0 or column_rank > int(gate.max_column_rank):
         return "column_rank_above_gate"
+
+    cell_a = residual_mht._finite_float(row.get("cell_probability_a"), float("nan"))
+    cell_b = residual_mht._finite_float(row.get("cell_probability_b"), float("nan"))
+    if not np.isfinite(cell_a) or not np.isfinite(cell_b):
+        return "cell_probability_missing"
+    min_cell_probability = min(cell_a, cell_b)
+    if min_cell_probability < float(gate.min_cell_probability):
+        return "cell_probability_below_gate"
+    if gate.max_min_cell_probability is not None and min_cell_probability > float(
+        gate.max_min_cell_probability
+    ):
+        return "min_cell_probability_above_gate"
 
     if any(not np.isfinite(value) for value in _calibrated_feature_vector(row)):
         return "calibrated_feature_missing"
@@ -531,16 +545,14 @@ def _select_training_probability_threshold(
 
 
 def _selected_has_training_tp_loss(rows: Sequence[Mapping[str, Any]]) -> bool:
-    return any(
-        residual_mht._finite_float(row.get(key), 0.0) != 0.0
-        for row in rows
-        for key in (
-            "pairwise_tp_delta_if_removed",
-            "pairwise_fn_delta_if_removed",
-            "complete_tp_delta_if_removed",
-            "complete_fn_delta_if_removed",
-        )
-    )
+    for row in rows:
+        for key in ("pairwise_tp_delta_if_removed", "complete_tp_delta_if_removed"):
+            if residual_mht._finite_float(row.get(key), 0.0) < 0.0:
+                return True
+        for key in ("pairwise_fn_delta_if_removed", "complete_fn_delta_if_removed"):
+            if residual_mht._finite_float(row.get(key), 0.0) > 0.0:
+                return True
+    return False
 
 
 def _false_positive_label(row: Mapping[str, Any]) -> int:
@@ -548,13 +560,23 @@ def _false_positive_label(row: Mapping[str, Any]) -> int:
 
 
 def _calibrated_feature_vector(row: Mapping[str, Any]) -> tuple[float, ...]:
-    growth_residual = max(
-        0.0,
-        residual_mht._finite_float(row.get("growth_residual"), 0.0),
+    raw_growth_residual = residual_mht._finite_float(
+        row.get("growth_residual"),
+        float("nan"),
     )
-    growth_mahalanobis = max(
-        0.0,
-        residual_mht._finite_float(row.get("growth_residual_mahalanobis"), 0.0),
+    raw_growth_mahalanobis = residual_mht._finite_float(
+        row.get("growth_residual_mahalanobis"),
+        float("nan"),
+    )
+    growth_residual = (
+        max(0.0, raw_growth_residual)
+        if np.isfinite(raw_growth_residual)
+        else float("nan")
+    )
+    growth_mahalanobis = (
+        max(0.0, raw_growth_mahalanobis)
+        if np.isfinite(raw_growth_mahalanobis)
+        else float("nan")
     )
     cell_a = residual_mht._finite_float(row.get("cell_probability_a"), float("nan"))
     cell_b = residual_mht._finite_float(row.get("cell_probability_b"), float("nan"))
@@ -678,7 +700,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    if args.growth_veto_base != "coherence-suffix":
+        parser.error(
+            "track2p-policy-pyrecest-calibrated-mht-cleanup requires "
+            "--growth-veto-base coherence-suffix"
+        )
     config = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
