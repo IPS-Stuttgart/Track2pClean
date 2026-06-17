@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -949,13 +950,22 @@ def _format_metadata_value(value: Any) -> str:
 
 
 def _require_positive(value: float, *, name: str) -> None:
-    if float(value) <= 0.0:
+    if _finite_float_value(value, name=name) <= 0.0:
         raise ValueError(f"{name} must be positive")
 
 
 def _require_nonnegative(value: float, *, name: str) -> None:
-    if float(value) < 0.0:
+    if _finite_float_value(value, name=name) < 0.0:
         raise ValueError(f"{name} must be non-negative")
+
+
+def _finite_float_value(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
 
 
 def _positive_int_value(value: Any, *, name: str) -> int:
