@@ -534,6 +534,7 @@ def main(argv: list[str] | None = None) -> int:
         plane_name=args.plane_name,
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        max_gap=args.max_gap,
         transform_type=args.transform_type,
         allow_track2p_as_reference_for_smoke_test=(
             args.allow_track2p_as_reference_for_smoke_test

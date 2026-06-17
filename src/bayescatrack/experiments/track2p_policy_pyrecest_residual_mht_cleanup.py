@@ -23,6 +23,7 @@ and fall back to the no-edit hypothesis when nothing clears the score threshold.
 from __future__ import annotations
 
 import argparse
+import sys
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -69,6 +70,10 @@ except ImportError as exc:  # pragma: no cover - exercised only with stale PyRec
     ) from exc
 
 METHOD = "track2p-policy-pyrecest-residual-mht-cleanup"
+_UNSUPPORTED_RESIDUAL_GROWTH_VETO_OPTIONS = (
+    "--max-vetoes-per-subject",
+    "--growth-veto-max-vetoes-per-subject",
+)
 
 
 @dataclass(frozen=True)
@@ -802,9 +807,32 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _explicit_option_present(args: Sequence[str], option: str) -> bool:
+    prefix = f"{option}="
+    return any(arg == option or arg.startswith(prefix) for arg in args)
+
+
+def _reject_unsupported_residual_options(
+    parser: argparse.ArgumentParser, args: Sequence[str]
+) -> None:
+    unsupported = sorted(
+        option
+        for option in _UNSUPPORTED_RESIDUAL_GROWTH_VETO_OPTIONS
+        if _explicit_option_present(args, option)
+    )
+    if unsupported:
+        parser.error(
+            "track2p-policy-pyrecest-residual-mht-cleanup uses "
+            "--mht-max-edits-per-subject for the edit budget; do not pass "
+            + ", ".join(unsupported)
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
-    args = parser.parse_args(argv)
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    _reject_unsupported_residual_options(parser, raw_args)
+    args = parser.parse_args(raw_args)
     if args.growth_veto_base != "coherence-suffix":
         parser.error(
             "track2p-policy-pyrecest-residual-mht-cleanup requires "
@@ -819,6 +847,7 @@ def main(argv: list[str] | None = None) -> int:
         plane_name=args.plane_name,
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        max_gap=args.max_gap,
         transform_type=args.transform_type,
         allow_track2p_as_reference_for_smoke_test=(
             args.allow_track2p_as_reference_for_smoke_test
@@ -889,7 +918,7 @@ def main(argv: list[str] | None = None) -> int:
             require_terminal_edge=bool(args.require_veto_terminal_edge),
             require_last_session_edge=bool(args.require_veto_last_session_edge),
             require_complete_component=bool(args.require_veto_complete_component),
-            max_vetoes_per_subject=int(args.mht_candidate_top_k),
+            max_vetoes_per_subject=int(args.mht_max_edits_per_subject),
         ),
         mht_options=PyRecEstResidualMHTOptions(
             candidate_top_k=int(args.mht_candidate_top_k),

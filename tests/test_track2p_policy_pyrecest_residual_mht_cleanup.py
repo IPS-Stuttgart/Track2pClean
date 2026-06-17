@@ -621,6 +621,26 @@ def test_residual_mht_cli_rejects_teacher_rescue_base(residual_mht_module) -> No
         )
 
 
+@pytest.mark.parametrize(
+    "option",
+    ["--max-vetoes-per-subject", "--growth-veto-max-vetoes-per-subject"],
+)
+def test_residual_mht_cli_rejects_deterministic_veto_count(
+    residual_mht_module, option
+) -> None:
+    with pytest.raises(SystemExit):
+        residual_mht_module.main(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                option,
+                "1",
+            ]
+        )
+
+
 def test_pyrecest_mht_summary_reports_applied_edge_labels(
     residual_mht_module,
 ) -> None:

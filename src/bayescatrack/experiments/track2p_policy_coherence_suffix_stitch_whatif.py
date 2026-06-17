@@ -33,6 +33,7 @@ from bayescatrack.experiments.track2p_emulation_benchmark import ThresholdMethod
 from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+    TRACK2P_POLICY_DEFAULT_MAX_GAP,
     TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
     TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE,
     track2p_policy_config,
@@ -681,6 +682,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
     )
+    parser.add_argument("--max-gap", type=int, default=TRACK2P_POLICY_DEFAULT_MAX_GAP)
     parser.add_argument("--split-risk-threshold", type=float, default=1.50)
     parser.add_argument("--split-penalty", type=float, default=0.25)
     parser.add_argument("--min-side-observations", type=int, default=2)
@@ -756,6 +758,7 @@ def main(
         plane_name=args.plane_name,
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        max_gap=args.max_gap,
         transform_type=args.transform_type,
         allow_track2p_as_reference_for_smoke_test=args.allow_track2p_as_reference_for_smoke_test,
         include_behavior=args.include_behavior,
