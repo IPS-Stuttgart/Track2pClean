@@ -779,7 +779,6 @@ def test_benchmark_manifest_growth_veto_defaults_keep_upper_iou_caps(
                     "runner": "track2p-policy-growth-veto-cleanup",
                     "data": "data",
                     "output": "results/growth-veto-default-caps.csv",
-                    "min_veto_anchor_count": -3,
                     "min_veto_complete_component_size": None,
                     "max_veto_local_neighbor_distortion": "none",
                 }
@@ -871,6 +870,44 @@ def test_benchmark_manifest_rejects_negative_growth_veto_component_size(tmp_path
     )
 
     with pytest.raises(ValueError, match="min_veto_complete_component_size"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "match"),
+    [
+        ("suffix_path_length", 0, "suffix_path_length"),
+        ("max_stitches_per_subject", 0, "max_stitches_per_subject"),
+        ("edge_top_k", 0, "edge_top_k"),
+        ("path_beam_width", 0, "path_beam_width"),
+        ("min_veto_anchor_count", -1, "anchor_count"),
+        ("max_veto_row_rank", 0, "max_veto_row_rank"),
+        ("max_veto_column_rank", 0, "max_veto_column_rank"),
+        ("max_vetoes_per_subject", 0, "max_vetoes_per_subject"),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_suffix_growth_veto_integer_controls(
+    tmp_path,
+    field: str,
+    value: int,
+    match: str,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-invalid-integer",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    field: value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=match):
         run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
 
@@ -1053,7 +1090,7 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
                     "max_veto_shifted_iou": 0.90,
                     "max_veto_min_cell_probability": 0.65,
                     "max_veto_local_neighbor_distortion": None,
-                    "growth_veto_min_anchor_count": -2,
+                    "growth_veto_min_anchor_count": 2,
                     "max_veto_row_rank": 2,
                     "max_veto_column_rank": 2,
                     "growth_veto_base": "coherence-suffix",
@@ -1089,7 +1126,7 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
     assert growth_gate.min_growth_residual == 2.0
     assert growth_gate.max_row_rank == 2
     assert growth_gate.max_column_rank == 2
-    assert growth_gate.min_anchor_count == 0
+    assert growth_gate.min_anchor_count == 2
     assert growth_gate.max_local_neighbor_distortion is None
     mht_options = calls["kwargs"]["mht_options"]
     assert mht_options.candidate_top_k == 8

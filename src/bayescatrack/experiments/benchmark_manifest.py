@@ -1609,8 +1609,8 @@ def _run_track2p_policy_coherence_suffix_rows(
     )
     gate_defaults = CoherenceSuffixStitchGate()
     gate = CoherenceSuffixStitchGate(
-        suffix_path_length=int(
-            options.get("suffix_path_length", gate_defaults.suffix_path_length)
+        suffix_path_length=_positive_int_option(
+            options, "suffix_path_length", default=gate_defaults.suffix_path_length
         ),
         min_cell_probability=_float_option(
             options,
@@ -1642,11 +1642,10 @@ def _run_track2p_policy_coherence_suffix_rows(
             "min_shape_consistency",
             default=gate_defaults.min_shape_consistency,
         ),
-        max_stitches_per_subject=int(
-            options.get(
-                "max_stitches_per_subject",
-                gate_defaults.max_stitches_per_subject,
-            )
+        max_stitches_per_subject=_positive_int_option(
+            options,
+            "max_stitches_per_subject",
+            default=gate_defaults.max_stitches_per_subject,
         ),
     )
     output = run_track2p_policy_coherence_suffix_stitch_whatif(
@@ -1663,8 +1662,8 @@ def _run_track2p_policy_coherence_suffix_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=cleanup_config,
         gate=gate,
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
     )
     return [
         dict(row) for row in output.result_rows if str(row.get("subject", "")) != "ALL"
@@ -1751,8 +1750,8 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
     )
     gate_defaults = CoherenceSuffixStitchGate()
     gate = CoherenceSuffixStitchGate(
-        suffix_path_length=int(
-            options.get("suffix_path_length", gate_defaults.suffix_path_length)
+        suffix_path_length=_positive_int_option(
+            options, "suffix_path_length", default=gate_defaults.suffix_path_length
         ),
         min_cell_probability=_float_option(
             options,
@@ -1784,11 +1783,10 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
             "min_shape_consistency",
             default=gate_defaults.min_shape_consistency,
         ),
-        max_stitches_per_subject=int(
-            options.get(
-                "max_stitches_per_subject",
-                gate_defaults.max_stitches_per_subject,
-            )
+        max_stitches_per_subject=_positive_int_option(
+            options,
+            "max_stitches_per_subject",
+            default=gate_defaults.max_stitches_per_subject,
         ),
     )
     raw_max_edits = options.get("max_applied_teacher_edits")
@@ -1814,8 +1812,8 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=cleanup_config,
         suffix_gate=gate,
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
         teacher_edge_order=str(options.get("teacher_edge_order", "structural")),
         teacher_action_filter=str(options.get("teacher_action_filter", "all")),
         teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
@@ -1934,8 +1932,8 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
     )
     suffix_defaults = CoherenceSuffixStitchGate()
     suffix_gate = CoherenceSuffixStitchGate(
-        suffix_path_length=int(
-            options.get("suffix_path_length", suffix_defaults.suffix_path_length)
+        suffix_path_length=_positive_int_option(
+            options, "suffix_path_length", default=suffix_defaults.suffix_path_length
         ),
         min_cell_probability=_float_option(
             options,
@@ -1967,11 +1965,10 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
             "min_shape_consistency",
             default=suffix_defaults.min_shape_consistency,
         ),
-        max_stitches_per_subject=int(
-            options.get(
-                "max_stitches_per_subject",
-                suffix_defaults.max_stitches_per_subject,
-            )
+        max_stitches_per_subject=_positive_int_option(
+            options,
+            "max_stitches_per_subject",
+            default=suffix_defaults.max_stitches_per_subject,
         ),
     )
     growth_veto_gate = _growth_veto_gate_from_options(options)
@@ -1989,8 +1986,8 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=cleanup_config,
         suffix_gate=suffix_gate,
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
         anchor_min_registered_iou=_float_option(
             options, "anchor_min_registered_iou", default=0.50
         ),
@@ -2050,8 +2047,8 @@ def _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=_coherence_suffix_cleanup_config_from_options(options),
         suffix_gate=_coherence_suffix_gate_from_options(options),
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
         anchor_min_registered_iou=_float_option(
             options, "anchor_min_registered_iou", default=0.50
         ),
@@ -2135,8 +2132,8 @@ def _run_track2p_policy_pyrecest_calibrated_mht_cleanup_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=_coherence_suffix_cleanup_config_from_options(options),
         suffix_gate=_coherence_suffix_gate_from_options(options),
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
         anchor_min_registered_iou=_float_option(
             options, "anchor_min_registered_iou", default=0.50
         ),
@@ -2318,8 +2315,8 @@ def _coherence_suffix_gate_from_options(options: ManifestObject) -> Any:
 
     gate_defaults = CoherenceSuffixStitchGate()
     return CoherenceSuffixStitchGate(
-        suffix_path_length=int(
-            options.get("suffix_path_length", gate_defaults.suffix_path_length)
+        suffix_path_length=_positive_int_option(
+            options, "suffix_path_length", default=gate_defaults.suffix_path_length
         ),
         min_cell_probability=_float_option(
             options,
@@ -2351,11 +2348,10 @@ def _coherence_suffix_gate_from_options(options: ManifestObject) -> Any:
             "min_shape_consistency",
             default=gate_defaults.min_shape_consistency,
         ),
-        max_stitches_per_subject=int(
-            options.get(
-                "max_stitches_per_subject",
-                gate_defaults.max_stitches_per_subject,
-            )
+        max_stitches_per_subject=_positive_int_option(
+            options,
+            "max_stitches_per_subject",
+            default=gate_defaults.max_stitches_per_subject,
         ),
     )
 
@@ -2483,17 +2479,18 @@ def _growth_veto_gate_from_options(options: ManifestObject) -> Any:
             or "growth_veto_max_local_neighbor_distortion" in options
             else gate_defaults.max_local_neighbor_distortion
         ),
-        min_anchor_count=max(
-            0,
-            int(
-                options.get(
+        min_anchor_count=_nonnegative_int_option(
+            {
+                "min_anchor_count": options.get(
                     "min_veto_anchor_count",
                     options.get(
                         "growth_veto_min_anchor_count",
                         gate_defaults.min_anchor_count,
                     ),
                 )
-            ),
+            },
+            "min_anchor_count",
+            default=gate_defaults.min_anchor_count,
         ),
         min_complete_component_size=(
             None
@@ -2507,9 +2504,11 @@ def _growth_veto_gate_from_options(options: ManifestObject) -> Any:
                 name="min_veto_complete_component_size",
             )
         ),
-        max_row_rank=int(options.get("max_veto_row_rank", gate_defaults.max_row_rank)),
-        max_column_rank=int(
-            options.get("max_veto_column_rank", gate_defaults.max_column_rank)
+        max_row_rank=_positive_int_option(
+            options, "max_veto_row_rank", default=gate_defaults.max_row_rank
+        ),
+        max_column_rank=_positive_int_option(
+            options, "max_veto_column_rank", default=gate_defaults.max_column_rank
         ),
         require_not_suffix_edge=_bool_option(
             options,
@@ -2531,14 +2530,18 @@ def _growth_veto_gate_from_options(options: ManifestObject) -> Any:
             "require_veto_complete_component",
             default=gate_defaults.require_complete_component,
         ),
-        max_vetoes_per_subject=int(
-            options.get(
-                "max_vetoes_per_subject",
-                options.get(
-                    "growth_veto_max_vetoes_per_subject",
-                    gate_defaults.max_vetoes_per_subject,
-                ),
-            )
+        max_vetoes_per_subject=_positive_int_option(
+            {
+                "max_vetoes_per_subject": options.get(
+                    "max_vetoes_per_subject",
+                    options.get(
+                        "growth_veto_max_vetoes_per_subject",
+                        gate_defaults.max_vetoes_per_subject,
+                    ),
+                )
+            },
+            "max_vetoes_per_subject",
+            default=gate_defaults.max_vetoes_per_subject,
         ),
     )
 
@@ -3172,18 +3175,21 @@ def _bool_option(options: ManifestObject, key: str, *, default: bool) -> bool:
     return value
 
 
-def _integer_option(options: ManifestObject, key: str, *, default: int) -> int:
-    value = options.get(key, default)
+def _integer_value(value: Any, *, name: str) -> int:
     if isinstance(value, bool):
-        raise ValueError(f"{key} must be an integer")
+        raise ValueError(f"{name} must be an integer")
     if isinstance(value, Integral):
         return int(value)
     if isinstance(value, str):
         try:
             return int(value)
         except ValueError as exc:
-            raise ValueError(f"{key} must be an integer") from exc
-    raise ValueError(f"{key} must be an integer")
+            raise ValueError(f"{name} must be an integer") from exc
+    raise ValueError(f"{name} must be an integer")
+
+
+def _integer_option(options: ManifestObject, key: str, *, default: int) -> int:
+    return _integer_value(options.get(key, default), name=key)
 
 
 def _positive_int_option(options: ManifestObject, key: str, *, default: int) -> int:
@@ -3212,7 +3218,7 @@ def _nonnegative_int_or_none(value: Any, *, name: str) -> int | None:
         return None
     if isinstance(value, str) and value.casefold() in {"none", "null", "all"}:
         return None
-    parsed = int(value)
+    parsed = _integer_value(value, name=name)
     if parsed < 0:
         raise ValueError(f"{name} must be non-negative or null")
     return parsed
@@ -3223,7 +3229,7 @@ def _positive_int_or_none(value: Any, *, name: str) -> int | None:
         return None
     if isinstance(value, str) and value.casefold() in {"none", "null", "all"}:
         return None
-    parsed = int(value)
+    parsed = _integer_value(value, name=name)
     if parsed <= 0:
         raise ValueError(f"{name} must be positive or null")
     return parsed
