@@ -2740,9 +2740,29 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
         ),
         teacher_edge_order=str(options.get("teacher_edge_order", "structural")),
         teacher_action_filter=str(options.get("teacher_action_filter", "all")),
-        min_component_observations=int(options.get("min_component_observations", 1)),
+        min_component_observations=_positive_int_option(
+            options, "min_component_observations", default=1
+        ),
         max_applied_edits=_nonnegative_int_or_none(
             options.get("max_applied_edits"), name="max_applied_edits"
+        ),
+        max_target_extension_edits=_nonnegative_int_or_none(
+            options.get("max_target_extension_edits"),
+            name="max_target_extension_edits",
+        ),
+        max_source_backfill_edits=_nonnegative_int_or_none(
+            options.get("max_source_backfill_edits"), name="max_source_backfill_edits"
+        ),
+        max_seed_source_backfill_edits=_nonnegative_int_or_none(
+            options.get("max_seed_source_backfill_edits"),
+            name="max_seed_source_backfill_edits",
+        ),
+        max_fragment_merge_edits=_nonnegative_int_or_none(
+            options.get("max_fragment_merge_edits"), name="max_fragment_merge_edits"
+        ),
+        max_completing_rescue_edits=_nonnegative_int_or_none(
+            options.get("max_completing_rescue_edits"),
+            name="max_completing_rescue_edits",
         ),
         teacher_feature_gate=teacher_feature_gate,
         teacher_repair_preset=str(options.get("teacher_repair_preset", "none")),
