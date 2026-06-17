@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
 )
@@ -96,6 +98,47 @@ def test_conflict_augmented_cleanup_audit_mode_marks_but_does_not_apply() -> Non
     assert rows[0]["would_split_with_conflict_augmentation"] == 1
     assert rows[0]["conflict_augmented_extra_split"] == 1
     assert rows[0]["applied_split"] == 0
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("conflicting_observation_bonus", True),
+        ("conflicting_observation_bonus", False),
+        ("conflicting_observation_bonus", float("nan")),
+        ("conflicting_observation_bonus", float("inf")),
+        ("duplicate_edge_bonus", True),
+        ("duplicate_edge_bonus", False),
+        ("duplicate_edge_bonus", float("nan")),
+        ("duplicate_edge_bonus", float("inf")),
+        ("min_base_risk", True),
+        ("min_base_risk", False),
+        ("min_base_risk", float("nan")),
+        ("min_base_risk", float("inf")),
+    ],
+)
+def test_conflict_augmented_cleanup_rejects_invalid_float_controls(
+    field: str, value: float | bool
+) -> None:
+    kwargs = {field: value}
+
+    with pytest.raises(ValueError, match=field):
+        ConflictAugmentedCleanupConfig(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"conflicting_observation_bonus": -0.1},
+        {"duplicate_edge_bonus": -0.1},
+        {"min_base_risk": -0.1},
+    ],
+)
+def test_conflict_augmented_cleanup_rejects_negative_controls(
+    kwargs: dict[str, float],
+) -> None:
+    with pytest.raises(ValueError, match="non-negative"):
+        ConflictAugmentedCleanupConfig(**kwargs)
 
 
 def _component_row(**overrides: float | int | str) -> dict[str, float | int | str]:
