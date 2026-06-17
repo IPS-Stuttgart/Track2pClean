@@ -1814,7 +1814,6 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
         ComponentCleanupConfig,
     )
     from bayescatrack.experiments.track2p_policy_growth_veto_cleanup import (
-        GrowthVetoGate,
         run_track2p_policy_growth_veto_cleanup,
     )
 
@@ -1921,147 +1920,7 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
             )
         ),
     )
-    gate_defaults = GrowthVetoGate()
-    growth_veto_gate = GrowthVetoGate(
-        min_growth_residual_mahalanobis=_float_option(
-            options,
-            "min_growth_residual_mahalanobis",
-            default=_float_option(
-                options,
-                "growth_veto_min_mahalanobis",
-                default=gate_defaults.min_growth_residual_mahalanobis,
-            ),
-        ),
-        min_growth_residual=_float_option(
-            options,
-            "min_growth_residual",
-            default=_float_option(
-                options,
-                "growth_veto_min_residual",
-                default=gate_defaults.min_growth_residual,
-            ),
-        ),
-        min_registered_iou=_float_option(
-            options,
-            "min_veto_registered_iou",
-            default=_float_option(
-                options,
-                "growth_veto_min_registered_iou",
-                default=gate_defaults.min_registered_iou,
-            ),
-        ),
-        min_shifted_iou=_float_option(
-            options,
-            "min_veto_shifted_iou",
-            default=_float_option(
-                options,
-                "growth_veto_min_shifted_iou",
-                default=gate_defaults.min_shifted_iou,
-            ),
-        ),
-        max_registered_iou=(
-            _optional_float_option(
-                options, "max_veto_registered_iou", "growth_veto_max_registered_iou"
-            )
-            if "max_veto_registered_iou" in options
-            or "growth_veto_max_registered_iou" in options
-            else gate_defaults.max_registered_iou
-        ),
-        max_shifted_iou=(
-            _optional_float_option(
-                options, "max_veto_shifted_iou", "growth_veto_max_shifted_iou"
-            )
-            if "max_veto_shifted_iou" in options
-            or "growth_veto_max_shifted_iou" in options
-            else gate_defaults.max_shifted_iou
-        ),
-        min_cell_probability=_float_option(
-            options,
-            "min_veto_cell_probability",
-            default=_float_option(
-                options,
-                "growth_veto_min_cell_probability",
-                default=gate_defaults.min_cell_probability,
-            ),
-        ),
-        max_min_cell_probability=(
-            _optional_float_option(
-                options,
-                "max_veto_min_cell_probability",
-                "growth_veto_max_min_cell_probability",
-            )
-            if "max_veto_min_cell_probability" in options
-            or "growth_veto_max_min_cell_probability" in options
-            else gate_defaults.max_min_cell_probability
-        ),
-        max_local_neighbor_distortion=(
-            _optional_float_option(
-                options,
-                "max_veto_local_neighbor_distortion",
-                "growth_veto_max_local_neighbor_distortion",
-            )
-            if "max_veto_local_neighbor_distortion" in options
-            or "growth_veto_max_local_neighbor_distortion" in options
-            else gate_defaults.max_local_neighbor_distortion
-        ),
-        min_anchor_count=max(
-            0,
-            int(
-                options.get(
-                    "min_veto_anchor_count",
-                    options.get(
-                        "growth_veto_min_anchor_count",
-                        gate_defaults.min_anchor_count,
-                    ),
-                )
-            ),
-        ),
-        min_complete_component_size=(
-            None
-            if "min_veto_complete_component_size" not in options
-            and "growth_veto_min_complete_component_size" not in options
-            else _nonnegative_int_or_none(
-                options.get(
-                    "min_veto_complete_component_size",
-                    options.get("growth_veto_min_complete_component_size"),
-                ),
-                name="min_veto_complete_component_size",
-            )
-        ),
-        max_row_rank=int(options.get("max_veto_row_rank", gate_defaults.max_row_rank)),
-        max_column_rank=int(
-            options.get("max_veto_column_rank", gate_defaults.max_column_rank)
-        ),
-        require_not_suffix_edge=_bool_option(
-            options,
-            "require_veto_not_suffix_edge",
-            default=gate_defaults.require_not_suffix_edge,
-        ),
-        require_terminal_edge=_bool_option(
-            options,
-            "require_veto_terminal_edge",
-            default=gate_defaults.require_terminal_edge,
-        ),
-        require_last_session_edge=_bool_option(
-            options,
-            "require_veto_last_session_edge",
-            default=gate_defaults.require_last_session_edge,
-        ),
-        require_complete_component=_bool_option(
-            options,
-            "require_veto_complete_component",
-            default=gate_defaults.require_complete_component,
-        ),
-        max_vetoes_per_subject=int(
-            options.get(
-                "max_vetoes_per_subject",
-                options.get(
-                    "growth_veto_max_vetoes_per_subject",
-                    gate_defaults.max_vetoes_per_subject,
-                ),
-            )
-        ),
-    )
+    growth_veto_gate = _growth_veto_gate_from_options(options)
     output = run_track2p_policy_growth_veto_cleanup(
         config,
         threshold_method=_policy_threshold_method(
@@ -2438,11 +2297,46 @@ def _coherence_suffix_gate_from_options(options: ManifestObject) -> Any:
     )
 
 
+_GROWTH_VETO_MANIFEST_ALIAS_PAIRS: tuple[tuple[str, str], ...] = (
+    ("min_growth_residual_mahalanobis", "growth_veto_min_mahalanobis"),
+    ("min_growth_residual", "growth_veto_min_residual"),
+    ("min_veto_registered_iou", "growth_veto_min_registered_iou"),
+    ("max_veto_registered_iou", "growth_veto_max_registered_iou"),
+    ("min_veto_shifted_iou", "growth_veto_min_shifted_iou"),
+    ("max_veto_shifted_iou", "growth_veto_max_shifted_iou"),
+    ("min_veto_cell_probability", "growth_veto_min_cell_probability"),
+    ("max_veto_min_cell_probability", "growth_veto_max_min_cell_probability"),
+    (
+        "max_veto_local_neighbor_distortion",
+        "growth_veto_max_local_neighbor_distortion",
+    ),
+    ("min_veto_anchor_count", "growth_veto_min_anchor_count"),
+    ("min_veto_complete_component_size", "growth_veto_min_complete_component_size"),
+    ("max_vetoes_per_subject", "growth_veto_max_vetoes_per_subject"),
+)
+
+
+def _reject_duplicate_manifest_aliases(
+    options: ManifestObject, alias_pairs: Sequence[tuple[str, str]]
+) -> None:
+    duplicates = [
+        f"{primary}/{alias}"
+        for primary, alias in alias_pairs
+        if primary in options and alias in options
+    ]
+    if duplicates:
+        raise ValueError(
+            "Manifest specifies both canonical and alias keys for the same option: "
+            + ", ".join(duplicates)
+        )
+
+
 def _growth_veto_gate_from_options(options: ManifestObject) -> Any:
     from bayescatrack.experiments.track2p_policy_growth_veto_cleanup import (
         GrowthVetoGate,
     )
 
+    _reject_duplicate_manifest_aliases(options, _GROWTH_VETO_MANIFEST_ALIAS_PAIRS)
     gate_defaults = GrowthVetoGate()
     return GrowthVetoGate(
         min_growth_residual_mahalanobis=_float_option(

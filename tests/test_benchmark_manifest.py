@@ -749,6 +749,54 @@ def test_benchmark_manifest_rejects_invalid_growth_veto_base(tmp_path):
         run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
 
+@pytest.mark.parametrize(
+    ("canonical", "alias"),
+    [
+        ("min_growth_residual_mahalanobis", "growth_veto_min_mahalanobis"),
+        ("min_growth_residual", "growth_veto_min_residual"),
+        ("min_veto_registered_iou", "growth_veto_min_registered_iou"),
+        ("max_veto_registered_iou", "growth_veto_max_registered_iou"),
+        ("min_veto_shifted_iou", "growth_veto_min_shifted_iou"),
+        ("max_veto_shifted_iou", "growth_veto_max_shifted_iou"),
+        ("min_veto_cell_probability", "growth_veto_min_cell_probability"),
+        ("max_veto_min_cell_probability", "growth_veto_max_min_cell_probability"),
+        (
+            "max_veto_local_neighbor_distortion",
+            "growth_veto_max_local_neighbor_distortion",
+        ),
+        ("min_veto_anchor_count", "growth_veto_min_anchor_count"),
+        (
+            "min_veto_complete_component_size",
+            "growth_veto_min_complete_component_size",
+        ),
+        ("max_vetoes_per_subject", "growth_veto_max_vetoes_per_subject"),
+    ],
+)
+def test_benchmark_manifest_rejects_duplicate_growth_veto_aliases(
+    tmp_path,
+    canonical: str,
+    alias: str,
+) -> None:
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-duplicate-alias",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    canonical: 1,
+                    alias: 2,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=f"{canonical}/{alias}"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
 def test_benchmark_manifest_rejects_teacher_base_for_coherence_suffix_growth_veto(
     tmp_path,
 ):
