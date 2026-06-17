@@ -996,6 +996,14 @@ def _configurable_loso_runner_kwargs(run_data: ManifestObject) -> dict[str, Any]
         model_kind = str(run_data["calibration_model"])
         kwargs["calibration_model"] = model_kind
         kwargs["model_kind"] = model_kind
+    if (
+        "calibration_model_kwargs" in run_data
+        and "calibration_model_kwargs_json" in run_data
+    ):
+        raise ValueError(
+            "Use either 'calibration_model_kwargs' or "
+            "'calibration_model_kwargs_json', not both"
+        )
     if "calibration_model_kwargs" in run_data:
         model_kwargs = _mapping_option(
             run_data["calibration_model_kwargs"], location="calibration_model_kwargs"
@@ -1007,6 +1015,22 @@ def _configurable_loso_runner_kwargs(run_data: ManifestObject) -> dict[str, Any]
             run_data["calibration_model_kwargs_json"]
         )
     if "hard_negative_options" in run_data:
+        scalar_fields = sorted(
+            key
+            for key in (
+                "hard_negative_ratio",
+                "hard_negative_top_k",
+                "hard_negative_column_candidates",
+                "hard_negative_features",
+            )
+            if key in run_data
+        )
+        if scalar_fields:
+            raise ValueError(
+                "Use either 'hard_negative_options' or scalar hard-negative fields, "
+                "not both: "
+                + ", ".join(scalar_fields)
+            )
         from bayescatrack.experiments.calibration_hard_negatives import (
             CandidateHardNegativeOptions,
         )
@@ -1034,11 +1058,40 @@ def _monotone_loso_runner_kwargs(run_data: ManifestObject) -> dict[str, Any]:
             run_data["feature_names"], location="feature_names"
         )
     if "monotone_options" in run_data:
+        alias_fields = sorted(
+            key
+            for key in ("monotone_ranker_kwargs", "monotone_ranker_kwargs_json")
+            if key in run_data
+        )
+        if alias_fields:
+            raise ValueError(
+                "Use either 'monotone_options' or monotone-ranker kwargs fields, "
+                "not both: "
+                + ", ".join(alias_fields)
+            )
         from bayescatrack.association.monotone_ranker import MonotoneRankerOptions
 
         kwargs["monotone_options"] = MonotoneRankerOptions(
             **_mapping_option(run_data["monotone_options"], location="monotone_options")
         )
+    else:
+        if (
+            "monotone_ranker_kwargs" in run_data
+            and "monotone_ranker_kwargs_json" in run_data
+        ):
+            raise ValueError(
+                "Use either 'monotone_ranker_kwargs' or "
+                "'monotone_ranker_kwargs_json', not both"
+            )
+        if "monotone_ranker_kwargs" in run_data:
+            kwargs["monotone_ranker_kwargs"] = _mapping_option(
+                run_data["monotone_ranker_kwargs"],
+                location="monotone_ranker_kwargs",
+            )
+        if "monotone_ranker_kwargs_json" in run_data:
+            kwargs["monotone_ranker_kwargs_json"] = str(
+                run_data["monotone_ranker_kwargs_json"]
+            )
     return kwargs
 
 

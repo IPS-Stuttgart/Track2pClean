@@ -214,6 +214,171 @@ def test_benchmark_manifest_accepts_monotone_loso_runner_options(tmp_path):
     assert options.max_negatives_per_positive == 3
 
 
+def test_benchmark_manifest_accepts_monotone_loso_runner_kwargs(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "monotone-loso",
+                    "runner": "track2p-monotone-loso",
+                    "monotone_ranker_kwargs": {
+                        "monotone_feature_names": ["one_minus_iou"],
+                        "max_iter": 12,
+                    },
+                }
+            ],
+        },
+    )
+
+    runner_kwargs = dict(load_benchmark_manifest(manifest_path).runs[0].runner_kwargs)
+
+    assert runner_kwargs["monotone_ranker_kwargs"] == {
+        "monotone_feature_names": ["one_minus_iou"],
+        "max_iter": 12,
+    }
+
+
+def test_benchmark_manifest_accepts_monotone_loso_runner_kwargs_json(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    monotone_json = '{"max_iter": 12}'
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "monotone-loso",
+                    "runner": "track2p-monotone-loso",
+                    "monotone_ranker_kwargs_json": monotone_json,
+                }
+            ],
+        },
+    )
+
+    runner_kwargs = dict(load_benchmark_manifest(manifest_path).runs[0].runner_kwargs)
+
+    assert runner_kwargs["monotone_ranker_kwargs_json"] == monotone_json
+
+
+@pytest.mark.parametrize(
+    ("first_key", "second_key"),
+    [
+        ("monotone_options", "monotone_ranker_kwargs"),
+        ("monotone_options", "monotone_ranker_kwargs_json"),
+        ("monotone_ranker_kwargs", "monotone_ranker_kwargs_json"),
+    ],
+)
+def test_benchmark_manifest_rejects_duplicate_monotone_loso_options(
+    tmp_path, first_key, second_key
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    values = {
+        "monotone_options": {"max_iter": 10},
+        "monotone_ranker_kwargs": {"max_iter": 11},
+        "monotone_ranker_kwargs_json": '{"max_iter": 12}',
+    }
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "monotone-loso",
+                    "runner": "track2p-monotone-loso",
+                    first_key: values[first_key],
+                    second_key: values[second_key],
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="Use either"):
+        load_benchmark_manifest(manifest_path)
+
+
+def test_benchmark_manifest_rejects_duplicate_loso_model_kwargs(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "hgb-loso",
+                    "runner": "track2p-loso-calibration",
+                    "calibration_model_kwargs": {"max_iter": 25},
+                    "calibration_model_kwargs_json": '{"max_iter": 50}',
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="calibration_model_kwargs"):
+        load_benchmark_manifest(manifest_path)
+
+
+@pytest.mark.parametrize(
+    ("scalar_key", "scalar_value"),
+    [
+        ("hard_negative_ratio", 2.0),
+        ("hard_negative_top_k", 5),
+        ("hard_negative_column_candidates", False),
+        ("hard_negative_features", "one_minus_iou"),
+    ],
+)
+def test_benchmark_manifest_rejects_duplicate_hard_negative_options(
+    tmp_path, scalar_key, scalar_value
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "hgb-loso",
+                    "runner": "track2p-loso-calibration",
+                    "hard_negative_options": {
+                        "negative_to_positive_ratio": 4.0,
+                    },
+                    scalar_key: scalar_value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="hard_negative_options"):
+        load_benchmark_manifest(manifest_path)
+
+
 def test_benchmark_manifest_rejects_runner_options_for_default_track2p(tmp_path):
     manifest_path = tmp_path / "benchmarks.json"
     _write_manifest(
