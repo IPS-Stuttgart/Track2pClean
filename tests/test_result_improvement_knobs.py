@@ -111,6 +111,74 @@ def test_uncertainty_penalizes_empty_registered_roi_columns() -> None:
     assert np.all(result.adjusted_cost_matrix[:, 1] > result.adjusted_cost_matrix[:, 0])
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("temperature", True),
+        ("temperature", False),
+        ("temperature", float("nan")),
+        ("temperature", float("inf")),
+        ("temperature", 0.0),
+        ("uncertainty_penalty_weight", True),
+        ("uncertainty_penalty_weight", False),
+        ("uncertainty_penalty_weight", float("nan")),
+        ("uncertainty_penalty_weight", float("inf")),
+        ("uncertainty_penalty_weight", -0.1),
+        ("registration_rmse_weight", True),
+        ("registration_rmse_weight", False),
+        ("registration_rmse_weight", float("nan")),
+        ("registration_rmse_weight", float("inf")),
+        ("registration_rmse_weight", -0.1),
+        ("invalid_warp_fraction_weight", True),
+        ("invalid_warp_fraction_weight", False),
+        ("invalid_warp_fraction_weight", float("nan")),
+        ("invalid_warp_fraction_weight", float("inf")),
+        ("invalid_warp_fraction_weight", -0.1),
+        ("empty_registered_roi_weight", True),
+        ("empty_registered_roi_weight", False),
+        ("empty_registered_roi_weight", float("nan")),
+        ("empty_registered_roi_weight", float("inf")),
+        ("empty_registered_roi_weight", -0.1),
+        ("gated_edge_weight", True),
+        ("gated_edge_weight", False),
+        ("gated_edge_weight", float("nan")),
+        ("gated_edge_weight", float("inf")),
+        ("gated_edge_weight", -0.1),
+        ("covariance_logdet_weight", True),
+        ("covariance_logdet_weight", False),
+        ("covariance_logdet_weight", float("nan")),
+        ("covariance_logdet_weight", float("inf")),
+        ("covariance_logdet_weight", -0.1),
+        ("local_margin_weight", True),
+        ("local_margin_weight", False),
+        ("local_margin_weight", float("nan")),
+        ("local_margin_weight", float("inf")),
+        ("local_margin_weight", -0.1),
+        ("activity_missing_weight", True),
+        ("activity_missing_weight", False),
+        ("activity_missing_weight", float("nan")),
+        ("activity_missing_weight", float("inf")),
+        ("activity_missing_weight", -0.1),
+        ("min_reliability", True),
+        ("min_reliability", False),
+        ("min_reliability", float("nan")),
+        ("min_reliability", float("inf")),
+        ("min_reliability", 0.0),
+        ("min_reliability", 1.1),
+        ("max_penalty", True),
+        ("max_penalty", False),
+        ("max_penalty", float("nan")),
+        ("max_penalty", float("inf")),
+        ("max_penalty", 0.0),
+    ],
+)
+def test_edge_uncertainty_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        EdgeUncertaintyConfig(**{field: value})
+
+
 def test_track2p_teacher_prior_reliefs_suite2p_edges() -> None:
     sessions = (
         _fake_session([10, 11]),
