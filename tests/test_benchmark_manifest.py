@@ -638,6 +638,51 @@ def test_benchmark_manifest_dispatches_coherence_suffix_teacher_rescue_options(
     assert (tmp_path / "results" / "suffix-teacher-rescue.csv").exists()
 
 
+@pytest.mark.parametrize(
+    ("options", "match"),
+    [
+        (
+            {"min_teacher_component_observations": 0},
+            "min_teacher_component_observations",
+        ),
+        ({"max_applied_teacher_edits": -2}, "max_applied_teacher_edits"),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_coherence_suffix_teacher_budgets(
+    tmp_path, monkeypatch, options, match
+):
+    from bayescatrack.experiments import (
+        track2p_policy_coherence_suffix_teacher_rescue,
+    )
+
+    def fake_suffix_teacher_rescue(*_args, **_kwargs):
+        raise AssertionError("runner should not be called for invalid options")
+
+    monkeypatch.setattr(
+        track2p_policy_coherence_suffix_teacher_rescue,
+        "run_track2p_policy_coherence_suffix_teacher_rescue",
+        fake_suffix_teacher_rescue,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "suffix-teacher-rescue",
+                    "runner": "track2p-policy-coherence-suffix-teacher-rescue",
+                    "data": "data",
+                    "output": "results/suffix-teacher-rescue.csv",
+                    **options,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=match):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
 def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     tmp_path, monkeypatch
 ):

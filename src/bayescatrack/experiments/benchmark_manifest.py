@@ -1790,8 +1790,8 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
         ),
     )
     raw_max_edits = options.get("max_applied_teacher_edits")
-    max_applied_teacher_edits = (
-        None if raw_max_edits is None or int(raw_max_edits) < 0 else int(raw_max_edits)
+    max_applied_teacher_edits = _minus_one_or_nonnegative_int_or_none(
+        raw_max_edits, name="max_applied_teacher_edits"
     )
     allow_completing_rescue = None
     if "allow_completing_rescue" in options:
@@ -1844,8 +1844,8 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
         allow_fragment_merges=_bool_option(
             options, "allow_fragment_merges", default=True
         ),
-        min_teacher_component_observations=int(
-            options.get("min_teacher_component_observations", 1)
+        min_teacher_component_observations=_positive_int_option(
+            options, "min_teacher_component_observations", default=1
         ),
         max_applied_teacher_edits=max_applied_teacher_edits,
     )
@@ -3241,6 +3241,17 @@ def _nonnegative_int_or_none(value: Any, *, name: str) -> int | None:
     parsed = _integer_value(value, name=name)
     if parsed < 0:
         raise ValueError(f"{name} must be non-negative or null")
+    return parsed
+
+
+def _minus_one_or_nonnegative_int_or_none(value: Any, *, name: str) -> int | None:
+    if value is None:
+        return None
+    parsed = _integer_value(value, name=name)
+    if parsed == -1:
+        return None
+    if parsed < -1:
+        raise ValueError(f"{name} must be -1, non-negative, or null")
     return parsed
 
 
