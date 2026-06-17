@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import importlib
 import json
 
 import pytest
@@ -773,7 +774,9 @@ def test_benchmark_manifest_rejects_teacher_base_for_coherence_suffix_growth_vet
 def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
     tmp_path, monkeypatch
 ):
-    from bayescatrack.experiments import track2p_policy_pyrecest_residual_mht_cleanup
+    track2p_policy_pyrecest_residual_mht_cleanup = importlib.import_module(
+        "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup"
+    )
 
     calls = {}
 
@@ -896,7 +899,9 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
 def test_benchmark_manifest_dispatches_pyrecest_frontier_mht_defaults(
     tmp_path, monkeypatch
 ):
-    from bayescatrack.experiments import track2p_policy_pyrecest_residual_mht_cleanup
+    track2p_policy_pyrecest_residual_mht_cleanup = importlib.import_module(
+        "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup"
+    )
 
     calls = []
 
@@ -996,7 +1001,9 @@ def test_benchmark_manifest_dispatches_pyrecest_frontier_mht_defaults(
 def test_benchmark_manifest_dispatches_pyrecest_calibrated_mht_options(
     tmp_path, monkeypatch
 ):
-    from bayescatrack.experiments import track2p_policy_pyrecest_calibrated_mht_cleanup
+    track2p_policy_pyrecest_calibrated_mht_cleanup = importlib.import_module(
+        "bayescatrack.experiments.track2p_policy_pyrecest_calibrated_mht_cleanup"
+    )
 
     calls = {}
 
@@ -1064,6 +1071,48 @@ def test_benchmark_manifest_dispatches_pyrecest_calibrated_mht_options(
     assert calls["kwargs"]["structural_gate"].max_registered_iou == 0.60
     assert calls["kwargs"]["structural_gate"].max_shifted_iou == 0.80
     assert (tmp_path / "results" / "pyrecest-calibrated.csv").exists()
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "min_growth_residual_mahalanobis",
+        "growth_veto_min_mahalanobis",
+        "min_growth_residual",
+        "growth_veto_min_residual",
+        "min_veto_registered_iou",
+        "growth_veto_min_registered_iou",
+        "max_veto_registered_iou",
+        "growth_veto_max_registered_iou",
+        "min_veto_shifted_iou",
+        "growth_veto_min_shifted_iou",
+        "max_veto_shifted_iou",
+        "growth_veto_max_shifted_iou",
+        "max_vetoes_per_subject",
+        "growth_veto_max_vetoes_per_subject",
+    ],
+)
+def test_benchmark_manifest_rejects_ignored_calibrated_mht_growth_veto_fields(
+    tmp_path,
+    field: str,
+) -> None:
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-calibrated",
+                    "runner": "track2p-policy-pyrecest-calibrated-mht-cleanup",
+                    "data": "data",
+                    field: 1,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=field):
+        load_benchmark_manifest(manifest_path)
 
 
 def test_benchmark_manifest_rejects_invalid_pyrecest_mht_selection_mode(tmp_path):

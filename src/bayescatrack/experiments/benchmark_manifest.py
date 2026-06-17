@@ -204,7 +204,34 @@ TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_FIELDS = set(
 TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_FIELDS = set(
     TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS
 )
-TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_FIELDS = TRACK2P_POLICY_GROWTH_VETO_FIELDS | {
+TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_STRUCTURAL_FIELDS = (
+    TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS
+    | {
+        "anchor_min_registered_iou",
+        "anchor_min_shifted_iou",
+        "anchor_min_cell_probability",
+        "min_veto_cell_probability",
+        "max_veto_min_cell_probability",
+        "max_veto_local_neighbor_distortion",
+        "min_veto_anchor_count",
+        "min_veto_complete_component_size",
+        "max_veto_row_rank",
+        "max_veto_column_rank",
+        "require_veto_not_suffix_edge",
+        "require_veto_terminal_edge",
+        "require_veto_last_session_edge",
+        "require_veto_complete_component",
+        "growth_veto_base",
+        "growth_veto_min_cell_probability",
+        "growth_veto_max_min_cell_probability",
+        "growth_veto_max_local_neighbor_distortion",
+        "growth_veto_min_anchor_count",
+        "growth_veto_min_complete_component_size",
+    }
+)
+TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_FIELDS = (
+    TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_STRUCTURAL_FIELDS
+    | {
     "mht_max_edits_per_subject",
     "mht_max_hypotheses",
     "mht_edit_penalty",
@@ -212,6 +239,7 @@ TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_FIELDS = TRACK2P_POLICY_GROWTH_VETO_FIELD
     "calibrated_fp_logistic_c",
     "calibrated_fp_min_training_positives",
 }
+)
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = TRACK2P_POLICY_COMPONENT_FIELDS | {
     "allow_completing_rescue",
     "allow_teacher_complete_row_rescue",

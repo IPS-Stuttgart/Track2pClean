@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
@@ -49,6 +50,24 @@ CALIBRATED_FEATURE_NAMES = (
     "log1p_growth_residual",
     "log1p_growth_residual_mahalanobis",
     "min_endpoint_cell_probability",
+)
+_UNSUPPORTED_CALIBRATED_GROWTH_VETO_OPTIONS = frozenset(
+    {
+        "--min-growth-residual-mahalanobis",
+        "--growth-veto-min-mahalanobis",
+        "--min-growth-residual",
+        "--growth-veto-min-residual",
+        "--min-veto-registered-iou",
+        "--growth-veto-min-registered-iou",
+        "--max-veto-registered-iou",
+        "--growth-veto-max-registered-iou",
+        "--min-veto-shifted-iou",
+        "--growth-veto-min-shifted-iou",
+        "--max-veto-shifted-iou",
+        "--growth-veto-max-shifted-iou",
+        "--max-vetoes-per-subject",
+        "--growth-veto-max-vetoes-per-subject",
+    }
 )
 
 
@@ -699,9 +718,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _explicit_option_present(args: Sequence[str], option: str) -> bool:
+    prefix = f"{option}="
+    return any(arg == option or arg.startswith(prefix) for arg in args)
+
+
+def _reject_unsupported_calibrated_options(
+    parser: argparse.ArgumentParser, args: Sequence[str]
+) -> None:
+    unsupported = sorted(
+        option
+        for option in _UNSUPPORTED_CALIBRATED_GROWTH_VETO_OPTIONS
+        if _explicit_option_present(args, option)
+    )
+    if unsupported:
+        parser.error(
+            "track2p-policy-pyrecest-calibrated-mht-cleanup does not apply "
+            "growth-residual, overlap, shifted-IoU, or deterministic veto-count "
+            "gates; use MHT/calibration options instead of "
+            + ", ".join(unsupported)
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
-    args = parser.parse_args(argv)
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    _reject_unsupported_calibrated_options(parser, raw_args)
+    args = parser.parse_args(raw_args)
     if args.growth_veto_base != "coherence-suffix":
         parser.error(
             "track2p-policy-pyrecest-calibrated-mht-cleanup requires "

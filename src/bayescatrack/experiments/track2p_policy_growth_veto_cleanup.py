@@ -762,7 +762,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--max-veto-registered-iou",
         "--growth-veto-max-registered-iou",
         dest="max_veto_registered_iou",
-        type=float,
+        type=_optional_float_arg,
         default=0.60,
         help=(
             "Optional upper bound on registered IoU for growth-veto candidates. "
@@ -781,7 +781,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--max-veto-shifted-iou",
         "--growth-veto-max-shifted-iou",
         dest="max_veto_shifted_iou",
-        type=float,
+        type=_optional_float_arg,
         default=0.80,
         help=(
             "Optional upper bound on shifted IoU for growth-veto candidates. "
@@ -800,7 +800,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--max-veto-min-cell-probability",
         "--growth-veto-max-min-cell-probability",
         dest="max_veto_min_cell_probability",
-        type=float,
+        type=_optional_float_arg,
         default=0.65,
         help=(
             "Optional upper bound on min(cell_probability_a, cell_probability_b). "

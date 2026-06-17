@@ -199,6 +199,31 @@ def test_growth_veto_cleanup_parser_can_disable_distortion_cap() -> None:
     assert args.max_veto_local_neighbor_distortion is None
 
 
+@pytest.mark.parametrize(
+    ("option", "attribute"),
+    [
+        ("--max-veto-registered-iou", "max_veto_registered_iou"),
+        ("--max-veto-shifted-iou", "max_veto_shifted_iou"),
+        ("--max-veto-min-cell-probability", "max_veto_min_cell_probability"),
+    ],
+)
+def test_growth_veto_cleanup_parser_can_disable_optional_caps(
+    option: str, attribute: str
+) -> None:
+    args = cleanup.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "growth_veto_cleanup.csv",
+            option,
+            "none",
+        ]
+    )
+
+    assert getattr(args, attribute) is None
+
+
 def test_growth_veto_gate_accepts_extreme_terminal_complete_edge() -> None:
     reason = cleanup.growth_veto_gate_reason(
         _candidate_row(), cleanup.GrowthVetoGate(), n_sessions=7

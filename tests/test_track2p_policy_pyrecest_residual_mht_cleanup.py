@@ -880,3 +880,39 @@ def test_calibrated_mht_cli_rejects_teacher_rescue_base(
                 "teacher-rescue",
             ]
         )
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--min-growth-residual-mahalanobis",
+        "--growth-veto-min-mahalanobis",
+        "--min-growth-residual",
+        "--growth-veto-min-residual",
+        "--min-veto-registered-iou",
+        "--growth-veto-min-registered-iou",
+        "--max-veto-registered-iou",
+        "--growth-veto-max-registered-iou",
+        "--min-veto-shifted-iou",
+        "--growth-veto-min-shifted-iou",
+        "--max-veto-shifted-iou",
+        "--growth-veto-max-shifted-iou",
+        "--max-vetoes-per-subject",
+        "--growth-veto-max-vetoes-per-subject",
+    ],
+)
+def test_calibrated_mht_cli_rejects_explicit_ignored_growth_veto_options(
+    calibrated_mht_module,
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        calibrated_mht_module.main(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                option,
+                "1",
+            ]
+        )
