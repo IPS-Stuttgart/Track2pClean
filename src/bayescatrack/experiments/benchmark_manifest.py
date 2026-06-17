@@ -2763,15 +2763,23 @@ def _run_configurable_loso_rows(
             )
         )
     else:
+        candidate_top_k = getattr(config, "calibration_candidate_top_k_per_anchor", 20)
         hard_negative_options = CandidateHardNegativeOptions(
             negative_to_positive_ratio=_float_option(
-                options, "hard_negative_ratio", default=4.0
+                options,
+                "hard_negative_ratio",
+                default=float(getattr(config, "calibration_hard_negative_ratio", 4.0)),
             ),
             candidate_top_k_per_anchor=_positive_int_or_none(
-                options.get("hard_negative_top_k", 20), name="hard_negative_top_k"
+                options.get("hard_negative_top_k", candidate_top_k),
+                name="hard_negative_top_k",
             ),
             include_column_candidates=_bool_option(
-                options, "hard_negative_column_candidates", default=True
+                options,
+                "hard_negative_column_candidates",
+                default=bool(
+                    getattr(config, "calibration_include_column_candidates", True)
+                ),
             ),
             hardness_feature_names=_string_tuple(
                 options.get("hard_negative_features", ()),
@@ -2790,7 +2798,12 @@ def _run_configurable_loso_rows(
         )
 
     kwargs: dict[str, Any] = {
-        "sample_weight_strategy": str(options.get("sample_weight_strategy", "none")),
+        "sample_weight_strategy": str(
+            options.get(
+                "sample_weight_strategy",
+                getattr(config, "calibration_sample_weight_strategy", "none"),
+            )
+        ),
         "model_kind": str(
             options.get("model_kind", options.get("calibration_model", "logistic"))
         ),

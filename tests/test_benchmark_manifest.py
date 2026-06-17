@@ -1407,6 +1407,50 @@ def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkey
     assert (tmp_path / "results" / "configurable-loso.csv").exists()
 
 
+def test_benchmark_manifest_configurable_loso_uses_config_calibration_defaults(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import track2p_configurable_loso_calibration
+    from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
+
+    calls = {}
+
+    class FakeResult:
+        def to_rows(self):
+            return []
+
+    def fake_configurable_loso(config, **kwargs):
+        calls["config"] = config
+        calls["kwargs"] = kwargs
+        return FakeResult()
+
+    monkeypatch.setattr(
+        track2p_configurable_loso_calibration,
+        "run_track2p_configurable_loso_calibration",
+        fake_configurable_loso,
+    )
+    config = Track2pBenchmarkConfig(
+        data=tmp_path,
+        method="global-assignment",
+        split="leave-one-subject-out",
+        cost="calibrated",
+        calibration_sample_weight_strategy="balanced",
+        calibration_hard_negative_ratio=7.5,
+        calibration_candidate_top_k_per_anchor=None,
+        calibration_include_column_candidates=False,
+        progress=False,
+    )
+
+    rows = bm._run_configurable_loso_rows(config, {})
+
+    hard_negative_options = calls["kwargs"]["hard_negative_options"]
+    assert rows == []
+    assert calls["kwargs"]["sample_weight_strategy"] == "balanced"
+    assert hard_negative_options.negative_to_positive_ratio == 7.5
+    assert hard_negative_options.candidate_top_k_per_anchor is None
+    assert not hard_negative_options.include_column_candidates
+
+
 def test_benchmark_manifest_dispatches_registration_qa_runner(tmp_path, monkeypatch):
     calls = {}
 
