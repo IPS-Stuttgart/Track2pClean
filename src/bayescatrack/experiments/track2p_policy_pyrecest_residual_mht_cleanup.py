@@ -9,6 +9,15 @@ scores plus a candidate ledger.
 Selection uses only label-free fields.  Manual-GT labels and score deltas can
 appear in diagnostic rows inherited from growth-veto what-if machinery, but they
 are never passed into the PyRecEst candidate score or conflict keys.
+
+Two selection modes are available.  The default ``additive`` mode keeps the
+historical behaviour: PyRecEst ranks hypotheses by the sum of independent
+per-edit candidate scores minus a flat edit penalty.  The opt-in
+``global-rescore`` mode instead re-ranks the enumerated, conflict-free
+hypotheses by the label-free structural quality of the *resulting* edited track
+configuration, so it can reject an edit set whose members each look locally
+plausible but which jointly over-fragment a track.  Both modes remain label-free
+and fall back to the no-edit hypothesis when nothing clears the score threshold.
 """
 
 from __future__ import annotations
@@ -71,6 +80,9 @@ class PyRecEstResidualMHTOptions:
     max_hypotheses: int = 16
     edit_penalty: float = 0.25
     score_threshold: float = 1.0
+    selection_mode: Literal["additive", "global-rescore"] = "additive"
+    fragmentation_penalty: float = 0.5
+    min_meaningful_track_length: int = 2
     include_high_overlap_low_motion: bool = False
     high_overlap_min_registered_iou: float = 0.85
     high_overlap_max_growth_residual: float = 0.50
@@ -183,10 +195,22 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
             pyrecest_candidates,
             config=pyrecest_config,
         )
-        selected_hypothesis = select_residual_hypothesis(
-            pyrecest_candidates,
-            config=pyrecest_config,
-        )
+        if mht_options.selection_mode == "global-rescore":
+            selected_hypothesis, selected_objective = (
+                _select_residual_hypothesis_global_rescore(
+                    hypotheses,
+                    candidate_rows,
+                    base_tracks=state.combined,
+                    gate=growth_veto_gate,
+                    options=mht_options,
+                )
+            )
+        else:
+            selected_hypothesis = select_residual_hypothesis(
+                pyrecest_candidates,
+                config=pyrecest_config,
+            )
+            selected_objective = float(selected_hypothesis.score)
         selected_ids = set(selected_hypothesis.candidate_ids)
         selected_rows = [
             row
@@ -210,6 +234,13 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
                 "track2p_pyrecest_mht_selected": int(len(selected_rows)),
                 "track2p_pyrecest_mht_applied": int(len(applied_keys)),
                 "track2p_pyrecest_mht_selected_score": float(selected_hypothesis.score),
+                "track2p_pyrecest_mht_selection_mode": str(
+                    mht_options.selection_mode
+                ),
+                "track2p_pyrecest_mht_selected_objective": float(selected_objective),
+                "track2p_pyrecest_mht_fragmentation_penalty": float(
+                    mht_options.fragmentation_penalty
+                ),
                 "track2p_pyrecest_mht_candidate_top_k": int(
                     mht_options.candidate_top_k
                 ),
@@ -506,6 +537,133 @@ def _candidate_score(
     return float(score)
 
 
+def _track_short_fragment_count(
+    tracks: Any, *, min_meaningful_track_length: int
+) -> int:
+    """Count label-free short track fragments in a track matrix.
+
+    A short fragment is a track row that is observed in at least one session but
+    in fewer than ``min_meaningful_track_length`` sessions.  With the default of
+    two this counts single-session singletons, which is the structural debris a
+    growth-veto split leaves behind when it prunes a spurious endpoint.
+    """
+
+    matrix = veto._as_track_matrix(tracks)
+    if matrix.size == 0:
+        return 0
+    observed = np.sum(matrix >= 0, axis=1)
+    threshold = max(1, int(min_meaningful_track_length))
+    return int(np.sum((observed > 0) & (observed < threshold)))
+
+
+def _global_hypothesis_objective(
+    base_matrix: np.ndarray,
+    base_short_fragments: int,
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    gate: cleanup.GrowthVetoGate,
+    options: PyRecEstResidualMHTOptions,
+) -> tuple[float, int]:
+    """Score one hypothesis by the resulting edited configuration, label-free.
+
+    Returns ``(objective, n_applied)``.  The benefit term reuses the same
+    label-free per-edit candidate score that PyRecEst ranked on, but the penalty
+    is computed on the *resulting* track matrix, so concentrating edits that
+    jointly shatter a track is penalised non-additively.
+    """
+
+    if not rows:
+        return 0.0, 0
+    apply_gate = replace(gate, max_vetoes_per_subject=len(rows))
+    edited_tracks, applied_keys = cleanup._apply_growth_veto_rows(
+        base_matrix,
+        rows,
+        gate=apply_gate,
+    )
+    if not applied_keys:
+        return 0.0, 0
+    applied_set = set(applied_keys)
+    applied_rows = [
+        row for row in rows if cleanup._edge_row_key(row) in applied_set
+    ]
+    benefit = sum(_candidate_score(row, options=options) for row in applied_rows)
+    edited_short_fragments = _track_short_fragment_count(
+        edited_tracks,
+        min_meaningful_track_length=options.min_meaningful_track_length,
+    )
+    new_short_fragments = max(
+        0, int(edited_short_fragments) - int(base_short_fragments)
+    )
+    objective = (
+        float(benefit)
+        - float(options.edit_penalty) * float(len(applied_keys))
+        - float(options.fragmentation_penalty) * float(new_short_fragments)
+    )
+    return float(objective), int(len(applied_keys))
+
+
+def _select_residual_hypothesis_global_rescore(
+    hypotheses: Sequence[Any],
+    candidate_rows: Sequence[Mapping[str, Any]],
+    *,
+    base_tracks: Any,
+    gate: cleanup.GrowthVetoGate,
+    options: PyRecEstResidualMHTOptions,
+) -> tuple[Any, float]:
+    """Pick the enumerated hypothesis with the best resulting configuration.
+
+    Falls back to the enumerated no-edit hypothesis (objective ``0.0``) when no
+    non-empty hypothesis applies or none clears ``score_threshold``.
+    """
+
+    empty_hypothesis = next(
+        (hypothesis for hypothesis in hypotheses if int(hypothesis.n_edits) == 0),
+        None,
+    )
+    candidates_by_id = {
+        str(row["pyrecest_candidate_id"]): row for row in candidate_rows
+    }
+    base_matrix = veto._as_track_matrix(base_tracks)
+    base_short_fragments = _track_short_fragment_count(
+        base_matrix,
+        min_meaningful_track_length=options.min_meaningful_track_length,
+    )
+    scored: list[tuple[float, int, tuple[str, ...], Any]] = []
+    for hypothesis in hypotheses:
+        if int(hypothesis.n_edits) == 0:
+            continue
+        rows = [
+            candidates_by_id[candidate_id]
+            for candidate_id in hypothesis.candidate_ids
+            if candidate_id in candidates_by_id
+        ]
+        objective, n_applied = _global_hypothesis_objective(
+            base_matrix,
+            base_short_fragments,
+            rows,
+            gate=gate,
+            options=options,
+        )
+        if n_applied <= 0:
+            continue
+        scored.append(
+            (
+                float(objective),
+                int(hypothesis.n_edits),
+                tuple(str(candidate_id) for candidate_id in hypothesis.candidate_ids),
+                hypothesis,
+            )
+        )
+    if not scored:
+        return empty_hypothesis, 0.0
+    # Prefer the highest objective, then fewer edits, then a deterministic order.
+    scored.sort(key=lambda item: (-item[0], item[1], item[2]))
+    best_objective, _n_edits, _ids, best_hypothesis = scored[0]
+    if best_objective < float(options.score_threshold):
+        return empty_hypothesis, 0.0
+    return best_hypothesis, float(best_objective)
+
+
 def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     by_subject: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
     for row in rows:
@@ -567,6 +725,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mht-max-hypotheses", type=int, default=16)
     parser.add_argument("--mht-edit-penalty", type=float, default=0.25)
     parser.add_argument("--mht-score-threshold", type=float, default=1.0)
+    parser.add_argument(
+        "--mht-selection-mode",
+        choices=("additive", "global-rescore"),
+        default="additive",
+        help=(
+            "How PyRecEst hypotheses are ranked. 'additive' (default) keeps the "
+            "historical sum-of-edit-scores ranking. 'global-rescore' re-ranks the "
+            "enumerated conflict-free hypotheses by the label-free structural "
+            "quality of the resulting edited track configuration, penalising edit "
+            "sets that jointly over-fragment a track."
+        ),
+    )
+    parser.add_argument(
+        "--mht-fragmentation-penalty",
+        type=float,
+        default=0.5,
+        help=(
+            "Per-fragment penalty applied in --mht-selection-mode global-rescore "
+            "for each short track fragment the edit set newly creates."
+        ),
+    )
+    parser.add_argument(
+        "--mht-min-meaningful-track-length",
+        type=int,
+        default=2,
+        help=(
+            "Minimum observed-session count for a track row not to count as a "
+            "short fragment in global-rescore selection (default 2 counts "
+            "single-session singletons as fragments)."
+        ),
+    )
     parser.add_argument(
         "--mht-include-high-overlap-low-motion-candidates",
         action="store_true",
@@ -684,6 +873,11 @@ def main(argv: list[str] | None = None) -> int:
             max_hypotheses=int(args.mht_max_hypotheses),
             edit_penalty=float(args.mht_edit_penalty),
             score_threshold=float(args.mht_score_threshold),
+            selection_mode=cast(
+                Literal["additive", "global-rescore"], args.mht_selection_mode
+            ),
+            fragmentation_penalty=float(args.mht_fragmentation_penalty),
+            min_meaningful_track_length=int(args.mht_min_meaningful_track_length),
             include_high_overlap_low_motion=bool(
                 args.mht_include_high_overlap_low_motion_candidates
             ),
