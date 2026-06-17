@@ -28,6 +28,15 @@ def test_policy_component_runner_aliases_are_supported() -> None:
     assert _runner_name("track2p-coherence-suffix-teacher-rescue") == (
         "track2p-policy-coherence-suffix-teacher-rescue"
     )
+    assert _runner_name("track2p-policy-coherence-suffix-growth-veto-cleanup") == (
+        "track2p-policy-coherence-suffix-growth-veto-cleanup"
+    )
+    assert _runner_name("track2p-coherence-suffix-growth-veto-cleanup") == (
+        "track2p-policy-coherence-suffix-growth-veto-cleanup"
+    )
+    assert _runner_name("track2p-component-coherence-suffix-growth-veto-cleanup") == (
+        "track2p-policy-coherence-suffix-growth-veto-cleanup"
+    )
 
 
 def test_policy_component_runner_config_defaults_method() -> None:
@@ -73,6 +82,26 @@ def test_policy_coherence_suffix_runner_config_defaults_method() -> None:
 def test_policy_coherence_suffix_teacher_runner_config_defaults_method() -> None:
     config = _run_config(
         "track2p-policy-coherence-suffix-teacher-rescue",
+        {
+            "data": "data-root",
+            "reference": "gt-root",
+            "reference_kind": "manual-gt",
+        },
+        base_dir=Path("/tmp/benchmark"),
+    )
+
+    assert config.method == "global-assignment"
+    assert config.data == Path("/tmp/benchmark/data-root")
+    assert config.reference == Path("/tmp/benchmark/gt-root")
+    assert config.include_non_cells is False
+    assert config.weighted_masks is False
+    assert config.weighted_centroids is False
+    assert config.exclude_overlapping_pixels is False
+
+
+def test_policy_coherence_suffix_growth_veto_runner_config_defaults_method() -> None:
+    config = _run_config(
+        "track2p-policy-coherence-suffix-growth-veto-cleanup",
         {
             "data": "data-root",
             "reference": "gt-root",

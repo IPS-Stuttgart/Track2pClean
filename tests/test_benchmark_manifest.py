@@ -613,6 +613,7 @@ def test_benchmark_manifest_growth_veto_defaults_keep_upper_iou_caps(
                     "runner": "track2p-policy-growth-veto-cleanup",
                     "data": "data",
                     "output": "results/growth-veto-default-caps.csv",
+                    "min_veto_anchor_count": -3,
                     "min_veto_complete_component_size": None,
                     "max_veto_local_neighbor_distortion": "none",
                 }
@@ -625,8 +626,66 @@ def test_benchmark_manifest_growth_veto_defaults_keep_upper_iou_caps(
     growth_gate = calls["kwargs"]["growth_veto_gate"]
     assert growth_gate.max_registered_iou == 0.60
     assert growth_gate.max_shifted_iou == 0.80
+    assert growth_gate.min_anchor_count == 0
     assert growth_gate.min_complete_component_size is None
     assert growth_gate.max_local_neighbor_distortion is None
+
+
+def test_benchmark_manifest_coherence_suffix_growth_veto_defaults_base(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
+
+    calls = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {
+                "subject": "jm_suffix_growth_veto",
+                "variant": "fake coherence suffix growth veto cleanup",
+                "method": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                "n_sessions": 7,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+        edge_rows = ()
+        summary_rows = ()
+
+    def fake_growth_veto_cleanup(config, **kwargs):
+        calls["config"] = config
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_growth_veto_cleanup,
+        "run_track2p_policy_growth_veto_cleanup",
+        fake_growth_veto_cleanup,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "coherence-suffix-growth-veto",
+                    "runner": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                    "data": "data",
+                    "output": "results/coherence-suffix-growth-veto.csv",
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["config"].method == "global-assignment"
+    assert calls["kwargs"]["prediction_base"] == "coherence-suffix"
+    assert (tmp_path / "results" / "coherence-suffix-growth-veto.csv").exists()
 
 
 def test_benchmark_manifest_rejects_negative_growth_veto_component_size(tmp_path):
@@ -646,6 +705,68 @@ def test_benchmark_manifest_rejects_negative_growth_veto_component_size(tmp_path
     )
 
     with pytest.raises(ValueError, match="min_veto_complete_component_size"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+def test_benchmark_manifest_rejects_ignored_growth_veto_teacher_options(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-ignored-teacher-option",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "teacher_edge_order": "dynamic-confidence",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="teacher_edge_order"):
+        load_benchmark_manifest(manifest_path)
+
+
+def test_benchmark_manifest_rejects_invalid_growth_veto_base(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-invalid-base",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "growth_veto_base": "teacher-oracle",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="growth_veto_base"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+def test_benchmark_manifest_rejects_teacher_base_for_coherence_suffix_growth_veto(
+    tmp_path,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "suffix-growth-veto-wrong-base",
+                    "runner": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                    "data": "data",
+                    "growth_veto_base": "teacher-rescue",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="coherence-suffix"):
         run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
 
@@ -716,6 +837,7 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
                     "max_veto_shifted_iou": 0.90,
                     "max_veto_min_cell_probability": 0.65,
                     "max_veto_local_neighbor_distortion": None,
+                    "growth_veto_min_anchor_count": -2,
                     "max_veto_row_rank": 2,
                     "max_veto_column_rank": 2,
                     "growth_veto_base": "coherence-suffix",
@@ -751,6 +873,7 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
     assert growth_gate.min_growth_residual == 2.0
     assert growth_gate.max_row_rank == 2
     assert growth_gate.max_column_rank == 2
+    assert growth_gate.min_anchor_count == 0
     assert growth_gate.max_local_neighbor_distortion is None
     mht_options = calls["kwargs"]["mht_options"]
     assert mht_options.candidate_top_k == 8

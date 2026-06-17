@@ -525,6 +525,8 @@ def _select_training_probability_threshold(
         if best is None or candidate_score > best:
             best = candidate_score
             best_threshold = float(threshold)
+    if best is None:
+        return float(math.nextafter(1.0, math.inf))
     return float(best_threshold)
 
 

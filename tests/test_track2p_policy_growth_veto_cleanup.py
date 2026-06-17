@@ -6,6 +6,9 @@ from typing import Any
 
 import numpy as np
 from bayescatrack import cli
+from bayescatrack.experiments import (
+    track2p_policy_coherence_suffix_growth_veto_cleanup as suffix_cleanup,
+)
 from bayescatrack.experiments import track2p_policy_growth_veto_cleanup as cleanup
 
 
@@ -152,6 +155,25 @@ def test_growth_veto_cleanup_parser_accepts_coherence_suffix_base() -> None:
     )
 
     assert args.growth_veto_base == "coherence-suffix"
+
+
+def test_coherence_suffix_growth_veto_wrapper_honors_equals_override() -> None:
+    args = suffix_cleanup._with_coherence_suffix_default(
+        ["--growth-veto-base=teacher-rescue"]
+    )
+
+    assert args == ["--growth-veto-base=teacher-rescue"]
+
+
+def test_coherence_suffix_growth_veto_wrapper_adds_default_base() -> None:
+    args = suffix_cleanup._with_coherence_suffix_default(["--data", "track2p-root"])
+
+    assert args == [
+        "--data",
+        "track2p-root",
+        "--growth-veto-base",
+        "coherence-suffix",
+    ]
 
 
 def test_growth_veto_cleanup_parser_can_disable_distortion_cap() -> None:
@@ -496,6 +518,40 @@ def test_growth_veto_row_selection_respects_per_subject_cap() -> None:
 
     assert len(selected) == 1
     assert selected[0]["roi_b"] == 1211
+
+
+def test_growth_veto_application_rechecks_complete_component_after_prior_edit() -> None:
+    tracks = np.asarray([[10, 11, 12, 13]], dtype=int)
+    terminal = _candidate_row(
+        session_a=2,
+        session_b=3,
+        roi_a=12,
+        roi_b=13,
+        complete_component_size=4,
+    )
+    middle = _candidate_row(
+        session_a=1,
+        session_b=2,
+        roi_a=11,
+        roi_b=12,
+        complete_component_size=4,
+        is_terminal_edge=0,
+        is_last_session_edge=0,
+    )
+
+    edited, applied = cleanup._apply_growth_veto_rows(  # pylint: disable=protected-access
+        tracks,
+        [terminal, middle],
+        gate=cleanup.GrowthVetoGate(
+            require_terminal_edge=False,
+            require_last_session_edge=False,
+            require_complete_component=True,
+            max_vetoes_per_subject=2,
+        ),
+    )
+
+    assert applied == ((2, 3, 12, 13, 0),)
+    assert edited.tolist() == [[10, 11, 12, -1], [-1, -1, -1, 13]]
 
 
 def test_growth_veto_selector_ignores_audit_only_gt_and_delta_columns() -> None:

@@ -415,7 +415,11 @@ def test_global_rescore_prefers_less_fragmenting_hypothesis(
         fragmentation_penalty=0.5,
         score_threshold=1.0,
     )
-    gate = cleanup.GrowthVetoGate(max_local_neighbor_distortion=None)
+    gate = cleanup.GrowthVetoGate(
+        max_local_neighbor_distortion=None,
+        require_terminal_edge=False,
+        require_last_session_edge=False,
+    )
 
     # The additive ranking that PyRecEst would use prefers the two-edit set,
     # because it sums the high-residual middle edit and the terminal edit.
@@ -477,7 +481,11 @@ def test_global_rescore_falls_back_to_no_edit_below_threshold(
         selection_mode="global-rescore",
         score_threshold=5.0,
     )
-    gate = cleanup.GrowthVetoGate(max_local_neighbor_distortion=None)
+    gate = cleanup.GrowthVetoGate(
+        max_local_neighbor_distortion=None,
+        require_terminal_edge=False,
+        require_last_session_edge=False,
+    )
     empty = _hypothesis()
 
     selected, objective = (
@@ -520,7 +528,11 @@ def test_global_rescore_does_not_read_audit_only_columns(
     options = residual_mht_module.PyRecEstResidualMHTOptions(
         selection_mode="global-rescore",
     )
-    gate = cleanup.GrowthVetoGate(max_local_neighbor_distortion=None)
+    gate = cleanup.GrowthVetoGate(
+        max_local_neighbor_distortion=None,
+        require_terminal_edge=False,
+        require_last_session_edge=False,
+    )
 
     selected, _objective = (
         residual_mht_module._select_residual_hypothesis_global_rescore(  # pylint: disable=protected-access
@@ -551,6 +563,38 @@ def test_residual_mht_cli_exposes_global_rescore_knobs(residual_mht_module) -> N
 
     assert args.mht_selection_mode == "global-rescore"
     assert args.mht_fragmentation_penalty == 0.75
+
+
+def test_pyrecest_mht_summary_reports_applied_edge_labels(
+    residual_mht_module,
+) -> None:
+    rows = [
+        {
+            "subject": "jm038",
+            "pyrecest_candidate": 1,
+            "selected_by_pyrecest_mht": 1,
+            "applied_by_pyrecest_mht": 1,
+            "edge_status_against_gt": "false_positive",
+        },
+        {
+            "subject": "jm038",
+            "pyrecest_candidate": 1,
+            "selected_by_pyrecest_mht": 1,
+            "applied_by_pyrecest_mht": 0,
+            "edge_status_against_gt": "true_positive",
+        },
+    ]
+
+    summary = {
+        row["subject"]: row
+        for row in residual_mht_module._summary_rows(rows)  # pylint: disable=protected-access
+    }
+
+    assert summary["jm038"]["selected_true_positive_edges"] == 1
+    assert summary["jm038"]["selected_false_positive_edges"] == 1
+    assert summary["jm038"]["applied_true_positive_edges"] == 0
+    assert summary["jm038"]["applied_false_positive_edges"] == 1
+    assert summary["ALL"]["applied_false_positive_edges"] == 1
 
 
 def test_calibrated_mht_cli_exposes_fold_calibration_knobs(
@@ -602,6 +646,27 @@ def test_calibrated_threshold_is_single_training_fold_decision(
     )
 
     assert threshold == pytest.approx(0.8)
+
+
+def test_calibrated_threshold_blocks_all_when_every_training_cut_loses_tp(
+    calibrated_mht_module,
+) -> None:
+    unsafe_true_positive = _candidate_row(
+        edge_status_against_gt="true_positive",
+        pairwise_fp_delta_if_removed=0,
+        pairwise_tp_delta_if_removed=-1,
+        pairwise_fn_delta_if_removed=1,
+        complete_fp_delta_if_removed=0,
+        complete_tp_delta_if_removed=-1,
+        complete_fn_delta_if_removed=1,
+    )
+
+    threshold = calibrated_mht_module._select_training_probability_threshold(  # pylint: disable=protected-access
+        [unsafe_true_positive],
+        [1.0],
+    )
+
+    assert threshold > 1.0
 
 
 def test_calibrated_heldout_scoring_does_not_read_audit_only_columns(

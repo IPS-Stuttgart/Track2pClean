@@ -345,10 +345,6 @@ def track2p_result_improvement_manifest(
     }
     track2p_policy_growth_veto_config = {
         **track2p_policy_suffix_config,
-        "teacher_edge_order": "structural",
-        "teacher_action_filter": "all",
-        "teacher_feature_preset": "none",
-        "max_applied_teacher_edits": -1,
         "anchor_min_registered_iou": 0.50,
         "anchor_min_shifted_iou": 0.30,
         "anchor_min_cell_probability": 0.80,
@@ -454,9 +450,8 @@ def track2p_result_improvement_manifest(
         },
         {
             "name": "track2p-policy-coherence-suffix-growth-veto-cleanup",
-            "runner": "track2p-policy-growth-veto-cleanup",
+            "runner": "track2p-policy-coherence-suffix-growth-veto-cleanup",
             **track2p_policy_growth_veto_config,
-            "growth_veto_base": "coherence-suffix",
             "max_veto_local_neighbor_distortion": None,
             "output": (
                 f"{output_root}/"

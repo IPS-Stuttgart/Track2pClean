@@ -699,6 +699,18 @@ def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                         for row in selected
                     )
                 ),
+                "applied_true_positive_edges": int(
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "true_positive"
+                        for row in applied
+                    )
+                ),
+                "applied_false_positive_edges": int(
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "false_positive"
+                        for row in applied
+                    )
+                ),
             }
         )
     return output

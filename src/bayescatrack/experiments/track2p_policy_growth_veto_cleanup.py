@@ -593,6 +593,7 @@ def _apply_growth_veto_rows(
     tracks: np.ndarray, rows: Sequence[Mapping[str, Any]], *, gate: GrowthVetoGate
 ) -> tuple[np.ndarray, tuple[tuple[int, int, int, int, int], ...]]:
     output = veto._as_track_matrix(tracks)
+    n_sessions = int(output.shape[1]) if output.ndim == 2 else 0
     applied: list[tuple[int, int, int, int, int]] = []
     for row in rows[: max(0, int(gate.max_vetoes_per_subject))]:
         edge = _edge_from_row(row)
@@ -602,9 +603,33 @@ def _apply_growth_veto_rows(
         )
         if split.reason != "split_edge" or int(split.would_split_component) <= 0:
             continue
+        if not _split_satisfies_current_structural_gate(
+            split,
+            gate=gate,
+            n_sessions=n_sessions,
+        ):
+            continue
         output = veto._as_track_matrix(split.tracks)
         applied.append((*edge, occurrence_index))
     return output, tuple(applied)
+
+
+def _split_satisfies_current_structural_gate(
+    split: Any, *, gate: GrowthVetoGate, n_sessions: int
+) -> bool:
+    if gate.require_terminal_edge and int(split.is_terminal_edge) <= 0:
+        return False
+    if gate.require_last_session_edge and int(split.is_last_session_edge) <= 0:
+        return False
+    if gate.require_complete_component and int(split.complete_component_size) < int(
+        n_sessions
+    ):
+        return False
+    if gate.min_complete_component_size is not None and int(
+        split.complete_component_size
+    ) < int(gate.min_complete_component_size):
+        return False
+    return True
 
 
 def _growth_veto_sort_key(
