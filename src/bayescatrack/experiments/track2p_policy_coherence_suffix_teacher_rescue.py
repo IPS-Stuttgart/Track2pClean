@@ -95,6 +95,10 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
 ) -> CoherenceSuffixTeacherRescueOutput:
     """Run CoherenceSuffixStitch followed by Track2p-teacher rescue."""
 
+    edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = suffix._positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -117,8 +121,8 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
             suffix_gate=suffix_gate,
             threshold_method=threshold_method,
             iou_distance_threshold=float(iou_distance_threshold),
-            edge_top_k=int(edge_top_k),
-            path_beam_width=int(path_beam_width),
+            edge_top_k=edge_top_k,
+            path_beam_width=path_beam_width,
             teacher_edge_order=teacher_edge_order,
             teacher_action_filter=teacher_action_filter,
             teacher_feature_preset=str(teacher_feature_preset),

@@ -185,6 +185,10 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
 ) -> PyRecEstResidualMHTResult:
     """Run PyRecEst residual-MHT cleanup from the non-teacher suffix row."""
 
+    edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = suffix._positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,

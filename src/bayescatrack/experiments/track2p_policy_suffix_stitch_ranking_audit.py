@@ -15,6 +15,7 @@ import json
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -68,6 +69,33 @@ TRACK2P_POLICY_SUFFIX_STITCH_RANKING_AUDIT_METHOD = (
     "track2p-policy-suffix-stitch-ranking-audit"
 )
 CompleteTrack = tuple[int, ...]
+
+
+def _integral_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    raise ValueError(f"{name} must be an integer")
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    numeric = _integral_value(value, name=name)
+    if numeric <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return numeric
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        return _positive_int_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 @dataclass(frozen=True)
@@ -183,6 +211,13 @@ def run_track2p_policy_suffix_stitch_ranking_audit(
 ) -> SuffixStitchRankingAuditResult:
     """Rank short suffix-stitch candidates after ComponentCleanup."""
 
+    max_suffix_length = _positive_int_value(
+        max_suffix_length, name="max_suffix_length"
+    )
+    edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = _positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -204,9 +239,9 @@ def run_track2p_policy_suffix_stitch_ranking_audit(
             cleanup_config=cleanup_config,
             threshold_method=threshold_method,
             iou_distance_threshold=float(iou_distance_threshold),
-            max_suffix_length=int(max_suffix_length),
-            edge_top_k=int(edge_top_k),
-            path_beam_width=int(path_beam_width),
+            max_suffix_length=max_suffix_length,
+            edge_top_k=edge_top_k,
+            path_beam_width=path_beam_width,
         )
         all_edge_rows.extend(edge_rows)
         all_path_rows.extend(path_rows)
@@ -302,6 +337,13 @@ def _ranked_suffix_paths(
     path_beam_width: int,
 ) -> tuple[_PathCandidate, ...]:
     del subject
+    max_suffix_length = _positive_int_value(
+        max_suffix_length, name="max_suffix_length"
+    )
+    edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = _positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     paths_by_component: dict[int, list[_PathCandidate]] = defaultdict(list)
     for component_id, row in enumerate(predicted):
         span = _suffix_fragment_span(row)
@@ -350,6 +392,11 @@ def _expand_paths_for_fragment(
     edge_top_k: int,
     path_beam_width: int,
 ) -> list[_PathCandidate]:
+    max_steps = _positive_int_value(max_steps, name="max_steps")
+    edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = _positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     active: list[tuple[int, int, tuple[_EdgeCandidate, ...]]] = [
         (int(tail_session), int(row[int(tail_session)]), ())
     ]
@@ -373,13 +420,14 @@ def _expand_paths_for_fragment(
                     )
                 )
         expanded.sort(key=lambda item: _mean_edge_score(item[2]), reverse=True)
-        active = expanded[: int(path_beam_width)]
+        active = expanded[:path_beam_width]
     return output
 
 
 def _top_edge_candidates(
     feature_cache: _FeatureCache, session_index: int, source_roi: int, *, top_k: int
 ) -> tuple[_EdgeCandidate, ...]:
+    top_k = _positive_int_value(top_k, name="top_k")
     if session_index < 0 or session_index + 1 >= len(feature_cache.sessions):
         return ()
     matrices = feature_cache.pair(session_index)
@@ -409,7 +457,7 @@ def _top_edge_candidates(
         )
         candidates.append(edge)
     candidates.sort(key=lambda edge: edge.edge_score, reverse=True)
-    return tuple(candidates[: int(top_k)])
+    return tuple(candidates[:top_k])
 
 
 def _edge_candidate(
@@ -926,9 +974,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--split-risk-threshold", type=float, default=1.50)
     parser.add_argument("--split-penalty", type=float, default=0.25)
     parser.add_argument("--min-side-observations", type=int, default=2)
-    parser.add_argument("--max-suffix-length", type=int, default=2)
-    parser.add_argument("--edge-top-k", type=int, default=25)
-    parser.add_argument("--path-beam-width", type=int, default=100)
+    parser.add_argument("--max-suffix-length", type=_positive_int_arg, default=2)
+    parser.add_argument("--edge-top-k", type=_positive_int_arg, default=25)
+    parser.add_argument("--path-beam-width", type=_positive_int_arg, default=100)
     parser.add_argument(
         "--require-complete-track",
         action=argparse.BooleanOptionalAction,
