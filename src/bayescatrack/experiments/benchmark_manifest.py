@@ -37,6 +37,18 @@ TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER = (
     "track2p-policy-coherence-suffix-teacher-rescue"
 )
 TRACK2P_POLICY_GROWTH_VETO_RUNNER = "track2p-policy-growth-veto-cleanup"
+TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER = (
+    "track2p-policy-pyrecest-residual-mht-cleanup"
+)
+TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER = (
+    "track2p-policy-pyrecest-calibrated-mht-cleanup"
+)
+TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER = (
+    "track2p-policy-pyrecest-frontier-mht-cleanup"
+)
+TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER = (
+    "track2p-policy-pyrecest-safe-frontier-mht-cleanup"
+)
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
 BenchmarkRunner = Literal[
     "track2p",
@@ -47,6 +59,10 @@ BenchmarkRunner = Literal[
     "track2p-policy-coherence-suffix-stitch",
     "track2p-policy-coherence-suffix-teacher-rescue",
     "track2p-policy-growth-veto-cleanup",
+    "track2p-policy-pyrecest-residual-mht-cleanup",
+    "track2p-policy-pyrecest-calibrated-mht-cleanup",
+    "track2p-policy-pyrecest-frontier-mht-cleanup",
+    "track2p-policy-pyrecest-safe-frontier-mht-cleanup",
     "track2p-policy-teacher-adjacent-rescue",
     "track2p-loso-calibration",
     "track2p-monotone-loso",
@@ -161,6 +177,36 @@ TRACK2P_POLICY_GROWTH_VETO_FIELDS = TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESC
     "growth_veto_min_anchor_count",
     "growth_veto_min_complete_component_size",
     "growth_veto_max_vetoes_per_subject",
+}
+TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS = TRACK2P_POLICY_GROWTH_VETO_FIELDS | {
+    "mht_candidate_top_k",
+    "mht_max_edits_per_subject",
+    "mht_max_hypotheses",
+    "mht_edit_penalty",
+    "mht_score_threshold",
+    "mht_selection_mode",
+    "mht_fragmentation_penalty",
+    "mht_min_meaningful_track_length",
+    "mht_include_high_overlap_low_motion_candidates",
+    "mht_high_overlap_min_registered_iou",
+    "mht_high_overlap_max_growth_residual",
+    "mht_high_overlap_min_growth_residual_mahalanobis",
+    "mht_high_overlap_min_cell_probability",
+    "mht_high_overlap_score_bonus",
+}
+TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_FIELDS = set(
+    TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS
+)
+TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_FIELDS = set(
+    TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS
+)
+TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_FIELDS = TRACK2P_POLICY_GROWTH_VETO_FIELDS | {
+    "mht_max_edits_per_subject",
+    "mht_max_hypotheses",
+    "mht_edit_penalty",
+    "mht_score_threshold",
+    "calibrated_fp_logistic_c",
+    "calibrated_fp_min_training_positives",
 }
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = TRACK2P_POLICY_COMPONENT_FIELDS | {
     "allow_completing_rescue",
@@ -278,6 +324,10 @@ RUNNER_SPECIFIC_FIELDS = (
     | TRACK2P_POLICY_COHERENCE_SUFFIX_FIELDS
     | TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS
     | TRACK2P_POLICY_GROWTH_VETO_FIELDS
+    | TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS
+    | TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_FIELDS
+    | TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_FIELDS
+    | TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_FIELDS
     | TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS
     | CONFIGURABLE_LOSO_FIELDS
     | MONOTONE_LOSO_FIELDS
@@ -308,6 +358,18 @@ RUNNER_CONFIG_FIELDS: dict[str, set[str]] = {
     ),
     TRACK2P_POLICY_GROWTH_VETO_RUNNER: set(
         TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_GROWTH_VETO_FIELDS
+    ),
+    TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER: set(
+        TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS
+    ),
+    TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER: set(
+        TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_FIELDS
+    ),
+    TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER: set(
+        TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_FIELDS
+    ),
+    TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER: set(
+        TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_FIELDS
     ),
     TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER: set(
         TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS
@@ -346,6 +408,42 @@ RUNNER_ALIASES = {
     "track2p-coherence-suffix-teacher-growth-veto": (TRACK2P_POLICY_GROWTH_VETO_RUNNER),
     "track2p-policy-coherence-suffix-teacher-growth-veto": (
         TRACK2P_POLICY_GROWTH_VETO_RUNNER
+    ),
+    TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER: (
+        TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER
+    ),
+    "track2p-pyrecest-residual-mht-cleanup": (
+        TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER
+    ),
+    "track2p-component-pyrecest-residual-mht-cleanup": (
+        TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER
+    ),
+    TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER: (
+        TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER
+    ),
+    "track2p-pyrecest-calibrated-mht-cleanup": (
+        TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER
+    ),
+    "track2p-component-pyrecest-calibrated-mht-cleanup": (
+        TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER
+    ),
+    TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER: (
+        TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER
+    ),
+    "track2p-pyrecest-frontier-mht-cleanup": (
+        TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER
+    ),
+    "track2p-component-pyrecest-frontier-mht-cleanup": (
+        TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER
+    ),
+    TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER: (
+        TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER
+    ),
+    "track2p-pyrecest-safe-frontier-mht-cleanup": (
+        TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER
+    ),
+    "track2p-component-pyrecest-safe-frontier-mht-cleanup": (
+        TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER
     ),
     TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER: (
         TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER
@@ -639,6 +737,26 @@ def _run_benchmark_rows(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
+    if run_spec.runner == TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER:
+        return _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER:
+        return _run_track2p_policy_pyrecest_calibrated_mht_cleanup_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER:
+        return _run_track2p_policy_pyrecest_frontier_mht_cleanup_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
+    if run_spec.runner == TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER:
+        return _run_track2p_policy_pyrecest_safe_frontier_mht_cleanup_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
     if run_spec.runner == TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER:
         return _run_track2p_policy_teacher_adjacent_rescue_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
@@ -707,6 +825,14 @@ def _runner_specific_fields(runner: str) -> set[str]:
         return set(TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS)
     if runner == TRACK2P_POLICY_GROWTH_VETO_RUNNER:
         return set(TRACK2P_POLICY_GROWTH_VETO_FIELDS)
+    if runner == TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER:
+        return set(TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS)
+    if runner == TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER:
+        return set(TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_FIELDS)
+    if runner == TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER:
+        return set(TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_FIELDS)
+    if runner == TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER:
+        return set(TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_FIELDS)
     if runner == TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER:
         return set(TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS)
     if runner == "track2p-loso-calibration":
@@ -757,6 +883,30 @@ def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
         return {
             key: run_data[key]
             for key in TRACK2P_POLICY_GROWTH_VETO_FIELDS
+            if key in run_data
+        }
+    if runner == TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER:
+        return {
+            key: run_data[key]
+            for key in TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS
+            if key in run_data
+        }
+    if runner == TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER:
+        return {
+            key: run_data[key]
+            for key in TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_FIELDS
+            if key in run_data
+        }
+    if runner == TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER:
+        return {
+            key: run_data[key]
+            for key in TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_FIELDS
+            if key in run_data
+        }
+    if runner == TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER:
+        return {
+            key: run_data[key]
+            for key in TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_FIELDS
             if key in run_data
         }
     if runner == TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER:
@@ -886,6 +1036,10 @@ def _run_config(
         TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER,
         TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER,
         TRACK2P_POLICY_GROWTH_VETO_RUNNER,
+        TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER,
+        TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER,
+        TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER,
+        TRACK2P_POLICY_PYRECEST_SAFE_FRONTIER_MHT_RUNNER,
         TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_RUNNER,
     }:
         config_defaults = {
@@ -1720,6 +1874,15 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
                 default=gate_defaults.min_growth_residual_mahalanobis,
             ),
         ),
+        min_growth_residual=_float_option(
+            options,
+            "min_growth_residual",
+            default=_float_option(
+                options,
+                "growth_veto_min_residual",
+                default=gate_defaults.min_growth_residual,
+            ),
+        ),
         min_registered_iou=_float_option(
             options,
             "min_veto_registered_iou",
@@ -1738,11 +1901,21 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
                 default=gate_defaults.min_shifted_iou,
             ),
         ),
-        max_registered_iou=_optional_float_option(
-            options, "max_veto_registered_iou", "growth_veto_max_registered_iou"
+        max_registered_iou=(
+            _optional_float_option(
+                options, "max_veto_registered_iou", "growth_veto_max_registered_iou"
+            )
+            if "max_veto_registered_iou" in options
+            or "growth_veto_max_registered_iou" in options
+            else gate_defaults.max_registered_iou
         ),
-        max_shifted_iou=_optional_float_option(
-            options, "max_veto_shifted_iou", "growth_veto_max_shifted_iou"
+        max_shifted_iou=(
+            _optional_float_option(
+                options, "max_veto_shifted_iou", "growth_veto_max_shifted_iou"
+            )
+            if "max_veto_shifted_iou" in options
+            or "growth_veto_max_shifted_iou" in options
+            else gate_defaults.max_shifted_iou
         ),
         min_cell_probability=_float_option(
             options,
@@ -1785,11 +1958,12 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
             None
             if "min_veto_complete_component_size" not in options
             and "growth_veto_min_complete_component_size" not in options
-            else int(
+            else _nonnegative_int_or_none(
                 options.get(
                     "min_veto_complete_component_size",
                     options.get("growth_veto_min_complete_component_size"),
-                )
+                ),
+                name="min_veto_complete_component_size",
             )
         ),
         max_row_rank=int(options.get("max_veto_row_rank", gate_defaults.max_row_rank)),
@@ -1858,6 +2032,467 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
         ),
     )
     return [result.to_dict() for result in output.results]
+
+
+def _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.track2p_policy_benchmark import (
+        TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
+    from bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup import (
+        PyRecEstResidualMHTOptions,
+        run_track2p_policy_pyrecest_residual_mht_cleanup,
+    )
+
+    _require_coherence_suffix_growth_veto_base(options)
+    output = run_track2p_policy_pyrecest_residual_mht_cleanup(
+        config,
+        threshold_method=_policy_threshold_method(
+            options.get("threshold_method", TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
+        ),
+        iou_distance_threshold=_float_option(
+            options,
+            "iou_distance_threshold",
+            default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        ),
+        transform_type=config.transform_type,
+        cell_probability_threshold=config.cell_probability_threshold,
+        cleanup_config=_coherence_suffix_cleanup_config_from_options(options),
+        suffix_gate=_coherence_suffix_gate_from_options(options),
+        edge_top_k=int(options.get("edge_top_k", 25)),
+        path_beam_width=int(options.get("path_beam_width", 100)),
+        anchor_min_registered_iou=_float_option(
+            options, "anchor_min_registered_iou", default=0.50
+        ),
+        anchor_min_shifted_iou=_float_option(
+            options, "anchor_min_shifted_iou", default=0.30
+        ),
+        anchor_min_cell_probability=_float_option(
+            options, "anchor_min_cell_probability", default=0.80
+        ),
+        growth_veto_gate=_growth_veto_gate_from_options(options),
+        mht_options=PyRecEstResidualMHTOptions(
+            candidate_top_k=int(options.get("mht_candidate_top_k", 4)),
+            max_edits_per_subject=int(options.get("mht_max_edits_per_subject", 2)),
+            max_hypotheses=int(options.get("mht_max_hypotheses", 16)),
+            edit_penalty=_float_option(options, "mht_edit_penalty", default=0.25),
+            score_threshold=_float_option(options, "mht_score_threshold", default=1.0),
+            selection_mode=_residual_mht_selection_mode(options),
+            fragmentation_penalty=_float_option(
+                options, "mht_fragmentation_penalty", default=0.5
+            ),
+            min_meaningful_track_length=int(
+                options.get("mht_min_meaningful_track_length", 2)
+            ),
+            include_high_overlap_low_motion=_bool_option(
+                options,
+                "mht_include_high_overlap_low_motion_candidates",
+                default=False,
+            ),
+            high_overlap_min_registered_iou=_float_option(
+                options, "mht_high_overlap_min_registered_iou", default=0.85
+            ),
+            high_overlap_max_growth_residual=_float_option(
+                options, "mht_high_overlap_max_growth_residual", default=0.50
+            ),
+            high_overlap_min_growth_residual_mahalanobis=_float_option(
+                options,
+                "mht_high_overlap_min_growth_residual_mahalanobis",
+                default=1.0,
+            ),
+            high_overlap_min_cell_probability=_optional_float_option(
+                options, "mht_high_overlap_min_cell_probability"
+            ),
+            high_overlap_score_bonus=_float_option(
+                options, "mht_high_overlap_score_bonus", default=2.0
+            ),
+        ),
+    )
+    return [result.to_dict() for result in output.results]
+
+
+def _run_track2p_policy_pyrecest_calibrated_mht_cleanup_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.track2p_policy_benchmark import (
+        TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
+    from bayescatrack.experiments.track2p_policy_pyrecest_calibrated_mht_cleanup import (
+        CalibratedResidualMHTOptions,
+        run_track2p_policy_pyrecest_calibrated_mht_cleanup,
+    )
+
+    _require_coherence_suffix_growth_veto_base(options)
+    output = run_track2p_policy_pyrecest_calibrated_mht_cleanup(
+        config,
+        threshold_method=_policy_threshold_method(
+            options.get("threshold_method", TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
+        ),
+        iou_distance_threshold=_float_option(
+            options,
+            "iou_distance_threshold",
+            default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+        ),
+        transform_type=config.transform_type,
+        cell_probability_threshold=config.cell_probability_threshold,
+        cleanup_config=_coherence_suffix_cleanup_config_from_options(options),
+        suffix_gate=_coherence_suffix_gate_from_options(options),
+        edge_top_k=int(options.get("edge_top_k", 25)),
+        path_beam_width=int(options.get("path_beam_width", 100)),
+        anchor_min_registered_iou=_float_option(
+            options, "anchor_min_registered_iou", default=0.50
+        ),
+        anchor_min_shifted_iou=_float_option(
+            options, "anchor_min_shifted_iou", default=0.30
+        ),
+        anchor_min_cell_probability=_float_option(
+            options, "anchor_min_cell_probability", default=0.80
+        ),
+        structural_gate=_growth_veto_gate_from_options(options),
+        mht_options=CalibratedResidualMHTOptions(
+            max_edits_per_subject=int(options.get("mht_max_edits_per_subject", 4)),
+            max_hypotheses=int(options.get("mht_max_hypotheses", 64)),
+            edit_penalty=_float_option(options, "mht_edit_penalty", default=0.0),
+            score_threshold=_float_option(options, "mht_score_threshold", default=0.0),
+            logistic_c=_float_option(options, "calibrated_fp_logistic_c", default=0.5),
+            min_training_positive_examples=max(
+                0,
+                int(options.get("calibrated_fp_min_training_positives", 1)),
+            ),
+        ),
+    )
+    return [result.to_dict() for result in output.results]
+
+
+_PYRECEST_FRONTIER_MHT_DEFAULTS: dict[str, Any] = {
+    "min_growth_residual_mahalanobis": 12.0,
+    "min_growth_residual": 2.0,
+    "min_veto_registered_iou": 0.35,
+    "max_veto_registered_iou": 0.60,
+    "min_veto_shifted_iou": 0.45,
+    "max_veto_shifted_iou": 0.80,
+    "min_veto_cell_probability": 0.50,
+    "max_veto_min_cell_probability": 0.65,
+    "max_veto_local_neighbor_distortion": None,
+    "max_veto_row_rank": 2,
+    "max_veto_column_rank": 2,
+    "require_veto_not_suffix_edge": True,
+    "require_veto_terminal_edge": True,
+    "require_veto_last_session_edge": True,
+    "require_veto_complete_component": True,
+    "mht_candidate_top_k": 8,
+    "mht_max_edits_per_subject": 2,
+    "mht_max_hypotheses": 32,
+    "mht_edit_penalty": 0.55,
+    "mht_score_threshold": 1.60,
+}
+
+
+def _run_track2p_policy_pyrecest_frontier_mht_cleanup_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    return _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(
+        config, _with_manifest_defaults(options, _PYRECEST_FRONTIER_MHT_DEFAULTS)
+    )
+
+
+def _run_track2p_policy_pyrecest_safe_frontier_mht_cleanup_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    return _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(
+        config, _with_manifest_defaults(options, _PYRECEST_FRONTIER_MHT_DEFAULTS)
+    )
+
+
+def _with_manifest_defaults(
+    options: ManifestObject, defaults: Mapping[str, Any]
+) -> dict[str, Any]:
+    merged = dict(defaults)
+    merged.update(dict(options))
+    return merged
+
+
+def _require_coherence_suffix_growth_veto_base(options: ManifestObject) -> None:
+    if str(options.get("growth_veto_base", "coherence-suffix")) != "coherence-suffix":
+        raise ValueError(
+            "PyRecEst residual-MHT manifest runners start from CoherenceSuffixStitch; "
+            "growth_veto_base must be 'coherence-suffix'"
+        )
+
+
+def _residual_mht_selection_mode(
+    options: ManifestObject,
+) -> Literal["additive", "global-rescore"]:
+    value = str(options.get("mht_selection_mode", "additive"))
+    if value not in {"additive", "global-rescore"}:
+        raise ValueError(
+            "mht_selection_mode must be either 'additive' or 'global-rescore'"
+        )
+    return cast(Literal["additive", "global-rescore"], value)
+
+
+def _coherence_suffix_cleanup_config_from_options(options: ManifestObject) -> Any:
+    from bayescatrack.experiments.track2p_policy_component_audit import (
+        ComponentCleanupConfig,
+    )
+
+    cleanup_defaults = ComponentCleanupConfig()
+    return ComponentCleanupConfig(
+        threshold_margin_scale=_float_option(
+            options,
+            "threshold_margin_scale",
+            default=cleanup_defaults.threshold_margin_scale,
+        ),
+        competition_margin_scale=_float_option(
+            options,
+            "competition_margin_scale",
+            default=cleanup_defaults.competition_margin_scale,
+        ),
+        area_ratio_floor=_float_option(
+            options,
+            "area_ratio_floor",
+            default=cleanup_defaults.area_ratio_floor,
+        ),
+        centroid_distance_scale=_float_option(
+            options,
+            "centroid_distance_scale",
+            default=cleanup_defaults.centroid_distance_scale,
+        ),
+        split_risk_threshold=_float_option(
+            options,
+            "split_risk_threshold",
+            default=cleanup_defaults.split_risk_threshold,
+        ),
+        split_penalty=_float_option(
+            options,
+            "split_penalty",
+            default=cleanup_defaults.split_penalty,
+        ),
+        min_side_observations=int(
+            options.get("min_side_observations", cleanup_defaults.min_side_observations)
+        ),
+        threshold_margin_weight=_float_option(
+            options,
+            "threshold_margin_weight",
+            default=cleanup_defaults.threshold_margin_weight,
+        ),
+        row_margin_weight=_float_option(
+            options,
+            "row_margin_weight",
+            default=cleanup_defaults.row_margin_weight,
+        ),
+        column_margin_weight=_float_option(
+            options,
+            "column_margin_weight",
+            default=cleanup_defaults.column_margin_weight,
+        ),
+        centroid_distance_weight=_float_option(
+            options,
+            "centroid_distance_weight",
+            default=cleanup_defaults.centroid_distance_weight,
+        ),
+        area_ratio_weight=_float_option(
+            options,
+            "area_ratio_weight",
+            default=cleanup_defaults.area_ratio_weight,
+        ),
+    )
+
+
+def _coherence_suffix_gate_from_options(options: ManifestObject) -> Any:
+    from bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif import (
+        CoherenceSuffixStitchGate,
+    )
+
+    gate_defaults = CoherenceSuffixStitchGate()
+    return CoherenceSuffixStitchGate(
+        suffix_path_length=int(
+            options.get("suffix_path_length", gate_defaults.suffix_path_length)
+        ),
+        min_cell_probability=_float_option(
+            options,
+            "min_cell_probability",
+            default=gate_defaults.min_cell_probability,
+        ),
+        min_area_ratio=_float_option(
+            options,
+            "min_area_ratio",
+            default=gate_defaults.min_area_ratio,
+        ),
+        max_centroid_distance=_float_option(
+            options,
+            "max_centroid_distance",
+            default=gate_defaults.max_centroid_distance,
+        ),
+        min_shifted_iou=_float_option(
+            options,
+            "min_shifted_iou",
+            default=gate_defaults.min_shifted_iou,
+        ),
+        min_motion_consistency=_float_option(
+            options,
+            "min_motion_consistency",
+            default=gate_defaults.min_motion_consistency,
+        ),
+        min_shape_consistency=_float_option(
+            options,
+            "min_shape_consistency",
+            default=gate_defaults.min_shape_consistency,
+        ),
+        max_stitches_per_subject=int(
+            options.get(
+                "max_stitches_per_subject",
+                gate_defaults.max_stitches_per_subject,
+            )
+        ),
+    )
+
+
+def _growth_veto_gate_from_options(options: ManifestObject) -> Any:
+    from bayescatrack.experiments.track2p_policy_growth_veto_cleanup import (
+        GrowthVetoGate,
+    )
+
+    gate_defaults = GrowthVetoGate()
+    return GrowthVetoGate(
+        min_growth_residual_mahalanobis=_float_option(
+            options,
+            "min_growth_residual_mahalanobis",
+            default=_float_option(
+                options,
+                "growth_veto_min_mahalanobis",
+                default=gate_defaults.min_growth_residual_mahalanobis,
+            ),
+        ),
+        min_growth_residual=_float_option(
+            options,
+            "min_growth_residual",
+            default=_float_option(
+                options,
+                "growth_veto_min_residual",
+                default=gate_defaults.min_growth_residual,
+            ),
+        ),
+        min_registered_iou=_float_option(
+            options,
+            "min_veto_registered_iou",
+            default=_float_option(
+                options,
+                "growth_veto_min_registered_iou",
+                default=gate_defaults.min_registered_iou,
+            ),
+        ),
+        min_shifted_iou=_float_option(
+            options,
+            "min_veto_shifted_iou",
+            default=_float_option(
+                options,
+                "growth_veto_min_shifted_iou",
+                default=gate_defaults.min_shifted_iou,
+            ),
+        ),
+        max_registered_iou=(
+            _optional_float_option(
+                options, "max_veto_registered_iou", "growth_veto_max_registered_iou"
+            )
+            if "max_veto_registered_iou" in options
+            or "growth_veto_max_registered_iou" in options
+            else gate_defaults.max_registered_iou
+        ),
+        max_shifted_iou=(
+            _optional_float_option(
+                options, "max_veto_shifted_iou", "growth_veto_max_shifted_iou"
+            )
+            if "max_veto_shifted_iou" in options
+            or "growth_veto_max_shifted_iou" in options
+            else gate_defaults.max_shifted_iou
+        ),
+        min_cell_probability=_float_option(
+            options,
+            "min_veto_cell_probability",
+            default=_float_option(
+                options,
+                "growth_veto_min_cell_probability",
+                default=gate_defaults.min_cell_probability,
+            ),
+        ),
+        max_min_cell_probability=(
+            _optional_float_option(
+                options,
+                "max_veto_min_cell_probability",
+                "growth_veto_max_min_cell_probability",
+            )
+            if "max_veto_min_cell_probability" in options
+            or "growth_veto_max_min_cell_probability" in options
+            else gate_defaults.max_min_cell_probability
+        ),
+        max_local_neighbor_distortion=(
+            _optional_float_option(
+                options,
+                "max_veto_local_neighbor_distortion",
+                "growth_veto_max_local_neighbor_distortion",
+            )
+            if "max_veto_local_neighbor_distortion" in options
+            or "growth_veto_max_local_neighbor_distortion" in options
+            else gate_defaults.max_local_neighbor_distortion
+        ),
+        min_anchor_count=int(
+            options.get(
+                "min_veto_anchor_count",
+                options.get(
+                    "growth_veto_min_anchor_count", gate_defaults.min_anchor_count
+                ),
+            )
+        ),
+        min_complete_component_size=(
+            None
+            if "min_veto_complete_component_size" not in options
+            and "growth_veto_min_complete_component_size" not in options
+            else _nonnegative_int_or_none(
+                options.get(
+                    "min_veto_complete_component_size",
+                    options.get("growth_veto_min_complete_component_size"),
+                ),
+                name="min_veto_complete_component_size",
+            )
+        ),
+        max_row_rank=int(options.get("max_veto_row_rank", gate_defaults.max_row_rank)),
+        max_column_rank=int(
+            options.get("max_veto_column_rank", gate_defaults.max_column_rank)
+        ),
+        require_not_suffix_edge=_bool_option(
+            options,
+            "require_veto_not_suffix_edge",
+            default=gate_defaults.require_not_suffix_edge,
+        ),
+        require_terminal_edge=_bool_option(
+            options,
+            "require_veto_terminal_edge",
+            default=gate_defaults.require_terminal_edge,
+        ),
+        require_last_session_edge=_bool_option(
+            options,
+            "require_veto_last_session_edge",
+            default=gate_defaults.require_last_session_edge,
+        ),
+        require_complete_component=_bool_option(
+            options,
+            "require_veto_complete_component",
+            default=gate_defaults.require_complete_component,
+        ),
+        max_vetoes_per_subject=int(
+            options.get(
+                "max_vetoes_per_subject",
+                options.get(
+                    "growth_veto_max_vetoes_per_subject",
+                    gate_defaults.max_vetoes_per_subject,
+                ),
+            )
+        ),
+    )
 
 
 def _run_track2p_policy_teacher_adjacent_rescue_rows(
@@ -2454,6 +3089,14 @@ def _optional_float_option(options: ManifestObject, *keys: str) -> float | None:
     for key in keys:
         if key not in options or options[key] is None:
             continue
+        if isinstance(options[key], str) and options[key].strip().lower() in {
+            "",
+            "none",
+            "null",
+            "off",
+            "disabled",
+        }:
+            return None
         value = float(options[key])
         if not math.isfinite(value):
             raise ValueError(f"{key} must be finite")
