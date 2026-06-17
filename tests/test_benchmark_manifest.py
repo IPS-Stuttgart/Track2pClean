@@ -1348,6 +1348,71 @@ def test_benchmark_manifest_rejects_invalid_pyrecest_mht_selection_mode(tmp_path
         run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("mht_candidate_top_k", 0),
+        ("mht_max_edits_per_subject", 0),
+        ("mht_max_hypotheses", 0),
+        ("mht_min_meaningful_track_length", 0),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_pyrecest_residual_mht_integer_options(
+    tmp_path,
+    field: str,
+    value: int,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-invalid-integer",
+                    "runner": "track2p-policy-pyrecest-residual-mht-cleanup",
+                    "data": "data",
+                    field: value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=field):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("mht_max_edits_per_subject", 0),
+        ("mht_max_hypotheses", 0),
+        ("calibrated_fp_min_training_positives", -1),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_pyrecest_calibrated_mht_integer_options(
+    tmp_path,
+    field: str,
+    value: int,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-calibrated-invalid-integer",
+                    "runner": "track2p-policy-pyrecest-calibrated-mht-cleanup",
+                    "data": "data",
+                    field: value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=field):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
 def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkeypatch):
     calls = {}
 

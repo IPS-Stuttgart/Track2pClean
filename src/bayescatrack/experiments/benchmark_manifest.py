@@ -9,6 +9,7 @@ import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields, replace
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -2062,17 +2063,23 @@ def _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(
         ),
         growth_veto_gate=_growth_veto_gate_from_options(options),
         mht_options=PyRecEstResidualMHTOptions(
-            candidate_top_k=int(options.get("mht_candidate_top_k", 4)),
-            max_edits_per_subject=int(options.get("mht_max_edits_per_subject", 2)),
-            max_hypotheses=int(options.get("mht_max_hypotheses", 16)),
+            candidate_top_k=_positive_int_option(
+                options, "mht_candidate_top_k", default=4
+            ),
+            max_edits_per_subject=_positive_int_option(
+                options, "mht_max_edits_per_subject", default=2
+            ),
+            max_hypotheses=_positive_int_option(
+                options, "mht_max_hypotheses", default=16
+            ),
             edit_penalty=_float_option(options, "mht_edit_penalty", default=0.25),
             score_threshold=_float_option(options, "mht_score_threshold", default=1.0),
             selection_mode=_residual_mht_selection_mode(options),
             fragmentation_penalty=_float_option(
                 options, "mht_fragmentation_penalty", default=0.5
             ),
-            min_meaningful_track_length=int(
-                options.get("mht_min_meaningful_track_length", 2)
+            min_meaningful_track_length=_positive_int_option(
+                options, "mht_min_meaningful_track_length", default=2
             ),
             include_high_overlap_low_motion=_bool_option(
                 options,
@@ -2141,14 +2148,17 @@ def _run_track2p_policy_pyrecest_calibrated_mht_cleanup_rows(
         ),
         structural_gate=_growth_veto_gate_from_options(options),
         mht_options=CalibratedResidualMHTOptions(
-            max_edits_per_subject=int(options.get("mht_max_edits_per_subject", 4)),
-            max_hypotheses=int(options.get("mht_max_hypotheses", 64)),
+            max_edits_per_subject=_positive_int_option(
+                options, "mht_max_edits_per_subject", default=4
+            ),
+            max_hypotheses=_positive_int_option(
+                options, "mht_max_hypotheses", default=64
+            ),
             edit_penalty=_float_option(options, "mht_edit_penalty", default=0.0),
             score_threshold=_float_option(options, "mht_score_threshold", default=0.0),
             logistic_c=_float_option(options, "calibrated_fp_logistic_c", default=0.5),
-            min_training_positive_examples=max(
-                0,
-                int(options.get("calibrated_fp_min_training_positives", 1)),
+            min_training_positive_examples=_nonnegative_int_option(
+                options, "calibrated_fp_min_training_positives", default=1
             ),
         ),
     )
@@ -3159,6 +3169,34 @@ def _bool_option(options: ManifestObject, key: str, *, default: bool) -> bool:
     value = options.get(key, default)
     if not isinstance(value, bool):
         raise ValueError(f"{key} must be a boolean")
+    return value
+
+
+def _integer_option(options: ManifestObject, key: str, *, default: int) -> int:
+    value = options.get(key, default)
+    if isinstance(value, bool):
+        raise ValueError(f"{key} must be an integer")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"{key} must be an integer") from exc
+    raise ValueError(f"{key} must be an integer")
+
+
+def _positive_int_option(options: ManifestObject, key: str, *, default: int) -> int:
+    value = _integer_option(options, key, default=default)
+    if value <= 0:
+        raise ValueError(f"{key} must be positive")
+    return value
+
+
+def _nonnegative_int_option(options: ManifestObject, key: str, *, default: int) -> int:
+    value = _integer_option(options, key, default=default)
+    if value < 0:
+        raise ValueError(f"{key} must be non-negative")
     return value
 
 

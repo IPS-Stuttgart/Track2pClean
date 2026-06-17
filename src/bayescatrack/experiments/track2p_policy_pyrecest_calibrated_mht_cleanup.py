@@ -82,6 +82,13 @@ class CalibratedResidualMHTOptions:
     logistic_c: float = 0.5
     min_training_positive_examples: int = 1
 
+    def __post_init__(self) -> None:
+        residual_mht._set_positive_int_field(self, "max_edits_per_subject")
+        residual_mht._set_positive_int_field(self, "max_hypotheses")
+        residual_mht._set_nonnegative_int_field(
+            self, "min_training_positive_examples"
+        )
+
 
 @dataclass(frozen=True)
 class FalsePositiveCalibrator:
@@ -709,12 +716,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "CoherenceSuffixStitch edit candidates."
     )
     parser.set_defaults(growth_veto_base="coherence-suffix")
-    parser.add_argument("--mht-max-edits-per-subject", type=int, default=4)
-    parser.add_argument("--mht-max-hypotheses", type=int, default=64)
+    parser.add_argument(
+        "--mht-max-edits-per-subject",
+        type=residual_mht._positive_int_arg,
+        default=4,
+    )
+    parser.add_argument(
+        "--mht-max-hypotheses", type=residual_mht._positive_int_arg, default=64
+    )
     parser.add_argument("--mht-edit-penalty", type=float, default=0.0)
     parser.add_argument("--mht-score-threshold", type=float, default=0.0)
     parser.add_argument("--calibrated-fp-logistic-c", type=float, default=0.5)
-    parser.add_argument("--calibrated-fp-min-training-positives", type=int, default=1)
+    parser.add_argument(
+        "--calibrated-fp-min-training-positives",
+        type=residual_mht._nonnegative_int_arg,
+        default=1,
+    )
     return parser
 
 
@@ -838,9 +855,8 @@ def main(argv: list[str] | None = None) -> int:
             edit_penalty=float(args.mht_edit_penalty),
             score_threshold=float(args.mht_score_threshold),
             logistic_c=float(args.calibrated_fp_logistic_c),
-            min_training_positive_examples=max(
-                0,
-                int(args.calibrated_fp_min_training_positives),
+            min_training_positive_examples=int(
+                args.calibrated_fp_min_training_positives
             ),
         ),
         progress=bool(args.progress),
