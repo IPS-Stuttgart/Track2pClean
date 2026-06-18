@@ -32,6 +32,9 @@ def pairwise_mahalanobis_distances(
 ) -> np.ndarray:
     """Return PyRecEst pairwise Mahalanobis distances or a local compatibility result."""
 
+    regularization = _validate_nonnegative_finite_float(
+        "regularization", regularization
+    )
     if _pyrecest_pairwise_mahalanobis_distances is not None:
         return np.asarray(
             _pyrecest_pairwise_mahalanobis_distances(
@@ -60,6 +63,7 @@ def pairwise_covariance_shape_components(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return PyRecEst covariance-shape components or a local compatibility result."""
 
+    epsilon = _validate_positive_finite_float("epsilon", epsilon)
     if _pyrecest_pairwise_covariance_shape_components is not None:
         shape_cost, logdet_cost, shape_similarity = (
             _pyrecest_pairwise_covariance_shape_components(
@@ -126,8 +130,9 @@ def _fallback_pairwise_mahalanobis_distances(
     *,
     regularization: float,
 ) -> np.ndarray:
-    if regularization < 0.0:
-        raise ValueError("regularization must be non-negative")
+    regularization = _validate_nonnegative_finite_float(
+        "regularization", regularization
+    )
     means_a, covariances_a = _validate_means_and_covariances(
         means_a,
         covariances_a,
@@ -172,8 +177,7 @@ def _fallback_pairwise_covariance_shape_components(
     covariances_b = _validate_covariance_stack("covariances_b", covariances_b)
     if covariances_a.shape[0] != covariances_b.shape[0]:
         raise ValueError("covariance stacks must have the same matrix dimension")
-    if epsilon <= 0.0:
-        raise ValueError("epsilon must be strictly positive")
+    epsilon = _validate_positive_finite_float("epsilon", epsilon)
 
     n_a = covariances_a.shape[2]
     n_b = covariances_b.shape[2]
@@ -196,6 +200,32 @@ def _fallback_pairwise_covariance_shape_components(
     determinants_b = np.maximum(np.linalg.det(moved_b), epsilon)
     logdet_cost = np.abs(np.log(determinants_a[:, None] / determinants_b[None, :]))
     return shape_cost, logdet_cost, shape_similarity
+
+
+def _validate_positive_finite_float(name: str, value: Any) -> float:
+    number = _validate_finite_float(name, value)
+    if number <= 0.0:
+        raise ValueError(f"{name} must be positive")
+    return number
+
+
+def _validate_nonnegative_finite_float(name: str, value: Any) -> float:
+    number = _validate_finite_float(name, value)
+    if number < 0.0:
+        raise ValueError(f"{name} must be non-negative")
+    return number
+
+
+def _validate_finite_float(name: str, value: Any) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    if not np.isfinite(number):
+        raise ValueError(f"{name} must be finite")
+    return number
 
 
 __all__ = [
