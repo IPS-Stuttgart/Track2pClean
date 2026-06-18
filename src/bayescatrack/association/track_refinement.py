@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -19,12 +20,29 @@ class TrackSmoothingConfig:
     fill_value: int = -1
 
     def __post_init__(self) -> None:
-        if self.residual_z_threshold <= 0.0:
-            raise ValueError("residual_z_threshold must be positive")
-        if self.min_track_detections < 2:
-            raise ValueError("min_track_detections must be at least two")
-        if self.min_edge_residual < 0.0:
-            raise ValueError("min_edge_residual must be non-negative")
+        object.__setattr__(
+            self,
+            "residual_z_threshold",
+            _finite_positive_float(self.residual_z_threshold, "residual_z_threshold"),
+        )
+        object.__setattr__(
+            self,
+            "min_track_detections",
+            _minimum_int_value(self.min_track_detections, "min_track_detections", 2),
+        )
+        object.__setattr__(
+            self,
+            "min_edge_residual",
+            _finite_nonnegative_float(self.min_edge_residual, "min_edge_residual"),
+        )
+        object.__setattr__(
+            self,
+            "split_bad_edges",
+            _bool_value(self.split_bad_edges, "split_bad_edges"),
+        )
+        object.__setattr__(
+            self, "fill_value", _integer_value(self.fill_value, "fill_value")
+        )
 
 
 @dataclass(frozen=True)
@@ -118,6 +136,7 @@ def smoothed_track_positions(
 ) -> dict[int, dict[int, np.ndarray]]:
     """Return fitted per-track positions for present detections."""
 
+    fill_value = _integer_value(fill_value, "fill_value")
     rows = np.asarray(track_rows, dtype=int)
     output: dict[int, dict[int, np.ndarray]] = {}
     for track_index, row in enumerate(rows):
@@ -149,6 +168,7 @@ def split_tracks_at_issues(
     to determine whether avoiding a false continuation improves F1.
     """
 
+    fill_value = _integer_value(fill_value, "fill_value")
     rows = np.asarray(track_rows, dtype=int)
     if rows.ndim != 2:
         raise ValueError("track_rows must be two-dimensional")
@@ -253,3 +273,49 @@ def _robust_z_scores(values: np.ndarray) -> np.ndarray:
     z_scores[non_median] = np.inf
     z_scores[~np.isfinite(deviations)] = np.inf
     return z_scores
+
+
+def _integer_value(value: Any, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    return int(integer_value)
+
+
+def _minimum_int_value(value: Any, name: str, minimum: int) -> int:
+    integer_value = _integer_value(value, name)
+    if integer_value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return integer_value
+
+
+def _finite_positive_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be finite and positive")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _finite_float_value(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _bool_value(value: Any, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
