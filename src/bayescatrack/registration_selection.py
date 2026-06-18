@@ -115,23 +115,41 @@ def select_registration_transform(
     must improve FOV correlation by ``min_fov_correlation_gain`` to be selected.
     """
 
-    if min_fov_correlation_gain < 0.0:
-        raise ValueError("min_fov_correlation_gain must be non-negative")
-    if not 0.0 <= max_empty_roi_fraction <= 1.0:
-        raise ValueError("max_empty_roi_fraction must be between 0 and 1")
-    if min_retained_mask_area_fraction < 0.0:
-        raise ValueError("min_retained_mask_area_fraction must be non-negative")
-    if not 0.0 <= min_nonrigid_inverse_warp_valid_fraction <= 1.0:
-        raise ValueError("min_nonrigid_inverse_warp_valid_fraction must lie in [0, 1]")
-    if empty_roi_penalty < 0.0 or retained_area_penalty < 0.0:
-        raise ValueError("selection penalties must be non-negative")
-    if nonrigid_valid_fraction_penalty < 0.0:
-        raise ValueError("nonrigid_valid_fraction_penalty must be non-negative")
+    min_fov_correlation_gain = _finite_nonnegative_float(
+        min_fov_correlation_gain, name="min_fov_correlation_gain"
+    )
+    max_empty_roi_fraction = _finite_fraction(
+        max_empty_roi_fraction, name="max_empty_roi_fraction"
+    )
+    min_retained_mask_area_fraction = _finite_nonnegative_float(
+        min_retained_mask_area_fraction, name="min_retained_mask_area_fraction"
+    )
+    min_nonrigid_inverse_warp_valid_fraction = _finite_fraction(
+        min_nonrigid_inverse_warp_valid_fraction,
+        name="min_nonrigid_inverse_warp_valid_fraction",
+    )
+    empty_roi_penalty = _finite_nonnegative_float(
+        empty_roi_penalty, name="empty_roi_penalty"
+    )
+    retained_area_penalty = _finite_nonnegative_float(
+        retained_area_penalty, name="retained_area_penalty"
+    )
+    nonrigid_valid_fraction_penalty = _finite_nonnegative_float(
+        nonrigid_valid_fraction_penalty,
+        name="nonrigid_valid_fraction_penalty",
+    )
 
     penalties = dict(_DEFAULT_COMPLEXITY_PENALTY)
     if complexity_penalty is not None:
+        if not isinstance(complexity_penalty, Mapping):
+            raise ValueError("complexity_penalty must be a mapping or None")
         penalties.update(
-            {key: float(value) for key, value in complexity_penalty.items()}
+            {
+                str(key): _finite_nonnegative_float(
+                    value, name=f"complexity_penalty[{key!r}]"
+                )
+                for key, value in complexity_penalty.items()
+            }
         )
 
     diagnostics: list[RegistrationCandidateDiagnostics] = []
@@ -217,9 +235,14 @@ def select_registration_transform(
 def _unique_candidate_transforms(
     candidate_transforms: Sequence[str],
 ) -> tuple[str, ...]:
+    if isinstance(candidate_transforms, str):
+        candidate_transforms = tuple(
+            part.strip() for part in candidate_transforms.split(",")
+        )
     candidates: list[str] = []
     for transform_type in candidate_transforms:
-        transform_type = str(transform_type)
+        if not isinstance(transform_type, str) or not transform_type:
+            raise ValueError("candidate_transforms must contain non-empty strings")
         if transform_type == "auto":
             raise ValueError(
                 "'auto' must not be nested inside auto-registration candidates"
@@ -383,6 +406,32 @@ def _maybe_float(value: object) -> float | None:
     except (TypeError, ValueError):
         return None
     return converted if np.isfinite(converted) else None
+
+
+def _finite_fraction(value: Any, *, name: str) -> float:
+    numeric = _finite_float(value, name=name)
+    if numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must lie in [0, 1]")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    numeric = _finite_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return numeric
+
+
+def _finite_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be finite") from exc
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
 
 
 def _fov_correlation(

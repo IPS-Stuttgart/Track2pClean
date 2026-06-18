@@ -31,7 +31,11 @@ from bayescatrack import (
     build_session_pair_association_bundle,
     load_track2p_subject,
 )
-from bayescatrack.core._bridge_impl import _suite2p_kwargs_from_args
+from bayescatrack.core._bridge_impl import (
+    _finite_nonnegative_float,
+    _strict_bool,
+    _suite2p_kwargs_from_args,
+)
 
 
 @dataclass(frozen=True)
@@ -51,19 +55,71 @@ class MultisessionTrackingConfig:  # pylint: disable=too-many-instance-attribute
     pairwise_cost_kwargs: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
-        if self.max_session_gap < 1:
-            raise ValueError("max_session_gap must be at least 1")
+        object.__setattr__(
+            self, "max_session_gap", _positive_int(self.max_session_gap)
+        )
         if self.order not in {"xy", "yx"}:
             raise ValueError("order must be either 'xy' or 'yx'")
-        if self.velocity_variance < 0.0:
-            raise ValueError("velocity_variance must be non-negative")
-        if self.regularization < 0.0:
-            raise ValueError("regularization must be non-negative")
+        object.__setattr__(
+            self,
+            "weighted_centroids",
+            _strict_bool(self.weighted_centroids, name="weighted_centroids"),
+        )
+        object.__setattr__(
+            self,
+            "return_pairwise_components",
+            _strict_bool(
+                self.return_pairwise_components,
+                name="return_pairwise_components",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "velocity_variance",
+            _finite_nonnegative_float(
+                self.velocity_variance, name="velocity_variance"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "regularization",
+            _finite_nonnegative_float(self.regularization, name="regularization"),
+        )
         for attribute_name in ("start_cost", "end_cost", "gap_penalty"):
-            if getattr(self, attribute_name) < 0.0:
-                raise ValueError(f"{attribute_name} must be non-negative")
-        if self.cost_threshold is not None and self.cost_threshold < 0.0:
-            raise ValueError("cost_threshold must be non-negative when specified")
+            object.__setattr__(
+                self,
+                attribute_name,
+                _finite_nonnegative_float(
+                    getattr(self, attribute_name), name=attribute_name
+                ),
+            )
+        if self.cost_threshold is not None:
+            object.__setattr__(
+                self,
+                "cost_threshold",
+                _finite_nonnegative_float(
+                    self.cost_threshold, name="cost_threshold"
+                ),
+            )
+        if self.pairwise_cost_kwargs is not None and not isinstance(
+            self.pairwise_cost_kwargs, Mapping
+        ):
+            raise ValueError("pairwise_cost_kwargs must be a mapping or None")
+
+
+def _positive_int(value: Any) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("max_session_gap must be an integer")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("max_session_gap must be an integer") from exc
+    if not np.isfinite(numeric) or not numeric.is_integer():
+        raise ValueError("max_session_gap must be an integer")
+    integer = int(numeric)
+    if integer < 1:
+        raise ValueError("max_session_gap must be at least 1")
+    return integer
 
 
 @dataclass(frozen=True)
