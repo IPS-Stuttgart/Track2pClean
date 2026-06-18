@@ -49,7 +49,9 @@ from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     TeacherActionFilter,
     TeacherEdgeFeatureGate,
     TeacherEdgeOrder,
+    _bool_value,
     _integral_value,
+    _optional_bool_value,
     _positive_int_arg,
     _positive_int_value,
     _teacher_edge_order_requires_feature_index,
@@ -129,6 +131,30 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
         max_applied_teacher_edits,
         name="max_applied_teacher_edits",
     )
+    allow_completing_rescue = _optional_bool_value(
+        allow_completing_rescue, name="allow_completing_rescue"
+    )
+    allow_teacher_supported_completing_rescue = _bool_value(
+        allow_teacher_supported_completing_rescue,
+        name="allow_teacher_supported_completing_rescue",
+    )
+    allow_teacher_confirmed_completing_rescue = _bool_value(
+        allow_teacher_confirmed_completing_rescue,
+        name="allow_teacher_confirmed_completing_rescue",
+    )
+    allow_source_backfill = _bool_value(
+        allow_source_backfill, name="allow_source_backfill"
+    )
+    allow_seed_source_backfill = _bool_value(
+        allow_seed_source_backfill, name="allow_seed_source_backfill"
+    )
+    allow_completing_seed_source_backfill = _bool_value(
+        allow_completing_seed_source_backfill,
+        name="allow_completing_seed_source_backfill",
+    )
+    allow_fragment_merges = _bool_value(
+        allow_fragment_merges, name="allow_fragment_merges"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -159,18 +185,18 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
             target_extension_feature_preset=str(target_extension_feature_preset),
             seed_source_feature_preset=str(seed_source_feature_preset),
             allow_completing_rescue=resolved_allow_completing_rescue,
-            allow_teacher_supported_completing_rescue=bool(
+            allow_teacher_supported_completing_rescue=(
                 allow_teacher_supported_completing_rescue
             ),
-            allow_teacher_confirmed_completing_rescue=bool(
+            allow_teacher_confirmed_completing_rescue=(
                 allow_teacher_confirmed_completing_rescue
             ),
-            allow_source_backfill=bool(allow_source_backfill),
-            allow_seed_source_backfill=bool(allow_seed_source_backfill),
-            allow_completing_seed_source_backfill=bool(
+            allow_source_backfill=allow_source_backfill,
+            allow_seed_source_backfill=allow_seed_source_backfill,
+            allow_completing_seed_source_backfill=(
                 allow_completing_seed_source_backfill
             ),
-            allow_fragment_merges=bool(allow_fragment_merges),
+            allow_fragment_merges=allow_fragment_merges,
             min_teacher_component_observations=min_teacher_component_observations,
             max_applied_teacher_edits=max_applied_teacher_edits,
         )
@@ -211,6 +237,30 @@ def _subject_row(
     max_applied_teacher_edits = _teacher_edit_cap_value(
         max_applied_teacher_edits,
         name="max_applied_teacher_edits",
+    )
+    allow_completing_rescue = _bool_value(
+        allow_completing_rescue, name="allow_completing_rescue"
+    )
+    allow_teacher_supported_completing_rescue = _bool_value(
+        allow_teacher_supported_completing_rescue,
+        name="allow_teacher_supported_completing_rescue",
+    )
+    allow_teacher_confirmed_completing_rescue = _bool_value(
+        allow_teacher_confirmed_completing_rescue,
+        name="allow_teacher_confirmed_completing_rescue",
+    )
+    allow_source_backfill = _bool_value(
+        allow_source_backfill, name="allow_source_backfill"
+    )
+    allow_seed_source_backfill = _bool_value(
+        allow_seed_source_backfill, name="allow_seed_source_backfill"
+    )
+    allow_completing_seed_source_backfill = _bool_value(
+        allow_completing_seed_source_backfill,
+        name="allow_completing_seed_source_backfill",
+    )
+    allow_fragment_merges = _bool_value(
+        allow_fragment_merges, name="allow_fragment_merges"
     )
     reference = _load_reference_for_subject(
         subject_dir, data_root=config.data, config=config
@@ -290,7 +340,7 @@ def _subject_row(
         stitched,
         teacher,
         seed_session=config.seed_session,
-        allow_completing_rescue=bool(allow_completing_rescue),
+        allow_completing_rescue=allow_completing_rescue,
         allow_source_backfill=allow_source_backfill,
         allow_seed_source_backfill=allow_seed_source_backfill,
         allow_completing_seed_source_backfill=allow_completing_seed_source_backfill,
@@ -299,10 +349,10 @@ def _subject_row(
         teacher_action_filter=teacher_action_filter,
         edge_feature_index=edge_features,
         teacher_feature_gate=teacher_feature_gate,
-        allow_teacher_supported_completing_rescue=bool(
+        allow_teacher_supported_completing_rescue=(
             allow_teacher_supported_completing_rescue
         ),
-        allow_teacher_confirmed_completing_rescue=bool(
+        allow_teacher_confirmed_completing_rescue=(
             allow_teacher_confirmed_completing_rescue
         ),
         target_extension_feature_gate=target_extension_feature_gate,
@@ -326,11 +376,11 @@ def _subject_row(
         teacher_applied=sum(
             int(edit.get("applied", 0)) for edit in teacher_report.rows
         ),
-        allow_completing_rescue=bool(allow_completing_rescue),
-        allow_teacher_supported_completing_rescue=bool(
+        allow_completing_rescue=allow_completing_rescue,
+        allow_teacher_supported_completing_rescue=(
             allow_teacher_supported_completing_rescue
         ),
-        allow_teacher_confirmed_completing_rescue=bool(
+        allow_teacher_confirmed_completing_rescue=(
             allow_teacher_confirmed_completing_rescue
         ),
     )
@@ -348,7 +398,9 @@ def _resolve_allow_completing_rescue(
     """Return whether the combined row should allow complete-row edits."""
 
     if allow_completing_rescue is not None:
-        return bool(allow_completing_rescue)
+        return _bool_value(
+            allow_completing_rescue, name="allow_completing_rescue"
+        )
     normalized = str(teacher_action_filter).strip().lower().replace("_", "-")
     return normalized == "completing-rescue"
 
