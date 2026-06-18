@@ -200,6 +200,24 @@ def test_residual_mht_options_reject_invalid_controls(
         residual_mht_module.PyRecEstResidualMHTOptions(**kwargs)
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"max_edits_per_subject": True}, "max_edits_per_subject"),
+        ({"edit_penalty": -0.1}, "edit_penalty"),
+        ({"score_threshold": float("nan")}, "score_threshold"),
+        ({"logistic_c": 0.0}, "logistic_c"),
+        ({"logistic_c": float("inf")}, "logistic_c"),
+        ({"min_training_positive_examples": True}, "min_training_positive_examples"),
+    ],
+)
+def test_calibrated_mht_options_reject_invalid_controls(
+    calibrated_mht_module, kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        calibrated_mht_module.CalibratedResidualMHTOptions(**kwargs)
+
+
 def test_high_overlap_pocket_exposes_cell_probability_gate(
     residual_mht_module,
 ) -> None:
