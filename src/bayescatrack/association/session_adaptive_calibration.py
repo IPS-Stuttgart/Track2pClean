@@ -35,8 +35,23 @@ class AdaptiveCalibrationConfig:
     max_abs_intercept: float = 5.0
 
     def __post_init__(self) -> None:
-        if self.max_abs_intercept <= 0.0:
-            raise ValueError("max_abs_intercept must be positive")
+        for name in (
+            "base_intercept",
+            "session_gap_weight",
+            "roi_density_weight",
+            "low_cell_probability_weight",
+            "registration_rmse_weight",
+            "invalid_warp_weight",
+            "trace_available_weight",
+        ):
+            object.__setattr__(
+                self, name, _finite_float_value(getattr(self, name), name)
+            )
+        object.__setattr__(
+            self,
+            "max_abs_intercept",
+            _finite_positive_float(self.max_abs_intercept, "max_abs_intercept"),
+        )
 
 
 @dataclass(frozen=True)
@@ -49,14 +64,16 @@ class SessionAdaptiveCalibrationConfig:
     low_cell_probability_weight: float = 0.50
 
     def __post_init__(self) -> None:
-        if (
-            self.session_gap_weight < 0.0
-            or self.registration_rmse_weight < 0.0
-            or self.invalid_fraction_weight < 0.0
-            or self.low_cell_probability_weight < 0.0
+        for name in (
+            "session_gap_weight",
+            "registration_rmse_weight",
+            "invalid_fraction_weight",
+            "low_cell_probability_weight",
         ):
-            raise ValueError(
-                "session adaptive calibration weights must be non-negative"
+            object.__setattr__(
+                self,
+                name,
+                _finite_nonnegative_float(getattr(self, name), name),
             )
 
 
@@ -176,8 +193,7 @@ def probability_cost_matrix(
 ) -> np.ndarray:
     """Convert match probabilities into non-negative assignment costs."""
 
-    if epsilon <= 0.0:
-        raise ValueError("epsilon must be positive")
+    epsilon = _finite_positive_float(epsilon, "epsilon")
     p = np.nan_to_num(
         np.asarray(probabilities, dtype=float),
         nan=0.0,
@@ -196,8 +212,7 @@ def apply_context_intercept_to_costs(
 ) -> np.ndarray:
     """Approximate a context logit shift directly on costs."""
 
-    if temperature <= 0.0:
-        raise ValueError("temperature must be positive")
+    temperature = _finite_positive_float(temperature, "temperature")
     costs = np.asarray(cost_matrix, dtype=float)
     return costs - float(temperature) * context_intercept(context, config=config)
 
@@ -233,7 +248,8 @@ def session_context_cost_offset(
 def apply_session_context_offset(cost_matrix: Any, offset: float) -> np.ndarray:
     """Add a scalar session-context offset to a cost matrix."""
 
-    return np.asarray(cost_matrix, dtype=float) + float(offset)
+    offset = _finite_float_value(offset, "offset")
+    return np.asarray(cost_matrix, dtype=float) + offset
 
 
 def _finite_mean(values: Any, *, default: float | None = None) -> float | None:
@@ -250,6 +266,29 @@ def _finite_scalar(value: Any, default: float) -> float:
     except (TypeError, ValueError):
         return float(default)
     return scalar if np.isfinite(scalar) else float(default)
+
+
+def _finite_float_value(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _finite_positive_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be finite and positive")
+    return numeric
 
 
 def _first_scalar(
