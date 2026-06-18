@@ -607,6 +607,57 @@ def test_residual_mht_cli_exposes_global_rescore_knobs(residual_mht_module) -> N
     assert args.mht_fragmentation_penalty == 0.75
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("candidate_top_k", 0),
+        ("max_edits_per_subject", 0),
+        ("max_hypotheses", 0),
+        ("min_meaningful_track_length", 0),
+    ],
+)
+def test_residual_mht_options_reject_nonpositive_integer_controls(
+    residual_mht_module,
+    field: str,
+    value: int,
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        residual_mht_module.PyRecEstResidualMHTOptions(**{field: value})
+
+
+def test_residual_mht_options_reject_invalid_selection_mode(
+    residual_mht_module,
+) -> None:
+    with pytest.raises(ValueError, match="selection_mode"):
+        residual_mht_module.PyRecEstResidualMHTOptions(selection_mode="oracle")
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--mht-candidate-top-k",
+        "--mht-max-edits-per-subject",
+        "--mht-max-hypotheses",
+        "--mht-min-meaningful-track-length",
+    ],
+)
+def test_residual_mht_cli_rejects_nonpositive_integer_controls(
+    residual_mht_module,
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        residual_mht_module.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                option,
+                "0",
+            ]
+        )
+
+
 def test_residual_mht_cli_rejects_teacher_rescue_base(residual_mht_module) -> None:
     with pytest.raises(SystemExit):
         residual_mht_module.main(
@@ -617,6 +668,26 @@ def test_residual_mht_cli_rejects_teacher_rescue_base(residual_mht_module) -> No
                 "mht.csv",
                 "--growth-veto-base",
                 "teacher-rescue",
+            ]
+        )
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["--max-vetoes-per-subject", "--growth-veto-max-vetoes-per-subject"],
+)
+def test_residual_mht_cli_rejects_deterministic_veto_count(
+    residual_mht_module, option
+) -> None:
+    with pytest.raises(SystemExit):
+        residual_mht_module.main(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                option,
+                "1",
             ]
         )
 
@@ -671,6 +742,49 @@ def test_calibrated_mht_cli_exposes_fold_calibration_knobs(
 
     assert args.calibrated_fp_logistic_c == 0.25
     assert args.mht_score_threshold == 0.0
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_edits_per_subject", 0),
+        ("max_hypotheses", 0),
+        ("min_training_positive_examples", -1),
+    ],
+)
+def test_calibrated_mht_options_reject_invalid_integer_controls(
+    calibrated_mht_module,
+    field: str,
+    value: int,
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        calibrated_mht_module.CalibratedResidualMHTOptions(**{field: value})
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--mht-max-edits-per-subject", "0"),
+        ("--mht-max-hypotheses", "0"),
+        ("--calibrated-fp-min-training-positives", "-1"),
+    ],
+)
+def test_calibrated_mht_cli_rejects_invalid_integer_controls(
+    calibrated_mht_module,
+    option: str,
+    value: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        calibrated_mht_module.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                option,
+                value,
+            ]
+        )
 
 
 def test_calibrated_threshold_is_single_training_fold_decision(

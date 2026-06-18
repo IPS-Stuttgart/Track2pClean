@@ -47,6 +47,7 @@ import csv
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -148,6 +149,47 @@ TeacherRepairPreset = Literal[
     "completing-rescue-action-specific",
     "complete-row-rescue-action-specific",
 ]
+
+
+def _integral_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    raise ValueError(f"{name} must be an integer")
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    numeric = _integral_value(value, name=name)
+    if numeric <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return numeric
+
+
+def _nonnegative_int_value(value: Any, *, name: str) -> int:
+    numeric = _integral_value(value, name=name)
+    if numeric < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return numeric
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        return _positive_int_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def _nonnegative_int_arg(value: str) -> int:
+    try:
+        return _nonnegative_int_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 @dataclass(frozen=True)
@@ -668,6 +710,9 @@ def run_track2p_policy_teacher_adjacent_rescue(
         )
 
     cleanup_config = cleanup_config or ComponentCleanupConfig()
+    min_component_observations = _positive_int_value(
+        min_component_observations, name="min_component_observations"
+    )
     repair_kwargs = teacher_adjacent_repair_preset_kwargs(teacher_repair_preset)
     if repair_kwargs:
         if (
@@ -743,8 +788,11 @@ def run_track2p_policy_teacher_adjacent_rescue(
             )
         if "min_component_observations" in repair_kwargs:
             min_component_observations = max(
-                int(min_component_observations),
-                int(repair_kwargs["min_component_observations"]),
+                min_component_observations,
+                _positive_int_value(
+                    repair_kwargs["min_component_observations"],
+                    name="min_component_observations",
+                ),
             )
         if max_applied_edits is None and "max_applied_edits" in repair_kwargs:
             max_applied_edits = int(repair_kwargs["max_applied_edits"])
@@ -801,7 +849,6 @@ def run_track2p_policy_teacher_adjacent_rescue(
     allow_fragment_completion = bool(
         allow_completing_fragment_merge or allow_completing_fragment_merges
     )
-    min_component_observations = max(1, int(min_component_observations))
     teacher_feature_gate = _resolve_teacher_feature_gate(
         teacher_feature_gate, edge_feature_gate
     )
@@ -1217,7 +1264,9 @@ def apply_teacher_adjacent_rescue_edges(
         max_completing_rescue_edits=max_completing_rescue_edits,
     )
     action_edit_counts = _initial_action_edit_counts(action_edit_caps)
-    min_component_observations = max(1, int(min_component_observations))
+    min_component_observations = _positive_int_value(
+        min_component_observations, name="min_component_observations"
+    )
     max_applied_edits = _normalized_max_applied_edits(max_applied_edits)
     teacher_feature_gate = _resolve_teacher_feature_gate(
         teacher_feature_gate, feature_gate, edge_feature_gate
@@ -1562,7 +1611,7 @@ def _teacher_action_filter_rejection_may_change_after_edit(reason: str) -> bool:
 def _normalized_max_applied_edits(max_applied_edits: int | None) -> int | None:
     if max_applied_edits is None:
         return None
-    return max(0, int(max_applied_edits))
+    return _nonnegative_int_value(max_applied_edits, name="max_applied_edits")
 
 
 def _max_applied_edits_reached(
@@ -1590,7 +1639,7 @@ def _normalized_action_edit_caps(
         ("completing_rescue", max_completing_rescue_edits),
     ):
         if value is not None:
-            caps[key] = max(0, int(value))
+            caps[key] = _nonnegative_int_value(value, name=f"max_{key}_edits")
     return caps
 
 
@@ -2834,7 +2883,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--min-component-observations",
-        type=int,
+        type=_positive_int_arg,
         default=1,
         help=(
             "Require the component receiving a teacher rescue edge to already "
@@ -2843,7 +2892,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--max-applied-edits",
-        type=int,
+        type=_nonnegative_int_arg,
         default=None,
         help=(
             "Cap accepted teacher-rescue edits per subject. This tests the "
@@ -2853,31 +2902,31 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--max-target-extension-edits",
-        type=int,
+        type=_nonnegative_int_arg,
         default=None,
         help="Cap accepted target-extension teacher edits per subject.",
     )
     parser.add_argument(
         "--max-source-backfill-edits",
-        type=int,
+        type=_nonnegative_int_arg,
         default=None,
         help="Cap accepted non-seed source-backfill teacher edits per subject.",
     )
     parser.add_argument(
         "--max-seed-source-backfill-edits",
-        type=int,
+        type=_nonnegative_int_arg,
         default=None,
         help="Cap accepted seed-session source-backfill teacher edits per subject.",
     )
     parser.add_argument(
         "--max-fragment-merge-edits",
-        type=int,
+        type=_nonnegative_int_arg,
         default=None,
         help="Cap accepted fragment-merge teacher edits per subject.",
     )
     parser.add_argument(
         "--max-completing-rescue-edits",
-        type=int,
+        type=_nonnegative_int_arg,
         default=None,
         help="Cap accepted teacher edits that would complete a predicted row.",
     )
