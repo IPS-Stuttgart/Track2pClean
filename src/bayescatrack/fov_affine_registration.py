@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from numbers import Integral
+from typing import Any, Literal
 
 import numpy as np
 
@@ -104,6 +105,14 @@ def estimate_fov_affine_transform(
     min_tile_size: int = 32,
     max_shift_fraction: float = 0.55,
 ) -> FovAffineEstimate:
+    subtract_mean = _strict_bool(subtract_mean, name="subtract_mean")
+    grid_shape = _normalize_tile_grid_shape(grid_shape)
+    min_tile_size = _integer_at_least(
+        min_tile_size, name="min_tile_size", minimum=1
+    )
+    max_shift_fraction = _finite_nonnegative_float(
+        max_shift_fraction, name="max_shift_fraction"
+    )
     reference = np.asarray(reference_fov, dtype=float)
     measurement = np.asarray(measurement_fov, dtype=float)
     if reference.ndim != 2 or measurement.ndim != 2:
@@ -374,6 +383,62 @@ def _bilinear_sample_image(
         + wy * wx * image[y1, x1]
     )
     return output
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _integer_at_least(value: Any, *, name: str, minimum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    numeric = int(value)
+    if numeric < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return numeric
+
+
+def _normalize_tile_grid_shape(grid_shape: Any, *, minimum: int = 1) -> tuple[int, int]:
+    if isinstance(grid_shape, str | bytes):
+        raise ValueError("grid_shape must contain exactly two integer values")
+    try:
+        values = tuple(grid_shape)
+    except TypeError as exc:
+        raise ValueError("grid_shape must contain exactly two integer values") from exc
+    if len(values) != 2:
+        raise ValueError("grid_shape must contain exactly two integer values")
+    return (
+        _integer_at_least(values[0], name="grid_shape[0]", minimum=minimum),
+        _integer_at_least(values[1], name="grid_shape[1]", minimum=minimum),
+    )
+
+
+def _finite_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be finite") from exc
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    numeric = _finite_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return numeric
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    numeric = _finite_float(value, name=name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return numeric
 
 
 def invert_affine_xy(matrix_xy: np.ndarray) -> np.ndarray:

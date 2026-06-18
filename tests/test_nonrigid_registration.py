@@ -182,6 +182,36 @@ def test_nonrigid_registration_rejects_unknown_options() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"grid_shape": (1, 3)}, "grid_shape"),
+        ({"grid_shape": (3.0, 3)}, "grid_shape"),
+        ({"min_tile_size": False}, "min_tile_size"),
+        ({"min_tile_size": 0}, "min_tile_size"),
+        ({"max_shift_fraction": np.nan}, "max_shift_fraction"),
+        ({"max_shift_fraction": -0.1}, "max_shift_fraction"),
+        ({"tps_regularization": np.nan}, "tps_regularization"),
+        ({"tps_regularization": -0.1}, "tps_regularization"),
+        ({"bspline_regularization": np.inf}, "bspline_regularization"),
+        ({"bspline_regularization": -0.1}, "bspline_regularization"),
+        ({"optical_flow_iterations": True}, "optical_flow_iterations"),
+        ({"optical_flow_iterations": 1.5}, "optical_flow_iterations"),
+        ({"optical_flow_iterations": -1}, "optical_flow_iterations"),
+        ({"optical_flow_alpha": np.nan}, "optical_flow_alpha"),
+        ({"optical_flow_alpha": 0.0}, "optical_flow_alpha"),
+    ],
+)
+def test_nonrigid_registration_rejects_invalid_control_values(
+    kwargs: dict[str, object], message: str
+) -> None:
+    reference = _plane((72, 72), (36, 34))
+    moving = _plane((72, 72), (32, 37))
+
+    with pytest.raises(ValueError, match=message):
+        register_measurement_plane_by_nonrigid_fov(reference, moving, **kwargs)
+
+
 def test_tps_registration_handles_lower_left_anchor_upper_right_growth() -> None:
     reference, measurement, reference_xy, measurement_xy, affine_xy, estimate = (
         _growth_planes_and_estimate()

@@ -8,7 +8,13 @@ from typing import Literal
 import numpy as np
 
 from .core.bridge import CalciumPlaneData
-from .fov_affine_registration import estimate_fov_affine_transform
+from .fov_affine_registration import (
+    _finite_nonnegative_float,
+    _finite_positive_float,
+    _integer_at_least,
+    _normalize_tile_grid_shape,
+    estimate_fov_affine_transform,
+)
 
 NonrigidRegistrationTransform = Literal[
     "bspline",
@@ -74,16 +80,25 @@ def register_measurement_plane_by_nonrigid_fov(
         raise ValueError(
             "Both planes must provide FOV images for nonrigid registration"
         )
-    if grid_shape[0] < 2 or grid_shape[1] < 2:
-        raise ValueError("grid_shape must contain at least two tiles per axis")
-    if tps_regularization < 0.0:
-        raise ValueError("tps_regularization must be non-negative")
-    if bspline_regularization < 0.0:
-        raise ValueError("bspline_regularization must be non-negative")
-    if optical_flow_iterations < 0:
-        raise ValueError("optical_flow_iterations must be non-negative")
-    if optical_flow_alpha <= 0.0:
-        raise ValueError("optical_flow_alpha must be strictly positive")
+    grid_shape = _normalize_tile_grid_shape(grid_shape, minimum=2)
+    min_tile_size = _integer_at_least(
+        min_tile_size, name="min_tile_size", minimum=1
+    )
+    max_shift_fraction = _finite_nonnegative_float(
+        max_shift_fraction, name="max_shift_fraction"
+    )
+    tps_regularization = _finite_nonnegative_float(
+        tps_regularization, name="tps_regularization"
+    )
+    bspline_regularization = _finite_nonnegative_float(
+        bspline_regularization, name="bspline_regularization"
+    )
+    optical_flow_iterations = _integer_at_least(
+        optical_flow_iterations, name="optical_flow_iterations", minimum=0
+    )
+    optical_flow_alpha = _finite_positive_float(
+        optical_flow_alpha, name="optical_flow_alpha"
+    )
 
     reference = _finite_image(reference_plane.fov)
     measurement = _finite_image(measurement_plane.fov)
