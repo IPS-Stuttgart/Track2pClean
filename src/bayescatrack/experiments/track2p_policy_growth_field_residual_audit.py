@@ -130,6 +130,10 @@ def run_track2p_policy_growth_field_residual_audit(
 ) -> GrowthFieldResidualAuditResult:
     """Audit residual pairwise errors against a fitted growth field."""
 
+    edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = suffix._positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -153,8 +157,8 @@ def run_track2p_policy_growth_field_residual_audit(
             suffix_gate=suffix_gate,
             threshold_method=threshold_method,
             iou_distance_threshold=float(iou_distance_threshold),
-            edge_top_k=int(edge_top_k),
-            path_beam_width=int(path_beam_width),
+            edge_top_k=edge_top_k,
+            path_beam_width=path_beam_width,
             anchor_min_registered_iou=float(anchor_min_registered_iou),
             anchor_min_shifted_iou=float(anchor_min_shifted_iou),
             anchor_min_cell_probability=float(anchor_min_cell_probability),

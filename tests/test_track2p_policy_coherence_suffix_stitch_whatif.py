@@ -174,6 +174,31 @@ def test_exposure_audit_does_not_require_reference_args() -> None:
     assert args.aggregate_row
 
 
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
+)
+def test_exposure_audit_parser_rejects_nonpositive_search_budgets(
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        exposure.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "exposure.csv",
+                option,
+                "0",
+            ]
+        )
+
+
 def test_coherence_gate_accepts_two_edge_final_suffix() -> None:
     predicted = np.asarray([[1, 2, 3, -1, -1]], dtype=int)
     path = _PathCandidate(
