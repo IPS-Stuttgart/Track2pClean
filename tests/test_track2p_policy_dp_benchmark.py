@@ -1,3 +1,4 @@
+import pytest
 from bayescatrack.experiments.track2p_policy_dp_benchmark import (
     PolicyCandidate,
     Track2pPolicyDPConfig,
@@ -111,3 +112,80 @@ def test_select_non_conflicting_paths_finds_component_optimum() -> None:
         (3, 1, -1),
         (4, 5, -1),
     ]
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "row_top_k",
+        "beam_width",
+        "max_gap",
+        "path_candidates_per_seed",
+        "path_selection_beam_width",
+    ],
+)
+@pytest.mark.parametrize(
+    "value",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_dp_config_rejects_invalid_positive_integer_controls(
+    field: str, value: object
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        Track2pPolicyDPConfig(**{field: value})
+
+
+@pytest.mark.parametrize("fill_value", [True, False, 1.5, "2", float("nan")])
+def test_dp_config_rejects_invalid_fill_value(fill_value: object) -> None:
+    with pytest.raises(ValueError, match="fill_value"):
+        Track2pPolicyDPConfig(fill_value=fill_value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("iou_distance_threshold", True),
+        ("iou_distance_threshold", False),
+        ("iou_distance_threshold", float("nan")),
+        ("iou_distance_threshold", float("inf")),
+        ("iou_distance_threshold", -0.1),
+        ("rescue_min_iou", True),
+        ("rescue_min_iou", False),
+        ("rescue_min_iou", float("nan")),
+        ("rescue_min_iou", float("inf")),
+        ("rescue_min_iou", -0.1),
+        ("rescue_min_iou", 1.1),
+        ("threshold_rescue_margin", True),
+        ("threshold_rescue_margin", False),
+        ("threshold_rescue_margin", float("nan")),
+        ("threshold_rescue_margin", float("inf")),
+        ("threshold_rescue_margin", -0.1),
+        ("accepted_bonus", True),
+        ("accepted_bonus", False),
+        ("accepted_bonus", float("nan")),
+        ("accepted_bonus", float("inf")),
+        ("rescue_penalty", True),
+        ("rescue_penalty", False),
+        ("rescue_penalty", float("nan")),
+        ("rescue_penalty", float("inf")),
+        ("gap_penalty", True),
+        ("gap_penalty", False),
+        ("gap_penalty", float("nan")),
+        ("gap_penalty", float("inf")),
+        ("threshold_margin_weight", True),
+        ("threshold_margin_weight", False),
+        ("threshold_margin_weight", float("nan")),
+        ("threshold_margin_weight", float("inf")),
+        ("logit_epsilon", True),
+        ("logit_epsilon", False),
+        ("logit_epsilon", float("nan")),
+        ("logit_epsilon", float("inf")),
+        ("logit_epsilon", 0.0),
+        ("logit_epsilon", 0.5),
+    ],
+)
+def test_dp_config_rejects_invalid_float_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        Track2pPolicyDPConfig(**{field: value})

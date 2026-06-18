@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from bayescatrack.experiments.advanced_improvement_workbench import (
     track2p_result_improvement_manifest,
 )
@@ -159,3 +160,19 @@ def test_track2p_result_improvement_manifest_adds_experimental_policy_dp_once():
     )
     assert experimental["row_top_k"] == 3
     assert experimental["path_selection_beam_width"] == 512
+
+
+@pytest.mark.parametrize(
+    "max_gap",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_track2p_result_improvement_manifest_rejects_invalid_max_gap(
+    max_gap: object,
+) -> None:
+    with pytest.raises(ValueError, match="max_gap"):
+        track2p_result_improvement_manifest(
+            data_root="data",
+            reference_root="reference",
+            output_root="results",
+            max_gap=max_gap,  # type: ignore[arg-type]
+        )
