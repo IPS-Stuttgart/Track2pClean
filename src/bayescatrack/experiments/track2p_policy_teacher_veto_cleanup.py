@@ -82,6 +82,43 @@ TeacherVetoEdgeOrder = Literal["lexicographic", "risk"]
 TeacherVetoOrder = Literal["lexicographic", "weakest"]
 
 
+def _bool_value(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
+
+
+def _finite_nonnegative_float_value(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and non-negative")
+    numeric = float(value)
+    if not math.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _optional_finite_nonnegative_float_value(
+    value: Any, *, name: str
+) -> float | None:
+    if value is None:
+        return None
+    return _finite_nonnegative_float_value(value, name=name)
+
+
+def _teacher_veto_edge_order_value(value: Any, *, name: str) -> TeacherVetoEdgeOrder:
+    if value not in ("lexicographic", "risk"):
+        raise ValueError(f"{name} must be either 'lexicographic' or 'risk'")
+    return cast(TeacherVetoEdgeOrder, value)
+
+
+def _teacher_veto_order_value(value: Any, *, name: str) -> TeacherVetoOrder | None:
+    if value is None:
+        return None
+    if value not in ("lexicographic", "weakest"):
+        raise ValueError(f"{name} must be either 'lexicographic' or 'weakest'")
+    return cast(TeacherVetoOrder, value)
+
+
 @dataclass(frozen=True)
 class TeacherVetoConfig:
     """Gate for conservative Track2p-teacher edge vetoes."""
@@ -105,13 +142,70 @@ class TeacherVetoConfig:
     max_applied_vetoes: int | None = None
 
     def __post_init__(self) -> None:
-        _positive_int_value(
-            self.min_fragment_observations, name="min_fragment_observations"
+        object.__setattr__(
+            self,
+            "max_threshold_margin",
+            _finite_nonnegative_float_value(
+                self.max_threshold_margin, name="max_threshold_margin"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "max_competition_margin",
+            _finite_nonnegative_float_value(
+                self.max_competition_margin, name="max_competition_margin"
+            ),
+        )
+        for name in (
+            "min_registered_iou",
+            "max_registered_iou",
+            "min_centroid_distance",
+            "max_area_ratio",
+            "max_cell_probability",
+        ):
+            object.__setattr__(
+                self,
+                name,
+                _optional_finite_nonnegative_float_value(
+                    getattr(self, name), name=name
+                ),
+            )
+        for name in (
+            "require_unassigned_by_hungarian",
+            "require_teacher_conflict",
+            "allow_complete_track_veto",
+            "complete_track_veto_only",
+            "include_teacher_supported_complete_track_edges",
+            "keep_right_fragment",
+        ):
+            object.__setattr__(
+                self, name, _bool_value(getattr(self, name), name=name)
+            )
+        object.__setattr__(
+            self,
+            "min_fragment_observations",
+            _positive_int_value(
+                self.min_fragment_observations, name="min_fragment_observations"
+            ),
         )
         if self.max_applied_vetoes is not None:
-            _nonnegative_int_value(
-                self.max_applied_vetoes, name="max_applied_vetoes"
+            object.__setattr__(
+                self,
+                "max_applied_vetoes",
+                _nonnegative_int_value(
+                    self.max_applied_vetoes, name="max_applied_vetoes"
+                ),
             )
+        object.__setattr__(
+            self,
+            "edge_order",
+            _teacher_veto_edge_order_value(self.edge_order, name="edge_order"),
+        )
+        object.__setattr__(
+            self,
+            "veto_order",
+            _teacher_veto_order_value(self.veto_order, name="veto_order"),
+        )
 
 
 @dataclass(frozen=True)
