@@ -71,6 +71,13 @@ _UNSUPPORTED_CALIBRATED_GROWTH_VETO_OPTIONS = frozenset(
 )
 
 
+def _finite_positive_float_value(value: Any, *, name: str) -> float:
+    numeric = residual_mht._finite_float_value(value, name=name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be finite and positive")
+    return numeric
+
+
 @dataclass(frozen=True)
 class CalibratedResidualMHTOptions:
     """Controls for the fold-calibrated residual-MHT row."""
@@ -87,6 +94,25 @@ class CalibratedResidualMHTOptions:
         residual_mht._set_positive_int_field(self, "max_hypotheses")
         residual_mht._set_nonnegative_int_field(
             self, "min_training_positive_examples"
+        )
+        object.__setattr__(
+            self,
+            "edit_penalty",
+            residual_mht._finite_nonnegative_float_value(
+                self.edit_penalty, name="edit_penalty"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "score_threshold",
+            residual_mht._finite_float_value(
+                self.score_threshold, name="score_threshold"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "logistic_c",
+            _finite_positive_float_value(self.logistic_c, name="logistic_c"),
         )
 
 
