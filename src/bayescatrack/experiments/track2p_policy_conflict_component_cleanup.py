@@ -506,7 +506,12 @@ def _as_int(value: Any, *, default: int) -> int:
 
 
 def _require_nonnegative(value: float, *, name: str) -> None:
-    if float(value) < 0.0:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    if numeric < 0.0:
         raise ValueError(f"{name} must be non-negative")
 
 

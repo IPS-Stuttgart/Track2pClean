@@ -70,6 +70,25 @@ def test_component_cleanup_config_normalizes_integer_like_min_side_observations(
     assert config.min_side_observations == 3
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "threshold_margin_scale",
+        "competition_margin_scale",
+        "area_ratio_floor",
+        "centroid_distance_scale",
+        "split_risk_threshold",
+        "split_penalty",
+    ],
+)
+@pytest.mark.parametrize("bad_value", [True, False, float("nan"), float("inf")])
+def test_component_cleanup_config_rejects_invalid_float_controls(
+    field: str, bad_value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        ComponentCleanupConfig(**{field: bad_value})
+
+
 def test_split_track_at_bridge_returns_left_and_right_fragments() -> None:
     left, right = split_track_at_bridge(np.asarray([10, 20, 30, 40]), 1)
 
