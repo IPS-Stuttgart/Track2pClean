@@ -178,6 +178,18 @@ def _nonnegative_int_value(value: Any, *, name: str) -> int:
     return numeric
 
 
+def _bool_value(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
+
+
+def _optional_bool_value(value: Any, *, name: str) -> bool | None:
+    if value is None:
+        return None
+    return _bool_value(value, name=name)
+
+
 def _positive_int_arg(value: str) -> int:
     try:
         return _positive_int_value(value, name="value")
@@ -230,9 +242,16 @@ class TeacherEdgeFeatureGate:
         require_assigned_by_hungarian: bool | None = None,
     ) -> None:
         if require_hungarian_assignment is not None:
-            require_hungarian = bool(require_hungarian_assignment)
+            require_hungarian = _bool_value(
+                require_hungarian_assignment, name="require_hungarian_assignment"
+            )
         if require_assigned_by_hungarian is not None:
-            require_hungarian = bool(require_assigned_by_hungarian)
+            require_hungarian = _bool_value(
+                require_assigned_by_hungarian, name="require_assigned_by_hungarian"
+            )
+        require_hungarian = _bool_value(
+            require_hungarian, name="require_hungarian"
+        )
         object.__setattr__(self, "min_registered_iou", min_registered_iou)
         object.__setattr__(self, "max_registered_iou", max_registered_iou)
         object.__setattr__(self, "min_threshold_margin", min_threshold_margin)
@@ -241,7 +260,7 @@ class TeacherEdgeFeatureGate:
         object.__setattr__(self, "max_centroid_distance", max_centroid_distance)
         object.__setattr__(self, "min_area_ratio", min_area_ratio)
         object.__setattr__(self, "min_cell_probability", min_cell_probability)
-        object.__setattr__(self, "require_hungarian", bool(require_hungarian))
+        object.__setattr__(self, "require_hungarian", require_hungarian)
 
     @property
     def require_hungarian_assignment(self) -> bool:
@@ -615,10 +634,12 @@ def _resolve_source_backfill_alias(
     allow_source_insertions: bool | None = None,
 ) -> bool:
     if allow_source_insertions is not None:
-        return bool(allow_source_insertions)
+        return _bool_value(
+            allow_source_insertions, name="allow_source_insertions"
+        )
     if allow_source_inserts is None:
-        return bool(allow_source_backfill)
-    return bool(allow_source_inserts)
+        return _bool_value(allow_source_backfill, name="allow_source_backfill")
+    return _bool_value(allow_source_inserts, name="allow_source_inserts")
 
 
 def _source_backfill_allowed_for_edge(
@@ -630,8 +651,13 @@ def _source_backfill_allowed_for_edge(
 ) -> bool:
     """Return whether this missing-source edge may be considered for backfill."""
 
-    return bool(source_backfill_enabled) or bool(
-        allow_seed_source_backfill and int(session_a) == int(seed_session)
+    return _bool_value(
+        source_backfill_enabled, name="source_backfill_enabled"
+    ) or (
+        _bool_value(
+            allow_seed_source_backfill, name="allow_seed_source_backfill"
+        )
+        and int(session_a) == int(seed_session)
     )
 
 
@@ -645,13 +671,21 @@ def _teacher_completion_gate_kwargs(
     """Return teacher-completion kwargs without broadening exact aliases."""
 
     return {
-        "allow_teacher_complete_row_rescue": bool(allow_teacher_complete_row_rescue),
-        "allow_teacher_supported_completion": bool(allow_teacher_supported_completion),
-        "allow_teacher_supported_completing_rescue": bool(
-            allow_teacher_supported_completing_rescue
+        "allow_teacher_complete_row_rescue": _bool_value(
+            allow_teacher_complete_row_rescue,
+            name="allow_teacher_complete_row_rescue",
         ),
-        "allow_teacher_confirmed_completing_rescue": bool(
-            allow_teacher_confirmed_completing_rescue
+        "allow_teacher_supported_completion": _bool_value(
+            allow_teacher_supported_completion,
+            name="allow_teacher_supported_completion",
+        ),
+        "allow_teacher_supported_completing_rescue": _bool_value(
+            allow_teacher_supported_completing_rescue,
+            name="allow_teacher_supported_completing_rescue",
+        ),
+        "allow_teacher_confirmed_completing_rescue": _bool_value(
+            allow_teacher_confirmed_completing_rescue,
+            name="allow_teacher_confirmed_completing_rescue",
         ),
     }
 
@@ -712,6 +746,63 @@ def run_track2p_policy_teacher_adjacent_rescue(
     cleanup_config = cleanup_config or ComponentCleanupConfig()
     min_component_observations = _positive_int_value(
         min_component_observations, name="min_component_observations"
+    )
+    allow_completing_rescue = _bool_value(
+        allow_completing_rescue, name="allow_completing_rescue"
+    )
+    allow_teacher_complete_row_rescue = _bool_value(
+        allow_teacher_complete_row_rescue,
+        name="allow_teacher_complete_row_rescue",
+    )
+    allow_teacher_supported_completion = _bool_value(
+        allow_teacher_supported_completion,
+        name="allow_teacher_supported_completion",
+    )
+    allow_teacher_supported_completing_rescue = _bool_value(
+        allow_teacher_supported_completing_rescue,
+        name="allow_teacher_supported_completing_rescue",
+    )
+    allow_teacher_confirmed_completing_rescue = _bool_value(
+        allow_teacher_confirmed_completing_rescue,
+        name="allow_teacher_confirmed_completing_rescue",
+    )
+    allow_completing_source_backfill = _bool_value(
+        allow_completing_source_backfill,
+        name="allow_completing_source_backfill",
+    )
+    allow_completing_fragment_merge = _bool_value(
+        allow_completing_fragment_merge,
+        name="allow_completing_fragment_merge",
+    )
+    allow_completing_fragment_merges = _bool_value(
+        allow_completing_fragment_merges,
+        name="allow_completing_fragment_merges",
+    )
+    allow_source_backfill = _bool_value(
+        allow_source_backfill, name="allow_source_backfill"
+    )
+    allow_source_inserts = _optional_bool_value(
+        allow_source_inserts, name="allow_source_inserts"
+    )
+    allow_source_insertions = _optional_bool_value(
+        allow_source_insertions, name="allow_source_insertions"
+    )
+    allow_seed_source_backfill = _bool_value(
+        allow_seed_source_backfill, name="allow_seed_source_backfill"
+    )
+    allow_seed_completing_backfill = _bool_value(
+        allow_seed_completing_backfill,
+        name="allow_seed_completing_backfill",
+    )
+    allow_seed_completing_rescue = _bool_value(
+        allow_seed_completing_rescue, name="allow_seed_completing_rescue"
+    )
+    allow_completing_seed_source_backfill = _bool_value(
+        allow_completing_seed_source_backfill,
+        name="allow_completing_seed_source_backfill",
+    )
+    allow_fragment_merges = _bool_value(
+        allow_fragment_merges, name="allow_fragment_merges"
     )
     repair_kwargs = teacher_adjacent_repair_preset_kwargs(teacher_repair_preset)
     if repair_kwargs:
@@ -1232,6 +1323,63 @@ def apply_teacher_adjacent_rescue_edges(
     either its target-extension cap or the completing-rescue cap.
     """
 
+    allow_completing_rescue = _bool_value(
+        allow_completing_rescue, name="allow_completing_rescue"
+    )
+    allow_teacher_complete_row_rescue = _bool_value(
+        allow_teacher_complete_row_rescue,
+        name="allow_teacher_complete_row_rescue",
+    )
+    allow_teacher_supported_completion = _bool_value(
+        allow_teacher_supported_completion,
+        name="allow_teacher_supported_completion",
+    )
+    allow_teacher_supported_completing_rescue = _bool_value(
+        allow_teacher_supported_completing_rescue,
+        name="allow_teacher_supported_completing_rescue",
+    )
+    allow_teacher_confirmed_completing_rescue = _bool_value(
+        allow_teacher_confirmed_completing_rescue,
+        name="allow_teacher_confirmed_completing_rescue",
+    )
+    allow_completing_source_backfill = _bool_value(
+        allow_completing_source_backfill,
+        name="allow_completing_source_backfill",
+    )
+    allow_completing_fragment_merge = _bool_value(
+        allow_completing_fragment_merge,
+        name="allow_completing_fragment_merge",
+    )
+    allow_completing_fragment_merges = _bool_value(
+        allow_completing_fragment_merges,
+        name="allow_completing_fragment_merges",
+    )
+    allow_source_backfill = _bool_value(
+        allow_source_backfill, name="allow_source_backfill"
+    )
+    allow_source_inserts = _optional_bool_value(
+        allow_source_inserts, name="allow_source_inserts"
+    )
+    allow_source_insertions = _optional_bool_value(
+        allow_source_insertions, name="allow_source_insertions"
+    )
+    allow_seed_source_backfill = _bool_value(
+        allow_seed_source_backfill, name="allow_seed_source_backfill"
+    )
+    allow_seed_completing_backfill = _bool_value(
+        allow_seed_completing_backfill,
+        name="allow_seed_completing_backfill",
+    )
+    allow_seed_completing_rescue = _bool_value(
+        allow_seed_completing_rescue, name="allow_seed_completing_rescue"
+    )
+    allow_completing_seed_source_backfill = _bool_value(
+        allow_completing_seed_source_backfill,
+        name="allow_completing_seed_source_backfill",
+    )
+    allow_fragment_merges = _bool_value(
+        allow_fragment_merges, name="allow_fragment_merges"
+    )
     output = _normalize_int_track_matrix(predicted_track_matrix)
     teacher = _normalize_int_track_matrix(teacher_track_matrix)
     allow_partial_teacher_completion = bool(
@@ -2425,6 +2573,40 @@ def _try_apply_teacher_edge(
     allow_fragment_merges: bool = True,
     min_component_observations: int = 1,
 ) -> tuple[np.ndarray, dict[str, int | str]]:
+    allow_completing_rescue = _bool_value(
+        allow_completing_rescue, name="allow_completing_rescue"
+    )
+    allow_teacher_supported_completing_rescue = _bool_value(
+        allow_teacher_supported_completing_rescue,
+        name="allow_teacher_supported_completing_rescue",
+    )
+    allow_completing_source_backfill = _bool_value(
+        allow_completing_source_backfill,
+        name="allow_completing_source_backfill",
+    )
+    allow_completing_fragment_merges = _bool_value(
+        allow_completing_fragment_merges,
+        name="allow_completing_fragment_merges",
+    )
+    allow_source_backfill = _bool_value(
+        allow_source_backfill, name="allow_source_backfill"
+    )
+    allow_source_inserts = _optional_bool_value(
+        allow_source_inserts, name="allow_source_inserts"
+    )
+    allow_source_insertions = _optional_bool_value(
+        allow_source_insertions, name="allow_source_insertions"
+    )
+    allow_seed_source_backfill = _bool_value(
+        allow_seed_source_backfill, name="allow_seed_source_backfill"
+    )
+    allow_completing_seed_source_backfill = _bool_value(
+        allow_completing_seed_source_backfill,
+        name="allow_completing_seed_source_backfill",
+    )
+    allow_fragment_merges = _bool_value(
+        allow_fragment_merges, name="allow_fragment_merges"
+    )
     output = np.asarray(predicted, dtype=int).copy()
     source_backfill_enabled = _resolve_source_backfill_alias(
         allow_source_backfill, allow_source_inserts, allow_source_insertions
