@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 from bayescatrack.association.context_descriptors import (
     fov_patch_moments,
     local_density_descriptor,
@@ -20,6 +21,7 @@ from bayescatrack.association.joint_registration_assignment import (
     high_confidence_anchor_pairs,
 )
 from bayescatrack.association.multi_hypothesis import (
+    HypothesisConfig,
     consensus_edges,
     top_k_edge_candidates,
 )
@@ -103,6 +105,80 @@ def test_multi_hypothesis_edge_set_consensus_respects_min_votes() -> None:
     consensus = consensus_edges((candidates_a, candidates_b), min_votes=2)
 
     assert consensus == {(0, 1, 0, 1): 2}
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("edge_top_k", True),
+        ("edge_top_k", 1.5),
+        ("edge_top_k", 0),
+        ("beam_width", False),
+        ("beam_width", 1.5),
+        ("beam_width", 0),
+        ("min_consensus_votes", True),
+        ("min_consensus_votes", 1.5),
+        ("min_consensus_votes", 0),
+        ("max_edge_cost", True),
+        ("max_edge_cost", float("nan")),
+        ("max_edge_cost", float("inf")),
+        ("fill_value", True),
+        ("fill_value", 1.5),
+    ],
+)
+def test_hypothesis_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        HypothesisConfig(**{field: value})
+
+
+@pytest.mark.parametrize(
+    "row_top_k",
+    [True, False, 1.5, 0],
+)
+def test_top_k_edge_candidates_rejects_invalid_row_top_k(
+    row_top_k: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="row_top_k"):
+        top_k_edge_candidates([[1.0]], edge=(0, 1), row_top_k=row_top_k)
+
+
+@pytest.mark.parametrize("max_cost", [True, float("nan"), float("inf")])
+def test_top_k_edge_candidates_rejects_invalid_max_cost(
+    max_cost: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="max_cost"):
+        top_k_edge_candidates([[1.0]], edge=(0, 1), max_cost=max_cost)
+
+
+@pytest.mark.parametrize("min_votes", [True, False, 1.5, 0])
+def test_consensus_edges_rejects_invalid_min_votes(
+    min_votes: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="min_votes"):
+        consensus_edges((((0, 1, 0, 1),),), min_votes=min_votes)
+
+
+@pytest.mark.parametrize(
+    "min_support_fraction",
+    [True, False, 0.0, -0.1, 1.1, float("nan"), float("inf")],
+)
+def test_consensus_edges_rejects_invalid_support_fraction(
+    min_support_fraction: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="min_support_fraction"):
+        consensus_edges(
+            (((0, 1, 0, 1),),), min_support_fraction=min_support_fraction
+        )
+
+
+@pytest.mark.parametrize("fill_value", [True, 1.5])
+def test_consensus_edges_rejects_invalid_fill_value(
+    fill_value: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="fill_value"):
+        consensus_edges((((0, 1, 0, 1),),), fill_value=fill_value)
 
 
 def test_joint_registration_anchor_selection_uses_probability_and_margin() -> None:
