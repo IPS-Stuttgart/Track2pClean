@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import (
     track2p_policy_coherence_teacher_overlay_audit as overlay_audit,
@@ -30,6 +31,28 @@ def test_coherence_teacher_overlay_audit_parser_uses_suffix_gate_defaults() -> N
     assert args.iou_distance_threshold == 12.0
     assert args.suffix_path_length == 2
     assert args.max_stitches_per_subject == 1
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["--suffix-path-length", "--max-stitches-per-subject", "--edge-top-k", "--path-beam-width"],
+)
+def test_coherence_teacher_overlay_parser_rejects_nonpositive_search_budgets(
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        overlay_audit.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--reference",
+                "manual-gt",
+                "--output",
+                "overlay.csv",
+                option,
+                "0",
+            ]
+        )
 
 
 def test_overlay_audit_fieldnames_match_requested_columns() -> None:

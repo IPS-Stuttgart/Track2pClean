@@ -9,6 +9,7 @@ the frozen Track2pPolicy component-cleanup row.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from numbers import Integral
 from typing import Any, cast
 
 TEACHER_ADJACENT_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
@@ -91,10 +92,34 @@ def _optional_float_option(options: Mapping[str, Any], *names: str) -> float | N
     return None
 
 
-def _optional_int_option(options: Mapping[str, Any], *names: str) -> int | None:
+def _integer_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    raise ValueError(f"{name} must be an integer")
+
+
+def _positive_int_option(
+    options: Mapping[str, Any], name: str, *, default: int
+) -> int:
+    value = _integer_value(options.get(name, default), name=name)
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+def _optional_nonnegative_int_option(
+    options: Mapping[str, Any], *names: str
+) -> int | None:
     for name in names:
         if name in options and options[name] not in {None, ""}:
-            value = int(options[name])
+            value = _integer_value(options[name], name=name)
             if value < 0:
                 raise ValueError(f"{name} must be non-negative when provided")
             return value
@@ -391,21 +416,25 @@ def _run_track2p_policy_teacher_adjacent_rows(
         seed_source_feature_preset=str(
             options.get("seed_source_feature_preset", "none")
         ),
-        min_component_observations=int(options.get("min_component_observations", 1)),
-        max_applied_edits=_optional_int_option(options, "max_applied_edits"),
-        max_target_extension_edits=_optional_int_option(
+        min_component_observations=_positive_int_option(
+            options, "min_component_observations", default=1
+        ),
+        max_applied_edits=_optional_nonnegative_int_option(
+            options, "max_applied_edits"
+        ),
+        max_target_extension_edits=_optional_nonnegative_int_option(
             options, "max_target_extension_edits"
         ),
-        max_source_backfill_edits=_optional_int_option(
+        max_source_backfill_edits=_optional_nonnegative_int_option(
             options, "max_source_backfill_edits"
         ),
-        max_seed_source_backfill_edits=_optional_int_option(
+        max_seed_source_backfill_edits=_optional_nonnegative_int_option(
             options, "max_seed_source_backfill_edits"
         ),
-        max_fragment_merge_edits=_optional_int_option(
+        max_fragment_merge_edits=_optional_nonnegative_int_option(
             options, "max_fragment_merge_edits"
         ),
-        max_completing_rescue_edits=_optional_int_option(
+        max_completing_rescue_edits=_optional_nonnegative_int_option(
             options, "max_completing_rescue_edits"
         ),
         teacher_feature_gate=teacher_feature_gate,

@@ -150,6 +150,10 @@ def run_track2p_policy_pyrecest_calibrated_mht_cleanup(
 ) -> CalibratedResidualMHTResult:
     """Run LOSO-calibrated residual MHT from the non-teacher suffix row."""
 
+    edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = suffix._positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -392,7 +396,7 @@ def _structural_candidate_gate_reason(
         row.get("complete_component_size", 0)
     ) < int(gate.min_complete_component_size):
         return "complete_component_size_below_gate"
-    if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
+    if int(row.get("growth_anchor_count", 0)) < int(gate.min_anchor_count):
         return "growth_anchor_count_below_gate"
 
     row_rank = int(residual_mht._finite_float(row.get("row_rank"), float("inf")))
@@ -835,11 +839,11 @@ def main(argv: list[str] | None = None) -> int:
                 if args.max_veto_local_neighbor_distortion is None
                 else float(args.max_veto_local_neighbor_distortion)
             ),
-            min_anchor_count=max(0, int(args.min_veto_anchor_count)),
+            min_anchor_count=int(args.min_veto_anchor_count),
             min_complete_component_size=(
                 None
                 if args.min_veto_complete_component_size is None
-                else max(0, int(args.min_veto_complete_component_size))
+                else int(args.min_veto_complete_component_size)
             ),
             max_row_rank=int(args.max_veto_row_rank),
             max_column_rank=int(args.max_veto_column_rank),

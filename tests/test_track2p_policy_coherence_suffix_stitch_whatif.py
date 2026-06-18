@@ -2,6 +2,7 @@ import inspect
 from dataclasses import replace
 
 import numpy as np
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import (
     track2p_policy_coherence_suffix_exposure_audit as exposure,
@@ -82,6 +83,45 @@ def test_coherence_suffix_exposure_audit_is_registered() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("suffix_path_length", 0),
+        ("max_stitches_per_subject", 0),
+    ],
+)
+def test_coherence_suffix_gate_rejects_nonpositive_integer_controls(
+    field: str, value: int
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        audit.CoherenceSuffixStitchGate(**{field: value})
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
+)
+def test_coherence_suffix_cli_rejects_nonpositive_integer_controls(
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        audit.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "suffix.csv",
+                option,
+                "0",
+            ]
+        )
+
+
 def test_candidate_output_is_optional() -> None:
     parser = audit.build_arg_parser()
 
@@ -132,6 +172,31 @@ def test_exposure_audit_does_not_require_reference_args() -> None:
 
     assert not hasattr(args, "reference")
     assert args.aggregate_row
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
+)
+def test_exposure_audit_parser_rejects_nonpositive_search_budgets(
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        exposure.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "exposure.csv",
+                option,
+                "0",
+            ]
+        )
 
 
 def test_coherence_gate_accepts_two_edge_final_suffix() -> None:

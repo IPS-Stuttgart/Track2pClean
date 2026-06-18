@@ -14,6 +14,7 @@ import csv
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -72,6 +73,47 @@ TRACK2P_POLICY_COHERENCE_SUFFIX_STITCH_WHATIF_METHOD = (
 TRACK2P_POLICY_COHERENCE_SUFFIX_STITCH_METHOD = "track2p-policy-coherence-suffix-stitch"
 
 
+def _integral_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    raise ValueError(f"{name} must be an integer")
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    numeric = _integral_value(value, name=name)
+    if numeric <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return numeric
+
+
+def _nonnegative_int_value(value: Any, *, name: str) -> int:
+    numeric = _integral_value(value, name=name)
+    if numeric < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return numeric
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        return _positive_int_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def _nonnegative_int_arg(value: str) -> int:
+    try:
+        return _nonnegative_int_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 @dataclass(frozen=True)
 class CoherenceSuffixStitchGate:
     """Hard gate for exploratory suffix-stitch what-if candidates."""
@@ -84,6 +126,20 @@ class CoherenceSuffixStitchGate:
     min_motion_consistency: float = 0.50
     min_shape_consistency: float = 0.82
     max_stitches_per_subject: int = 1
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "suffix_path_length",
+            _positive_int_value(self.suffix_path_length, name="suffix_path_length"),
+        )
+        object.__setattr__(
+            self,
+            "max_stitches_per_subject",
+            _positive_int_value(
+                self.max_stitches_per_subject, name="max_stitches_per_subject"
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -108,6 +164,8 @@ def run_track2p_policy_coherence_suffix_stitch_whatif(
 ) -> CoherenceSuffixStitchWhatIfResult:
     """Return coherence-gated suffix-stitch what-if rows."""
 
+    edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = _positive_int_value(path_beam_width, name="path_beam_width")
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -686,16 +744,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--split-risk-threshold", type=float, default=1.50)
     parser.add_argument("--split-penalty", type=float, default=0.25)
     parser.add_argument("--min-side-observations", type=int, default=2)
-    parser.add_argument("--suffix-path-length", type=int, default=2)
+    parser.add_argument("--suffix-path-length", type=_positive_int_arg, default=2)
     parser.add_argument("--min-cell-probability", type=float, default=0.80)
     parser.add_argument("--min-area-ratio", type=float, default=0.80)
     parser.add_argument("--max-centroid-distance", type=float, default=6.0)
     parser.add_argument("--min-shifted-iou", type=float, default=0.30)
     parser.add_argument("--min-motion-consistency", type=float, default=0.50)
     parser.add_argument("--min-shape-consistency", type=float, default=0.82)
-    parser.add_argument("--max-stitches-per-subject", type=int, default=1)
-    parser.add_argument("--edge-top-k", type=int, default=25)
-    parser.add_argument("--path-beam-width", type=int, default=100)
+    parser.add_argument("--max-stitches-per-subject", type=_positive_int_arg, default=1)
+    parser.add_argument("--edge-top-k", type=_positive_int_arg, default=25)
+    parser.add_argument("--path-beam-width", type=_positive_int_arg, default=100)
     parser.add_argument(
         "--require-complete-track",
         action=argparse.BooleanOptionalAction,

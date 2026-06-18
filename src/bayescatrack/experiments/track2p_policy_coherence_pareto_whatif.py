@@ -51,6 +51,8 @@ from bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif impo
     CoherenceSuffixStitchGate,
     _apply_suffix_paths,
     _FeatureCache,
+    _positive_int_arg,
+    _positive_int_value,
     _select_paths,
 )
 from bayescatrack.experiments.track2p_policy_component_audit import (
@@ -179,6 +181,10 @@ def run_track2p_policy_coherence_pareto_whatif(
 ) -> CoherenceParetoWhatIfResult:
     """Score exact one-edit Pareto candidates after coherence suffix stitching."""
 
+    edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = _positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -200,8 +206,8 @@ def run_track2p_policy_coherence_pareto_whatif(
             threshold_method=threshold_method,
             iou_distance_threshold=float(iou_distance_threshold),
             gate=gate,
-            edge_top_k=int(edge_top_k),
-            path_beam_width=int(path_beam_width),
+            edge_top_k=edge_top_k,
+            path_beam_width=path_beam_width,
         )
         for subject_dir in subject_dirs
     )
@@ -1021,16 +1027,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--split-risk-threshold", type=float, default=1.50)
     parser.add_argument("--split-penalty", type=float, default=0.25)
     parser.add_argument("--min-side-observations", type=int, default=2)
-    parser.add_argument("--suffix-path-length", type=int, default=2)
+    parser.add_argument("--suffix-path-length", type=_positive_int_arg, default=2)
     parser.add_argument("--min-cell-probability", type=float, default=0.80)
     parser.add_argument("--min-area-ratio", type=float, default=0.80)
     parser.add_argument("--max-centroid-distance", type=float, default=6.0)
     parser.add_argument("--min-shifted-iou", type=float, default=0.30)
     parser.add_argument("--min-motion-consistency", type=float, default=0.50)
     parser.add_argument("--min-shape-consistency", type=float, default=0.82)
-    parser.add_argument("--max-stitches-per-subject", type=int, default=1)
-    parser.add_argument("--edge-top-k", type=int, default=25)
-    parser.add_argument("--path-beam-width", type=int, default=100)
+    parser.add_argument("--max-stitches-per-subject", type=_positive_int_arg, default=1)
+    parser.add_argument("--edge-top-k", type=_positive_int_arg, default=25)
+    parser.add_argument("--path-beam-width", type=_positive_int_arg, default=100)
     parser.add_argument(
         "--require-complete-track",
         action=argparse.BooleanOptionalAction,
