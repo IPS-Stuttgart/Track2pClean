@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from typing import Any
 
 import numpy as np
@@ -51,17 +52,16 @@ class TeacherEdgePriorConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if self.relief < 0.0 or not np.isfinite(self.relief):
+        if _finite_float_value(self.relief, "relief") < 0.0:
             raise ValueError("relief must be a finite non-negative value")
-        if self.non_teacher_penalty < 0.0 or not np.isfinite(self.non_teacher_penalty):
+        if _finite_float_value(self.non_teacher_penalty, "non_teacher_penalty") < 0.0:
             raise ValueError("non_teacher_penalty must be a finite non-negative value")
-        if self.teacher_cost_cap is not None and not np.isfinite(self.teacher_cost_cap):
-            raise ValueError("teacher_cost_cap must be finite when provided")
-        if not np.isfinite(self.min_cost):
-            raise ValueError("min_cost must be finite")
-        if self.max_gap is not None and int(self.max_gap) < 1:
-            raise ValueError("max_gap must be at least 1 when provided")
-        if self.large_cost <= 0.0 or not np.isfinite(self.large_cost):
+        if self.teacher_cost_cap is not None:
+            _finite_float_value(self.teacher_cost_cap, "teacher_cost_cap")
+        _finite_float_value(self.min_cost, "min_cost")
+        if self.max_gap is not None:
+            _positive_int_value(self.max_gap, "max_gap")
+        if _finite_float_value(self.large_cost, "large_cost") <= 0.0:
             raise ValueError("large_cost must be a positive finite value")
 
 
@@ -223,3 +223,21 @@ def _parse_roi_index(value: Any) -> int | None:
 
 def _is_valid_roi_index(value: Any) -> bool:
     return _parse_roi_index(value) is not None
+
+
+def _finite_float_value(value: float, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _positive_int_value(value: int, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    numeric = int(value)
+    if numeric < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return numeric

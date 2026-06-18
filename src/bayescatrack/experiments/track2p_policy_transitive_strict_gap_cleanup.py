@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Mapping, Sequence
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -549,9 +550,7 @@ def _round_limit(
     max_rounds: int | None,
 ) -> int:
     if max_rounds is not None:
-        if int(max_rounds) < 1:
-            raise ValueError("max_rounds must be at least 1 when provided")
-        return int(max_rounds)
+        return _positive_int_value(max_rounds, "max_rounds")
     return max(1, min(len(feature_index), int(np.size(track_matrix))))
 
 
@@ -571,6 +570,15 @@ def _candidate_confidence(
         -int(roi_a),
         -int(roi_b),
     )
+
+
+def _positive_int_value(value: int, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    numeric = int(value)
+    if numeric < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return numeric
 
 
 if __name__ == "__main__":  # pragma: no cover

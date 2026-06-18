@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from typing import Any
 
 import numpy as np
@@ -28,15 +29,14 @@ class HigherOrderConsistencyConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if not np.isfinite(self.triplet_weight) or self.triplet_weight < 0.0:
+        if _finite_float_value(self.triplet_weight, "triplet_weight") < 0.0:
             raise ValueError("triplet_weight must be a non-negative finite number")
-        if int(self.support_top_k) < 1:
-            raise ValueError("support_top_k must be at least 1")
-        if not np.isfinite(self.support_cost_cap) or self.support_cost_cap < 0.0:
+        _positive_int_value(self.support_top_k, "support_top_k")
+        if _finite_float_value(self.support_cost_cap, "support_cost_cap") < 0.0:
             raise ValueError("support_cost_cap must be a non-negative finite number")
-        if not np.isfinite(self.max_penalty) or self.max_penalty < 0.0:
+        if _finite_float_value(self.max_penalty, "max_penalty") < 0.0:
             raise ValueError("max_penalty must be a non-negative finite number")
-        if not np.isfinite(self.large_cost) or self.large_cost <= 0.0:
+        if _finite_float_value(self.large_cost, "large_cost") <= 0.0:
             raise ValueError("large_cost must be a positive finite number")
 
     @property
@@ -280,3 +280,21 @@ def _coerce_config(
     if isinstance(config, HigherOrderConsistencyConfig):
         return config
     return HigherOrderConsistencyConfig(**dict(config))
+
+
+def _finite_float_value(value: float, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _positive_int_value(value: int, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    numeric = int(value)
+    if numeric < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return numeric

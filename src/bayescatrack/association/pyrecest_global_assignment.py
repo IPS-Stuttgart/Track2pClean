@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from typing import Any, Literal
 
 import numpy as np
@@ -115,6 +116,19 @@ class TripletSupportConsistencyConfig:
     support_top_k: int = 3
     support_cost_cap: float | None = None
     max_penalty: float | None = None
+
+    def __post_init__(self) -> None:
+        if _finite_float_value(self.triplet_weight, "triplet_weight") < 0.0:
+            raise ValueError("triplet_weight must be finite and non-negative")
+        _positive_int_value(self.support_top_k, "support_top_k")
+        if self.support_cost_cap is not None and (
+            _finite_float_value(self.support_cost_cap, "support_cost_cap") < 0.0
+        ):
+            raise ValueError("support_cost_cap must be finite and non-negative")
+        if self.max_penalty is not None and (
+            _finite_float_value(self.max_penalty, "max_penalty") < 0.0
+        ):
+            raise ValueError("max_penalty must be finite and non-negative")
 
 
 @dataclass(frozen=True)
@@ -279,14 +293,12 @@ def session_edge_pairs(
 ) -> tuple[SessionEdge, ...]:
     """Return forward session edges admitted by the max-gap skip-session policy."""
 
-    if num_sessions < 0:
-        raise ValueError("num_sessions must be non-negative")
-    if max_gap < 1:
-        raise ValueError("max_gap must be at least 1")
+    session_count = _nonnegative_int_value(num_sessions, "num_sessions")
+    gap_limit = _positive_int_value(max_gap, "max_gap")
     return tuple(
         (source, target)
-        for source in range(max(0, num_sessions - 1))
-        for target in range(source + 1, min(num_sessions, source + max_gap + 1))
+        for source in range(max(0, session_count - 1))
+        for target in range(source + 1, min(session_count, source + gap_limit + 1))
     )
 
 
@@ -309,12 +321,6 @@ def apply_triplet_support_consistency(
     }
     if config is None or config.triplet_weight <= 0.0:
         return adjusted
-    if config.support_top_k < 1:
-        raise ValueError("support_top_k must be at least 1")
-    if config.support_cost_cap is not None and config.support_cost_cap < 0.0:
-        raise ValueError("support_cost_cap must be non-negative when provided")
-    if config.max_penalty is not None and config.max_penalty < 0.0:
-        raise ValueError("max_penalty must be non-negative when provided")
 
     penalty_value = float(config.triplet_weight)
     if config.max_penalty is not None:
@@ -766,13 +772,21 @@ def solve_global_assignment_from_pairwise_costs(
     costs = dict(pairwise_costs)
     sizes = tuple(int(size) for size in session_sizes)
     edges = tuple(session_edges) if session_edges is not None else tuple(sorted(costs))
+    resolved_start_cost = _finite_float_value(start_cost, "start_cost")
+    resolved_end_cost = _finite_float_value(end_cost, "end_cost")
+    resolved_gap_penalty = _finite_float_value(gap_penalty, "gap_penalty")
+    resolved_cost_threshold = (
+        None
+        if cost_threshold is None
+        else _finite_float_value(cost_threshold, "cost_threshold")
+    )
     result = _load_pyrecest_multisession_solver()(
         costs,
         session_sizes=sizes,
-        start_cost=float(start_cost),
-        end_cost=float(end_cost),
-        gap_penalty=float(gap_penalty),
-        cost_threshold=None if cost_threshold is None else float(cost_threshold),
+        start_cost=resolved_start_cost,
+        end_cost=resolved_end_cost,
+        gap_penalty=resolved_gap_penalty,
+        cost_threshold=resolved_cost_threshold,
     )
     return GlobalAssignmentRun(
         result=result,
@@ -997,3 +1011,32 @@ def _load_pyrecest_multisession_solver() -> Any:
                 "for global-assignment benchmarks."
             ) from exc
     return solve_multisession_assignment
+
+
+def _finite_float_value(value: float, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _positive_int_value(value: int, name: str) -> int:
+    numeric = _integer_value(value, name)
+    if numeric < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return numeric
+
+
+def _nonnegative_int_value(value: int, name: str) -> int:
+    numeric = _integer_value(value, name)
+    if numeric < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return numeric
+
+
+def _integer_value(value: int, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    return int(value)

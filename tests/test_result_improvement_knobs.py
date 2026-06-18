@@ -128,6 +128,50 @@ def test_track2p_teacher_prior_reliefs_suite2p_edges() -> None:
     assert adjusted[(0, 1)][0, 0] == pytest.approx(5.0)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("relief", True),
+        ("relief", False),
+        ("relief", float("nan")),
+        ("relief", float("inf")),
+        ("relief", -0.1),
+        ("teacher_cost_cap", True),
+        ("teacher_cost_cap", False),
+        ("teacher_cost_cap", float("nan")),
+        ("teacher_cost_cap", float("inf")),
+        ("non_teacher_penalty", True),
+        ("non_teacher_penalty", False),
+        ("non_teacher_penalty", float("nan")),
+        ("non_teacher_penalty", float("inf")),
+        ("non_teacher_penalty", -0.1),
+        ("min_cost", True),
+        ("min_cost", False),
+        ("min_cost", float("nan")),
+        ("min_cost", float("inf")),
+        ("large_cost", True),
+        ("large_cost", False),
+        ("large_cost", float("nan")),
+        ("large_cost", float("inf")),
+        ("large_cost", 0.0),
+    ],
+)
+def test_teacher_edge_prior_config_rejects_invalid_float_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        TeacherEdgePriorConfig(**{field: value})
+
+
+@pytest.mark.parametrize(
+    "max_gap",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_teacher_edge_prior_config_rejects_invalid_max_gap(max_gap: object) -> None:
+    with pytest.raises(ValueError, match="max_gap"):
+        TeacherEdgePriorConfig(max_gap=max_gap)  # type: ignore[arg-type]
+
+
 def _fake_session(roi_indices: list[int]) -> SimpleNamespace:
     return SimpleNamespace(
         plane_data=SimpleNamespace(
