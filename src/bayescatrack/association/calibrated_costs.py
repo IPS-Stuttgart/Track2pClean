@@ -127,6 +127,15 @@ class CalibratedAssociationModel:
     model: Any
     feature_names: tuple[str, ...] = DEFAULT_ASSOCIATION_FEATURES
 
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "feature_names",
+            _coerce_string_sequence(
+                "feature_names", self.feature_names, allow_empty=False
+            ),
+        )
+
     @property
     def schema(self) -> NamedPairwiseFeatureSchema:
         """Named PyRecEst feature schema used by this calibrated model."""
@@ -207,6 +216,71 @@ class ReferenceTrainingOptions:
     pairwise_cost_kwargs: Mapping[str, Any] | None = None
     restrict_training_to_reference_rois: bool = True
 
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "curated_only", _coerce_strict_bool("curated_only", self.curated_only)
+        )
+        object.__setattr__(
+            self,
+            "weighted_centroids",
+            _coerce_strict_bool("weighted_centroids", self.weighted_centroids),
+        )
+        object.__setattr__(
+            self,
+            "restrict_training_to_reference_rois",
+            _coerce_strict_bool(
+                "restrict_training_to_reference_rois",
+                self.restrict_training_to_reference_rois,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "velocity_variance",
+            _coerce_nonnegative_finite_float(
+                "velocity_variance", self.velocity_variance
+            ),
+        )
+        object.__setattr__(
+            self,
+            "regularization",
+            _coerce_nonnegative_finite_float("regularization", self.regularization),
+        )
+        object.__setattr__(
+            self,
+            "feature_names",
+            _coerce_string_sequence(
+                "feature_names", self.feature_names, allow_empty=False
+            ),
+        )
+        object.__setattr__(
+            self,
+            "auto_registration_candidates",
+            _coerce_string_sequence(
+                "auto_registration_candidates",
+                self.auto_registration_candidates,
+                allow_empty=True,
+            ),
+        )
+        if self.pairwise_cost_kwargs is not None and not isinstance(
+            self.pairwise_cost_kwargs, Mapping
+        ):
+            raise ValueError("pairwise_cost_kwargs must be a mapping or None")
+        object.__setattr__(
+            self,
+            "transform_type",
+            _coerce_nonempty_string("transform_type", self.transform_type),
+        )
+        object.__setattr__(
+            self, "order", _coerce_nonempty_string("order", self.order)
+        )
+        object.__setattr__(
+            self,
+            "fov_affine_mask_warp_mode",
+            _coerce_nonempty_string(
+                "fov_affine_mask_warp_mode", self.fov_affine_mask_warp_mode
+            ),
+        )
+
 
 @dataclass(frozen=True)
 class ReferencePairwiseExamples:
@@ -266,9 +340,7 @@ def with_session_gap_component(
 ) -> dict[str, np.ndarray]:
     """Return pairwise components augmented with a constant positive session-gap plane."""
 
-    session_gap = float(session_gap)
-    if session_gap <= 0.0:
-        raise ValueError("session_gap must be positive")
+    session_gap = _coerce_positive_finite_float("session_gap", session_gap)
     components = {key: np.asarray(value) for key, value in pairwise_components.items()}
     if not components:
         raise ValueError(
@@ -757,8 +829,7 @@ def _pairwise_covariance_shape_components(
         raise ValueError("covariances_self must have shape (2, 2, n_roi)")
     if covariances_other.ndim != 3 or covariances_other.shape[:2] != (2, 2):
         raise ValueError("covariances_other must have shape (2, 2, n_roi)")
-    if epsilon <= 0.0:
-        raise ValueError("epsilon must be strictly positive")
+    epsilon = _coerce_positive_finite_float("epsilon", epsilon)
     n_self = covariances_self.shape[2]
     n_other = covariances_other.shape[2]
     if n_self == 0 or n_other == 0:
@@ -785,3 +856,58 @@ def _pairwise_covariance_shape_components(
         np.nan_to_num(covariance_logdet_cost, nan=0.0, posinf=1.0e6, neginf=0.0),
         np.nan_to_num(covariance_shape_similarity, nan=0.0, posinf=1.0, neginf=0.0),
     )
+
+
+def _coerce_strict_bool(name: str, value: Any) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a bool")
+    return value
+
+
+def _coerce_string_sequence(
+    name: str, values: Sequence[str] | str, *, allow_empty: bool
+) -> tuple[str, ...]:
+    if isinstance(values, str):
+        items = tuple(part.strip() for part in values.split(","))
+    else:
+        try:
+            items = tuple(values)
+        except TypeError as exc:
+            raise ValueError(f"{name} must be a sequence of strings") from exc
+    if any(not isinstance(item, str) or not item for item in items):
+        raise ValueError(f"{name} must contain only non-empty strings")
+    if not allow_empty and not items:
+        raise ValueError(f"{name} must contain at least one string")
+    return items
+
+
+def _coerce_nonempty_string(name: str, value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be a non-empty string")
+    return value
+
+
+def _coerce_positive_finite_float(name: str, value: Any) -> float:
+    number = _coerce_finite_float(name, value)
+    if number <= 0.0:
+        raise ValueError(f"{name} must be positive")
+    return number
+
+
+def _coerce_nonnegative_finite_float(name: str, value: Any) -> float:
+    number = _coerce_finite_float(name, value)
+    if number < 0.0:
+        raise ValueError(f"{name} must be non-negative")
+    return number
+
+
+def _coerce_finite_float(name: str, value: Any) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    if not np.isfinite(number):
+        raise ValueError(f"{name} must be finite")
+    return number
