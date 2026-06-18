@@ -313,13 +313,39 @@ def test_teacher_veto_zero_cap_prevents_vetoes() -> None:
     [
         ({"min_fragment_observations": 0}, "min_fragment_observations"),
         ({"max_applied_vetoes": -1}, "max_applied_vetoes"),
+        ({"max_threshold_margin": float("nan")}, "max_threshold_margin"),
+        ({"max_competition_margin": -0.1}, "max_competition_margin"),
+        ({"min_registered_iou": -0.1}, "min_registered_iou"),
+        ({"max_cell_probability": float("inf")}, "max_cell_probability"),
+        (
+            {"require_unassigned_by_hungarian": "false"},
+            "require_unassigned_by_hungarian",
+        ),
+        ({"allow_complete_track_veto": 1}, "allow_complete_track_veto"),
+        ({"keep_right_fragment": "false"}, "keep_right_fragment"),
+        ({"edge_order": "weakest"}, "edge_order"),
+        ({"veto_order": "risk"}, "veto_order"),
     ],
 )
 def test_teacher_veto_config_rejects_invalid_budget_values(
-    kwargs: dict[str, int], match: str
+    kwargs: dict[str, object], match: str
 ) -> None:
     with pytest.raises(ValueError, match=match):
         veto.TeacherVetoConfig(**kwargs)
+
+
+def test_teacher_veto_config_canonicalizes_valid_numeric_values() -> None:
+    config = veto.TeacherVetoConfig(
+        min_fragment_observations="3",  # type: ignore[arg-type]
+        max_applied_vetoes="2",  # type: ignore[arg-type]
+        max_threshold_margin="0.2",  # type: ignore[arg-type]
+        require_teacher_conflict=np.bool_(True),  # type: ignore[arg-type]
+    )
+
+    assert config.min_fragment_observations == 3
+    assert config.max_applied_vetoes == 2
+    assert config.max_threshold_margin == 0.2
+    assert config.require_teacher_conflict is True
 
 
 def test_teacher_veto_rejects_centroid_too_close_when_requested() -> None:
