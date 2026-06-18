@@ -14,7 +14,6 @@ from typing import Any
 
 import numpy as np
 from bayescatrack.association.calibrated_costs import (
-    DEFAULT_ASSOCIATION_FEATURES,
     collect_reference_pairwise_example_blocks,
     collect_reference_training_examples,
 )
@@ -63,7 +62,9 @@ def run_track2p_monotone_loso_calibration(
             "Monotone LOSO calibration requires method='global-assignment' and cost='calibrated'"
         )
     feature_names = tuple(
-        DEFAULT_ASSOCIATION_FEATURES if feature_names is None else feature_names
+        calibration_feature_names(config.calibration_feature_set)
+        if feature_names is None
+        else feature_names
     )
     config = replace(
         config,
@@ -383,6 +384,10 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
             args.dynamic_edge_prior_json,
             "--dynamic-edge-prior-json",
         ),
+        activity_tie_breaker_weight=args.activity_tie_breaker_weight,
+        activity_tie_breaker_component=args.activity_tie_breaker_component,
+        activity_trace_source=args.activity_trace_source,
+        activity_event_threshold=args.activity_event_threshold,
         progress=args.progress,
     )
 
