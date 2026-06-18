@@ -4,6 +4,7 @@ from collections import Counter
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_growth_veto_whatif as veto
 
@@ -35,6 +36,26 @@ def test_growth_veto_parser_exposes_defaults() -> None:
     assert args.anchor_min_shifted_iou == 0.30
     assert args.anchor_min_cell_probability == 0.80
     assert args.progress is False
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["--suffix-path-length", "--max-stitches-per-subject", "--edge-top-k", "--path-beam-width"],
+)
+def test_growth_veto_parser_rejects_nonpositive_search_budgets(option: str) -> None:
+    with pytest.raises(SystemExit):
+        veto.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--reference",
+                "manual-gt",
+                "--output",
+                "growth_veto_edges.csv",
+                option,
+                "0",
+            ]
+        )
 
 
 def test_remove_edge_occurrence_splits_component_without_gt_guard() -> None:
