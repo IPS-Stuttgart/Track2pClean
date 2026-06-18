@@ -79,20 +79,38 @@ class ComponentCleanupConfig:
     area_ratio_weight: float = 1.0
 
     def __post_init__(self) -> None:
-        _require_positive(self.threshold_margin_scale, name="threshold_margin_scale")
-        _require_positive(
-            self.competition_margin_scale, name="competition_margin_scale"
-        )
-        _require_positive(self.area_ratio_floor, name="area_ratio_floor")
-        _require_positive(self.centroid_distance_scale, name="centroid_distance_scale")
-        _require_nonnegative(self.split_risk_threshold, name="split_risk_threshold")
-        _require_nonnegative(self.split_penalty, name="split_penalty")
+        for name in (
+            "threshold_margin_scale",
+            "competition_margin_scale",
+            "area_ratio_floor",
+            "centroid_distance_scale",
+        ):
+            object.__setattr__(
+                self, name, _require_positive(getattr(self, name), name=name)
+            )
+        for name in (
+            "split_risk_threshold",
+            "split_penalty",
+            "threshold_margin_weight",
+            "row_margin_weight",
+            "column_margin_weight",
+            "centroid_distance_weight",
+            "area_ratio_weight",
+        ):
+            object.__setattr__(
+                self, name, _require_nonnegative(getattr(self, name), name=name)
+            )
         object.__setattr__(
             self,
             "min_side_observations",
             _positive_int_value(
                 self.min_side_observations, name="min_side_observations"
             ),
+        )
+        object.__setattr__(
+            self,
+            "require_complete_track",
+            _bool_value(self.require_complete_track, name="require_complete_track"),
         )
 
 
@@ -949,18 +967,28 @@ def _format_metadata_value(value: Any) -> str:
     return str(value)
 
 
-def _require_positive(value: float, *, name: str) -> None:
-    if _finite_float_value(value, name=name) <= 0.0:
+def _require_positive(value: float, *, name: str) -> float:
+    numeric = _finite_float_value(value, name=name)
+    if numeric <= 0.0:
         raise ValueError(f"{name} must be positive")
+    return numeric
 
 
-def _require_nonnegative(value: float, *, name: str) -> None:
-    if _finite_float_value(value, name=name) < 0.0:
+def _require_nonnegative(value: float, *, name: str) -> float:
+    numeric = _finite_float_value(value, name=name)
+    if numeric < 0.0:
         raise ValueError(f"{name} must be non-negative")
+    return numeric
+
+
+def _bool_value(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
 
 
 def _finite_float_value(value: Any, *, name: str) -> float:
-    if isinstance(value, bool):
+    if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite")
     numeric = float(value)
     if not math.isfinite(numeric):
@@ -969,7 +997,7 @@ def _finite_float_value(value: Any, *, name: str) -> float:
 
 
 def _positive_int_value(value: Any, *, name: str) -> int:
-    if isinstance(value, bool):
+    if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a positive integer")
     if isinstance(value, Integral):
         parsed = int(value)
