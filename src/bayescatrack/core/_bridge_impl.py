@@ -261,20 +261,29 @@ class CalciumPlaneData:
             diagnostics and ablations.
         """
 
-        if similarity_epsilon <= 0.0:
-            raise ValueError("similarity_epsilon must be strictly positive")
-        if large_cost <= 0.0:
-            raise ValueError("large_cost must be strictly positive")
-        for weight_name, weight_value in {
-            "centroid_weight": centroid_weight,
-            "iou_weight": iou_weight,
-            "mask_cosine_weight": mask_cosine_weight,
-            "area_weight": area_weight,
-            "roi_feature_weight": roi_feature_weight,
-            "cell_probability_weight": cell_probability_weight,
-        }.items():
-            if weight_value < 0.0:
-                raise ValueError(f"{weight_name} must be non-negative")
+        weighted_centroids = _strict_bool(
+            weighted_centroids, name="weighted_centroids"
+        )
+        soft_iou = _strict_bool(soft_iou, name="soft_iou")
+        return_components = _strict_bool(return_components, name="return_components")
+        similarity_epsilon = _finite_positive_float(
+            similarity_epsilon, name="similarity_epsilon"
+        )
+        large_cost = _finite_positive_float(large_cost, name="large_cost")
+        centroid_weight = _finite_nonnegative_float(
+            centroid_weight, name="centroid_weight"
+        )
+        iou_weight = _finite_nonnegative_float(iou_weight, name="iou_weight")
+        mask_cosine_weight = _finite_nonnegative_float(
+            mask_cosine_weight, name="mask_cosine_weight"
+        )
+        area_weight = _finite_nonnegative_float(area_weight, name="area_weight")
+        roi_feature_weight = _finite_nonnegative_float(
+            roi_feature_weight, name="roi_feature_weight"
+        )
+        cell_probability_weight = _finite_nonnegative_float(
+            cell_probability_weight, name="cell_probability_weight"
+        )
 
         cost_shape = (self.n_rois, other.n_rois)
         zero_cost = np.zeros(cost_shape, dtype=float)
@@ -369,8 +378,9 @@ class CalciumPlaneData:
             cell_probability_available = zero_cost
 
         if max_centroid_distance is not None:
-            if max_centroid_distance <= 0.0:
-                raise ValueError("max_centroid_distance must be strictly positive")
+            max_centroid_distance = _finite_positive_float(
+                max_centroid_distance, name="max_centroid_distance"
+            )
             gated = centroid_distances > max_centroid_distance
             total_cost = np.where(gated, large_cost, total_cost)
         else:
@@ -401,6 +411,7 @@ class CalciumPlaneData:
         """Return ROI centroids as a ``(2, n_roi)`` measurement matrix."""
 
         order = _validate_coordinate_order(order)
+        weighted = _strict_bool(weighted, name="weighted")
         if self.n_rois == 0:
             return np.zeros((2, 0), dtype=float)
 
@@ -439,8 +450,10 @@ class CalciumPlaneData:
         """Return per-ROI spatial covariance matrices with shape ``(2, 2, n_roi)``."""
 
         order = _validate_coordinate_order(order)
-        if regularization < 0.0:
-            raise ValueError("regularization must be non-negative")
+        weighted = _strict_bool(weighted, name="weighted")
+        regularization = _finite_nonnegative_float(
+            regularization, name="regularization"
+        )
         if self.n_rois == 0:
             return np.zeros((2, 2, 0), dtype=float)
 
@@ -493,8 +506,10 @@ class CalciumPlaneData:
             ``(4, 4, n_roi)``.
         """
 
-        if velocity_variance < 0.0:
-            raise ValueError("velocity_variance must be non-negative")
+        weighted = _strict_bool(weighted, name="weighted")
+        velocity_variance = _finite_nonnegative_float(
+            velocity_variance, name="velocity_variance"
+        )
 
         means_2d = self.centroids(order=order, weighted=weighted)
         covariances_2d = self.position_covariances(
@@ -1375,9 +1390,7 @@ def _estimate_default_centroid_scale(
     centroid_scale: float | None = None,
 ) -> float:
     if centroid_scale is not None:
-        if centroid_scale <= 0.0:
-            raise ValueError("centroid_scale must be strictly positive")
-        return float(centroid_scale)
+        return _finite_positive_float(centroid_scale, name="centroid_scale")
 
     pooled_areas = np.concatenate(
         [
@@ -1390,6 +1403,38 @@ def _estimate_default_centroid_scale(
         return 1.0
     equivalent_diameter = 2.0 * np.sqrt(np.median(pooled_areas) / np.pi)
     return float(max(equivalent_diameter, 1.0))
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    number = _finite_float(value, name=name)
+    if number < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return number
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    number = _finite_float(value, name=name)
+    if number <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return number
+
+
+def _finite_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    if not np.isfinite(number):
+        raise ValueError(f"{name} must be finite")
+    return number
 
 
 def _pairwise_iou_matrix(

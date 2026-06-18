@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     LOCAL_EVIDENCE_ASSOCIATION_FEATURES,
@@ -80,3 +81,37 @@ def test_default_features_keep_local_evidence_opt_in() -> None:
     assert not (
         set(DEFAULT_ASSOCIATION_FEATURES) & set(LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
     )
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"weighted_dice_weight": True},
+        {"overlap_fraction_weight": float("nan")},
+        {"containment_weight": float("inf")},
+        {"distance_transform_weight": -1.0},
+        {"image_patch_weight": True},
+        {"neighbor_constellation_weight": float("nan")},
+        {"centroid_rank_weight": float("inf")},
+        {"local_evidence_components": "true"},
+        {"normalize_weighted_overlap": 1},
+        {"patch_radius": True},
+        {"patch_radius": 1.5},
+        {"patch_radius": -1},
+        {"neighbor_k": False},
+        {"neighbor_k": 1.5},
+        {"neighbor_k": 0},
+        {"similarity_epsilon": True},
+        {"similarity_epsilon": float("nan")},
+        {"similarity_epsilon": 0.0},
+        {"large_cost": False},
+        {"large_cost": float("inf")},
+        {"large_cost": 0.0},
+        {"weighted_centroids": "false"},
+    ],
+)
+def test_local_evidence_pairwise_wrapper_rejects_invalid_controls(kwargs) -> None:
+    field_name = next(iter(kwargs))
+
+    with pytest.raises(ValueError, match=field_name):
+        _plane().build_pairwise_cost_matrix(_plane(), **kwargs)
