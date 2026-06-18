@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -72,7 +73,9 @@ class Track2pPolicyPruneConfig:
         _require_nonnegative(self.threshold_margin, name="threshold_margin")
         _require_nonnegative(self.competition_margin, name="competition_margin")
         _require_probability_like(self.min_area_ratio, name="min_area_ratio")
-        _require_nonnegative(self.centroid_distance, name="centroid_distance")
+        _require_nonnegative(
+            self.centroid_distance, name="centroid_distance", allow_infinite=True
+        )
 
 
 @dataclass(frozen=True)
@@ -842,15 +845,28 @@ def _format_metadata_value(value: Any) -> str:
     return str(value)
 
 
-def _require_nonnegative(value: float, *, name: str) -> None:
-    if float(value) < 0.0:
+def _require_nonnegative(
+    value: float, *, name: str, allow_infinite: bool = False
+) -> None:
+    if _finite_float_value(value, name=name, allow_infinite=allow_infinite) < 0.0:
         raise ValueError(f"{name} must be non-negative")
 
 
 def _require_probability_like(value: float, *, name: str) -> None:
-    numeric = float(value)
+    numeric = _finite_float_value(value, name=name)
     if numeric < 0.0 or numeric > 1.0:
         raise ValueError(f"{name} must be between 0 and 1")
+
+
+def _finite_float_value(
+    value: Any, *, name: str, allow_infinite: bool = False
+) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if math.isnan(numeric) or (not allow_infinite and not math.isfinite(numeric)):
+        raise ValueError(f"{name} must be finite")
+    return numeric
 
 
 if __name__ == "__main__":  # pragma: no cover

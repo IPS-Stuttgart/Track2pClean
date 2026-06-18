@@ -139,3 +139,33 @@ def test_prune_config_rejects_invalid_values() -> None:
         Track2pPolicyPruneConfig(threshold_margin=-0.1)
     with pytest.raises(ValueError, match="min_area_ratio"):
         Track2pPolicyPruneConfig(min_area_ratio=1.5)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "threshold_margin",
+        "competition_margin",
+        "min_area_ratio",
+    ],
+)
+@pytest.mark.parametrize("bad_value", [True, False, float("nan"), float("inf")])
+def test_prune_config_rejects_nonfinite_and_boolean_controls(
+    field: str, bad_value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        Track2pPolicyPruneConfig(**{field: bad_value})
+
+
+@pytest.mark.parametrize("bad_value", [True, False, float("nan")])
+def test_prune_config_rejects_invalid_centroid_distance_controls(
+    bad_value: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="centroid_distance"):
+        Track2pPolicyPruneConfig(centroid_distance=bad_value)
+
+
+def test_prune_config_allows_infinite_centroid_distance_sentinel() -> None:
+    config = Track2pPolicyPruneConfig(centroid_distance=float("inf"))
+
+    assert config.centroid_distance == float("inf")
