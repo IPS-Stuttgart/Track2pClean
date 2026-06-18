@@ -30,7 +30,10 @@ from bayescatrack.association.multiplane_consistency import (
     apply_multiplane_quality_penalty,
     shared_registration_reliability,
 )
-from bayescatrack.association.segmentation_events import detect_segmentation_events
+from bayescatrack.association.segmentation_events import (
+    SegmentationEventConfig,
+    detect_segmentation_events,
+)
 from bayescatrack.association.session_adaptive_calibration import (
     AdaptiveCalibrationConfig,
     SessionAdaptiveCalibrationConfig,
@@ -68,6 +71,63 @@ def test_segmentation_events_detect_split_and_merge() -> None:
         for event in events
         if event.event_type == "split"
     )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("min_overlap_fraction", True),
+        ("min_overlap_fraction", float("nan")),
+        ("min_overlap_fraction", float("inf")),
+        ("min_overlap_fraction", -0.1),
+        ("min_overlap_fraction", 1.1),
+        ("min_weighted_dice", False),
+        ("min_weighted_dice", float("nan")),
+        ("min_weighted_dice", float("inf")),
+        ("min_weighted_dice", -0.1),
+        ("min_weighted_dice", 1.1),
+        ("max_area_ratio_cost", True),
+        ("max_area_ratio_cost", float("nan")),
+        ("max_area_ratio_cost", float("inf")),
+        ("max_area_ratio_cost", -0.1),
+        ("min_children", False),
+        ("min_children", 1.5),
+        ("min_children", 1),
+        ("max_children", True),
+        ("max_children", 1.5),
+        ("max_children", 1),
+    ],
+)
+def test_segmentation_event_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        SegmentationEventConfig(**{field: value})
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("min_similarity", True),
+        ("min_similarity", float("nan")),
+        ("min_similarity", float("inf")),
+        ("min_similarity", -0.1),
+        ("min_similarity", 1.1),
+        ("min_children", False),
+        ("min_children", 1.5),
+        ("min_children", 1),
+        ("max_children", True),
+        ("max_children", 1.5),
+        ("max_children", 1),
+    ],
+)
+def test_detect_segmentation_events_rejects_invalid_mapping_controls(
+    key: str, value: float | bool
+) -> None:
+    components = {"weighted_dice_similarity": np.asarray([[0.9]], dtype=float)}
+
+    with pytest.raises(ValueError, match=key):
+        detect_segmentation_events(components, config={key: value})
 
 
 def test_context_descriptors_return_pairwise_planes_and_patch_moments() -> None:
