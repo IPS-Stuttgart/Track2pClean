@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -19,16 +20,29 @@ class SegmentationEventConfig:
     max_children: int = 4
 
     def __post_init__(self) -> None:
-        if not 0.0 <= self.min_overlap_fraction <= 1.0:
-            raise ValueError("min_overlap_fraction must lie in [0, 1]")
-        if not 0.0 <= self.min_weighted_dice <= 1.0:
-            raise ValueError("min_weighted_dice must lie in [0, 1]")
-        if self.max_area_ratio_cost < 0.0:
-            raise ValueError("max_area_ratio_cost must be non-negative")
-        if self.min_children < 2:
-            raise ValueError("min_children must be at least two")
-        if self.max_children < self.min_children:
+        object.__setattr__(
+            self,
+            "min_overlap_fraction",
+            _unit_interval_float(self.min_overlap_fraction, "min_overlap_fraction"),
+        )
+        object.__setattr__(
+            self,
+            "min_weighted_dice",
+            _unit_interval_float(self.min_weighted_dice, "min_weighted_dice"),
+        )
+        object.__setattr__(
+            self,
+            "max_area_ratio_cost",
+            _finite_nonnegative_float(
+                self.max_area_ratio_cost, "max_area_ratio_cost"
+            ),
+        )
+        min_children = _minimum_int_value(self.min_children, "min_children", 2)
+        max_children = _integer_value(self.max_children, "max_children")
+        if max_children < min_children:
             raise ValueError("max_children must be >= min_children")
+        object.__setattr__(self, "min_children", min_children)
+        object.__setattr__(self, "max_children", max_children)
 
 
 @dataclass(frozen=True)
@@ -68,9 +82,15 @@ def detect_segmentation_events(
         max_children = config.max_children
     else:
         options = {} if config is None else dict(config)
-        min_similarity = float(options.get("min_similarity", 0.20))
-        min_children = int(options.get("min_children", 2))
-        max_children = int(options.get("max_children", 4))
+        min_similarity = _unit_interval_float(
+            options.get("min_similarity", 0.20), "min_similarity"
+        )
+        min_children = _minimum_int_value(
+            options.get("min_children", 2), "min_children", 2
+        )
+        max_children = _integer_value(options.get("max_children", 4), "max_children")
+        if max_children < min_children:
+            raise ValueError("max_children must be >= min_children")
     events: list[SegmentationEvent] = []
     for row_index, row in enumerate(similarity):
         positions = np.flatnonzero(row >= min_similarity)
@@ -281,3 +301,43 @@ def _plausible_child_mask(
     return (
         (overlap >= config.min_overlap_fraction) | (dice >= config.min_weighted_dice)
     ) & (area <= config.max_area_ratio_cost)
+
+
+def _integer_value(value: Any, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    return int(integer_value)
+
+
+def _minimum_int_value(value: Any, name: str, minimum: int) -> int:
+    integer_value = _integer_value(value, name)
+    if integer_value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return integer_value
+
+
+def _unit_interval_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must lie in [0, 1]")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _finite_float_value(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
