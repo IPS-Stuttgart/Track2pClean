@@ -62,21 +62,49 @@ def install_local_evidence_pairwise_features(calcium_plane_cls: type[Any]) -> No
     ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
         """Build a cost matrix with optional local image/geometry evidence."""
 
-        for weight_name, weight_value in {
-            "weighted_dice_weight": weighted_dice_weight,
-            "overlap_fraction_weight": overlap_fraction_weight,
-            "containment_weight": containment_weight,
-            "distance_transform_weight": distance_transform_weight,
-            "image_patch_weight": image_patch_weight,
-            "neighbor_constellation_weight": neighbor_constellation_weight,
-            "centroid_rank_weight": centroid_rank_weight,
-        }.items():
-            if weight_value < 0.0:
-                raise ValueError(f"{weight_name} must be non-negative")
-        if patch_radius < 0:
-            raise ValueError("patch_radius must be non-negative")
-        if neighbor_k < 1:
-            raise ValueError("neighbor_k must be at least 1")
+        weighted_dice_weight = _finite_nonnegative_float(
+            weighted_dice_weight, name="weighted_dice_weight"
+        )
+        overlap_fraction_weight = _finite_nonnegative_float(
+            overlap_fraction_weight, name="overlap_fraction_weight"
+        )
+        containment_weight = _finite_nonnegative_float(
+            containment_weight, name="containment_weight"
+        )
+        distance_transform_weight = _finite_nonnegative_float(
+            distance_transform_weight, name="distance_transform_weight"
+        )
+        image_patch_weight = _finite_nonnegative_float(
+            image_patch_weight, name="image_patch_weight"
+        )
+        neighbor_constellation_weight = _finite_nonnegative_float(
+            neighbor_constellation_weight, name="neighbor_constellation_weight"
+        )
+        centroid_rank_weight = _finite_nonnegative_float(
+            centroid_rank_weight, name="centroid_rank_weight"
+        )
+        local_evidence_components = _strict_bool(
+            local_evidence_components, name="local_evidence_components"
+        )
+        normalize_weighted_overlap = _strict_bool(
+            normalize_weighted_overlap, name="normalize_weighted_overlap"
+        )
+        patch_radius = _nonnegative_int(patch_radius, name="patch_radius")
+        neighbor_k = _positive_int(neighbor_k, name="neighbor_k")
+        base_cost_kwargs = dict(base_cost_kwargs)
+        similarity_epsilon = _finite_positive_float(
+            base_cost_kwargs.get("similarity_epsilon", 1.0e-6),
+            name="similarity_epsilon",
+        )
+        large_cost = _finite_positive_float(
+            base_cost_kwargs.get("large_cost", 1.0e6), name="large_cost"
+        )
+        base_cost_kwargs["similarity_epsilon"] = similarity_epsilon
+        base_cost_kwargs["large_cost"] = large_cost
+        if "weighted_centroids" in base_cost_kwargs:
+            base_cost_kwargs["weighted_centroids"] = _strict_bool(
+                base_cost_kwargs["weighted_centroids"], name="weighted_centroids"
+            )
 
         base_cost, components = original_build_pairwise_cost_matrix(
             self,
@@ -86,10 +114,6 @@ def install_local_evidence_pairwise_features(calcium_plane_cls: type[Any]) -> No
         )
         total_cost = np.asarray(base_cost, dtype=float).copy()
         components = dict(components)
-        similarity_epsilon = float(base_cost_kwargs.get("similarity_epsilon", 1.0e-6))
-        if similarity_epsilon <= 0.0:
-            raise ValueError("similarity_epsilon must be strictly positive")
-        large_cost = float(base_cost_kwargs.get("large_cost", 1.0e6))
         order = str(base_cost_kwargs.get("order", "xy"))
         weighted_centroids = bool(base_cost_kwargs.get("weighted_centroids", False))
         centroid_scale = base_cost_kwargs.get("centroid_scale")
@@ -608,3 +632,61 @@ def _pairwise_centroid_rank_cost(centroid_distances: np.ndarray) -> np.ndarray:
     row_scale = max(n_measurement - 1, 1)
     column_scale = max(n_reference - 1, 1)
     return 0.5 * (row_rank / row_scale + column_rank / column_scale)
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    integer = _finite_integer(value, name=name)
+    if integer < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return integer
+
+
+def _positive_int(value: Any, *, name: str) -> int:
+    integer = _finite_integer(value, name=name)
+    if integer < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return integer
+
+
+def _finite_integer(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if not np.isfinite(numeric) or not numeric.is_integer():
+        raise ValueError(f"{name} must be an integer")
+    return int(numeric)
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    number = _finite_float(value, name=name)
+    if number < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return number
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    number = _finite_float(value, name=name)
+    if number <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return number
+
+
+def _finite_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    if not np.isfinite(number):
+        raise ValueError(f"{name} must be finite")
+    return number

@@ -61,8 +61,9 @@ def install_split_roi_stat_pairwise_features(calcium_plane_cls: type[Any]) -> No
     ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
         """Build a ROI-aware cost matrix with split ROI-stat diagnostics."""
 
-        if similarity_epsilon <= 0.0:
-            raise ValueError("similarity_epsilon must be strictly positive")
+        similarity_epsilon = _finite_positive_float(
+            similarity_epsilon, name="similarity_epsilon"
+        )
 
         result = original_build_pairwise_cost_matrix(
             self,
@@ -101,10 +102,8 @@ def _pairwise_roi_feature_components(
 ) -> dict[str, np.ndarray]:
     """Return separate pairwise Suite2p ROI-stat feature planes."""
 
-    if scale_epsilon <= 0.0:
-        raise ValueError("scale_epsilon must be strictly positive")
-    if value_epsilon <= 0.0:
-        raise ValueError("value_epsilon must be strictly positive")
+    scale_epsilon = _finite_positive_float(scale_epsilon, name="scale_epsilon")
+    value_epsilon = _finite_positive_float(value_epsilon, name="value_epsilon")
 
     component_shape = (reference_plane.n_rois, measurement_plane.n_rois)
     components: dict[str, np.ndarray] = {}
@@ -234,6 +233,8 @@ def _normalize_roi_feature_names(
 
     if feature_names is None:
         return None
+    if isinstance(feature_names, str):
+        feature_names = tuple(part.strip() for part in feature_names.split(","))
 
     component_to_raw = {
         component_name: raw_feature_name
@@ -241,7 +242,21 @@ def _normalize_roi_feature_names(
     }
     normalized: list[str] = []
     for feature_name in feature_names:
+        if not isinstance(feature_name, str) or not feature_name:
+            raise ValueError("feature_names must contain only non-empty strings")
         raw_feature_name = component_to_raw.get(feature_name, feature_name)
         if raw_feature_name not in normalized:
             normalized.append(raw_feature_name)
     return normalized
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite positive value")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite positive value") from exc
+    if not np.isfinite(number) or number <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return number

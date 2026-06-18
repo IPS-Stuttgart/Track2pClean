@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     SPLIT_ROI_STAT_FEATURES,
     pairwise_feature_tensor,
 )
 from bayescatrack.core.bridge import CalciumPlaneData
+from bayescatrack.core._roi_stat_features import _normalize_roi_feature_names
 
 
 def _masks(n_rois: int) -> np.ndarray:
@@ -133,3 +135,31 @@ def test_missing_indicators_cover_planes_without_suite2p_stats() -> None:
             pairwise_feature_tensor(components, feature_names=SPLIT_ROI_STAT_FEATURES)
         )
     )
+
+
+def test_split_roi_stat_feature_names_accept_direct_comma_string() -> None:
+    assert _normalize_roi_feature_names(
+        "abs_log_radius_ratio, abs_skew_diff"
+    ) == ["radius", "skew"]
+
+
+@pytest.mark.parametrize(
+    "feature_names",
+    [
+        ("abs_log_radius_ratio", True),
+        ("abs_log_radius_ratio", ""),
+    ],
+)
+def test_split_roi_stat_feature_names_reject_invalid_entries(feature_names) -> None:
+    with pytest.raises(ValueError, match="feature_names"):
+        _normalize_roi_feature_names(feature_names)
+
+
+@pytest.mark.parametrize("similarity_epsilon", [True, float("nan"), float("inf"), 0.0])
+def test_split_roi_stat_wrapper_rejects_invalid_similarity_epsilon(
+    similarity_epsilon,
+) -> None:
+    with pytest.raises(ValueError, match="similarity_epsilon"):
+        _reference_plane().build_pairwise_cost_matrix(
+            _measurement_plane(), similarity_epsilon=similarity_epsilon
+        )
