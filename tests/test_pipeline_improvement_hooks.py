@@ -9,7 +9,11 @@ from bayescatrack.association.consensus_priors import (
     edge_votes_from_tracks,
 )
 from bayescatrack.association.joint_registration_assignment import (
+    JointRefinementConfig,
+    JointRegistrationAssignmentConfig,
+    anchor_relief_cost_matrix,
     apply_joint_anchor_relief_to_pairwise_costs,
+    high_confidence_anchor_edges,
 )
 from bayescatrack.association.postsolve_relinking import (
     relink_tracks_at_geometry_issues,
@@ -56,6 +60,83 @@ def test_joint_anchor_relief_reduces_mutual_low_cost_edges():
     )
 
     assert adjusted[(0, 1)][0, 0] < pairwise[(0, 1)][0, 0]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_iterations", True),
+        ("max_iterations", 1.5),
+        ("max_iterations", 0),
+        ("high_confidence_quantile", True),
+        ("high_confidence_quantile", float("nan")),
+        ("high_confidence_quantile", float("inf")),
+        ("high_confidence_quantile", -0.1),
+        ("high_confidence_quantile", 1.1),
+        ("min_anchor_edges", False),
+        ("min_anchor_edges", 1.5),
+        ("min_anchor_edges", 0),
+        ("cost_relief", True),
+        ("cost_relief", float("nan")),
+        ("cost_relief", float("inf")),
+        ("cost_relief", -0.1),
+        ("convergence_tolerance", False),
+        ("convergence_tolerance", float("nan")),
+        ("convergence_tolerance", float("inf")),
+        ("convergence_tolerance", -0.1),
+    ],
+)
+def test_joint_refinement_config_rejects_invalid_controls(
+    field: str, value: object
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        JointRefinementConfig(**{field: value})
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("min_anchor_probability", True),
+        ("min_anchor_probability", float("nan")),
+        ("min_anchor_probability", float("inf")),
+        ("min_anchor_probability", -0.1),
+        ("min_anchor_probability", 1.1),
+        ("min_anchor_margin", False),
+        ("min_anchor_margin", float("nan")),
+        ("min_anchor_margin", float("inf")),
+        ("min_anchor_margin", -0.1),
+        ("min_anchors", True),
+        ("min_anchors", 1.5),
+        ("min_anchors", 0),
+    ],
+)
+def test_joint_registration_assignment_config_rejects_invalid_controls(
+    field: str, value: object
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        JointRegistrationAssignmentConfig(**{field: value})
+
+
+@pytest.mark.parametrize("quantile", [True, float("nan"), float("inf"), -0.1, 1.1])
+def test_high_confidence_anchor_edges_rejects_invalid_quantile(
+    quantile: object,
+) -> None:
+    with pytest.raises(ValueError, match="quantile"):
+        high_confidence_anchor_edges([[1.0]], quantile=quantile)
+
+
+@pytest.mark.parametrize("min_anchor_edges", [True, 1.5, 0])
+def test_high_confidence_anchor_edges_rejects_invalid_anchor_budget(
+    min_anchor_edges: object,
+) -> None:
+    with pytest.raises(ValueError, match="min_anchor_edges"):
+        high_confidence_anchor_edges([[1.0]], min_anchor_edges=min_anchor_edges)
+
+
+@pytest.mark.parametrize("relief", [True, float("nan"), float("inf"), -0.1])
+def test_anchor_relief_cost_matrix_rejects_invalid_relief(relief: object) -> None:
+    with pytest.raises(ValueError, match="relief"):
+        anchor_relief_cost_matrix([[1.0]], ((0, 0),), relief=relief)
 
 
 def test_consensus_prior_relieves_edges_with_enough_votes():
