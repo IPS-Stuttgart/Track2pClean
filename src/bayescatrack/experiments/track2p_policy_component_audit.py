@@ -17,6 +17,7 @@ import json
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -85,8 +86,13 @@ class ComponentCleanupConfig:
         _require_positive(self.centroid_distance_scale, name="centroid_distance_scale")
         _require_nonnegative(self.split_risk_threshold, name="split_risk_threshold")
         _require_nonnegative(self.split_penalty, name="split_penalty")
-        if int(self.min_side_observations) < 1:
-            raise ValueError("min_side_observations must be at least 1")
+        object.__setattr__(
+            self,
+            "min_side_observations",
+            _positive_int_value(
+                self.min_side_observations, name="min_side_observations"
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -950,6 +956,23 @@ def _require_positive(value: float, *, name: str) -> None:
 def _require_nonnegative(value: float, *, name: str) -> None:
     if float(value) < 0.0:
         raise ValueError(f"{name} must be non-negative")
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a positive integer")
+    if isinstance(value, Integral):
+        parsed = int(value)
+    elif isinstance(value, str):
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be a positive integer") from exc
+    else:
+        raise ValueError(f"{name} must be a positive integer")
+    if parsed <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return parsed
 
 
 if __name__ == "__main__":  # pragma: no cover
