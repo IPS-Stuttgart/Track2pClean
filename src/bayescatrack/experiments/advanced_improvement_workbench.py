@@ -12,6 +12,7 @@ import csv
 import json
 from collections import defaultdict
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -213,9 +214,7 @@ def track2p_result_improvement_manifest(
         calibration_feature_names,
     )
 
-    max_gap = int(max_gap)
-    if max_gap < 1:
-        raise ValueError("max_gap must be at least 1")
+    max_gap = _positive_int_value(max_gap, "max_gap")
 
     local_evidence_similarity_features = (
         "one_minus_weighted_dice",
@@ -942,6 +941,15 @@ def _safe_bool(value: Any) -> bool:
         if text in {"1", "true", "t", "yes", "y"}:
             return True
     return bool(value)
+
+
+def _positive_int_value(value: int, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    numeric = int(value)
+    if numeric < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return numeric
 
 
 if __name__ == "__main__":  # pragma: no cover

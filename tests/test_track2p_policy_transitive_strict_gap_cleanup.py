@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from bayescatrack.experiments.track2p_policy_gap_edge_audit import GapEdgeFeature
 from bayescatrack.experiments.track2p_policy_strict_gated_gap_cleanup import (
     StrictGapGateConfig,
@@ -47,6 +48,24 @@ def test_transitive_gap_cleanup_follows_newly_inserted_source() -> None:
         (2, 4, 30, 50),
     ]
     assert applied == frozenset({0, 1})
+
+
+@pytest.mark.parametrize(
+    "max_rounds",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_transitive_gap_cleanup_rejects_invalid_max_rounds(
+    max_rounds: object,
+) -> None:
+    with pytest.raises(ValueError, match="max_rounds"):
+        apply_transitive_strict_gated_gap_edges_with_report(
+            np.asarray([[10, -1, -1]], dtype=int),
+            sessions=(_session(10), _session(20), _session(30)),
+            feature_index={(0, 2, 10, 30): _feature(threshold_margin=0.30)},
+            gate_config=StrictGapGateConfig(),
+            seed_rois={10},
+            max_rounds=max_rounds,  # type: ignore[arg-type]
+        )
 
 
 def _feature(*, threshold_margin: float) -> GapEdgeFeature:
