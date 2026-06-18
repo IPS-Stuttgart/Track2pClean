@@ -48,6 +48,69 @@ def test_teacher_edge_feature_gate_rejects_invalid_boolean_controls(
         TeacherEdgeFeatureGate(**kwargs)
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"allow_completing_rescue": "false"}, "allow_completing_rescue"),
+        (
+            {"allow_teacher_complete_row_rescue": 1},
+            "allow_teacher_complete_row_rescue",
+        ),
+        (
+            {"allow_teacher_supported_completion": "false"},
+            "allow_teacher_supported_completion",
+        ),
+        (
+            {"allow_teacher_supported_completing_rescue": 0},
+            "allow_teacher_supported_completing_rescue",
+        ),
+        (
+            {"allow_teacher_confirmed_completing_rescue": "true"},
+            "allow_teacher_confirmed_completing_rescue",
+        ),
+        (
+            {"allow_completing_source_backfill": 1},
+            "allow_completing_source_backfill",
+        ),
+        (
+            {"allow_completing_fragment_merge": "true"},
+            "allow_completing_fragment_merge",
+        ),
+        (
+            {"allow_completing_fragment_merges": 1},
+            "allow_completing_fragment_merges",
+        ),
+        ({"allow_source_backfill": "false"}, "allow_source_backfill"),
+        ({"allow_source_inserts": "true"}, "allow_source_inserts"),
+        ({"allow_source_insertions": 1}, "allow_source_insertions"),
+        ({"allow_seed_source_backfill": "true"}, "allow_seed_source_backfill"),
+        (
+            {"allow_seed_completing_backfill": 1},
+            "allow_seed_completing_backfill",
+        ),
+        ({"allow_seed_completing_rescue": "true"}, "allow_seed_completing_rescue"),
+        (
+            {"allow_completing_seed_source_backfill": 1},
+            "allow_completing_seed_source_backfill",
+        ),
+        ({"allow_fragment_merges": "false"}, "allow_fragment_merges"),
+    ],
+)
+def test_teacher_adjacent_rescue_rejects_invalid_boolean_controls(
+    kwargs: dict[str, object], message: str
+) -> None:
+    predicted = np.asarray([[10, -1]], dtype=int)
+    teacher = np.asarray([[10, 20]], dtype=int)
+
+    with pytest.raises(ValueError, match=message):
+        apply_teacher_adjacent_rescue_edges(
+            predicted,
+            teacher,
+            seed_session=0,
+            **kwargs,
+        )
+
+
 def test_teacher_edge_order_requires_feature_index_for_seed_confidence() -> None:
     assert _teacher_edge_order_requires_feature_index("confidence")
     assert _teacher_edge_order_requires_feature_index("cell-confidence")
