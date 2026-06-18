@@ -114,6 +114,41 @@ def test_coherence_suffix_teacher_rescue_rejects_invalid_budget_values(
         )
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"allow_completing_rescue": "false"}, "allow_completing_rescue"),
+        (
+            {"allow_teacher_supported_completing_rescue": 0},
+            "allow_teacher_supported_completing_rescue",
+        ),
+        (
+            {"allow_teacher_confirmed_completing_rescue": "true"},
+            "allow_teacher_confirmed_completing_rescue",
+        ),
+        ({"allow_source_backfill": "false"}, "allow_source_backfill"),
+        ({"allow_seed_source_backfill": 1}, "allow_seed_source_backfill"),
+        (
+            {"allow_completing_seed_source_backfill": "true"},
+            "allow_completing_seed_source_backfill",
+        ),
+        ({"allow_fragment_merges": 0}, "allow_fragment_merges"),
+    ],
+)
+def test_coherence_suffix_teacher_rescue_rejects_invalid_boolean_values(
+    kwargs: dict[str, object], match: str
+) -> None:
+    config = Track2pBenchmarkConfig(data=Path("missing-data"), method="global-assignment")
+
+    with pytest.raises(ValueError, match=match):
+        (
+            track2p_policy_coherence_suffix_teacher_rescue
+            .run_track2p_policy_coherence_suffix_teacher_rescue
+        )(
+            config, **kwargs
+        )
+
+
 def test_coherence_suffix_teacher_rescue_exposes_completing_seed_source_filter() -> (
     None
 ):
