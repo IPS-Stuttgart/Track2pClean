@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack import CalciumPlaneData
 from bayescatrack.fov_affine_registration import (
     _fit_weighted_affine_matrix_xy,
@@ -106,6 +107,32 @@ def test_fov_affine_estimate_contains_residual_metadata():
     assert estimate.inverse_matrix_xy.shape == (2, 3)
     assert estimate.tile_residual_norm.ndim == 1
     assert np.isfinite(estimate.fit_rmse)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"subtract_mean": 1}, "subtract_mean"),
+        ({"grid_shape": (0, 3)}, "grid_shape"),
+        ({"grid_shape": (True, 3)}, "grid_shape"),
+        ({"grid_shape": (3.0, 3)}, "grid_shape"),
+        ({"grid_shape": (3,)}, "grid_shape"),
+        ({"min_tile_size": False}, "min_tile_size"),
+        ({"min_tile_size": 0}, "min_tile_size"),
+        ({"max_shift_fraction": True}, "max_shift_fraction"),
+        ({"max_shift_fraction": np.nan}, "max_shift_fraction"),
+        ({"max_shift_fraction": np.inf}, "max_shift_fraction"),
+        ({"max_shift_fraction": -0.1}, "max_shift_fraction"),
+    ],
+)
+def test_fov_affine_estimate_rejects_invalid_control_values(kwargs, message):
+    reference = _spot_image((48, 48), ((12, 12), (12, 36), (36, 12), (36, 36)))
+    measurement = apply_integer_image_translation(
+        reference, [1, -1], output_shape=(48, 48)
+    )
+
+    with pytest.raises(ValueError, match=message):
+        estimate_fov_affine_transform(reference, measurement, **kwargs)
 
 
 def test_fov_affine_fit_downweights_low_confidence_tile_outlier():
