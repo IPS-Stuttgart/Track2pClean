@@ -91,13 +91,15 @@ class GrowthVetoGate:
         object.__setattr__(
             self,
             "min_anchor_count",
-            _nonnegative_integer(self.min_anchor_count, name="min_anchor_count"),
+            suffix._nonnegative_int_value(
+                self.min_anchor_count, name="min_anchor_count"
+            ),
         )
         if self.min_complete_component_size is not None:
             object.__setattr__(
                 self,
                 "min_complete_component_size",
-                _nonnegative_integer(
+                suffix._nonnegative_int_value(
                     self.min_complete_component_size,
                     name="min_complete_component_size",
                 ),
@@ -105,19 +107,18 @@ class GrowthVetoGate:
         object.__setattr__(
             self,
             "max_row_rank",
-            _positive_integer(self.max_row_rank, name="max_row_rank"),
+            suffix._positive_int_value(self.max_row_rank, name="max_row_rank"),
         )
         object.__setattr__(
             self,
             "max_column_rank",
-            _positive_integer(self.max_column_rank, name="max_column_rank"),
+            suffix._positive_int_value(self.max_column_rank, name="max_column_rank"),
         )
         object.__setattr__(
             self,
             "max_vetoes_per_subject",
-            _positive_integer(
-                self.max_vetoes_per_subject,
-                name="max_vetoes_per_subject",
+            suffix._positive_int_value(
+                self.max_vetoes_per_subject, name="max_vetoes_per_subject"
             ),
         )
 
@@ -151,6 +152,10 @@ def run_track2p_policy_growth_veto_cleanup(
 ) -> GrowthVetoCleanupResult:
     """Run a coherence-suffix-family prediction followed by growth-veto splits."""
 
+    edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = suffix._positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -401,7 +406,7 @@ def growth_veto_gate_reason(
         row.get("complete_component_size", 0)
     ) < int(gate.min_complete_component_size):
         return "complete_component_size_below_gate"
-    if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
+    if int(row.get("growth_anchor_count", 0)) < int(gate.min_anchor_count):
         return "growth_anchor_count_below_gate"
     growth_residual = _finite_float(row.get("growth_residual"), float("nan"))
     if not np.isfinite(growth_residual) or growth_residual < float(
@@ -459,7 +464,7 @@ def _selected_growth_veto_rows(
         if growth_veto_gate_reason(row, gate, n_sessions=n_sessions) == "accepted"
     ]
     selected.sort(key=_growth_veto_sort_key)
-    return selected[: max(0, int(gate.max_vetoes_per_subject))]
+    return selected[: int(gate.max_vetoes_per_subject)]
 
 
 def _augment_growth_veto_candidate_shifted_iou(
@@ -520,7 +525,7 @@ def _needs_sparse_shifted_iou(
         row.get("complete_component_size", 0)
     ) < int(gate.min_complete_component_size):
         return False
-    if int(row.get("growth_anchor_count", 0)) < max(0, int(gate.min_anchor_count)):
+    if int(row.get("growth_anchor_count", 0)) < int(gate.min_anchor_count):
         return False
     growth_residual = _finite_float(row.get("growth_residual"), float("nan"))
     if not np.isfinite(growth_residual) or growth_residual < float(
@@ -627,8 +632,9 @@ def _apply_growth_veto_rows(
     tracks: np.ndarray, rows: Sequence[Mapping[str, Any]], *, gate: GrowthVetoGate
 ) -> tuple[np.ndarray, tuple[tuple[int, int, int, int, int], ...]]:
     output = veto._as_track_matrix(tracks)
+    n_sessions = int(output.shape[1]) if output.ndim == 2 else 0
     applied: list[tuple[int, int, int, int, int]] = []
-    for row in rows[: max(0, int(gate.max_vetoes_per_subject))]:
+    for row in rows[: int(gate.max_vetoes_per_subject)]:
         edge = _edge_from_row(row)
         occurrence_index = int(row.get("occurrence_index", 0))
         split = veto._remove_edge_occurrence(
@@ -636,9 +642,33 @@ def _apply_growth_veto_rows(
         )
         if split.reason != "split_edge" or int(split.would_split_component) <= 0:
             continue
+        if not _split_satisfies_current_structural_gate(
+            split,
+            gate=gate,
+            n_sessions=n_sessions,
+        ):
+            continue
         output = veto._as_track_matrix(split.tracks)
         applied.append((*edge, occurrence_index))
     return output, tuple(applied)
+
+
+def _split_satisfies_current_structural_gate(
+    split: Any, *, gate: GrowthVetoGate, n_sessions: int
+) -> bool:
+    if gate.require_terminal_edge and int(split.is_terminal_edge) <= 0:
+        return False
+    if gate.require_last_session_edge and int(split.is_last_session_edge) <= 0:
+        return False
+    if gate.require_complete_component and int(split.complete_component_size) < int(
+        n_sessions
+    ):
+        return False
+    if gate.min_complete_component_size is not None and int(
+        split.complete_component_size
+    ) < int(gate.min_complete_component_size):
+        return False
+    return True
 
 
 def _growth_veto_sort_key(
@@ -724,29 +754,6 @@ def _finite_float(value: Any, fallback: float) -> float:
     return numeric if np.isfinite(numeric) else float(fallback)
 
 
-def _validated_numeric_float(value: Any, *, name: str) -> float:
-    if isinstance(value, bool):
-        raise ValueError(f"{name} must be finite")
-    numeric = float(value)
-    if not np.isfinite(numeric):
-        raise ValueError(f"{name} must be finite")
-    return numeric
-
-
-def _positive_integer(value: Any, *, name: str) -> int:
-    numeric = _validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 1.0:
-        raise ValueError(f"{name} must be a positive integer")
-    return int(numeric)
-
-
-def _nonnegative_integer(value: Any, *, name: str) -> int:
-    numeric = _validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 0.0:
-        raise ValueError(f"{name} must be a non-negative integer")
-    return int(numeric)
-
-
 def _optional_float_arg(value: str) -> float | None:
     if str(value).strip().lower() in {"none", "null", "off", "disabled"}:
         return None
@@ -794,7 +801,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--max-veto-registered-iou",
         "--growth-veto-max-registered-iou",
         dest="max_veto_registered_iou",
-        type=float,
+        type=_optional_float_arg,
         default=0.60,
         help=(
             "Optional upper bound on registered IoU for growth-veto candidates. "
@@ -813,7 +820,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--max-veto-shifted-iou",
         "--growth-veto-max-shifted-iou",
         dest="max_veto_shifted_iou",
-        type=float,
+        type=_optional_float_arg,
         default=0.80,
         help=(
             "Optional upper bound on shifted IoU for growth-veto candidates. "
@@ -832,7 +839,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--max-veto-min-cell-probability",
         "--growth-veto-max-min-cell-probability",
         dest="max_veto_min_cell_probability",
-        type=float,
+        type=_optional_float_arg,
         default=0.65,
         help=(
             "Optional upper bound on min(cell_probability_a, cell_probability_b). "
@@ -857,7 +864,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--min-veto-anchor-count",
         "--growth-veto-min-anchor-count",
         dest="min_veto_anchor_count",
-        type=int,
+        type=suffix._nonnegative_int_arg,
         default=0,
         help=(
             "Require at least this many growth-field anchor edges for the "
@@ -868,7 +875,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--min-veto-complete-component-size",
         "--growth-veto-min-complete-component-size",
         dest="min_veto_complete_component_size",
-        type=int,
+        type=suffix._nonnegative_int_arg,
         default=None,
         help=(
             "Optional minimum complete-component size for veto candidates. "
@@ -877,8 +884,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "scripts that record the intended operating point."
         ),
     )
-    parser.add_argument("--max-veto-row-rank", type=int, default=1)
-    parser.add_argument("--max-veto-column-rank", type=int, default=1)
+    parser.add_argument("--max-veto-row-rank", type=suffix._positive_int_arg, default=1)
+    parser.add_argument(
+        "--max-veto-column-rank", type=suffix._positive_int_arg, default=1
+    )
     parser.add_argument(
         "--require-veto-not-suffix-edge",
         action=argparse.BooleanOptionalAction,
@@ -903,7 +912,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--max-vetoes-per-subject",
         "--growth-veto-max-vetoes-per-subject",
         dest="max_vetoes_per_subject",
-        type=int,
+        type=suffix._positive_int_arg,
         default=1,
     )
     return parser
@@ -922,6 +931,7 @@ def main(argv: list[str] | None = None) -> int:
         plane_name=args.plane_name,
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        max_gap=args.max_gap,
         transform_type=args.transform_type,
         allow_track2p_as_reference_for_smoke_test=(
             args.allow_track2p_as_reference_for_smoke_test
@@ -980,11 +990,11 @@ def main(argv: list[str] | None = None) -> int:
                 if args.max_veto_local_neighbor_distortion is None
                 else float(args.max_veto_local_neighbor_distortion)
             ),
-            min_anchor_count=max(0, int(args.min_veto_anchor_count)),
+            min_anchor_count=int(args.min_veto_anchor_count),
             min_complete_component_size=(
                 None
                 if args.min_veto_complete_component_size is None
-                else max(0, int(args.min_veto_complete_component_size))
+                else int(args.min_veto_complete_component_size)
             ),
             max_row_rank=int(args.max_veto_row_rank),
             max_column_rank=int(args.max_veto_column_rank),
@@ -1004,12 +1014,6 @@ def main(argv: list[str] | None = None) -> int:
             result.edge_rows,
             args.diagnostics_output,
             output_format=cast(Literal["csv", "json"], args.diagnostics_format),
-        )
-    if args.candidate_output is not None:
-        veto.write_rows(
-            result.edge_rows,
-            args.candidate_output,
-            output_format=cast(Literal["csv", "json"], args.format),
         )
     if args.summary_output is not None:
         veto.write_rows(

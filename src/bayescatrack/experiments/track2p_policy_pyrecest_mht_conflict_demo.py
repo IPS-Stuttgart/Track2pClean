@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,30 @@ from bayescatrack.experiments import (
 )
 
 METHOD = "track2p-policy-pyrecest-mht-conflict-demo"
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a positive integer")
+    if isinstance(value, Integral):
+        parsed = int(value)
+    elif isinstance(value, str):
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be a positive integer") from exc
+    else:
+        raise ValueError(f"{name} must be a positive integer")
+    if parsed <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return parsed
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        return _positive_int_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 @dataclass(frozen=True)
@@ -228,6 +253,7 @@ def greedy_select(
 ) -> list[Mapping[str, Any]]:
     """Conflict-blind per-edge selection: take every gated candidate by score."""
 
+    max_edits = _positive_int_value(max_edits, name="max_edits")
     ordered = sorted(
         candidates,
         key=lambda row: (
@@ -238,7 +264,7 @@ def greedy_select(
     selected = [
         row for row in ordered if float(row["removal_score"]) >= float(score_threshold)
     ]
-    return selected[: max(0, int(max_edits))]
+    return selected[:max_edits]
 
 
 def mht_select(
@@ -322,8 +348,9 @@ def evaluate_scenario(
 ) -> list[ArmResult]:
     """Return the baseline / deterministic / greedy / MHT comparison arms."""
 
+    max_edits = _positive_int_value(max_edits, name="max_edits")
     config = ResidualMHTConfig(
-        max_edits=int(max_edits),
+        max_edits=max_edits,
         max_hypotheses=int(max_hypotheses),
         edit_penalty=float(edit_penalty),
         score_threshold=float(score_threshold),
@@ -408,7 +435,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, default=None, help="Optional CSV path.")
     parser.add_argument("--score-threshold", type=float, default=0.0)
     parser.add_argument("--edit-penalty", type=float, default=0.25)
-    parser.add_argument("--max-edits", type=int, default=3)
+    parser.add_argument("--max-edits", type=_positive_int_arg, default=3)
     return parser
 
 
@@ -419,7 +446,7 @@ def main(argv: list[str] | None = None) -> int:
         scenario,
         score_threshold=float(args.score_threshold),
         edit_penalty=float(args.edit_penalty),
-        max_edits=int(args.max_edits),
+        max_edits=args.max_edits,
     )
     print(format_markdown(results))
     if args.output is not None:

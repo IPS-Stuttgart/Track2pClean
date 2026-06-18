@@ -1,6 +1,10 @@
 import inspect
 
+import pytest
 from bayescatrack import cli
+from bayescatrack.experiments import (
+    track2p_policy_teacher_free_adjacent_rescue_ranking_audit as audit,
+)
 from bayescatrack.experiments.track2p_policy_teacher_free_adjacent_rescue_ranking_audit import (
     teacher_free_adjacent_ranking_score,
 )
@@ -19,6 +23,33 @@ def test_teacher_free_adjacent_rescue_audit_cli_aliases() -> None:
         ]
         == canonical
     )
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
+)
+def test_teacher_free_adjacent_rescue_parser_rejects_nonpositive_search_budgets(
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        audit.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--reference",
+                "manual-gt",
+                "--output",
+                "teacher_free.csv",
+                option,
+                "0",
+            ]
+        )
 
 
 def test_teacher_free_adjacent_rank_score_has_no_audit_label_inputs() -> None:

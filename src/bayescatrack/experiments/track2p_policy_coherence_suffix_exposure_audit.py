@@ -31,6 +31,8 @@ from bayescatrack.experiments.track2p_policy_benchmark import (
 )
 from bayescatrack.experiments.track2p_policy_coherence_suffix_stitch_whatif import (
     CoherenceSuffixStitchGate,
+    _positive_int_arg,
+    _positive_int_value,
     _select_paths,
 )
 from bayescatrack.experiments.track2p_policy_component_audit import (
@@ -71,6 +73,8 @@ def run_track2p_policy_coherence_suffix_exposure_audit(
 ) -> tuple[dict[str, int | str], ...]:
     """Return per-subject suffix-gate exposure rows without loading GT."""
 
+    edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = _positive_int_value(path_beam_width, name="path_beam_width")
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -93,8 +97,8 @@ def run_track2p_policy_coherence_suffix_exposure_audit(
             threshold_method=threshold_method,
             iou_distance_threshold=float(iou_distance_threshold),
             gate=gate,
-            edge_top_k=int(edge_top_k),
-            path_beam_width=int(path_beam_width),
+            edge_top_k=edge_top_k,
+            path_beam_width=path_beam_width,
         )
         rows.append(_exposure_row(subject_dir.name, paths, selected))
     rows.append(_aggregate_row(rows))
@@ -271,16 +275,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
-    parser.add_argument("--suffix-path-length", type=int, default=2)
+    parser.add_argument("--suffix-path-length", type=_positive_int_arg, default=2)
     parser.add_argument("--min-cell-probability", type=float, default=0.80)
     parser.add_argument("--min-area-ratio", type=float, default=0.80)
     parser.add_argument("--max-centroid-distance", type=float, default=6.0)
     parser.add_argument("--min-shifted-iou", type=float, default=0.30)
     parser.add_argument("--min-motion-consistency", type=float, default=0.50)
     parser.add_argument("--min-shape-consistency", type=float, default=0.82)
-    parser.add_argument("--max-stitches-per-subject", type=int, default=1)
-    parser.add_argument("--edge-top-k", type=int, default=25)
-    parser.add_argument("--path-beam-width", type=int, default=100)
+    parser.add_argument("--max-stitches-per-subject", type=_positive_int_arg, default=1)
+    parser.add_argument("--edge-top-k", type=_positive_int_arg, default=25)
+    parser.add_argument("--path-beam-width", type=_positive_int_arg, default=100)
     parser.add_argument("--seed-session", type=int, default=0)
     parser.add_argument(
         "--include-behavior", action=argparse.BooleanOptionalAction, default=False

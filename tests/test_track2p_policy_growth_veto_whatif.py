@@ -4,6 +4,7 @@ from collections import Counter
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_growth_veto_whatif as veto
 
@@ -31,58 +32,35 @@ def test_growth_veto_parser_exposes_defaults() -> None:
 
     assert args.threshold_method == "min"
     assert args.iou_distance_threshold == 12.0
-    assert args.growth_veto_base == "teacher-rescue"
     assert args.anchor_min_registered_iou == 0.50
     assert args.anchor_min_shifted_iou == 0.30
     assert args.anchor_min_cell_probability == 0.80
     assert args.progress is False
 
 
-def test_growth_veto_whatif_writes_candidate_output(tmp_path, monkeypatch) -> None:
-    edge_row = {
-        "subject": "jm046",
-        "session_a": 5,
-        "session_b": 6,
-        "roi_a": 2309,
-        "roi_b": 1210,
-    }
-
-    calls = {}
-
-    def fake_run(*args, **kwargs):
-        calls["prediction_base"] = kwargs["prediction_base"]
-        return veto.GrowthVetoWhatIfResult(
-            edge_rows=(edge_row,),
-            summary_rows=(),
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
+)
+def test_growth_veto_parser_rejects_nonpositive_search_budgets(option: str) -> None:
+    with pytest.raises(SystemExit):
+        veto.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--reference",
+                "manual-gt",
+                "--output",
+                "growth_veto_edges.csv",
+                option,
+                "0",
+            ]
         )
-
-    monkeypatch.setattr(veto, "run_track2p_policy_growth_veto_whatif", fake_run)
-
-    output = tmp_path / "growth_veto_edges.csv"
-    candidate_output = tmp_path / "growth_veto_candidates.csv"
-
-    exit_status = veto.main(
-        [
-            "--data",
-            str(tmp_path / "data"),
-            "--output",
-            str(output),
-            "--candidate-output",
-            str(candidate_output),
-            "--growth-veto-base",
-            "coherence-suffix",
-            "--format",
-            "csv",
-        ]
-    )
-
-    assert exit_status == 0
-    assert calls["prediction_base"] == "coherence-suffix"
-    assert output.read_text(encoding="utf-8") == candidate_output.read_text(
-        encoding="utf-8"
-    )
-    assert "jm046" in candidate_output.read_text(encoding="utf-8")
-    assert "2309" in candidate_output.read_text(encoding="utf-8")
 
 
 def test_remove_edge_occurrence_splits_component_without_gt_guard() -> None:

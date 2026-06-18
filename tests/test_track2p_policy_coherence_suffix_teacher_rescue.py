@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_coherence_suffix_teacher_rescue
+from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
 
 
 def test_coherence_suffix_teacher_rescue_is_registered() -> None:
@@ -66,6 +70,47 @@ def test_coherence_suffix_teacher_rescue_exposes_action_specific_gates() -> None
     assert args.allow_completing_seed_source_backfill is True
     assert args.allow_fragment_merges is False
     assert args.min_teacher_component_observations == 2
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--min-teacher-component-observations", "0"),
+        ("--max-applied-teacher-edits", "-2"),
+    ],
+)
+def test_coherence_suffix_teacher_rescue_rejects_invalid_budget_args(
+    option: str, value: str
+) -> None:
+    parser = track2p_policy_coherence_suffix_teacher_rescue.build_arg_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["--data", "track2p-root", "--output", "scores.csv", option, value]
+        )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        (
+            {"min_teacher_component_observations": 0},
+            "min_teacher_component_observations",
+        ),
+        ({"max_applied_teacher_edits": -2}, "max_applied_teacher_edits"),
+    ],
+)
+def test_coherence_suffix_teacher_rescue_rejects_invalid_budget_values(
+    kwargs: dict[str, int], match: str
+) -> None:
+    config = Track2pBenchmarkConfig(
+        data=Path("missing-data"), method="global-assignment"
+    )
+
+    with pytest.raises(ValueError, match=match):
+        (
+            track2p_policy_coherence_suffix_teacher_rescue.run_track2p_policy_coherence_suffix_teacher_rescue
+        )(config, **kwargs)
 
 
 def test_coherence_suffix_teacher_rescue_exposes_completing_seed_source_filter() -> (

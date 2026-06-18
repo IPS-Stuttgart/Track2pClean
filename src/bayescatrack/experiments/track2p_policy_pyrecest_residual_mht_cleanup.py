@@ -23,9 +23,11 @@ and fall back to the no-edit hypothesis when nothing clears the score threshold.
 from __future__ import annotations
 
 import argparse
+import sys
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from numbers import Integral
 from typing import Any, Literal, cast
 
 import numpy as np
@@ -70,6 +72,59 @@ except ImportError as exc:  # pragma: no cover - exercised only with stale PyRec
     ) from exc
 
 METHOD = "track2p-policy-pyrecest-residual-mht-cleanup"
+_UNSUPPORTED_RESIDUAL_GROWTH_VETO_OPTIONS = (
+    "--max-vetoes-per-subject",
+    "--growth-veto-max-vetoes-per-subject",
+)
+
+
+def _integral_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    raise ValueError(f"{name} must be an integer")
+
+
+def _set_positive_int_field(instance: object, name: str) -> int:
+    value = _integral_value(getattr(instance, name), name=name)
+    if value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    object.__setattr__(instance, name, value)
+    return value
+
+
+def _set_nonnegative_int_field(instance: object, name: str) -> int:
+    value = _integral_value(getattr(instance, name), name=name)
+    if value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    object.__setattr__(instance, name, value)
+    return value
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        numeric = _integral_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    if numeric <= 0:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return numeric
+
+
+def _nonnegative_int_arg(value: str) -> int:
+    try:
+        numeric = _integral_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    if numeric < 0:
+        raise argparse.ArgumentTypeError("value must be a non-negative integer")
+    return numeric
 
 
 @dataclass(frozen=True)
@@ -90,6 +145,16 @@ class PyRecEstResidualMHTOptions:
     high_overlap_min_growth_residual_mahalanobis: float = 1.0
     high_overlap_min_cell_probability: float | None = None
     high_overlap_score_bonus: float = 2.0
+
+    def __post_init__(self) -> None:
+        _set_positive_int_field(self, "candidate_top_k")
+        _set_positive_int_field(self, "max_edits_per_subject")
+        _set_positive_int_field(self, "max_hypotheses")
+        _set_positive_int_field(self, "min_meaningful_track_length")
+        if self.selection_mode not in ("additive", "global-rescore"):
+            raise ValueError(
+                "selection_mode must be either 'additive' or 'global-rescore'"
+            )
 
 
 @dataclass(frozen=True)
@@ -121,6 +186,10 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
 ) -> PyRecEstResidualMHTResult:
     """Run PyRecEst residual-MHT cleanup from the non-teacher suffix row."""
 
+    edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = suffix._positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -359,7 +428,7 @@ def _candidate_rows(
             str(row["pyrecest_candidate_id"]),
         )
     )
-    return sorted_candidates[: max(0, int(options.candidate_top_k))]
+    return sorted_candidates[: int(options.candidate_top_k)]
 
 
 def _candidate_gate_reason(
@@ -416,6 +485,8 @@ def _high_overlap_low_motion_reason(
         row.get("complete_component_size", 0)
     ) < int(gate.min_complete_component_size):
         return "complete_component_size_below_gate"
+    if int(row.get("growth_anchor_count", 0)) < int(gate.min_anchor_count):
+        return "growth_anchor_count_below_gate"
 
     row_rank = int(_finite_float(row.get("row_rank"), float("inf")))
     column_rank = int(_finite_float(row.get("column_rank"), float("inf")))
@@ -454,6 +525,10 @@ def _high_overlap_low_motion_reason(
     )
     if min(cell_a, cell_b) < min_cell_probability:
         return "high_overlap_cell_probability_below_gate"
+    if gate.max_min_cell_probability is not None and min(cell_a, cell_b) > float(
+        gate.max_min_cell_probability
+    ):
+        return "min_cell_probability_above_gate"
     if gate.max_local_neighbor_distortion is not None:
         distortion = _finite_float(row.get("local_neighbor_distortion"), float("nan"))
         if not np.isfinite(distortion) or distortion > float(
@@ -696,6 +771,18 @@ def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                         for row in selected
                     )
                 ),
+                "applied_true_positive_edges": int(
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "true_positive"
+                        for row in applied
+                    )
+                ),
+                "applied_false_positive_edges": int(
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "false_positive"
+                        for row in applied
+                    )
+                ),
             }
         )
     return output
@@ -717,9 +804,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "after CoherenceSuffixStitch."
     )
     parser.set_defaults(growth_veto_base="coherence-suffix")
-    parser.add_argument("--mht-candidate-top-k", type=int, default=4)
-    parser.add_argument("--mht-max-edits-per-subject", type=int, default=2)
-    parser.add_argument("--mht-max-hypotheses", type=int, default=16)
+    parser.add_argument("--mht-candidate-top-k", type=_positive_int_arg, default=4)
+    parser.add_argument(
+        "--mht-max-edits-per-subject", type=_positive_int_arg, default=2
+    )
+    parser.add_argument("--mht-max-hypotheses", type=_positive_int_arg, default=16)
     parser.add_argument("--mht-edit-penalty", type=float, default=0.25)
     parser.add_argument("--mht-score-threshold", type=float, default=1.0)
     parser.add_argument(
@@ -745,7 +834,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mht-min-meaningful-track-length",
-        type=int,
+        type=_positive_int_arg,
         default=2,
         help=(
             "Minimum observed-session count for a track row not to count as a "
@@ -785,8 +874,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _explicit_option_present(args: Sequence[str], option: str) -> bool:
+    prefix = f"{option}="
+    return any(arg == option or arg.startswith(prefix) for arg in args)
+
+
+def _reject_unsupported_residual_options(
+    parser: argparse.ArgumentParser, args: Sequence[str]
+) -> None:
+    unsupported = sorted(
+        option
+        for option in _UNSUPPORTED_RESIDUAL_GROWTH_VETO_OPTIONS
+        if _explicit_option_present(args, option)
+    )
+    if unsupported:
+        parser.error(
+            "track2p-policy-pyrecest-residual-mht-cleanup uses "
+            "--mht-max-edits-per-subject for the edit budget; do not pass "
+            + ", ".join(unsupported)
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+    parser = build_arg_parser()
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    _reject_unsupported_residual_options(parser, raw_args)
+    args = parser.parse_args(raw_args)
+    if args.growth_veto_base != "coherence-suffix":
+        parser.error(
+            "track2p-policy-pyrecest-residual-mht-cleanup requires "
+            "--growth-veto-base coherence-suffix"
+        )
     config = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -796,6 +914,7 @@ def main(argv: list[str] | None = None) -> int:
         plane_name=args.plane_name,
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        max_gap=args.max_gap,
         transform_type=args.transform_type,
         allow_track2p_as_reference_for_smoke_test=(
             args.allow_track2p_as_reference_for_smoke_test
@@ -854,11 +973,11 @@ def main(argv: list[str] | None = None) -> int:
                 if args.max_veto_local_neighbor_distortion is None
                 else float(args.max_veto_local_neighbor_distortion)
             ),
-            min_anchor_count=max(0, int(args.min_veto_anchor_count)),
+            min_anchor_count=int(args.min_veto_anchor_count),
             min_complete_component_size=(
                 None
                 if args.min_veto_complete_component_size is None
-                else max(0, int(args.min_veto_complete_component_size))
+                else int(args.min_veto_complete_component_size)
             ),
             max_row_rank=int(args.max_veto_row_rank),
             max_column_rank=int(args.max_veto_column_rank),
@@ -866,7 +985,7 @@ def main(argv: list[str] | None = None) -> int:
             require_terminal_edge=bool(args.require_veto_terminal_edge),
             require_last_session_edge=bool(args.require_veto_last_session_edge),
             require_complete_component=bool(args.require_veto_complete_component),
-            max_vetoes_per_subject=int(args.mht_candidate_top_k),
+            max_vetoes_per_subject=int(args.mht_max_edits_per_subject),
         ),
         mht_options=PyRecEstResidualMHTOptions(
             candidate_top_k=int(args.mht_candidate_top_k),

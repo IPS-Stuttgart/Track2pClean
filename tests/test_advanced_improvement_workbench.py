@@ -96,10 +96,10 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
     )
     assert growth_veto_cleanup["runner"] == "track2p-policy-growth-veto-cleanup"
     assert growth_veto_cleanup["suffix_path_length"] == 2
-    assert growth_veto_cleanup["teacher_edge_order"] == "structural"
-    assert growth_veto_cleanup["teacher_action_filter"] == "all"
-    assert growth_veto_cleanup["teacher_feature_preset"] == "none"
-    assert growth_veto_cleanup["max_applied_teacher_edits"] == -1
+    assert "teacher_edge_order" not in growth_veto_cleanup
+    assert "teacher_action_filter" not in growth_veto_cleanup
+    assert "teacher_feature_preset" not in growth_veto_cleanup
+    assert "max_applied_teacher_edits" not in growth_veto_cleanup
     assert growth_veto_cleanup["anchor_min_registered_iou"] == 0.5
     assert growth_veto_cleanup["anchor_min_shifted_iou"] == 0.3
     assert growth_veto_cleanup["anchor_min_cell_probability"] == 0.8
@@ -115,10 +115,13 @@ def test_track2p_result_improvement_manifest_contains_key_variants(tmp_path):
         for run in manifest["runs"]
         if run["name"] == "track2p-policy-coherence-suffix-growth-veto-cleanup"
     )
-    assert suffix_growth_veto_cleanup["runner"] == "track2p-policy-growth-veto-cleanup"
-    assert suffix_growth_veto_cleanup["growth_veto_base"] == "coherence-suffix"
+    assert (
+        suffix_growth_veto_cleanup["runner"]
+        == "track2p-policy-coherence-suffix-growth-veto-cleanup"
+    )
+    assert "growth_veto_base" not in suffix_growth_veto_cleanup
     assert suffix_growth_veto_cleanup["max_veto_local_neighbor_distortion"] is None
-    assert suffix_growth_veto_cleanup["teacher_edge_order"] == "structural"
+    assert "teacher_edge_order" not in suffix_growth_veto_cleanup
     assert suffix_growth_veto_cleanup["max_vetoes_per_subject"] == 1
 
     teacher_rescue = next(

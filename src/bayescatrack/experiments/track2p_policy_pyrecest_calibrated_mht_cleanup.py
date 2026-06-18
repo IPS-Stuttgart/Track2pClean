@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
@@ -51,6 +52,24 @@ CALIBRATED_FEATURE_NAMES = (
     "log1p_growth_residual_mahalanobis",
     "min_endpoint_cell_probability",
 )
+_UNSUPPORTED_CALIBRATED_GROWTH_VETO_OPTIONS = frozenset(
+    {
+        "--min-growth-residual-mahalanobis",
+        "--growth-veto-min-mahalanobis",
+        "--min-growth-residual",
+        "--growth-veto-min-residual",
+        "--min-veto-registered-iou",
+        "--growth-veto-min-registered-iou",
+        "--max-veto-registered-iou",
+        "--growth-veto-max-registered-iou",
+        "--min-veto-shifted-iou",
+        "--growth-veto-min-shifted-iou",
+        "--max-veto-shifted-iou",
+        "--growth-veto-max-shifted-iou",
+        "--max-vetoes-per-subject",
+        "--growth-veto-max-vetoes-per-subject",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +82,11 @@ class CalibratedResidualMHTOptions:
     score_threshold: float = 0.0
     logistic_c: float = 0.5
     min_training_positive_examples: int = 1
+
+    def __post_init__(self) -> None:
+        residual_mht._set_positive_int_field(self, "max_edits_per_subject")
+        residual_mht._set_positive_int_field(self, "max_hypotheses")
+        residual_mht._set_nonnegative_int_field(self, "min_training_positive_examples")
 
 
 @dataclass(frozen=True)
@@ -125,6 +149,10 @@ def run_track2p_policy_pyrecest_calibrated_mht_cleanup(
 ) -> CalibratedResidualMHTResult:
     """Run LOSO-calibrated residual MHT from the non-teacher suffix row."""
 
+    edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = suffix._positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -365,6 +393,8 @@ def _structural_candidate_gate_reason(
         row.get("complete_component_size", 0)
     ) < int(gate.min_complete_component_size):
         return "complete_component_size_below_gate"
+    if int(row.get("growth_anchor_count", 0)) < int(gate.min_anchor_count):
+        return "growth_anchor_count_below_gate"
 
     row_rank = int(residual_mht._finite_float(row.get("row_rank"), float("inf")))
     column_rank = int(residual_mht._finite_float(row.get("column_rank"), float("inf")))
@@ -372,6 +402,18 @@ def _structural_candidate_gate_reason(
         return "row_rank_above_gate"
     if column_rank <= 0 or column_rank > int(gate.max_column_rank):
         return "column_rank_above_gate"
+
+    cell_a = residual_mht._finite_float(row.get("cell_probability_a"), float("nan"))
+    cell_b = residual_mht._finite_float(row.get("cell_probability_b"), float("nan"))
+    if not np.isfinite(cell_a) or not np.isfinite(cell_b):
+        return "cell_probability_missing"
+    min_cell_probability = min(cell_a, cell_b)
+    if min_cell_probability < float(gate.min_cell_probability):
+        return "cell_probability_below_gate"
+    if gate.max_min_cell_probability is not None and min_cell_probability > float(
+        gate.max_min_cell_probability
+    ):
+        return "min_cell_probability_above_gate"
 
     if any(not np.isfinite(value) for value in _calibrated_feature_vector(row)):
         return "calibrated_feature_missing"
@@ -525,20 +567,20 @@ def _select_training_probability_threshold(
         if best is None or candidate_score > best:
             best = candidate_score
             best_threshold = float(threshold)
+    if best is None:
+        return float(math.nextafter(1.0, math.inf))
     return float(best_threshold)
 
 
 def _selected_has_training_tp_loss(rows: Sequence[Mapping[str, Any]]) -> bool:
-    return any(
-        residual_mht._finite_float(row.get(key), 0.0) != 0.0
-        for row in rows
-        for key in (
-            "pairwise_tp_delta_if_removed",
-            "pairwise_fn_delta_if_removed",
-            "complete_tp_delta_if_removed",
-            "complete_fn_delta_if_removed",
-        )
-    )
+    for row in rows:
+        for key in ("pairwise_tp_delta_if_removed", "complete_tp_delta_if_removed"):
+            if residual_mht._finite_float(row.get(key), 0.0) < 0.0:
+                return True
+        for key in ("pairwise_fn_delta_if_removed", "complete_fn_delta_if_removed"):
+            if residual_mht._finite_float(row.get(key), 0.0) > 0.0:
+                return True
+    return False
 
 
 def _false_positive_label(row: Mapping[str, Any]) -> int:
@@ -546,13 +588,23 @@ def _false_positive_label(row: Mapping[str, Any]) -> int:
 
 
 def _calibrated_feature_vector(row: Mapping[str, Any]) -> tuple[float, ...]:
-    growth_residual = max(
-        0.0,
-        residual_mht._finite_float(row.get("growth_residual"), 0.0),
+    raw_growth_residual = residual_mht._finite_float(
+        row.get("growth_residual"),
+        float("nan"),
     )
-    growth_mahalanobis = max(
-        0.0,
-        residual_mht._finite_float(row.get("growth_residual_mahalanobis"), 0.0),
+    raw_growth_mahalanobis = residual_mht._finite_float(
+        row.get("growth_residual_mahalanobis"),
+        float("nan"),
+    )
+    growth_residual = (
+        max(0.0, raw_growth_residual)
+        if np.isfinite(raw_growth_residual)
+        else float("nan")
+    )
+    growth_mahalanobis = (
+        max(0.0, raw_growth_mahalanobis)
+        if np.isfinite(raw_growth_mahalanobis)
+        else float("nan")
     )
     cell_a = residual_mht._finite_float(row.get("cell_probability_a"), float("nan"))
     cell_b = residual_mht._finite_float(row.get("cell_probability_b"), float("nan"))
@@ -668,17 +720,56 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "CoherenceSuffixStitch edit candidates."
     )
     parser.set_defaults(growth_veto_base="coherence-suffix")
-    parser.add_argument("--mht-max-edits-per-subject", type=int, default=4)
-    parser.add_argument("--mht-max-hypotheses", type=int, default=64)
+    parser.add_argument(
+        "--mht-max-edits-per-subject",
+        type=residual_mht._positive_int_arg,
+        default=4,
+    )
+    parser.add_argument(
+        "--mht-max-hypotheses", type=residual_mht._positive_int_arg, default=64
+    )
     parser.add_argument("--mht-edit-penalty", type=float, default=0.0)
     parser.add_argument("--mht-score-threshold", type=float, default=0.0)
     parser.add_argument("--calibrated-fp-logistic-c", type=float, default=0.5)
-    parser.add_argument("--calibrated-fp-min-training-positives", type=int, default=1)
+    parser.add_argument(
+        "--calibrated-fp-min-training-positives",
+        type=residual_mht._nonnegative_int_arg,
+        default=1,
+    )
     return parser
 
 
+def _explicit_option_present(args: Sequence[str], option: str) -> bool:
+    prefix = f"{option}="
+    return any(arg == option or arg.startswith(prefix) for arg in args)
+
+
+def _reject_unsupported_calibrated_options(
+    parser: argparse.ArgumentParser, args: Sequence[str]
+) -> None:
+    unsupported = sorted(
+        option
+        for option in _UNSUPPORTED_CALIBRATED_GROWTH_VETO_OPTIONS
+        if _explicit_option_present(args, option)
+    )
+    if unsupported:
+        parser.error(
+            "track2p-policy-pyrecest-calibrated-mht-cleanup does not apply "
+            "growth-residual, overlap, shifted-IoU, or deterministic veto-count "
+            "gates; use MHT/calibration options instead of " + ", ".join(unsupported)
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+    parser = build_arg_parser()
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    _reject_unsupported_calibrated_options(parser, raw_args)
+    args = parser.parse_args(raw_args)
+    if args.growth_veto_base != "coherence-suffix":
+        parser.error(
+            "track2p-policy-pyrecest-calibrated-mht-cleanup requires "
+            "--growth-veto-base coherence-suffix"
+        )
     config = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -688,6 +779,7 @@ def main(argv: list[str] | None = None) -> int:
         plane_name=args.plane_name,
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        max_gap=args.max_gap,
         transform_type=args.transform_type,
         allow_track2p_as_reference_for_smoke_test=(
             args.allow_track2p_as_reference_for_smoke_test
@@ -746,11 +838,11 @@ def main(argv: list[str] | None = None) -> int:
                 if args.max_veto_local_neighbor_distortion is None
                 else float(args.max_veto_local_neighbor_distortion)
             ),
-            min_anchor_count=max(0, int(args.min_veto_anchor_count)),
+            min_anchor_count=int(args.min_veto_anchor_count),
             min_complete_component_size=(
                 None
                 if args.min_veto_complete_component_size is None
-                else max(0, int(args.min_veto_complete_component_size))
+                else int(args.min_veto_complete_component_size)
             ),
             max_row_rank=int(args.max_veto_row_rank),
             max_column_rank=int(args.max_veto_column_rank),
@@ -766,9 +858,8 @@ def main(argv: list[str] | None = None) -> int:
             edit_penalty=float(args.mht_edit_penalty),
             score_threshold=float(args.mht_score_threshold),
             logistic_c=float(args.calibrated_fp_logistic_c),
-            min_training_positive_examples=max(
-                0,
-                int(args.calibrated_fp_min_training_positives),
+            min_training_positive_examples=int(
+                args.calibrated_fp_min_training_positives
             ),
         ),
         progress=bool(args.progress),

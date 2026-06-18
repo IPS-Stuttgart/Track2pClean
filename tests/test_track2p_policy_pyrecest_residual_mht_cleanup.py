@@ -209,6 +209,47 @@ def test_high_overlap_pocket_can_require_stronger_endpoint_cell_probability(
     assert reason == "high_overlap_cell_probability_below_gate"
 
 
+def test_high_overlap_pocket_respects_anchor_count_guard(
+    residual_mht_module,
+) -> None:
+    options = residual_mht_module.PyRecEstResidualMHTOptions(
+        include_high_overlap_low_motion=True,
+    )
+
+    reason = residual_mht_module._high_overlap_low_motion_reason(  # pylint: disable=protected-access
+        _candidate_row(growth_anchor_count=1),
+        gate=cleanup.GrowthVetoGate(
+            min_anchor_count=2,
+            max_min_cell_probability=None,
+            max_local_neighbor_distortion=None,
+        ),
+        options=options,
+        n_sessions=7,
+    )
+
+    assert reason == "growth_anchor_count_below_gate"
+
+
+def test_high_overlap_pocket_respects_weak_endpoint_cap(
+    residual_mht_module,
+) -> None:
+    options = residual_mht_module.PyRecEstResidualMHTOptions(
+        include_high_overlap_low_motion=True,
+    )
+
+    reason = residual_mht_module._high_overlap_low_motion_reason(  # pylint: disable=protected-access
+        _candidate_row(cell_probability_a=0.70, cell_probability_b=0.91),
+        gate=cleanup.GrowthVetoGate(
+            max_min_cell_probability=0.65,
+            max_local_neighbor_distortion=None,
+        ),
+        options=options,
+        n_sessions=7,
+    )
+
+    assert reason == "min_cell_probability_above_gate"
+
+
 def test_high_overlap_pocket_does_not_read_audit_only_columns(
     residual_mht_module,
 ) -> None:
@@ -242,7 +283,7 @@ def test_high_overlap_pocket_does_not_read_audit_only_columns(
         min_shifted_iou=0.60,
         max_shifted_iou=0.80,
         min_cell_probability=0.50,
-        max_min_cell_probability=0.65,
+        max_min_cell_probability=None,
         max_local_neighbor_distortion=None,
         max_row_rank=1,
         max_column_rank=1,
@@ -314,6 +355,7 @@ def test_high_overlap_selection_matches_sanitized_rows(residual_mht_module) -> N
         min_growth_residual=2.5,
         max_registered_iou=0.60,
         max_shifted_iou=0.80,
+        max_min_cell_probability=None,
         max_local_neighbor_distortion=None,
         require_not_suffix_edge=True,
         require_terminal_edge=True,
@@ -422,7 +464,11 @@ def test_global_rescore_prefers_less_fragmenting_hypothesis(
         fragmentation_penalty=0.5,
         score_threshold=1.0,
     )
-    gate = cleanup.GrowthVetoGate(max_local_neighbor_distortion=None)
+    gate = cleanup.GrowthVetoGate(
+        max_local_neighbor_distortion=None,
+        require_terminal_edge=False,
+        require_last_session_edge=False,
+    )
 
     # The additive ranking that PyRecEst would use prefers the two-edit set,
     # because it sums the high-residual middle edit and the terminal edit.
@@ -492,7 +538,11 @@ def test_global_rescore_falls_back_to_no_edit_below_threshold(
         selection_mode="global-rescore",
         score_threshold=5.0,
     )
-    gate = cleanup.GrowthVetoGate(max_local_neighbor_distortion=None)
+    gate = cleanup.GrowthVetoGate(
+        max_local_neighbor_distortion=None,
+        require_terminal_edge=False,
+        require_last_session_edge=False,
+    )
     empty = _hypothesis()
 
     selected, objective = (
@@ -535,7 +585,11 @@ def test_global_rescore_does_not_read_audit_only_columns(
     options = residual_mht_module.PyRecEstResidualMHTOptions(
         selection_mode="global-rescore",
     )
-    gate = cleanup.GrowthVetoGate(max_local_neighbor_distortion=None)
+    gate = cleanup.GrowthVetoGate(
+        max_local_neighbor_distortion=None,
+        require_terminal_edge=False,
+        require_last_session_edge=False,
+    )
 
     selected, _objective = (
         residual_mht_module._select_residual_hypothesis_global_rescore(  # pylint: disable=protected-access
@@ -568,6 +622,125 @@ def test_residual_mht_cli_exposes_global_rescore_knobs(residual_mht_module) -> N
     assert args.mht_fragmentation_penalty == 0.75
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("candidate_top_k", 0),
+        ("max_edits_per_subject", 0),
+        ("max_hypotheses", 0),
+        ("min_meaningful_track_length", 0),
+    ],
+)
+def test_residual_mht_options_reject_nonpositive_integer_controls(
+    residual_mht_module,
+    field: str,
+    value: int,
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        residual_mht_module.PyRecEstResidualMHTOptions(**{field: value})
+
+
+def test_residual_mht_options_reject_invalid_selection_mode(
+    residual_mht_module,
+) -> None:
+    with pytest.raises(ValueError, match="selection_mode"):
+        residual_mht_module.PyRecEstResidualMHTOptions(selection_mode="oracle")
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--mht-candidate-top-k",
+        "--mht-max-edits-per-subject",
+        "--mht-max-hypotheses",
+        "--mht-min-meaningful-track-length",
+    ],
+)
+def test_residual_mht_cli_rejects_nonpositive_integer_controls(
+    residual_mht_module,
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        residual_mht_module.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                option,
+                "0",
+            ]
+        )
+
+
+def test_residual_mht_cli_rejects_teacher_rescue_base(residual_mht_module) -> None:
+    with pytest.raises(SystemExit):
+        residual_mht_module.main(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                "--growth-veto-base",
+                "teacher-rescue",
+            ]
+        )
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["--max-vetoes-per-subject", "--growth-veto-max-vetoes-per-subject"],
+)
+def test_residual_mht_cli_rejects_deterministic_veto_count(
+    residual_mht_module, option
+) -> None:
+    with pytest.raises(SystemExit):
+        residual_mht_module.main(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                option,
+                "1",
+            ]
+        )
+
+
+def test_pyrecest_mht_summary_reports_applied_edge_labels(
+    residual_mht_module,
+) -> None:
+    rows = [
+        {
+            "subject": "jm038",
+            "pyrecest_candidate": 1,
+            "selected_by_pyrecest_mht": 1,
+            "applied_by_pyrecest_mht": 1,
+            "edge_status_against_gt": "false_positive",
+        },
+        {
+            "subject": "jm038",
+            "pyrecest_candidate": 1,
+            "selected_by_pyrecest_mht": 1,
+            "applied_by_pyrecest_mht": 0,
+            "edge_status_against_gt": "true_positive",
+        },
+    ]
+
+    summary = {
+        row["subject"]: row
+        for row in residual_mht_module._summary_rows(
+            rows
+        )  # pylint: disable=protected-access
+    }
+
+    assert summary["jm038"]["selected_true_positive_edges"] == 1
+    assert summary["jm038"]["selected_false_positive_edges"] == 1
+    assert summary["jm038"]["applied_true_positive_edges"] == 0
+    assert summary["jm038"]["applied_false_positive_edges"] == 1
+    assert summary["ALL"]["applied_false_positive_edges"] == 1
+
+
 def test_calibrated_mht_cli_exposes_fold_calibration_knobs(
     calibrated_mht_module,
 ) -> None:
@@ -586,6 +759,49 @@ def test_calibrated_mht_cli_exposes_fold_calibration_knobs(
 
     assert args.calibrated_fp_logistic_c == 0.25
     assert args.mht_score_threshold == 0.0
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_edits_per_subject", 0),
+        ("max_hypotheses", 0),
+        ("min_training_positive_examples", -1),
+    ],
+)
+def test_calibrated_mht_options_reject_invalid_integer_controls(
+    calibrated_mht_module,
+    field: str,
+    value: int,
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        calibrated_mht_module.CalibratedResidualMHTOptions(**{field: value})
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--mht-max-edits-per-subject", "0"),
+        ("--mht-max-hypotheses", "0"),
+        ("--calibrated-fp-min-training-positives", "-1"),
+    ],
+)
+def test_calibrated_mht_cli_rejects_invalid_integer_controls(
+    calibrated_mht_module,
+    option: str,
+    value: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        calibrated_mht_module.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                option,
+                value,
+            ]
+        )
 
 
 def test_calibrated_threshold_is_single_training_fold_decision(
@@ -619,6 +835,110 @@ def test_calibrated_threshold_is_single_training_fold_decision(
     assert threshold == pytest.approx(0.8)
 
 
+def test_calibrated_threshold_blocks_all_when_every_training_cut_loses_tp(
+    calibrated_mht_module,
+) -> None:
+    unsafe_true_positive = _candidate_row(
+        edge_status_against_gt="true_positive",
+        pairwise_fp_delta_if_removed=0,
+        pairwise_tp_delta_if_removed=-1,
+        pairwise_fn_delta_if_removed=1,
+        complete_fp_delta_if_removed=0,
+        complete_tp_delta_if_removed=-1,
+        complete_fn_delta_if_removed=1,
+    )
+
+    threshold = calibrated_mht_module._select_training_probability_threshold(  # pylint: disable=protected-access
+        [unsafe_true_positive],
+        [1.0],
+    )
+
+    assert threshold > 1.0
+
+
+def test_calibrated_threshold_allows_positive_tp_delta(
+    calibrated_mht_module,
+) -> None:
+    helpful_removal = _candidate_row(
+        edge_status_against_gt="false_positive",
+        pairwise_fp_delta_if_removed=-1,
+        pairwise_tp_delta_if_removed=0,
+        pairwise_fn_delta_if_removed=0,
+        complete_fp_delta_if_removed=-1,
+        complete_tp_delta_if_removed=1,
+        complete_fn_delta_if_removed=-1,
+    )
+
+    threshold = calibrated_mht_module._select_training_probability_threshold(  # pylint: disable=protected-access
+        [helpful_removal],
+        [0.9],
+    )
+
+    assert threshold == pytest.approx(0.9)
+
+
+def test_calibrated_structural_gate_respects_anchor_count(
+    calibrated_mht_module,
+) -> None:
+    reason = calibrated_mht_module._structural_candidate_gate_reason(  # pylint: disable=protected-access
+        _candidate_row(growth_anchor_count=1),
+        gate=cleanup.GrowthVetoGate(
+            min_anchor_count=2,
+            max_min_cell_probability=None,
+            max_local_neighbor_distortion=None,
+        ),
+        n_sessions=7,
+    )
+
+    assert reason == "growth_anchor_count_below_gate"
+
+
+def test_calibrated_structural_gate_rejects_high_endpoint_confidence(
+    calibrated_mht_module,
+) -> None:
+    reason = calibrated_mht_module._structural_candidate_gate_reason(  # pylint: disable=protected-access
+        _candidate_row(cell_probability_a=0.70, cell_probability_b=0.91),
+        gate=cleanup.GrowthVetoGate(
+            max_min_cell_probability=0.65,
+            max_local_neighbor_distortion=None,
+        ),
+        n_sessions=7,
+    )
+
+    assert reason == "min_cell_probability_above_gate"
+
+
+def test_calibrated_structural_gate_respects_min_endpoint_confidence(
+    calibrated_mht_module,
+) -> None:
+    reason = calibrated_mht_module._structural_candidate_gate_reason(  # pylint: disable=protected-access
+        _candidate_row(cell_probability_a=0.49, cell_probability_b=0.91),
+        gate=cleanup.GrowthVetoGate(
+            min_cell_probability=0.50,
+            max_min_cell_probability=None,
+            max_local_neighbor_distortion=None,
+        ),
+        n_sessions=7,
+    )
+
+    assert reason == "cell_probability_below_gate"
+
+
+def test_calibrated_structural_gate_rejects_missing_growth_features(
+    calibrated_mht_module,
+) -> None:
+    reason = calibrated_mht_module._structural_candidate_gate_reason(  # pylint: disable=protected-access
+        _candidate_row(growth_residual="", growth_residual_mahalanobis=""),
+        gate=cleanup.GrowthVetoGate(
+            max_min_cell_probability=None,
+            max_local_neighbor_distortion=None,
+        ),
+        n_sessions=7,
+    )
+
+    assert reason == "calibrated_feature_missing"
+
+
 def test_calibrated_heldout_scoring_does_not_read_audit_only_columns(
     calibrated_mht_module,
 ) -> None:
@@ -640,7 +960,10 @@ def test_calibrated_heldout_scoring_does_not_read_audit_only_columns(
 
     candidates = calibrated_mht_module._calibrated_candidate_rows(  # pylint: disable=protected-access
         [row],
-        gate=cleanup.GrowthVetoGate(max_local_neighbor_distortion=None),
+        gate=cleanup.GrowthVetoGate(
+            max_min_cell_probability=None,
+            max_local_neighbor_distortion=None,
+        ),
         n_sessions=7,
         calibrator=calibrator,
         threshold=0.5,
@@ -670,3 +993,55 @@ def test_calibrated_score_is_threshold_relative_log_likelihood(
 
     assert score_at_threshold == pytest.approx(0.0)
     assert score_above_threshold > 0.0
+
+
+def test_calibrated_mht_cli_rejects_teacher_rescue_base(
+    calibrated_mht_module,
+) -> None:
+    with pytest.raises(SystemExit):
+        calibrated_mht_module.main(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                "--growth-veto-base",
+                "teacher-rescue",
+            ]
+        )
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--min-growth-residual-mahalanobis",
+        "--growth-veto-min-mahalanobis",
+        "--min-growth-residual",
+        "--growth-veto-min-residual",
+        "--min-veto-registered-iou",
+        "--growth-veto-min-registered-iou",
+        "--max-veto-registered-iou",
+        "--growth-veto-max-registered-iou",
+        "--min-veto-shifted-iou",
+        "--growth-veto-min-shifted-iou",
+        "--max-veto-shifted-iou",
+        "--growth-veto-max-shifted-iou",
+        "--max-vetoes-per-subject",
+        "--growth-veto-max-vetoes-per-subject",
+    ],
+)
+def test_calibrated_mht_cli_rejects_explicit_ignored_growth_veto_options(
+    calibrated_mht_module,
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        calibrated_mht_module.main(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "mht.csv",
+                option,
+                "1",
+            ]
+        )

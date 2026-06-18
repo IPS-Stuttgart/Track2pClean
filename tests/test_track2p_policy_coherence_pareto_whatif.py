@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_coherence_pareto_whatif as audit
 from pyrecest.utils.track_edit_whatif import TrackEdit, score_track_edit_delta
@@ -11,6 +12,33 @@ def test_coherence_pareto_whatif_is_registered() -> None:
     assert cli._BENCHMARK_COMMANDS[canonical].module == (
         "bayescatrack.experiments.track2p_policy_coherence_pareto_whatif"
     )
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
+)
+def test_coherence_pareto_parser_rejects_nonpositive_search_budgets(
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        audit.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--reference",
+                "manual-gt",
+                "--output",
+                "pareto.csv",
+                option,
+                "0",
+            ]
+        )
 
 
 def test_remove_edge_splits_component_and_scores_exact_delta() -> None:

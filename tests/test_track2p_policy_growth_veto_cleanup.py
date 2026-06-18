@@ -8,13 +8,9 @@ import numpy as np
 import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import (
-    track2p_policy_coherence_suffix_growth_veto_cleanup as coherence_cleanup,
+    track2p_policy_coherence_suffix_growth_veto_cleanup as suffix_cleanup,
 )
 from bayescatrack.experiments import track2p_policy_growth_veto_cleanup as cleanup
-from bayescatrack.experiments.track2p_benchmark import (
-    GROUND_TRUTH_REFERENCE_SOURCE,
-    SubjectBenchmarkResult,
-)
 
 
 def _candidate_row(**overrides: object) -> dict[str, object]:
@@ -43,6 +39,13 @@ def _candidate_row(**overrides: object) -> dict[str, object]:
     }
     row.update(overrides)
     return row
+
+
+def test_coherence_suffix_growth_veto_wrapper_rejects_teacher_base() -> None:
+    with pytest.raises(ValueError, match="coherence-suffix"):
+        suffix_cleanup._with_coherence_suffix_default(  # pylint: disable=protected-access
+            ["--growth-veto-base", "teacher-rescue"]
+        )
 
 
 FORBIDDEN_AUDIT_COLUMNS = frozenset(
@@ -162,100 +165,69 @@ def test_growth_veto_cleanup_parser_accepts_coherence_suffix_base() -> None:
     assert args.growth_veto_base == "coherence-suffix"
 
 
-def test_growth_veto_cleanup_writes_candidate_output(monkeypatch, tmp_path) -> None:
-    result = cleanup.GrowthVetoCleanupResult(
-        results=(
-            SubjectBenchmarkResult(
-                subject="jm046",
-                variant="test",
-                method="global-assignment",
-                scores={"pairwise_f1_micro": 1.0},
-                n_sessions=7,
-                reference_source=GROUND_TRUTH_REFERENCE_SOURCE,
-            ),
-        ),
-        edge_rows=(
-            {
-                "subject": "jm046",
-                "session_a": 5,
-                "session_b": 6,
-                "roi_a": 2309,
-                "roi_b": 1210,
-                "selected_by_growth_veto": 1,
-            },
-        ),
-        summary_rows=(),
-    )
-    monkeypatch.setattr(
-        cleanup,
-        "run_track2p_policy_growth_veto_cleanup",
-        lambda *args, **kwargs: result,
-    )
-    candidates = tmp_path / "growth_veto_candidates.csv"
-
-    exit_status = cleanup.main(
-        [
-            "--data",
-            str(tmp_path),
-            "--reference",
-            str(tmp_path),
-            "--reference-kind",
-            "manual-gt",
-            "--output",
-            str(tmp_path / "scores.csv"),
-            "--candidate-output",
-            str(candidates),
-            "--format",
-            "csv",
-        ]
-    )
-
-    assert exit_status == 0
-    assert candidates.exists()
-    assert "2309" in candidates.read_text(encoding="utf-8")
-
-
-def test_coherence_suffix_growth_veto_wrapper_forces_non_teacher_base(
-    monkeypatch,
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("min_anchor_count", -1),
+        ("min_complete_component_size", -1),
+        ("max_row_rank", 0),
+        ("max_column_rank", 0),
+        ("max_vetoes_per_subject", 0),
+    ],
+)
+def test_growth_veto_gate_rejects_invalid_integer_controls(
+    field: str, value: int
 ) -> None:
-    captured = {}
-
-    def fake_main(args):
-        captured["args"] = args
-        return 0
-
-    monkeypatch.setattr(
-        coherence_cleanup.cleanup,
-        "main",
-        fake_main,
-    )
-
-    exit_status = coherence_cleanup.main(["--data", "track2p-root"])
-
-    assert exit_status == 0
-    assert captured["args"][-2:] == ["--growth-veto-base", "coherence-suffix"]
+    with pytest.raises(ValueError, match=field):
+        cleanup.GrowthVetoGate(**{field: value})
 
 
-def test_coherence_suffix_growth_veto_wrapper_rejects_teacher_rescue_base() -> None:
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--min-veto-anchor-count", "-1"),
+        ("--min-veto-complete-component-size", "-1"),
+        ("--max-veto-row-rank", "0"),
+        ("--max-veto-column-rank", "0"),
+        ("--max-vetoes-per-subject", "0"),
+    ],
+)
+def test_growth_veto_cleanup_parser_rejects_invalid_integer_controls(
+    option: str,
+    value: str,
+) -> None:
     with pytest.raises(SystemExit):
-        coherence_cleanup.main(["--growth-veto-base", "teacher-rescue"])
-
-
-def test_coherence_suffix_growth_veto_wrapper_rejects_teacher_rescue_equals() -> None:
-    with pytest.raises(SystemExit):
-        coherence_cleanup.main(["--growth-veto-base=teacher-rescue"])
-
-
-def test_coherence_suffix_growth_veto_wrapper_rejects_later_teacher_rescue() -> None:
-    with pytest.raises(SystemExit):
-        coherence_cleanup.main(
+        cleanup.build_arg_parser().parse_args(
             [
-                "--growth-veto-base",
-                "coherence-suffix",
-                "--growth-veto-base",
-                "teacher-rescue",
+                "--data",
+                "track2p-root",
+                "--output",
+                "growth_veto_cleanup.csv",
+                option,
+                value,
             ]
         )
+
+
+def test_coherence_suffix_growth_veto_wrapper_honors_equals_coherence_override() -> (
+    None
+):
+    args = suffix_cleanup._with_coherence_suffix_default(
+        ["--growth-veto-base=coherence-suffix"]
+    )
+
+    assert args == ["--growth-veto-base=coherence-suffix"]
+
+
+def test_coherence_suffix_growth_veto_wrapper_adds_default_base() -> None:
+    args = suffix_cleanup._with_coherence_suffix_default(["--data", "track2p-root"])
+
+    assert args == [
+        "--data",
+        "track2p-root",
+        "--growth-veto-base",
+        "coherence-suffix",
+    ]
 
 
 def test_growth_veto_cleanup_parser_can_disable_distortion_cap() -> None:
@@ -271,6 +243,31 @@ def test_growth_veto_cleanup_parser_can_disable_distortion_cap() -> None:
     )
 
     assert args.max_veto_local_neighbor_distortion is None
+
+
+@pytest.mark.parametrize(
+    ("option", "attribute"),
+    [
+        ("--max-veto-registered-iou", "max_veto_registered_iou"),
+        ("--max-veto-shifted-iou", "max_veto_shifted_iou"),
+        ("--max-veto-min-cell-probability", "max_veto_min_cell_probability"),
+    ],
+)
+def test_growth_veto_cleanup_parser_can_disable_optional_caps(
+    option: str, attribute: str
+) -> None:
+    args = cleanup.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "growth_veto_cleanup.csv",
+            option,
+            "none",
+        ]
+    )
+
+    assert getattr(args, attribute) is None
 
 
 def test_growth_veto_gate_accepts_extreme_terminal_complete_edge() -> None:
@@ -602,32 +599,40 @@ def test_growth_veto_row_selection_respects_per_subject_cap() -> None:
     assert selected[0]["roi_b"] == 1211
 
 
-@pytest.mark.parametrize(
-    ("kwargs", "message"),
-    [
-        (
-            {"max_vetoes_per_subject": 0},
-            "max_vetoes_per_subject must be a positive integer",
-        ),
-        (
-            {"max_vetoes_per_subject": 1.5},
-            "max_vetoes_per_subject must be a positive integer",
-        ),
-        ({"max_vetoes_per_subject": True}, "max_vetoes_per_subject must be finite"),
-        ({"max_row_rank": 0}, "max_row_rank must be a positive integer"),
-        ({"max_column_rank": 1.5}, "max_column_rank must be a positive integer"),
-        ({"min_anchor_count": -1}, "min_anchor_count must be a non-negative integer"),
-        (
-            {"min_complete_component_size": 1.5},
-            "min_complete_component_size must be a non-negative integer",
-        ),
-    ],
-)
-def test_growth_veto_gate_rejects_silent_cap_coercions(
-    kwargs: dict[str, object], message: str
-) -> None:
-    with pytest.raises(ValueError, match=message):
-        cleanup.GrowthVetoGate(**kwargs)
+def test_growth_veto_application_rechecks_complete_component_after_prior_edit() -> None:
+    tracks = np.asarray([[10, 11, 12, 13]], dtype=int)
+    terminal = _candidate_row(
+        session_a=2,
+        session_b=3,
+        roi_a=12,
+        roi_b=13,
+        complete_component_size=4,
+    )
+    middle = _candidate_row(
+        session_a=1,
+        session_b=2,
+        roi_a=11,
+        roi_b=12,
+        complete_component_size=4,
+        is_terminal_edge=0,
+        is_last_session_edge=0,
+    )
+
+    edited, applied = (
+        cleanup._apply_growth_veto_rows(  # pylint: disable=protected-access
+            tracks,
+            [terminal, middle],
+            gate=cleanup.GrowthVetoGate(
+                require_terminal_edge=False,
+                require_last_session_edge=False,
+                require_complete_component=True,
+                max_vetoes_per_subject=2,
+            ),
+        )
+    )
+
+    assert applied == ((2, 3, 12, 13, 0),)
+    assert edited.tolist() == [[10, 11, 12, -1], [-1, -1, -1, 13]]
 
 
 def test_growth_veto_selector_ignores_audit_only_gt_and_delta_columns() -> None:
