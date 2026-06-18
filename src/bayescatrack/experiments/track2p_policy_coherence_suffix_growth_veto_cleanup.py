@@ -12,33 +12,39 @@ import sys
 from bayescatrack.experiments import track2p_policy_growth_veto_cleanup as cleanup
 
 
+def _option_present(args: list[str], option: str) -> bool:
+    prefix = f"{option}="
+    return any(arg == option or arg.startswith(prefix) for arg in args)
+
+
 def _option_values(args: list[str], option: str) -> list[str]:
     prefix = f"{option}="
     values: list[str] = []
     for index, arg in enumerate(args):
         if arg.startswith(prefix):
-            values.append(arg.split("=", 1)[1])
-        if arg == option:
-            if index + 1 >= len(args):
-                values.append("")
-            else:
-                values.append(args[index + 1])
+            values.append(arg.removeprefix(prefix))
+        elif arg == option and index + 1 < len(args):
+            values.append(args[index + 1])
     return values
+
+
+def _with_coherence_suffix_default(args: list[str]) -> list[str]:
+    if _option_present(args, "--growth-veto-base"):
+        for value in _option_values(args, "--growth-veto-base"):
+            if value != "coherence-suffix":
+                raise ValueError(
+                    "track2p-policy-coherence-suffix-growth-veto-cleanup "
+                    "requires --growth-veto-base coherence-suffix"
+                )
+        return list(args)
+    return [*args, "--growth-veto-base", "coherence-suffix"]
 
 
 def main(argv: list[str] | None = None) -> int:
     """Run the non-teacher coherence-suffix growth-veto cleanup row."""
 
     args = list(sys.argv[1:] if argv is None else argv)
-    growth_veto_bases = _option_values(args, "--growth-veto-base")
-    if not growth_veto_bases:
-        args.extend(["--growth-veto-base", "coherence-suffix"])
-    elif any(base != "coherence-suffix" for base in growth_veto_bases):
-        raise SystemExit(
-            "track2p-policy-coherence-suffix-growth-veto-cleanup requires "
-            "--growth-veto-base coherence-suffix."
-        )
-    return cleanup.main(args)
+    return cleanup.main(_with_coherence_suffix_default(args))
 
 
 if __name__ == "__main__":  # pragma: no cover

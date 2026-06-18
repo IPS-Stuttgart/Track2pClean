@@ -70,6 +70,12 @@ from bayescatrack.experiments.track2p_policy_component_residual_audit import (
 from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     emulate_track2p_pruned_tracks,
 )
+from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
+    _nonnegative_int_arg,
+    _nonnegative_int_value,
+    _positive_int_arg,
+    _positive_int_value,
+)
 
 TRACK2P_POLICY_TEACHER_VETO_CLEANUP_METHOD = "track2p-policy-teacher-veto-cleanup"
 TeacherVetoEdgeOrder = Literal["lexicographic", "risk"]
@@ -97,6 +103,13 @@ class TeacherVetoConfig:
     edge_order: TeacherVetoEdgeOrder = "risk"
     veto_order: TeacherVetoOrder | None = None
     max_applied_vetoes: int | None = None
+
+    def __post_init__(self) -> None:
+        _positive_int_value(
+            self.min_fragment_observations, name="min_fragment_observations"
+        )
+        if self.max_applied_vetoes is not None:
+            _nonnegative_int_value(self.max_applied_vetoes, name="max_applied_vetoes")
 
 
 @dataclass(frozen=True)
@@ -459,7 +472,7 @@ def _max_applied_vetoes_reached(
     applied_count: int, max_applied_vetoes: int | None
 ) -> bool:
     return max_applied_vetoes is not None and int(applied_count) >= int(
-        max(0, int(max_applied_vetoes))
+        max_applied_vetoes
     )
 
 
@@ -533,7 +546,9 @@ def _try_veto_edge(
     right[:session_b] = -1
     left_observations = int(np.sum(left >= 0))
     right_observations = int(np.sum(right >= 0))
-    min_fragment_observations = max(1, int(config.min_fragment_observations))
+    min_fragment_observations = _positive_int_value(
+        config.min_fragment_observations, name="min_fragment_observations"
+    )
     if (
         left_observations < min_fragment_observations
         or right_observations < min_fragment_observations
@@ -849,7 +864,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--min-veto-fragment-observations",
-        type=int,
+        type=_positive_int_arg,
         default=2,
         help=(
             "Require both fragments created by a teacher-veto split to contain "
@@ -874,7 +889,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "to 'risk'."
         ),
     )
-    parser.add_argument("--max-applied-vetoes", type=int, default=None)
+    parser.add_argument("--max-applied-vetoes", type=_nonnegative_int_arg, default=None)
     parser.add_argument(
         "--restrict-to-reference-seed-rois",
         action=argparse.BooleanOptionalAction,

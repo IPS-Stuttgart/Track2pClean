@@ -9,6 +9,15 @@ scores plus a candidate ledger.
 Selection uses only label-free fields.  Manual-GT labels and score deltas can
 appear in diagnostic rows inherited from growth-veto what-if machinery, but they
 are never passed into the PyRecEst candidate score or conflict keys.
+
+Two selection modes are available.  The default ``additive`` mode keeps the
+historical behaviour: PyRecEst ranks hypotheses by the sum of independent
+per-edit candidate scores minus a flat edit penalty.  The opt-in
+``global-rescore`` mode instead re-ranks the enumerated, conflict-free
+hypotheses by the label-free structural quality of the *resulting* edited track
+configuration, so it can reject an edit set whose members each look locally
+plausible but which jointly over-fragment a track.  Both modes remain label-free
+and fall back to the no-edit hypothesis when nothing clears the score threshold.
 """
 
 from __future__ import annotations
@@ -18,9 +27,11 @@ import sys
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from numbers import Integral
 from typing import Any, Literal, cast
 
 import numpy as np
+
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import (
     track2p_policy_coherence_suffix_stitch_whatif as suffix,
@@ -61,6 +72,59 @@ except ImportError as exc:  # pragma: no cover - exercised only with stale PyRec
     ) from exc
 
 METHOD = "track2p-policy-pyrecest-residual-mht-cleanup"
+_UNSUPPORTED_RESIDUAL_GROWTH_VETO_OPTIONS = (
+    "--max-vetoes-per-subject",
+    "--growth-veto-max-vetoes-per-subject",
+)
+
+
+def _integral_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    raise ValueError(f"{name} must be an integer")
+
+
+def _set_positive_int_field(instance: object, name: str) -> int:
+    value = _integral_value(getattr(instance, name), name=name)
+    if value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    object.__setattr__(instance, name, value)
+    return value
+
+
+def _set_nonnegative_int_field(instance: object, name: str) -> int:
+    value = _integral_value(getattr(instance, name), name=name)
+    if value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    object.__setattr__(instance, name, value)
+    return value
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        numeric = _integral_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    if numeric <= 0:
+        raise argparse.ArgumentTypeError("value must be a positive integer")
+    return numeric
+
+
+def _nonnegative_int_arg(value: str) -> int:
+    try:
+        numeric = _integral_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    if numeric < 0:
+        raise argparse.ArgumentTypeError("value must be a non-negative integer")
+    return numeric
 
 
 @dataclass(frozen=True)
@@ -72,36 +136,25 @@ class PyRecEstResidualMHTOptions:
     max_hypotheses: int = 16
     edit_penalty: float = 0.25
     score_threshold: float = 1.0
+    selection_mode: Literal["additive", "global-rescore"] = "additive"
+    fragmentation_penalty: float = 0.5
+    min_meaningful_track_length: int = 2
+    include_high_overlap_low_motion: bool = False
+    high_overlap_min_registered_iou: float = 0.85
+    high_overlap_max_growth_residual: float = 0.50
+    high_overlap_min_growth_residual_mahalanobis: float = 1.0
+    high_overlap_min_cell_probability: float | None = None
+    high_overlap_score_bonus: float = 2.0
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "candidate_top_k",
-            _positive_integer(self.candidate_top_k, name="candidate_top_k"),
-        )
-        object.__setattr__(
-            self,
-            "max_edits_per_subject",
-            _nonnegative_integer(
-                self.max_edits_per_subject,
-                name="max_edits_per_subject",
-            ),
-        )
-        object.__setattr__(
-            self,
-            "max_hypotheses",
-            _positive_integer(self.max_hypotheses, name="max_hypotheses"),
-        )
-        object.__setattr__(
-            self,
-            "edit_penalty",
-            _nonnegative_finite_float(self.edit_penalty, name="edit_penalty"),
-        )
-        object.__setattr__(
-            self,
-            "score_threshold",
-            _validated_numeric_float(self.score_threshold, name="score_threshold"),
-        )
+        _set_positive_int_field(self, "candidate_top_k")
+        _set_positive_int_field(self, "max_edits_per_subject")
+        _set_positive_int_field(self, "max_hypotheses")
+        _set_positive_int_field(self, "min_meaningful_track_length")
+        if self.selection_mode not in ("additive", "global-rescore"):
+            raise ValueError(
+                "selection_mode must be either 'additive' or 'global-rescore'"
+            )
 
 
 @dataclass(frozen=True)
@@ -133,6 +186,10 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
 ) -> PyRecEstResidualMHTResult:
     """Run PyRecEst residual-MHT cleanup from the non-teacher suffix row."""
 
+    edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = suffix._positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -208,10 +265,22 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
             pyrecest_candidates,
             config=pyrecest_config,
         )
-        selected_hypothesis = select_residual_hypothesis(
-            pyrecest_candidates,
-            config=pyrecest_config,
-        )
+        if mht_options.selection_mode == "global-rescore":
+            selected_hypothesis, selected_objective = (
+                _select_residual_hypothesis_global_rescore(
+                    hypotheses,
+                    candidate_rows,
+                    base_tracks=state.combined,
+                    gate=growth_veto_gate,
+                    options=mht_options,
+                )
+            )
+        else:
+            selected_hypothesis = select_residual_hypothesis(
+                pyrecest_candidates,
+                config=pyrecest_config,
+            )
+            selected_objective = float(selected_hypothesis.score)
         selected_ids = set(selected_hypothesis.candidate_ids)
         selected_rows = [
             row
@@ -235,6 +304,11 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
                 "track2p_pyrecest_mht_selected": int(len(selected_rows)),
                 "track2p_pyrecest_mht_applied": int(len(applied_keys)),
                 "track2p_pyrecest_mht_selected_score": float(selected_hypothesis.score),
+                "track2p_pyrecest_mht_selection_mode": str(mht_options.selection_mode),
+                "track2p_pyrecest_mht_selected_objective": float(selected_objective),
+                "track2p_pyrecest_mht_fragmentation_penalty": float(
+                    mht_options.fragmentation_penalty
+                ),
                 "track2p_pyrecest_mht_candidate_top_k": int(
                     mht_options.candidate_top_k
                 ),
@@ -261,21 +335,30 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
 
         selected_keys = {cleanup._edge_row_key(row) for row in selected_rows}
         applied_set = set(applied_keys)
+        candidates_by_id = {
+            str(row["pyrecest_candidate_id"]): row for row in candidate_rows
+        }
         hypothesis_ids = [";".join(h.candidate_ids) for h in hypotheses]
         for row in edge_rows:
             key = cleanup._edge_row_key(row)
             candidate_id = _candidate_id(row)
-            is_candidate = any(
-                str(candidate_row["pyrecest_candidate_id"]) == candidate_id
-                for candidate_row in candidate_rows
-            )
+            candidate_row = candidates_by_id.get(candidate_id)
+            is_candidate = candidate_row is not None
             ledger_rows.append(
                 {
                     **row,
                     "pyrecest_candidate_id": candidate_id,
                     "pyrecest_candidate": int(is_candidate),
                     "pyrecest_candidate_score": float(
-                        _candidate_score(row, options=mht_options)
+                        _candidate_score(
+                            candidate_row or row,
+                            options=mht_options,
+                        )
+                    ),
+                    "pyrecest_candidate_family": (
+                        str(candidate_row.get("pyrecest_candidate_family", ""))
+                        if candidate_row is not None
+                        else ""
                     ),
                     "selected_by_pyrecest_mht": int(key in selected_keys),
                     "applied_by_pyrecest_mht": int(key in applied_set),
@@ -287,9 +370,10 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
                     ),
                     "pyrecest_hypothesis_count": int(len(hypotheses)),
                     "pyrecest_top_hypotheses": "|".join(hypothesis_ids[:5]),
-                    "pyrecest_mht_gate_reason": cleanup.growth_veto_gate_reason(
+                    "pyrecest_mht_gate_reason": _candidate_gate_reason(
                         row,
-                        growth_veto_gate,
+                        gate=growth_veto_gate,
+                        options=mht_options,
                         n_sessions=int(state.reference.shape[1]),
                     ),
                 }
@@ -309,19 +393,149 @@ def _candidate_rows(
     options: PyRecEstResidualMHTOptions,
     n_sessions: int,
 ) -> list[Mapping[str, Any]]:
-    candidates = [
-        {**dict(row), "pyrecest_candidate_id": _candidate_id(row)}
-        for row in rows
-        if cleanup.growth_veto_gate_reason(row, gate, n_sessions=n_sessions)
-        == "accepted"
-    ]
-    candidates.sort(
+    candidates: dict[str, Mapping[str, Any]] = {}
+    for row in rows:
+        growth_reason = cleanup.growth_veto_gate_reason(
+            row,
+            gate,
+            n_sessions=n_sessions,
+        )
+        high_overlap_reason = _high_overlap_low_motion_reason(
+            row,
+            gate=gate,
+            options=options,
+            n_sessions=n_sessions,
+        )
+        if growth_reason == "accepted":
+            candidate = {
+                **dict(row),
+                "pyrecest_candidate_id": _candidate_id(row),
+                "pyrecest_candidate_family": "growth_veto",
+            }
+            candidates[str(candidate["pyrecest_candidate_id"])] = candidate
+            continue
+        if high_overlap_reason == "accepted":
+            candidate = {
+                **dict(row),
+                "pyrecest_candidate_id": _candidate_id(row),
+                "pyrecest_candidate_family": "high_overlap_low_motion",
+            }
+            candidates[str(candidate["pyrecest_candidate_id"])] = candidate
+    sorted_candidates = list(candidates.values())
+    sorted_candidates.sort(
         key=lambda row: (
             -_candidate_score(row, options=options),
             str(row["pyrecest_candidate_id"]),
         )
     )
-    return candidates[: int(options.candidate_top_k)]
+    return sorted_candidates[: int(options.candidate_top_k)]
+
+
+def _candidate_gate_reason(
+    row: Mapping[str, Any],
+    *,
+    gate: cleanup.GrowthVetoGate,
+    options: PyRecEstResidualMHTOptions,
+    n_sessions: int,
+) -> str:
+    growth_reason = cleanup.growth_veto_gate_reason(
+        row,
+        gate,
+        n_sessions=n_sessions,
+    )
+    if growth_reason == "accepted":
+        return "accepted"
+    high_overlap_reason = _high_overlap_low_motion_reason(
+        row,
+        gate=gate,
+        options=options,
+        n_sessions=n_sessions,
+    )
+    if high_overlap_reason == "accepted":
+        return "high_overlap_low_motion_accepted"
+    return growth_reason
+
+
+def _high_overlap_low_motion_reason(
+    row: Mapping[str, Any],
+    *,
+    gate: cleanup.GrowthVetoGate,
+    options: PyRecEstResidualMHTOptions,
+    n_sessions: int,
+) -> str:
+    """Return accepted for an opt-in high-overlap/low-motion anomaly pocket."""
+
+    if not options.include_high_overlap_low_motion:
+        return "high_overlap_low_motion_disabled"
+    if gate.require_not_suffix_edge and str(row.get("edge_source", "")) == "suffix":
+        return "coherence_suffix_edge"
+    if str(row.get("remove_reason", "")) != "split_edge":
+        return "not_splittable"
+    if int(row.get("would_split_component", 0)) <= 0:
+        return "does_not_split_component"
+    if gate.require_terminal_edge and int(row.get("is_terminal_edge", 0)) <= 0:
+        return "not_terminal_edge"
+    if gate.require_last_session_edge and int(row.get("is_last_session_edge", 0)) <= 0:
+        return "not_last_session_edge"
+    if gate.require_complete_component and int(
+        row.get("complete_component_size", 0)
+    ) < int(n_sessions):
+        return "not_complete_component"
+    if gate.min_complete_component_size is not None and int(
+        row.get("complete_component_size", 0)
+    ) < int(gate.min_complete_component_size):
+        return "complete_component_size_below_gate"
+    if int(row.get("growth_anchor_count", 0)) < int(gate.min_anchor_count):
+        return "growth_anchor_count_below_gate"
+
+    row_rank = int(_finite_float(row.get("row_rank"), float("inf")))
+    column_rank = int(_finite_float(row.get("column_rank"), float("inf")))
+    if row_rank <= 0 or row_rank > int(gate.max_row_rank):
+        return "row_rank_above_gate"
+    if column_rank <= 0 or column_rank > int(gate.max_column_rank):
+        return "column_rank_above_gate"
+
+    registered_iou = _finite_float(row.get("registered_iou"), float("nan"))
+    if not np.isfinite(registered_iou) or registered_iou < float(
+        options.high_overlap_min_registered_iou
+    ):
+        return "high_overlap_registered_iou_below_gate"
+    growth_residual = _finite_float(row.get("growth_residual"), float("nan"))
+    if not np.isfinite(growth_residual) or growth_residual > float(
+        options.high_overlap_max_growth_residual
+    ):
+        return "high_overlap_growth_residual_above_gate"
+    growth_mahalanobis = _finite_float(
+        row.get("growth_residual_mahalanobis"),
+        float("nan"),
+    )
+    if not np.isfinite(growth_mahalanobis) or growth_mahalanobis < float(
+        options.high_overlap_min_growth_residual_mahalanobis
+    ):
+        return "high_overlap_mahalanobis_below_gate"
+
+    cell_a = _finite_float(row.get("cell_probability_a"), float("nan"))
+    cell_b = _finite_float(row.get("cell_probability_b"), float("nan"))
+    if not np.isfinite(cell_a) or not np.isfinite(cell_b):
+        return "cell_probability_missing"
+    min_cell_probability = (
+        float(gate.min_cell_probability)
+        if options.high_overlap_min_cell_probability is None
+        else float(options.high_overlap_min_cell_probability)
+    )
+    if min(cell_a, cell_b) < min_cell_probability:
+        return "high_overlap_cell_probability_below_gate"
+    if gate.max_min_cell_probability is not None and min(cell_a, cell_b) > float(
+        gate.max_min_cell_probability
+    ):
+        return "min_cell_probability_above_gate"
+    if gate.max_local_neighbor_distortion is not None:
+        distortion = _finite_float(row.get("local_neighbor_distortion"), float("nan"))
+        if not np.isfinite(distortion) or distortion > float(
+            gate.max_local_neighbor_distortion
+        ):
+            return "local_neighbor_distortion_above_gate"
+    return "accepted"
 
 
 def _to_pyrecest_candidate(
@@ -370,7 +584,6 @@ def _candidate_score(
 ) -> float:
     """Label-free residual-MHT score; ignores all GT/status/delta columns."""
 
-    del options
     growth_mahal = _finite_float(row.get("growth_residual_mahalanobis"), 0.0)
     growth_residual = _finite_float(row.get("growth_residual"), 0.0)
     registered_iou = _finite_float(row.get("registered_iou"), 0.0)
@@ -393,7 +606,134 @@ def _candidate_score(
     score -= 0.10 * float(row_rank - 1)
     score -= 0.10 * float(column_rank - 1)
     score -= 1.00 * max(0.0, local_distortion)
+    if str(row.get("pyrecest_candidate_family", "")) == "high_overlap_low_motion":
+        score += float(options.high_overlap_score_bonus)
     return float(score)
+
+
+def _track_short_fragment_count(
+    tracks: Any, *, min_meaningful_track_length: int
+) -> int:
+    """Count label-free short track fragments in a track matrix.
+
+    A short fragment is a track row that is observed in at least one session but
+    in fewer than ``min_meaningful_track_length`` sessions.  With the default of
+    two this counts single-session singletons, which is the structural debris a
+    growth-veto split leaves behind when it prunes a spurious endpoint.
+    """
+
+    matrix = veto._as_track_matrix(tracks)
+    if matrix.size == 0:
+        return 0
+    observed = np.sum(matrix >= 0, axis=1)
+    threshold = max(1, int(min_meaningful_track_length))
+    return int(np.sum((observed > 0) & (observed < threshold)))
+
+
+def _global_hypothesis_objective(
+    base_matrix: np.ndarray,
+    base_short_fragments: int,
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    gate: cleanup.GrowthVetoGate,
+    options: PyRecEstResidualMHTOptions,
+) -> tuple[float, int]:
+    """Score one hypothesis by the resulting edited configuration, label-free.
+
+    Returns ``(objective, n_applied)``.  The benefit term reuses the same
+    label-free per-edit candidate score that PyRecEst ranked on, but the penalty
+    is computed on the *resulting* track matrix, so concentrating edits that
+    jointly shatter a track is penalised non-additively.
+    """
+
+    if not rows:
+        return 0.0, 0
+    apply_gate = replace(gate, max_vetoes_per_subject=len(rows))
+    edited_tracks, applied_keys = cleanup._apply_growth_veto_rows(
+        base_matrix,
+        rows,
+        gate=apply_gate,
+    )
+    if not applied_keys:
+        return 0.0, 0
+    applied_set = set(applied_keys)
+    applied_rows = [row for row in rows if cleanup._edge_row_key(row) in applied_set]
+    benefit = sum(_candidate_score(row, options=options) for row in applied_rows)
+    edited_short_fragments = _track_short_fragment_count(
+        edited_tracks,
+        min_meaningful_track_length=options.min_meaningful_track_length,
+    )
+    new_short_fragments = max(
+        0, int(edited_short_fragments) - int(base_short_fragments)
+    )
+    objective = (
+        float(benefit)
+        - float(options.edit_penalty) * float(len(applied_keys))
+        - float(options.fragmentation_penalty) * float(new_short_fragments)
+    )
+    return float(objective), int(len(applied_keys))
+
+
+def _select_residual_hypothesis_global_rescore(
+    hypotheses: Sequence[Any],
+    candidate_rows: Sequence[Mapping[str, Any]],
+    *,
+    base_tracks: Any,
+    gate: cleanup.GrowthVetoGate,
+    options: PyRecEstResidualMHTOptions,
+) -> tuple[Any, float]:
+    """Pick the enumerated hypothesis with the best resulting configuration.
+
+    Falls back to the enumerated no-edit hypothesis (objective ``0.0``) when no
+    non-empty hypothesis applies or none clears ``score_threshold``.
+    """
+
+    empty_hypothesis = next(
+        (hypothesis for hypothesis in hypotheses if int(hypothesis.n_edits) == 0),
+        None,
+    )
+    candidates_by_id = {
+        str(row["pyrecest_candidate_id"]): row for row in candidate_rows
+    }
+    base_matrix = veto._as_track_matrix(base_tracks)
+    base_short_fragments = _track_short_fragment_count(
+        base_matrix,
+        min_meaningful_track_length=options.min_meaningful_track_length,
+    )
+    scored: list[tuple[float, int, tuple[str, ...], Any]] = []
+    for hypothesis in hypotheses:
+        if int(hypothesis.n_edits) == 0:
+            continue
+        rows = [
+            candidates_by_id[candidate_id]
+            for candidate_id in hypothesis.candidate_ids
+            if candidate_id in candidates_by_id
+        ]
+        objective, n_applied = _global_hypothesis_objective(
+            base_matrix,
+            base_short_fragments,
+            rows,
+            gate=gate,
+            options=options,
+        )
+        if n_applied <= 0:
+            continue
+        scored.append(
+            (
+                float(objective),
+                int(hypothesis.n_edits),
+                tuple(str(candidate_id) for candidate_id in hypothesis.candidate_ids),
+                hypothesis,
+            )
+        )
+    if not scored:
+        return empty_hypothesis, 0.0
+    # Prefer the highest objective, then fewer edits, then a deterministic order.
+    scored.sort(key=lambda item: (-item[0], item[1], item[2]))
+    best_objective, _n_edits, _ids, best_hypothesis = scored[0]
+    if best_objective < float(options.score_threshold):
+        return empty_hypothesis, 0.0
+    return best_hypothesis, float(best_objective)
 
 
 def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -431,6 +771,18 @@ def _summary_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                         for row in selected
                     )
                 ),
+                "applied_true_positive_edges": int(
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "true_positive"
+                        for row in applied
+                    )
+                ),
+                "applied_false_positive_edges": int(
+                    sum(
+                        str(row.get("edge_status_against_gt")) == "false_positive"
+                        for row in applied
+                    )
+                ),
             }
         )
     return output
@@ -444,41 +796,6 @@ def _finite_float(value: Any, fallback: float) -> float:
     return numeric if np.isfinite(numeric) else float(fallback)
 
 
-def _validated_numeric_float(value: Any, *, name: str) -> float:
-    if isinstance(value, bool):
-        raise ValueError(f"{name} must be finite")
-    numeric = float(value)
-    if not np.isfinite(numeric):
-        raise ValueError(f"{name} must be finite")
-    return numeric
-
-
-def _nonnegative_finite_float(value: Any, *, name: str) -> float:
-    numeric = _validated_numeric_float(value, name=name)
-    if numeric < 0.0:
-        raise ValueError(f"{name} must be finite and non-negative")
-    return numeric
-
-
-def _positive_integer(value: Any, *, name: str) -> int:
-    numeric = _validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 1.0:
-        raise ValueError(f"{name} must be a positive integer")
-    return int(numeric)
-
-
-def _nonnegative_integer(value: Any, *, name: str) -> int:
-    numeric = _validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 0.0:
-        raise ValueError(f"{name} must be a non-negative integer")
-    return int(numeric)
-
-
-def _option_present(args: Sequence[str], option: str) -> bool:
-    prefix = f"{option}="
-    return any(arg == option or arg.startswith(prefix) for arg in args)
-
-
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = cleanup.build_arg_parser()
     parser.prog = "bayescatrack benchmark track2p-policy-pyrecest-residual-mht-cleanup"
@@ -487,46 +804,107 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "after CoherenceSuffixStitch."
     )
     parser.set_defaults(growth_veto_base="coherence-suffix")
-    for action in parser._actions:
-        if action.dest == "growth_veto_base":
-            action.choices = ("coherence-suffix",)
-            action.default = "coherence-suffix"
-            action.help = (
-                "Residual-MHT always starts from the non-teacher "
-                "CoherenceSuffixStitch state."
-            )
-    parser.add_argument("--mht-candidate-top-k", type=int, default=4)
-    parser.add_argument("--mht-max-edits-per-subject", type=int, default=2)
-    parser.add_argument("--mht-max-hypotheses", type=int, default=16)
+    parser.add_argument("--mht-candidate-top-k", type=_positive_int_arg, default=4)
+    parser.add_argument(
+        "--mht-max-edits-per-subject", type=_positive_int_arg, default=2
+    )
+    parser.add_argument("--mht-max-hypotheses", type=_positive_int_arg, default=16)
     parser.add_argument("--mht-edit-penalty", type=float, default=0.25)
     parser.add_argument("--mht-score-threshold", type=float, default=1.0)
+    parser.add_argument(
+        "--mht-selection-mode",
+        choices=("additive", "global-rescore"),
+        default="additive",
+        help=(
+            "How PyRecEst hypotheses are ranked. 'additive' (default) keeps the "
+            "historical sum-of-edit-scores ranking. 'global-rescore' re-ranks the "
+            "enumerated conflict-free hypotheses by the label-free structural "
+            "quality of the resulting edited track configuration, penalising edit "
+            "sets that jointly over-fragment a track."
+        ),
+    )
+    parser.add_argument(
+        "--mht-fragmentation-penalty",
+        type=float,
+        default=0.5,
+        help=(
+            "Per-fragment penalty applied in --mht-selection-mode global-rescore "
+            "for each short track fragment the edit set newly creates."
+        ),
+    )
+    parser.add_argument(
+        "--mht-min-meaningful-track-length",
+        type=_positive_int_arg,
+        default=2,
+        help=(
+            "Minimum observed-session count for a track row not to count as a "
+            "short fragment in global-rescore selection (default 2 counts "
+            "single-session singletons as fragments)."
+        ),
+    )
+    parser.add_argument(
+        "--mht-include-high-overlap-low-motion-candidates",
+        action="store_true",
+        help=(
+            "Also expose a high-registered-IoU, low-growth-motion residual "
+            "candidate pocket to PyRecEst MHT."
+        ),
+    )
+    parser.add_argument(
+        "--mht-high-overlap-min-registered-iou", type=float, default=0.85
+    )
+    parser.add_argument(
+        "--mht-high-overlap-max-growth-residual", type=float, default=0.50
+    )
+    parser.add_argument(
+        "--mht-high-overlap-min-growth-residual-mahalanobis",
+        type=float,
+        default=1.0,
+    )
+    parser.add_argument(
+        "--mht-high-overlap-min-cell-probability",
+        type=float,
+        default=None,
+        help=(
+            "Optional high-overlap-pocket endpoint cell-probability floor. "
+            "When omitted, the pocket uses --min-veto-cell-probability."
+        ),
+    )
+    parser.add_argument("--mht-high-overlap-score-bonus", type=float, default=2.0)
     return parser
 
 
+def _explicit_option_present(args: Sequence[str], option: str) -> bool:
+    prefix = f"{option}="
+    return any(arg == option or arg.startswith(prefix) for arg in args)
+
+
+def _reject_unsupported_residual_options(
+    parser: argparse.ArgumentParser, args: Sequence[str]
+) -> None:
+    unsupported = sorted(
+        option
+        for option in _UNSUPPORTED_RESIDUAL_GROWTH_VETO_OPTIONS
+        if _explicit_option_present(args, option)
+    )
+    if unsupported:
+        parser.error(
+            "track2p-policy-pyrecest-residual-mht-cleanup uses "
+            "--mht-max-edits-per-subject for the edit budget; do not pass "
+            + ", ".join(unsupported)
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
-    raw_args = list(sys.argv[1:] if argv is None else argv)
     parser = build_arg_parser()
+    raw_args = list(sys.argv[1:] if argv is None else argv)
+    _reject_unsupported_residual_options(parser, raw_args)
     args = parser.parse_args(raw_args)
     if args.growth_veto_base != "coherence-suffix":
         parser.error(
-            "PyRecEst residual MHT always starts from CoherenceSuffixStitch; "
-            "use --growth-veto-base coherence-suffix."
+            "track2p-policy-pyrecest-residual-mht-cleanup requires "
+            "--growth-veto-base coherence-suffix"
         )
-    mht_candidate_top_k = int(args.mht_candidate_top_k)
-    mht_max_edits_per_subject = int(args.mht_max_edits_per_subject)
-    legacy_veto_cap_present = any(
-        _option_present(raw_args, option)
-        for option in (
-            "--max-vetoes-per-subject",
-            "--growth-veto-max-vetoes-per-subject",
-        )
-    )
-    if legacy_veto_cap_present:
-        legacy_veto_cap = int(args.max_vetoes_per_subject)
-        if not _option_present(raw_args, "--mht-candidate-top-k"):
-            mht_candidate_top_k = legacy_veto_cap
-        if not _option_present(raw_args, "--mht-max-edits-per-subject"):
-            mht_max_edits_per_subject = legacy_veto_cap
     config = Track2pBenchmarkConfig(
         data=args.data,
         method="global-assignment",
@@ -536,6 +914,7 @@ def main(argv: list[str] | None = None) -> int:
         plane_name=args.plane_name,
         seed_session=args.seed_session,
         restrict_to_reference_seed_rois=args.restrict_to_reference_seed_rois,
+        max_gap=args.max_gap,
         transform_type=args.transform_type,
         allow_track2p_as_reference_for_smoke_test=(
             args.allow_track2p_as_reference_for_smoke_test
@@ -594,11 +973,11 @@ def main(argv: list[str] | None = None) -> int:
                 if args.max_veto_local_neighbor_distortion is None
                 else float(args.max_veto_local_neighbor_distortion)
             ),
-            min_anchor_count=max(0, int(args.min_veto_anchor_count)),
+            min_anchor_count=int(args.min_veto_anchor_count),
             min_complete_component_size=(
                 None
                 if args.min_veto_complete_component_size is None
-                else max(0, int(args.min_veto_complete_component_size))
+                else int(args.min_veto_complete_component_size)
             ),
             max_row_rank=int(args.max_veto_row_rank),
             max_column_rank=int(args.max_veto_column_rank),
@@ -606,14 +985,37 @@ def main(argv: list[str] | None = None) -> int:
             require_terminal_edge=bool(args.require_veto_terminal_edge),
             require_last_session_edge=bool(args.require_veto_last_session_edge),
             require_complete_component=bool(args.require_veto_complete_component),
-            max_vetoes_per_subject=int(mht_candidate_top_k),
+            max_vetoes_per_subject=int(args.mht_max_edits_per_subject),
         ),
         mht_options=PyRecEstResidualMHTOptions(
-            candidate_top_k=int(mht_candidate_top_k),
-            max_edits_per_subject=int(mht_max_edits_per_subject),
+            candidate_top_k=int(args.mht_candidate_top_k),
+            max_edits_per_subject=int(args.mht_max_edits_per_subject),
             max_hypotheses=int(args.mht_max_hypotheses),
             edit_penalty=float(args.mht_edit_penalty),
             score_threshold=float(args.mht_score_threshold),
+            selection_mode=cast(
+                Literal["additive", "global-rescore"], args.mht_selection_mode
+            ),
+            fragmentation_penalty=float(args.mht_fragmentation_penalty),
+            min_meaningful_track_length=int(args.mht_min_meaningful_track_length),
+            include_high_overlap_low_motion=bool(
+                args.mht_include_high_overlap_low_motion_candidates
+            ),
+            high_overlap_min_registered_iou=float(
+                args.mht_high_overlap_min_registered_iou
+            ),
+            high_overlap_max_growth_residual=float(
+                args.mht_high_overlap_max_growth_residual
+            ),
+            high_overlap_min_growth_residual_mahalanobis=float(
+                args.mht_high_overlap_min_growth_residual_mahalanobis
+            ),
+            high_overlap_min_cell_probability=(
+                None
+                if args.mht_high_overlap_min_cell_probability is None
+                else float(args.mht_high_overlap_min_cell_probability)
+            ),
+            high_overlap_score_bonus=float(args.mht_high_overlap_score_bonus),
         ),
         progress=bool(args.progress),
     )
@@ -627,12 +1029,6 @@ def main(argv: list[str] | None = None) -> int:
             result.candidate_rows,
             args.diagnostics_output,
             output_format=cast(Literal["csv", "json"], args.diagnostics_format),
-        )
-    if args.candidate_output is not None:
-        veto.write_rows(
-            result.candidate_rows,
-            args.candidate_output,
-            output_format=cast(Literal["csv", "json"], args.format),
         )
     if args.summary_output is not None:
         veto.write_rows(

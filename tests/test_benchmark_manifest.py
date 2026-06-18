@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import importlib
 import json
 
 import pytest
@@ -213,6 +214,171 @@ def test_benchmark_manifest_accepts_monotone_loso_runner_options(tmp_path):
     assert options.max_negatives_per_positive == 3
 
 
+def test_benchmark_manifest_accepts_monotone_loso_runner_kwargs(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "monotone-loso",
+                    "runner": "track2p-monotone-loso",
+                    "monotone_ranker_kwargs": {
+                        "monotone_feature_names": ["one_minus_iou"],
+                        "max_iter": 12,
+                    },
+                }
+            ],
+        },
+    )
+
+    runner_kwargs = dict(load_benchmark_manifest(manifest_path).runs[0].runner_kwargs)
+
+    assert runner_kwargs["monotone_ranker_kwargs"] == {
+        "monotone_feature_names": ["one_minus_iou"],
+        "max_iter": 12,
+    }
+
+
+def test_benchmark_manifest_accepts_monotone_loso_runner_kwargs_json(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    monotone_json = '{"max_iter": 12}'
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "monotone-loso",
+                    "runner": "track2p-monotone-loso",
+                    "monotone_ranker_kwargs_json": monotone_json,
+                }
+            ],
+        },
+    )
+
+    runner_kwargs = dict(load_benchmark_manifest(manifest_path).runs[0].runner_kwargs)
+
+    assert runner_kwargs["monotone_ranker_kwargs_json"] == monotone_json
+
+
+@pytest.mark.parametrize(
+    ("first_key", "second_key"),
+    [
+        ("monotone_options", "monotone_ranker_kwargs"),
+        ("monotone_options", "monotone_ranker_kwargs_json"),
+        ("monotone_ranker_kwargs", "monotone_ranker_kwargs_json"),
+    ],
+)
+def test_benchmark_manifest_rejects_duplicate_monotone_loso_options(
+    tmp_path, first_key, second_key
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    values = {
+        "monotone_options": {"max_iter": 10},
+        "monotone_ranker_kwargs": {"max_iter": 11},
+        "monotone_ranker_kwargs_json": '{"max_iter": 12}',
+    }
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "monotone-loso",
+                    "runner": "track2p-monotone-loso",
+                    first_key: values[first_key],
+                    second_key: values[second_key],
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="Use either"):
+        load_benchmark_manifest(manifest_path)
+
+
+def test_benchmark_manifest_rejects_duplicate_loso_model_kwargs(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "hgb-loso",
+                    "runner": "track2p-loso-calibration",
+                    "calibration_model_kwargs": {"max_iter": 25},
+                    "calibration_model_kwargs_json": '{"max_iter": 50}',
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="calibration_model_kwargs"):
+        load_benchmark_manifest(manifest_path)
+
+
+@pytest.mark.parametrize(
+    ("scalar_key", "scalar_value"),
+    [
+        ("hard_negative_ratio", 2.0),
+        ("hard_negative_top_k", 5),
+        ("hard_negative_column_candidates", False),
+        ("hard_negative_features", "one_minus_iou"),
+    ],
+)
+def test_benchmark_manifest_rejects_duplicate_hard_negative_options(
+    tmp_path, scalar_key, scalar_value
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "method": "global-assignment",
+                "split": "leave-one-subject-out",
+                "cost": "calibrated",
+            },
+            "runs": [
+                {
+                    "name": "hgb-loso",
+                    "runner": "track2p-loso-calibration",
+                    "hard_negative_options": {
+                        "negative_to_positive_ratio": 4.0,
+                    },
+                    scalar_key: scalar_value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="hard_negative_options"):
+        load_benchmark_manifest(manifest_path)
+
+
 def test_benchmark_manifest_rejects_runner_options_for_default_track2p(tmp_path):
     manifest_path = tmp_path / "benchmarks.json"
     _write_manifest(
@@ -233,44 +399,6 @@ def test_benchmark_manifest_rejects_runner_options_for_default_track2p(tmp_path)
 
     with pytest.raises(ValueError, match="does not support.*feature_names"):
         load_benchmark_manifest(manifest_path)
-
-
-def test_manifest_optional_float_helpers_accept_cli_null_strings() -> None:
-    from bayescatrack.experiments import _teacher_rescue_manifest_integration
-
-    assert bm._optional_float_option({"value": "none"}, "value") is None
-    assert bm._optional_float_option({"value": "null"}, "value") is None
-    assert bm._optional_float_option({"value": "nan"}, "value") is None
-    assert (
-        _teacher_rescue_manifest_integration._optional_float_option(
-            {"value": "none"}, "value"
-        )
-        is None
-    )
-    with pytest.raises(ValueError, match="value must be finite"):
-        bm._optional_float_option({"value": "inf"}, "value")
-    with pytest.raises(ValueError, match="value must be finite"):
-        _teacher_rescue_manifest_integration._optional_float_option(
-            {"value": "inf"}, "value"
-        )
-    assert (
-        _teacher_rescue_manifest_integration._optional_int_option(
-            {"value": "none"}, "value"
-        )
-        is None
-    )
-    assert (
-        _teacher_rescue_manifest_integration._optional_int_option(
-            {"value": "null"}, "value"
-        )
-        is None
-    )
-    assert (
-        _teacher_rescue_manifest_integration._optional_int_option(
-            {"value": "all"}, "value"
-        )
-        is None
-    )
 
 
 def test_benchmark_manifest_accepts_teacher_adjacent_rescue_options(tmp_path):
@@ -381,13 +509,11 @@ def test_benchmark_manifest_dispatches_teacher_adjacent_rescue_options(
                     "teacher_edge_order": "dynamic-confidence",
                     "teacher_feature_preset": "high-confidence",
                     "teacher_gate_min_registered_iou": 0.25,
-                    "teacher_gate_max_registered_iou": "none",
                     "teacher_gate_min_cell_probability": 0.8,
                     "teacher_gate_require_hungarian": True,
                     "min_component_observations": 3,
                     "max_applied_edits": 2,
                     "max_target_extension_edits": 1,
-                    "max_source_backfill_edits": "all",
                     "max_seed_source_backfill_edits": 1,
                     "max_completing_rescue_edits": 1,
                 }
@@ -406,11 +532,9 @@ def test_benchmark_manifest_dispatches_teacher_adjacent_rescue_options(
     assert calls["kwargs"]["min_component_observations"] == 3
     assert calls["kwargs"]["max_applied_edits"] == 2
     assert calls["kwargs"]["max_target_extension_edits"] == 1
-    assert calls["kwargs"]["max_source_backfill_edits"] is None
     assert calls["kwargs"]["max_seed_source_backfill_edits"] == 1
     assert calls["kwargs"]["max_completing_rescue_edits"] == 1
     assert gate.min_registered_iou == 0.25
-    assert gate.max_registered_iou is None
     assert gate.min_cell_probability == 0.8
     assert gate.require_hungarian is True
     assert (tmp_path / "results" / "teacher-rescue.csv").exists()
@@ -514,6 +638,51 @@ def test_benchmark_manifest_dispatches_coherence_suffix_teacher_rescue_options(
     assert (tmp_path / "results" / "suffix-teacher-rescue.csv").exists()
 
 
+@pytest.mark.parametrize(
+    ("options", "match"),
+    [
+        (
+            {"min_teacher_component_observations": 0},
+            "min_teacher_component_observations",
+        ),
+        ({"max_applied_teacher_edits": -2}, "max_applied_teacher_edits"),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_coherence_suffix_teacher_budgets(
+    tmp_path, monkeypatch, options, match
+):
+    from bayescatrack.experiments import (
+        track2p_policy_coherence_suffix_teacher_rescue,
+    )
+
+    def fake_suffix_teacher_rescue(*_args, **_kwargs):
+        raise AssertionError("runner should not be called for invalid options")
+
+    monkeypatch.setattr(
+        track2p_policy_coherence_suffix_teacher_rescue,
+        "run_track2p_policy_coherence_suffix_teacher_rescue",
+        fake_suffix_teacher_rescue,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "suffix-teacher-rescue",
+                    "runner": "track2p-policy-coherence-suffix-teacher-rescue",
+                    "data": "data",
+                    "output": "results/suffix-teacher-rescue.csv",
+                    **options,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=match):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
 def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     tmp_path, monkeypatch
 ):
@@ -574,11 +743,13 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
                     "anchor_min_shifted_iou": 0.3,
                     "anchor_min_cell_probability": 0.8,
                     "min_growth_residual_mahalanobis": 20.0,
-                    "min_growth_residual": 3.5,
+                    "min_growth_residual": 3.25,
                     "min_veto_registered_iou": 0.45,
+                    "max_veto_registered_iou": 0.6,
                     "min_veto_shifted_iou": 0.6,
+                    "max_veto_shifted_iou": 0.8,
                     "max_veto_min_cell_probability": 0.65,
-                    "max_veto_local_neighbor_distortion": "none",
+                    "max_veto_local_neighbor_distortion": None,
                     "max_vetoes_per_subject": 1,
                     "growth_veto_base": "coherence-suffix",
                 }
@@ -597,7 +768,7 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     assert calls["kwargs"]["prediction_base"] == "coherence-suffix"
     growth_gate = calls["kwargs"]["growth_veto_gate"]
     assert growth_gate.min_growth_residual_mahalanobis == 20.0
-    assert growth_gate.min_growth_residual == 3.5
+    assert growth_gate.min_growth_residual == 3.25
     assert growth_gate.min_registered_iou == 0.45
     assert growth_gate.min_shifted_iou == 0.6
     assert growth_gate.max_min_cell_probability == 0.65
@@ -610,7 +781,41 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     assert (tmp_path / "results" / "growth-veto-cleanup.csv").exists()
 
 
-def test_benchmark_manifest_accepts_coherence_suffix_growth_veto_runner(
+@pytest.mark.parametrize("value", [0, 1.5])
+def test_benchmark_manifest_rejects_invalid_cleanup_min_side_observations(
+    tmp_path, monkeypatch, value
+):
+    from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
+
+    def fake_growth_veto_cleanup(*_args, **_kwargs):
+        raise AssertionError("runner should not be called for invalid options")
+
+    monkeypatch.setattr(
+        track2p_policy_growth_veto_cleanup,
+        "run_track2p_policy_growth_veto_cleanup",
+        fake_growth_veto_cleanup,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-cleanup",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "output": "results/growth-veto-cleanup.csv",
+                    "min_side_observations": value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="min_side_observations"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+def test_benchmark_manifest_growth_veto_defaults_keep_upper_iou_caps(
     tmp_path, monkeypatch
 ):
     from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
@@ -620,9 +825,9 @@ def test_benchmark_manifest_accepts_coherence_suffix_growth_veto_runner(
     class _FakeResult:
         def to_dict(self):
             return {
-                "subject": "jm_growth_veto",
-                "variant": "fake coherence suffix growth veto cleanup",
-                "method": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                "subject": "jm_growth_veto_defaults",
+                "variant": "fake growth veto cleanup",
+                "method": "track2p-policy-growth-veto-cleanup",
                 "n_sessions": 7,
                 "reference_source": "ground_truth_csv",
                 "pairwise_f1": 1.0,
@@ -649,6 +854,67 @@ def test_benchmark_manifest_accepts_coherence_suffix_growth_veto_runner(
         {
             "runs": [
                 {
+                    "name": "growth-veto-default-caps",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "output": "results/growth-veto-default-caps.csv",
+                    "min_veto_complete_component_size": None,
+                    "max_veto_local_neighbor_distortion": "none",
+                }
+            ],
+        },
+    )
+
+    run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    growth_gate = calls["kwargs"]["growth_veto_gate"]
+    assert growth_gate.max_registered_iou == 0.60
+    assert growth_gate.max_shifted_iou == 0.80
+    assert growth_gate.min_anchor_count == 0
+    assert growth_gate.min_complete_component_size is None
+    assert growth_gate.max_local_neighbor_distortion is None
+
+
+def test_benchmark_manifest_coherence_suffix_growth_veto_defaults_base(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
+
+    calls = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {
+                "subject": "jm_suffix_growth_veto",
+                "variant": "fake coherence suffix growth veto cleanup",
+                "method": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                "n_sessions": 7,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+        edge_rows = ()
+        summary_rows = ()
+
+    def fake_growth_veto_cleanup(config, **kwargs):
+        calls["config"] = config
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_growth_veto_cleanup,
+        "run_track2p_policy_growth_veto_cleanup",
+        fake_growth_veto_cleanup,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
                     "name": "coherence-suffix-growth-veto",
                     "runner": "track2p-policy-coherence-suffix-growth-veto-cleanup",
                     "data": "data",
@@ -661,22 +927,193 @@ def test_benchmark_manifest_accepts_coherence_suffix_growth_veto_runner(
     result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
     assert result.runs[0].rows == 1
+    assert calls["config"].method == "global-assignment"
     assert calls["kwargs"]["prediction_base"] == "coherence-suffix"
     assert (tmp_path / "results" / "coherence-suffix-growth-veto.csv").exists()
+
+
+def test_benchmark_manifest_rejects_negative_growth_veto_component_size(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-invalid-component-size",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "min_veto_complete_component_size": -1,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="min_veto_complete_component_size"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "match"),
+    [
+        ("suffix_path_length", 0, "suffix_path_length"),
+        ("max_stitches_per_subject", 0, "max_stitches_per_subject"),
+        ("edge_top_k", 0, "edge_top_k"),
+        ("path_beam_width", 0, "path_beam_width"),
+        ("min_veto_anchor_count", -1, "anchor_count"),
+        ("max_veto_row_rank", 0, "max_veto_row_rank"),
+        ("max_veto_column_rank", 0, "max_veto_column_rank"),
+        ("max_vetoes_per_subject", 0, "max_vetoes_per_subject"),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_suffix_growth_veto_integer_controls(
+    tmp_path,
+    field: str,
+    value: int,
+    match: str,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-invalid-integer",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    field: value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=match):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+def test_benchmark_manifest_rejects_ignored_growth_veto_teacher_options(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-ignored-teacher-option",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "teacher_edge_order": "dynamic-confidence",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="teacher_edge_order"):
+        load_benchmark_manifest(manifest_path)
+
+
+def test_benchmark_manifest_rejects_invalid_growth_veto_base(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-invalid-base",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "growth_veto_base": "teacher-oracle",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="growth_veto_base"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+@pytest.mark.parametrize(
+    ("canonical", "alias"),
+    [
+        ("min_growth_residual_mahalanobis", "growth_veto_min_mahalanobis"),
+        ("min_growth_residual", "growth_veto_min_residual"),
+        ("min_veto_registered_iou", "growth_veto_min_registered_iou"),
+        ("max_veto_registered_iou", "growth_veto_max_registered_iou"),
+        ("min_veto_shifted_iou", "growth_veto_min_shifted_iou"),
+        ("max_veto_shifted_iou", "growth_veto_max_shifted_iou"),
+        ("min_veto_cell_probability", "growth_veto_min_cell_probability"),
+        ("max_veto_min_cell_probability", "growth_veto_max_min_cell_probability"),
+        (
+            "max_veto_local_neighbor_distortion",
+            "growth_veto_max_local_neighbor_distortion",
+        ),
+        ("min_veto_anchor_count", "growth_veto_min_anchor_count"),
+        (
+            "min_veto_complete_component_size",
+            "growth_veto_min_complete_component_size",
+        ),
+        ("max_vetoes_per_subject", "growth_veto_max_vetoes_per_subject"),
+    ],
+)
+def test_benchmark_manifest_rejects_duplicate_growth_veto_aliases(
+    tmp_path,
+    canonical: str,
+    alias: str,
+) -> None:
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-duplicate-alias",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    canonical: 1,
+                    alias: 2,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=f"{canonical}/{alias}"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+def test_benchmark_manifest_rejects_teacher_base_for_coherence_suffix_growth_veto(
+    tmp_path,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "suffix-growth-veto-wrong-base",
+                    "runner": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                    "data": "data",
+                    "growth_veto_base": "teacher-rescue",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="coherence-suffix"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
 
 def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
     tmp_path, monkeypatch
 ):
-    from bayescatrack.experiments import track2p_policy_pyrecest_residual_mht_cleanup
+    track2p_policy_pyrecest_residual_mht_cleanup = importlib.import_module(
+        "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup"
+    )
 
     calls = {}
 
     class _FakeResult:
         def to_dict(self):
             return {
-                "subject": "jm_mht",
-                "variant": "fake residual mht",
+                "subject": "jm_pyrecest",
+                "variant": "fake PyRecEst residual MHT",
                 "method": "track2p-policy-pyrecest-residual-mht-cleanup",
                 "n_sessions": 7,
                 "reference_source": "ground_truth_csv",
@@ -705,21 +1142,51 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
         {
             "runs": [
                 {
-                    "name": "pyrecest-residual-mht",
-                    "runner": "track2p-policy-pyrecest-residual-mht-cleanup",
+                    "name": "pyrecest-dual-pocket",
+                    "runner": "track2p-pyrecest-residual-mht-cleanup",
                     "data": "data",
-                    "output": "results/pyrecest-residual-mht.csv",
+                    "output": "results/pyrecest-dual-pocket.csv",
                     "threshold_method": "min",
                     "iou_distance_threshold": 12.0,
+                    "split_risk_threshold": 1.5,
+                    "min_side_observations": 2,
                     "suffix_path_length": 2,
-                    "min_growth_residual_mahalanobis": 20.0,
-                    "min_growth_residual": 2.5,
-                    "max_veto_local_neighbor_distortion": "none",
-                    "mht_candidate_top_k": 1,
-                    "mht_max_edits_per_subject": 1,
-                    "mht_max_hypotheses": 8,
-                    "mht_edit_penalty": 0.5,
-                    "mht_score_threshold": 1.25,
+                    "min_cell_probability": 0.8,
+                    "min_area_ratio": 0.8,
+                    "max_centroid_distance": 6.0,
+                    "min_shifted_iou": 0.3,
+                    "min_motion_consistency": 0.5,
+                    "min_shape_consistency": 0.82,
+                    "max_stitches_per_subject": 1,
+                    "anchor_min_registered_iou": 0.5,
+                    "anchor_min_shifted_iou": 0.3,
+                    "anchor_min_cell_probability": 0.8,
+                    "min_growth_residual_mahalanobis": 12.0,
+                    "min_growth_residual": 2.0,
+                    "min_veto_registered_iou": 0.35,
+                    "max_veto_registered_iou": 0.75,
+                    "min_veto_shifted_iou": 0.45,
+                    "max_veto_shifted_iou": 0.90,
+                    "max_veto_min_cell_probability": 0.65,
+                    "max_veto_local_neighbor_distortion": None,
+                    "growth_veto_min_anchor_count": 2,
+                    "max_veto_row_rank": 2,
+                    "max_veto_column_rank": 2,
+                    "growth_veto_base": "coherence-suffix",
+                    "mht_candidate_top_k": 8,
+                    "mht_max_edits_per_subject": 2,
+                    "mht_max_hypotheses": 32,
+                    "mht_edit_penalty": 0.4,
+                    "mht_score_threshold": 1.4,
+                    "mht_selection_mode": "global-rescore",
+                    "mht_fragmentation_penalty": 0.75,
+                    "mht_min_meaningful_track_length": 3,
+                    "mht_include_high_overlap_low_motion_candidates": True,
+                    "mht_high_overlap_min_registered_iou": 0.9,
+                    "mht_high_overlap_max_growth_residual": 1.5,
+                    "mht_high_overlap_min_growth_residual_mahalanobis": 1.1,
+                    "mht_high_overlap_min_cell_probability": 0.7,
+                    "mht_high_overlap_score_bonus": 2.5,
                 }
             ],
         },
@@ -728,22 +1195,338 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
     result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
     assert result.runs[0].rows == 1
+    assert calls["config"].method == "global-assignment"
     assert calls["kwargs"]["threshold_method"] == "min"
     assert calls["kwargs"]["iou_distance_threshold"] == 12.0
+    assert calls["kwargs"]["cleanup_config"].split_risk_threshold == 1.5
     assert calls["kwargs"]["suffix_gate"].suffix_path_length == 2
     growth_gate = calls["kwargs"]["growth_veto_gate"]
-    assert growth_gate.min_growth_residual_mahalanobis == 20.0
-    assert growth_gate.min_growth_residual == 2.5
-    assert growth_gate.max_registered_iou == 0.6
-    assert growth_gate.max_shifted_iou == 0.8
+    assert growth_gate.min_growth_residual_mahalanobis == 12.0
+    assert growth_gate.min_growth_residual == 2.0
+    assert growth_gate.max_row_rank == 2
+    assert growth_gate.max_column_rank == 2
+    assert growth_gate.min_anchor_count == 2
     assert growth_gate.max_local_neighbor_distortion is None
     mht_options = calls["kwargs"]["mht_options"]
-    assert mht_options.candidate_top_k == 1
-    assert mht_options.max_edits_per_subject == 1
-    assert mht_options.max_hypotheses == 8
-    assert mht_options.edit_penalty == 0.5
-    assert mht_options.score_threshold == 1.25
-    assert (tmp_path / "results" / "pyrecest-residual-mht.csv").exists()
+    assert mht_options.candidate_top_k == 8
+    assert mht_options.max_edits_per_subject == 2
+    assert mht_options.max_hypotheses == 32
+    assert mht_options.edit_penalty == 0.4
+    assert mht_options.score_threshold == 1.4
+    assert mht_options.selection_mode == "global-rescore"
+    assert mht_options.fragmentation_penalty == 0.75
+    assert mht_options.min_meaningful_track_length == 3
+    assert mht_options.include_high_overlap_low_motion is True
+    assert mht_options.high_overlap_min_registered_iou == 0.9
+    assert mht_options.high_overlap_max_growth_residual == 1.5
+    assert mht_options.high_overlap_min_growth_residual_mahalanobis == 1.1
+    assert mht_options.high_overlap_min_cell_probability == 0.7
+    assert mht_options.high_overlap_score_bonus == 2.5
+    assert (tmp_path / "results" / "pyrecest-dual-pocket.csv").exists()
+
+
+def test_benchmark_manifest_dispatches_pyrecest_frontier_mht_defaults(
+    tmp_path, monkeypatch
+):
+    track2p_policy_pyrecest_residual_mht_cleanup = importlib.import_module(
+        "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup"
+    )
+
+    calls = []
+
+    class _FakeResult:
+        def __init__(self, subject):
+            self.subject = subject
+
+        def to_dict(self):
+            return {
+                "subject": self.subject,
+                "variant": "fake PyRecEst frontier MHT",
+                "method": "track2p-policy-pyrecest-residual-mht-cleanup",
+                "n_sessions": 7,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        def __init__(self, subject):
+            self.results = (_FakeResult(subject),)
+            self.candidate_rows = ()
+            self.summary_rows = ()
+
+    def fake_residual_mht(config, **kwargs):
+        calls.append((config, dict(kwargs)))
+        return _FakeOutput(f"jm_frontier_{len(calls)}")
+
+    monkeypatch.setattr(
+        track2p_policy_pyrecest_residual_mht_cleanup,
+        "run_track2p_policy_pyrecest_residual_mht_cleanup",
+        fake_residual_mht,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-frontier",
+                    "runner": "track2p-pyrecest-frontier-mht-cleanup",
+                    "data": "data",
+                    "output": "results/pyrecest-frontier.csv",
+                    "max_veto_min_cell_probability": 0.70,
+                    "mht_score_threshold": 1.70,
+                },
+                {
+                    "name": "pyrecest-safe-frontier",
+                    "runner": "track2p-policy-pyrecest-safe-frontier-mht-cleanup",
+                    "data": "data",
+                    "output": "results/pyrecest-safe-frontier.csv",
+                },
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert [run.rows for run in result.runs] == [1, 1]
+    assert len(calls) == 2
+    first_config, first_kwargs = calls[0]
+    second_config, second_kwargs = calls[1]
+    assert first_config.method == "global-assignment"
+    assert second_config.method == "global-assignment"
+
+    growth_gate = first_kwargs["growth_veto_gate"]
+    assert growth_gate.min_growth_residual_mahalanobis == 12.0
+    assert growth_gate.min_growth_residual == 2.0
+    assert growth_gate.min_registered_iou == 0.35
+    assert growth_gate.max_registered_iou == 0.60
+    assert growth_gate.min_shifted_iou == 0.45
+    assert growth_gate.max_shifted_iou == 0.80
+    assert growth_gate.min_cell_probability == 0.50
+    assert growth_gate.max_min_cell_probability == 0.70
+    assert growth_gate.max_local_neighbor_distortion is None
+    assert growth_gate.max_row_rank == 2
+    assert growth_gate.max_column_rank == 2
+    assert growth_gate.require_not_suffix_edge is True
+    assert growth_gate.require_terminal_edge is True
+    assert growth_gate.require_last_session_edge is True
+    assert growth_gate.require_complete_component is True
+
+    mht_options = first_kwargs["mht_options"]
+    assert mht_options.candidate_top_k == 8
+    assert mht_options.max_edits_per_subject == 2
+    assert mht_options.max_hypotheses == 32
+    assert mht_options.edit_penalty == 0.55
+    assert mht_options.score_threshold == 1.70
+
+    second_growth_gate = second_kwargs["growth_veto_gate"]
+    assert second_growth_gate.max_min_cell_probability == 0.65
+    assert second_kwargs["mht_options"].score_threshold == 1.60
+    assert (tmp_path / "results" / "pyrecest-frontier.csv").exists()
+    assert (tmp_path / "results" / "pyrecest-safe-frontier.csv").exists()
+
+
+def test_benchmark_manifest_dispatches_pyrecest_calibrated_mht_options(
+    tmp_path, monkeypatch
+):
+    track2p_policy_pyrecest_calibrated_mht_cleanup = importlib.import_module(
+        "bayescatrack.experiments.track2p_policy_pyrecest_calibrated_mht_cleanup"
+    )
+
+    calls = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {
+                "subject": "jm_calibrated",
+                "variant": "fake PyRecEst calibrated MHT",
+                "method": "track2p-policy-pyrecest-calibrated-mht-cleanup",
+                "n_sessions": 7,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+        candidate_rows = ()
+        summary_rows = ()
+
+    def fake_calibrated_mht(config, **kwargs):
+        calls["config"] = config
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_pyrecest_calibrated_mht_cleanup,
+        "run_track2p_policy_pyrecest_calibrated_mht_cleanup",
+        fake_calibrated_mht,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-calibrated",
+                    "runner": "track2p-policy-pyrecest-calibrated-mht-cleanup",
+                    "data": "data",
+                    "output": "results/pyrecest-calibrated.csv",
+                    "growth_veto_base": "coherence-suffix",
+                    "mht_max_edits_per_subject": 3,
+                    "mht_max_hypotheses": 48,
+                    "mht_edit_penalty": 0.1,
+                    "mht_score_threshold": 0.2,
+                    "calibrated_fp_logistic_c": 0.75,
+                    "calibrated_fp_min_training_positives": 2,
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["config"].method == "global-assignment"
+    mht_options = calls["kwargs"]["mht_options"]
+    assert mht_options.max_edits_per_subject == 3
+    assert mht_options.max_hypotheses == 48
+    assert mht_options.edit_penalty == 0.1
+    assert mht_options.score_threshold == 0.2
+    assert mht_options.logistic_c == 0.75
+    assert mht_options.min_training_positive_examples == 2
+    assert calls["kwargs"]["structural_gate"].min_growth_residual == 2.5
+    assert calls["kwargs"]["structural_gate"].max_registered_iou == 0.60
+    assert calls["kwargs"]["structural_gate"].max_shifted_iou == 0.80
+    assert (tmp_path / "results" / "pyrecest-calibrated.csv").exists()
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "min_growth_residual_mahalanobis",
+        "growth_veto_min_mahalanobis",
+        "min_growth_residual",
+        "growth_veto_min_residual",
+        "min_veto_registered_iou",
+        "growth_veto_min_registered_iou",
+        "max_veto_registered_iou",
+        "growth_veto_max_registered_iou",
+        "min_veto_shifted_iou",
+        "growth_veto_min_shifted_iou",
+        "max_veto_shifted_iou",
+        "growth_veto_max_shifted_iou",
+        "max_vetoes_per_subject",
+        "growth_veto_max_vetoes_per_subject",
+    ],
+)
+def test_benchmark_manifest_rejects_ignored_calibrated_mht_growth_veto_fields(
+    tmp_path,
+    field: str,
+) -> None:
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-calibrated",
+                    "runner": "track2p-policy-pyrecest-calibrated-mht-cleanup",
+                    "data": "data",
+                    field: 1,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=field):
+        load_benchmark_manifest(manifest_path)
+
+
+def test_benchmark_manifest_rejects_invalid_pyrecest_mht_selection_mode(tmp_path):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-invalid-selection",
+                    "runner": "track2p-policy-pyrecest-residual-mht-cleanup",
+                    "data": "data",
+                    "mht_selection_mode": "oracle",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="mht_selection_mode"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("mht_candidate_top_k", 0),
+        ("mht_max_edits_per_subject", 0),
+        ("mht_max_hypotheses", 0),
+        ("mht_min_meaningful_track_length", 0),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_pyrecest_residual_mht_integer_options(
+    tmp_path,
+    field: str,
+    value: int,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-invalid-integer",
+                    "runner": "track2p-policy-pyrecest-residual-mht-cleanup",
+                    "data": "data",
+                    field: value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=field):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("mht_max_edits_per_subject", 0),
+        ("mht_max_hypotheses", 0),
+        ("calibrated_fp_min_training_positives", -1),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_pyrecest_calibrated_mht_integer_options(
+    tmp_path,
+    field: str,
+    value: int,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-calibrated-invalid-integer",
+                    "runner": "track2p-policy-pyrecest-calibrated-mht-cleanup",
+                    "data": "data",
+                    field: value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=field):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
 
 def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkeypatch):
@@ -803,6 +1586,50 @@ def test_benchmark_manifest_dispatches_configurable_loso_runner(tmp_path, monkey
     assert calls["options"]["sample_weight_strategy"] == "balanced"
     assert calls["options"]["calibration_model_kwargs"] == {"max_iter": 25}
     assert (tmp_path / "results" / "configurable-loso.csv").exists()
+
+
+def test_benchmark_manifest_configurable_loso_uses_config_calibration_defaults(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import track2p_configurable_loso_calibration
+    from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
+
+    calls = {}
+
+    class FakeResult:
+        def to_rows(self):
+            return []
+
+    def fake_configurable_loso(config, **kwargs):
+        calls["config"] = config
+        calls["kwargs"] = kwargs
+        return FakeResult()
+
+    monkeypatch.setattr(
+        track2p_configurable_loso_calibration,
+        "run_track2p_configurable_loso_calibration",
+        fake_configurable_loso,
+    )
+    config = Track2pBenchmarkConfig(
+        data=tmp_path,
+        method="global-assignment",
+        split="leave-one-subject-out",
+        cost="calibrated",
+        calibration_sample_weight_strategy="balanced",
+        calibration_hard_negative_ratio=7.5,
+        calibration_candidate_top_k_per_anchor=None,
+        calibration_include_column_candidates=False,
+        progress=False,
+    )
+
+    rows = bm._run_configurable_loso_rows(config, {})
+
+    hard_negative_options = calls["kwargs"]["hard_negative_options"]
+    assert rows == []
+    assert calls["kwargs"]["sample_weight_strategy"] == "balanced"
+    assert hard_negative_options.negative_to_positive_ratio == 7.5
+    assert hard_negative_options.candidate_top_k_per_anchor is None
+    assert not hard_negative_options.include_column_candidates
 
 
 def test_benchmark_manifest_dispatches_registration_qa_runner(tmp_path, monkeypatch):
