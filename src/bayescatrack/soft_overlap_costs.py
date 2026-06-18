@@ -135,7 +135,9 @@ def _install_cost_matrix_patch() -> None:
         kwargs["similarity_epsilon"] = similarity_epsilon
         kwargs["large_cost"] = large_cost
 
-        return_components = bool(kwargs.pop("return_components", False))
+        return_components = _strict_bool(
+            kwargs.pop("return_components", False), name="return_components"
+        )
         needs_soft_components = return_components and (
             soft_iou_radius > 0 or distance_transform_overlap_radius > 0
         )
@@ -414,6 +416,12 @@ def _finite_float(
     if not np.isfinite(numeric_value) or violates_bound:
         raise ValueError(f"{name} must be a finite {qualifier} value")
     return numeric_value
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
 
 
 __all__ = ["install_soft_overlap_costs", "registered_soft_iou_cost_kwargs"]

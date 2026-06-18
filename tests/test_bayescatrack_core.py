@@ -58,6 +58,49 @@ def test_mask_geometry_ignores_non_finite_and_negative_weights():
     )
 
 
+@pytest.mark.parametrize("weighted", ["false", 1, np.bool_(True)])
+def test_centroids_reject_invalid_weighted_flag(weighted):
+    plane = CalciumPlaneData(roi_masks=np.ones((1, 2, 2), dtype=bool))
+
+    with pytest.raises(ValueError, match="weighted"):
+        plane.centroids(weighted=weighted)
+
+
+@pytest.mark.parametrize("regularization", [True, np.nan, np.inf, -1.0])
+def test_position_covariances_reject_invalid_regularization(regularization):
+    plane = CalciumPlaneData(roi_masks=np.ones((1, 2, 2), dtype=bool))
+
+    with pytest.raises(ValueError, match="regularization"):
+        plane.position_covariances(regularization=regularization)
+
+
+@pytest.mark.parametrize("velocity_variance", [True, np.nan, np.inf, -1.0])
+def test_state_moments_reject_invalid_velocity_variance(velocity_variance):
+    plane = CalciumPlaneData(roi_masks=np.ones((1, 2, 2), dtype=bool))
+
+    with pytest.raises(ValueError, match="velocity_variance"):
+        plane.to_constant_velocity_state_moments(
+            velocity_variance=velocity_variance,
+        )
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"return_components": "true"},
+        {"soft_iou": 1},
+        {"centroid_scale": True},
+        {"max_centroid_distance": np.nan},
+    ],
+)
+def test_pairwise_cost_builder_rejects_invalid_core_controls(kwargs):
+    plane = CalciumPlaneData(roi_masks=np.ones((1, 2, 2), dtype=bool))
+    field_name = next(iter(kwargs))
+
+    with pytest.raises(ValueError, match=field_name):
+        plane.build_pairwise_cost_matrix(plane, **kwargs)
+
+
 def test_roi_feature_cost_scales_multi_dimensional_features_per_dimension():
     reference_masks = np.zeros((1, 5, 5), dtype=bool)
     reference_masks[0, 1:3, 1:3] = True

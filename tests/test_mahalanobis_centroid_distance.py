@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any, TypeAlias, cast
 
 import numpy as np
+import pytest
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     pairwise_feature_tensor,
@@ -134,3 +135,34 @@ def test_mahalanobis_weight_contributes_to_pairwise_cost() -> None:
 
 def test_default_association_features_include_mahalanobis_centroid_distance() -> None:
     assert "mahalanobis_centroid_distance" in DEFAULT_ASSOCIATION_FEATURES
+
+
+@pytest.mark.parametrize("regularization", [True, np.nan, np.inf, -1.0])
+def test_pairwise_mahalanobis_distances_reject_invalid_regularization(
+    regularization,
+) -> None:
+    plane = _plane_from_rectangles([(1, 1, 3, 3)])
+
+    with pytest.raises(ValueError, match="regularization"):
+        _mahalanobis_distances(plane, plane, regularization=regularization)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"mahalanobis_weight": True},
+        {"mahalanobis_weight": np.nan},
+        {"mahalanobis_weight": np.inf},
+        {"mahalanobis_weight": -1.0},
+        {"mahalanobis_regularization": True},
+        {"mahalanobis_regularization": np.nan},
+        {"mahalanobis_regularization": np.inf},
+        {"mahalanobis_regularization": -1.0},
+    ],
+)
+def test_mahalanobis_cost_builder_rejects_invalid_controls(kwargs) -> None:
+    plane = _plane_from_rectangles([(1, 1, 3, 3)])
+    field_name = next(iter(kwargs))
+
+    with pytest.raises(ValueError, match=field_name):
+        _build_pairwise_cost_matrix(plane, plane, **kwargs)

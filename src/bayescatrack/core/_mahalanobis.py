@@ -7,6 +7,8 @@ from typing import Any
 import numpy as np
 from bayescatrack._pyrecest_pairwise_features import pairwise_mahalanobis_distances
 
+from ._bridge_impl import _finite_nonnegative_float, _strict_bool
+
 _MAHALANOBIS_INSTALLED_ATTR = "_bayescatrack_mahalanobis_installed"
 
 
@@ -38,8 +40,9 @@ def install_mahalanobis_pairwise_features(calcium_plane_cls: type[Any]) -> None:
         ``sqrt((mu_i - mu_j)^T (Sigma_i + Sigma_j)^-1 (mu_i - mu_j))``.
         """
 
-        if regularization < 0.0:
-            raise ValueError("regularization must be non-negative")
+        regularization = _finite_nonnegative_float(
+            regularization, name="regularization"
+        )
         if self.n_rois == 0 or other.n_rois == 0:
             return np.zeros((self.n_rois, other.n_rois), dtype=float)
 
@@ -92,10 +95,13 @@ def install_mahalanobis_pairwise_features(calcium_plane_cls: type[Any]) -> None:
     ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
         """Build a ROI-aware association cost matrix with Mahalanobis features."""
 
-        if mahalanobis_regularization < 0.0:
-            raise ValueError("mahalanobis_regularization must be non-negative")
-        if mahalanobis_weight < 0.0:
-            raise ValueError("mahalanobis_weight must be non-negative")
+        mahalanobis_regularization = _finite_nonnegative_float(
+            mahalanobis_regularization, name="mahalanobis_regularization"
+        )
+        mahalanobis_weight = _finite_nonnegative_float(
+            mahalanobis_weight, name="mahalanobis_weight"
+        )
+        return_components = _strict_bool(return_components, name="return_components")
 
         base_cost, components = original_build_pairwise_cost_matrix(
             self,

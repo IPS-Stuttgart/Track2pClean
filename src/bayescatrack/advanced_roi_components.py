@@ -74,7 +74,9 @@ def install_advanced_roi_components() -> None:
         candidate_gate_margin: float | None = None,
         **kwargs: Any,
     ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
-        return_components = bool(kwargs.pop("return_components", False))
+        return_components = _strict_bool(
+            kwargs.pop("return_components", False), name="return_components"
+        )
         weights = {
             "radial_profile_weight": float(radial_profile_weight),
             "orientation_weight": float(orientation_weight),
@@ -228,6 +230,12 @@ def _pairwise_method_chain_has_patch(method: Any, marker: str) -> bool:
             return True
         current = getattr(current, "_bayescatrack_original", None)
     return False
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
 
 
 def pairwise_shape_descriptor_components(
