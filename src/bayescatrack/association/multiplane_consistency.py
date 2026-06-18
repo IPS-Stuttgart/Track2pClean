@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -17,10 +18,23 @@ class MultiPlaneConsistencyConfig:
     min_plane_count: int = 2
 
     def __post_init__(self) -> None:
-        if self.shared_shift_weight < 0.0 or self.shared_quality_weight < 0.0:
-            raise ValueError("weights must be non-negative")
-        if self.min_plane_count < 1:
-            raise ValueError("min_plane_count must be positive")
+        object.__setattr__(
+            self,
+            "shared_shift_weight",
+            _finite_nonnegative_float(self.shared_shift_weight, "shared_shift_weight"),
+        )
+        object.__setattr__(
+            self,
+            "shared_quality_weight",
+            _finite_nonnegative_float(
+                self.shared_quality_weight, "shared_quality_weight"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_plane_count",
+            _positive_int_value(self.min_plane_count, "min_plane_count"),
+        )
 
 
 @dataclass(frozen=True)
@@ -62,8 +76,9 @@ def apply_multiplane_quality_penalty(
 ) -> np.ndarray:
     """Add a shared penalty when registration quality is unreliable."""
 
+    penalty_weight = _finite_nonnegative_float(penalty_weight, "penalty_weight")
     reliability = shared_registration_reliability(qualities)
-    penalty = max(1.0 - reliability, 0.0) * float(penalty_weight)
+    penalty = max(1.0 - reliability, 0.0) * penalty_weight
     return np.asarray(cost_matrix, dtype=float) + penalty
 
 
@@ -160,3 +175,24 @@ def _safe_float(value: Any, default: float) -> float:
     except (TypeError, ValueError):
         return float(default)
     return numeric if np.isfinite(numeric) else float(default)
+
+
+def _positive_int_value(value: Any, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if integer_value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return int(integer_value)
+
+
+def _finite_nonnegative_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and non-negative")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric

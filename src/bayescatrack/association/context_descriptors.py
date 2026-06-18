@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,14 +19,24 @@ class ContextDescriptorConfig:
     histogram_bins: int = 8
 
     def __post_init__(self) -> None:
-        if self.patch_radius < 0:
-            raise ValueError("patch_radius must be non-negative")
-        if self.neighbor_k <= 0:
-            raise ValueError("neighbor_k must be positive")
-        if self.density_radius <= 0.0:
-            raise ValueError("density_radius must be positive")
-        if self.histogram_bins <= 1:
-            raise ValueError("histogram_bins must be greater than one")
+        object.__setattr__(
+            self,
+            "patch_radius",
+            _nonnegative_int_value(self.patch_radius, "patch_radius"),
+        )
+        object.__setattr__(
+            self, "neighbor_k", _positive_int_value(self.neighbor_k, "neighbor_k")
+        )
+        object.__setattr__(
+            self,
+            "density_radius",
+            _finite_positive_float(self.density_radius, "density_radius"),
+        )
+        object.__setattr__(
+            self,
+            "histogram_bins",
+            _minimum_int_value(self.histogram_bins, "histogram_bins", 2),
+        )
 
 
 def roi_context_descriptors(
@@ -118,10 +129,11 @@ def pairwise_context_components(
     density_radius = (
         config.density_radius
         if isinstance(config, ContextDescriptorConfig)
-        else float(
+        else _finite_positive_float(
             (config or {}).get(
                 "density_radius", ContextDescriptorConfig().density_radius
-            )
+            ),
+            "density_radius",
         )
     )
     reference_density = local_density_descriptor(
@@ -140,6 +152,7 @@ def pairwise_context_components(
 def local_density_features(centroids_xy: Any, *, radius: float) -> np.ndarray:
     """Return local ROI-density and nearest-neighbor summary features."""
 
+    radius = _finite_positive_float(radius, "radius")
     centroids = np.asarray(centroids_xy, dtype=float)
     n = centroids.shape[0]
     if n == 0:
@@ -159,9 +172,10 @@ def local_density_features(centroids_xy: Any, *, radius: float) -> np.ndarray:
 def neighbor_graph_signature(centroids_xy: Any, *, neighbor_k: int) -> np.ndarray:
     """Return sorted normalized neighbor-distance signatures per ROI."""
 
+    neighbor_k = _positive_int_value(neighbor_k, "neighbor_k")
     centroids = np.asarray(centroids_xy, dtype=float)
     n = centroids.shape[0]
-    signature = np.zeros((n, int(neighbor_k)), dtype=float)
+    signature = np.zeros((n, neighbor_k), dtype=float)
     if n <= 1:
         return signature
     distances = _pairwise_distances(centroids)
@@ -186,6 +200,7 @@ def fov_patch_moments(
 ) -> np.ndarray:
     """Return mean and standard-deviation moments for local FOV patches."""
 
+    patch_radius = _nonnegative_int_value(patch_radius, "patch_radius")
     img = np.asarray(image, dtype=float)
     centroids = np.asarray(centroids_xy, dtype=float)
     moments = np.zeros((centroids.shape[0], 2), dtype=float)
@@ -209,6 +224,8 @@ def fov_patch_moment_descriptors(
 ) -> np.ndarray:
     """Return local FOV patch moments and histogram descriptors."""
 
+    patch_radius = _nonnegative_int_value(patch_radius, "patch_radius")
+    histogram_bins = _minimum_int_value(histogram_bins, "histogram_bins", 2)
     img = np.asarray(image, dtype=float)
     centroids = np.asarray(centroids_xy, dtype=float)
     n = centroids.shape[0]
@@ -261,6 +278,7 @@ def _pairwise_distances(points_xy: np.ndarray) -> np.ndarray:
 def _crop_patch(
     image: np.ndarray, x_coord: float, y_coord: float, *, radius: int
 ) -> np.ndarray:
+    radius = _nonnegative_int_value(radius, "radius")
     height, width = image.shape
     x = int(round(float(x_coord)))
     y = int(round(float(y_coord)))
@@ -271,3 +289,43 @@ def _crop_patch(
     if y0 >= y1 or x0 >= x1:
         return np.zeros((0, 0), dtype=float)
     return np.asarray(image[y0:y1, x0:x1], dtype=float)
+
+
+def _positive_int_value(value: Any, name: str) -> int:
+    integer_value = _integer_value(value, name)
+    if integer_value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return integer_value
+
+
+def _nonnegative_int_value(value: Any, name: str) -> int:
+    integer_value = _integer_value(value, name)
+    if integer_value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return integer_value
+
+
+def _minimum_int_value(value: Any, name: str, minimum: int) -> int:
+    integer_value = _integer_value(value, name)
+    if integer_value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return integer_value
+
+
+def _integer_value(value: Any, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    return int(integer_value)
+
+
+def _finite_positive_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and positive")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric <= 0.0:
+        raise ValueError(f"{name} must be finite and positive")
+    return numeric
