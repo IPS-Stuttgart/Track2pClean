@@ -153,9 +153,48 @@ def test_consensus_split_config_rejects_invalid_votes() -> None:
         ConsensusSplitConfig(required_support_votes=0)
 
 
+@pytest.mark.parametrize(
+    "required_support_votes",
+    [True, False, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_consensus_split_config_rejects_non_integer_votes(
+    required_support_votes: object,
+) -> None:
+    with pytest.raises(ValueError, match="required_support_votes"):
+        ConsensusSplitConfig(
+            required_support_votes=required_support_votes  # type: ignore[arg-type]
+        )
+
+
 def test_consensus_split_config_rejects_invalid_max_splits() -> None:
     with pytest.raises(ValueError, match="max_splits_per_component"):
         ConsensusSplitConfig(max_splits_per_component=0)
+
+
+@pytest.mark.parametrize(
+    "max_splits_per_component",
+    [True, False, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_consensus_split_config_rejects_non_integer_max_splits(
+    max_splits_per_component: object,
+) -> None:
+    with pytest.raises(ValueError, match="max_splits_per_component"):
+        ConsensusSplitConfig(
+            max_splits_per_component=max_splits_per_component  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize(
+    "max_splits_per_component",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_consensus_cleanup_config_rejects_invalid_max_splits(
+    max_splits_per_component: object,
+) -> None:
+    with pytest.raises(ValueError, match="max_splits_per_component"):
+        ConsensusCleanupConfig(
+            max_splits_per_component=max_splits_per_component  # type: ignore[arg-type]
+        )
 
 
 def test_consensus_split_config_rejects_invalid_mode() -> None:
