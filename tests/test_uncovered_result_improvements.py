@@ -7,8 +7,11 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 from bayescatrack.association.context_descriptors import (
+    ContextDescriptorConfig,
+    fov_patch_moment_descriptors,
     fov_patch_moments,
     local_density_descriptor,
+    neighbor_graph_signature,
     pairwise_context_components,
 )
 from bayescatrack.association.growth_priors import (
@@ -147,6 +150,75 @@ def test_context_descriptors_return_pairwise_planes_and_patch_moments() -> None:
     assert components["local_density_cost"].shape == (3, 2)
     assert moments.shape == (1, 2)
     assert np.isclose(moments[0, 0], 12.0)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("patch_radius", True),
+        ("patch_radius", 1.5),
+        ("patch_radius", -1),
+        ("neighbor_k", False),
+        ("neighbor_k", 1.5),
+        ("neighbor_k", 0),
+        ("density_radius", True),
+        ("density_radius", float("nan")),
+        ("density_radius", float("inf")),
+        ("density_radius", 0.0),
+        ("histogram_bins", False),
+        ("histogram_bins", 1.5),
+        ("histogram_bins", 1),
+    ],
+)
+def test_context_descriptor_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        ContextDescriptorConfig(**{field: value})
+
+
+@pytest.mark.parametrize("radius", [True, float("nan"), float("inf"), 0.0])
+def test_local_density_descriptor_rejects_invalid_radius(
+    radius: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="radius"):
+        local_density_descriptor([[0.0, 0.0]], radius=radius)
+
+
+@pytest.mark.parametrize("density_radius", [True, float("nan"), float("inf"), 0.0])
+def test_pairwise_context_components_rejects_invalid_mapping_radius(
+    density_radius: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="density_radius"):
+        pairwise_context_components(
+            [[0.0, 0.0]], [[1.0, 1.0]], config={"density_radius": density_radius}
+        )
+
+
+@pytest.mark.parametrize("neighbor_k", [True, 1.5, 0])
+def test_neighbor_graph_signature_rejects_invalid_neighbor_k(
+    neighbor_k: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="neighbor_k"):
+        neighbor_graph_signature([[0.0, 0.0]], neighbor_k=neighbor_k)
+
+
+@pytest.mark.parametrize("patch_radius", [True, 1.5, -1])
+def test_fov_patch_moments_rejects_invalid_patch_radius(
+    patch_radius: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="patch_radius"):
+        fov_patch_moments([[1.0]], [[0.0, 0.0]], patch_radius=patch_radius)
+
+
+@pytest.mark.parametrize("histogram_bins", [True, 1.5, 1])
+def test_fov_patch_moment_descriptors_rejects_invalid_histogram_bins(
+    histogram_bins: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="histogram_bins"):
+        fov_patch_moment_descriptors(
+            [[1.0]], [[0.0, 0.0]], patch_radius=0, histogram_bins=histogram_bins
+        )
 
 
 def test_multi_hypothesis_candidates_and_consensus() -> None:
