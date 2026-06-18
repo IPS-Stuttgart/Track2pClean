@@ -14,6 +14,28 @@ def test_dynamic_edge_prior_rejects_nonfinite_edge_quality_bias():
             DynamicEdgePriorConfig(edge_quality_bias=invalid_bias)
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "session_gap_weight",
+        "cell_probability_weight",
+        "area_ratio_weight",
+        "activity_missing_weight",
+        "registration_empty_roi_weight",
+        "reciprocal_rank_weight",
+        "reciprocal_rank_cap",
+        "local_margin_weight",
+        "local_margin_target",
+        "local_margin_cap",
+        "edge_quality_bias",
+        "large_cost",
+    ],
+)
+def test_dynamic_edge_prior_rejects_boolean_numeric_controls(field: str) -> None:
+    with pytest.raises(ValueError, match=field):
+        DynamicEdgePriorConfig(**{field: True})
+
+
 def test_dynamic_edge_prior_allows_finite_negative_edge_quality_bias():
     costs = np.asarray([[3.0, 4.0]], dtype=float)
 
