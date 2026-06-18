@@ -165,6 +165,50 @@ def test_growth_veto_cleanup_parser_accepts_coherence_suffix_base() -> None:
     assert args.growth_veto_base == "coherence-suffix"
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("min_anchor_count", -1),
+        ("min_complete_component_size", -1),
+        ("max_row_rank", 0),
+        ("max_column_rank", 0),
+        ("max_vetoes_per_subject", 0),
+    ],
+)
+def test_growth_veto_gate_rejects_invalid_integer_controls(
+    field: str, value: int
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        cleanup.GrowthVetoGate(**{field: value})
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--min-veto-anchor-count", "-1"),
+        ("--min-veto-complete-component-size", "-1"),
+        ("--max-veto-row-rank", "0"),
+        ("--max-veto-column-rank", "0"),
+        ("--max-vetoes-per-subject", "0"),
+    ],
+)
+def test_growth_veto_cleanup_parser_rejects_invalid_integer_controls(
+    option: str,
+    value: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        cleanup.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "growth_veto_cleanup.csv",
+                option,
+                value,
+            ]
+        )
+
+
 def test_coherence_suffix_growth_veto_wrapper_honors_equals_coherence_override() -> None:
     args = suffix_cleanup._with_coherence_suffix_default(
         ["--growth-veto-base=coherence-suffix"]

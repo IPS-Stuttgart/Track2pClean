@@ -47,6 +47,7 @@ from bayescatrack.experiments.track2p_loso_calibration import (
     LosoCalibrationFold,
     LosoCalibrationResult,
     SubjectCalibrationData,
+    _candidate_hard_negative_options_from_config,
     _config_with_pairwise_kwargs_for_features,
     _load_subject_calibration_data,
     _reference_training_options,
@@ -103,7 +104,7 @@ def run_track2p_configurable_loso_calibration(
     *,
     feature_names: Sequence[str] | None = None,
     sample_weight: Any | None = None,
-    sample_weight_strategy: SampleWeightStrategy = "none",
+    sample_weight_strategy: SampleWeightStrategy | None = None,
     model_kind: CalibrationModelKind = "logistic",
     model_kwargs: Mapping[str, Any] | None = None,
     hard_negative_options: CandidateHardNegativeOptions | None = None,
@@ -115,12 +116,20 @@ def run_track2p_configurable_loso_calibration(
             "LOSO calibration requires method='global-assignment' and cost='calibrated'"
         )
     feature_names = _resolved_feature_names(config, feature_names)
-    config = _config_with_pairwise_kwargs_for_features(config, feature_names)
-    subjects = _load_subjects(config)
-    sample_weight_strategy = _validate_sample_weight_strategy(sample_weight_strategy)
+    sample_weight_strategy = _validate_sample_weight_strategy(
+        str(
+            sample_weight_strategy
+            if sample_weight_strategy is not None
+            else getattr(config, "calibration_sample_weight_strategy", "none")
+        )
+    )
     model_kind = _validate_calibration_model_kind(model_kind)
     model_kwargs = _model_kwargs(model_kind, model_kwargs)
-    hard_negative_options = hard_negative_options or CandidateHardNegativeOptions()
+    hard_negative_options = (
+        hard_negative_options or _candidate_hard_negative_options_from_config(config)
+    )
+    config = _config_with_pairwise_kwargs_for_features(config, feature_names)
+    subjects = _load_subjects(config)
     progress = ProgressReporter(
         len(subjects) * (len(subjects) + 2),
         enabled=config.progress,
@@ -603,6 +612,10 @@ def _config_from_args(args: argparse.Namespace) -> Track2pBenchmarkConfig:
             args.track_refinement_json,
             "--track-refinement-json",
         ),
+        activity_tie_breaker_weight=args.activity_tie_breaker_weight,
+        activity_tie_breaker_component=args.activity_tie_breaker_component,
+        activity_trace_source=args.activity_trace_source,
+        activity_event_threshold=args.activity_event_threshold,
         calibration_feature_set=args.calibration_feature_set,
         progress=args.progress,
     )
