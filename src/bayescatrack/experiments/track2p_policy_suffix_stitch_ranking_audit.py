@@ -211,13 +211,9 @@ def run_track2p_policy_suffix_stitch_ranking_audit(
 ) -> SuffixStitchRankingAuditResult:
     """Rank short suffix-stitch candidates after ComponentCleanup."""
 
-    max_suffix_length = _positive_int_value(
-        max_suffix_length, name="max_suffix_length"
-    )
+    max_suffix_length = _positive_int_value(max_suffix_length, name="max_suffix_length")
     edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
-    path_beam_width = _positive_int_value(
-        path_beam_width, name="path_beam_width"
-    )
+    path_beam_width = _positive_int_value(path_beam_width, name="path_beam_width")
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -337,13 +333,9 @@ def _ranked_suffix_paths(
     path_beam_width: int,
 ) -> tuple[_PathCandidate, ...]:
     del subject
-    max_suffix_length = _positive_int_value(
-        max_suffix_length, name="max_suffix_length"
-    )
+    max_suffix_length = _positive_int_value(max_suffix_length, name="max_suffix_length")
     edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
-    path_beam_width = _positive_int_value(
-        path_beam_width, name="path_beam_width"
-    )
+    path_beam_width = _positive_int_value(path_beam_width, name="path_beam_width")
     paths_by_component: dict[int, list[_PathCandidate]] = defaultdict(list)
     for component_id, row in enumerate(predicted):
         span = _suffix_fragment_span(row)
@@ -394,9 +386,7 @@ def _expand_paths_for_fragment(
 ) -> list[_PathCandidate]:
     max_steps = _positive_int_value(max_steps, name="max_steps")
     edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
-    path_beam_width = _positive_int_value(
-        path_beam_width, name="path_beam_width"
-    )
+    path_beam_width = _positive_int_value(path_beam_width, name="path_beam_width")
     active: list[tuple[int, int, tuple[_EdgeCandidate, ...]]] = [
         (int(tail_session), int(row[int(tail_session)]), ())
     ]

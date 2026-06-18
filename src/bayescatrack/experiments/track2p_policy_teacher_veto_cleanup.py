@@ -109,9 +109,7 @@ class TeacherVetoConfig:
             self.min_fragment_observations, name="min_fragment_observations"
         )
         if self.max_applied_vetoes is not None:
-            _nonnegative_int_value(
-                self.max_applied_vetoes, name="max_applied_vetoes"
-            )
+            _nonnegative_int_value(self.max_applied_vetoes, name="max_applied_vetoes")
 
 
 @dataclass(frozen=True)

@@ -103,7 +103,7 @@ def test_native_manifest_forwards_action_specific_teacher_edit_caps(
     ],
 )
 def test_native_manifest_rejects_invalid_teacher_edit_budget_options(
-    options: dict[str, int]
+    options: dict[str, int],
 ) -> None:
     with pytest.raises(ValueError):
         benchmark_manifest._run_track2p_policy_teacher_adjacent_rescue_rows(
@@ -159,7 +159,7 @@ def test_legacy_manifest_integration_forwards_action_specific_teacher_feature_pr
     ],
 )
 def test_legacy_manifest_rejects_invalid_teacher_edit_budget_options(
-    options: dict[str, int]
+    options: dict[str, int],
 ) -> None:
     with pytest.raises(ValueError):
         legacy._run_track2p_policy_teacher_adjacent_rows(_minimal_config(), options)

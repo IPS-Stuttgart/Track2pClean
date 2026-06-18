@@ -40,15 +40,16 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from bayescatrack.evaluation.complete_track_scores import score_track_matrices
-from bayescatrack.experiments import track2p_policy_growth_veto_whatif as veto
-from bayescatrack.experiments import (
-    track2p_policy_pyrecest_residual_mht_cleanup as residual_mht,
-)
 from pyrecest.tracking import (
     ResidualEditCandidate,
     ResidualMHTConfig,
     select_residual_hypothesis,
+)
+
+from bayescatrack.evaluation.complete_track_scores import score_track_matrices
+from bayescatrack.experiments import track2p_policy_growth_veto_whatif as veto
+from bayescatrack.experiments import (
+    track2p_policy_pyrecest_residual_mht_cleanup as residual_mht,
 )
 
 METHOD = "track2p-policy-pyrecest-mht-conflict-demo"
@@ -283,11 +284,7 @@ def mht_select(
     ]
     chosen = select_residual_hypothesis(pyrecest_candidates, config=config)
     chosen_ids = set(chosen.candidate_ids)
-    return [
-        row
-        for row in candidates
-        if residual_mht._candidate_id(row) in chosen_ids
-    ]
+    return [row for row in candidates if residual_mht._candidate_id(row) in chosen_ids]
 
 
 def apply_removals(
@@ -333,9 +330,7 @@ def _arm_result(
     return ArmResult(
         arm=arm,
         description=description,
-        removed_candidate_ids=tuple(
-            residual_mht._candidate_id(row) for row in removed
-        ),
+        removed_candidate_ids=tuple(residual_mht._candidate_id(row) for row in removed),
         n_edits=len(removed),
         conflict_free=is_conflict_free(removed),
         pairwise_f1=float(scores["pairwise_f1"]),

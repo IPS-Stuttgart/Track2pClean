@@ -105,9 +105,7 @@ def _integer_value(value: Any, *, name: str) -> int:
     raise ValueError(f"{name} must be an integer")
 
 
-def _positive_int_option(
-    options: Mapping[str, Any], name: str, *, default: int
-) -> int:
+def _positive_int_option(options: Mapping[str, Any], name: str, *, default: int) -> int:
     value = _integer_value(options.get(name, default), name=name)
     if value <= 0:
         raise ValueError(f"{name} must be positive")

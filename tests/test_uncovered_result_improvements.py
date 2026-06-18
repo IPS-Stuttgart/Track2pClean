@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 from bayescatrack.association.context_descriptors import (
     fov_patch_moments,
     local_density_descriptor,
@@ -20,7 +21,9 @@ from bayescatrack.association.joint_registration_assignment import (
     high_confidence_anchor_pairs,
 )
 from bayescatrack.association.multi_hypothesis import (
+    HypothesisConfig,
     consensus_edges,
+    edge_union_costs,
     top_k_edge_candidates,
 )
 from bayescatrack.association.multiplane_consistency import (
@@ -28,7 +31,10 @@ from bayescatrack.association.multiplane_consistency import (
     apply_multiplane_quality_penalty,
     shared_registration_reliability,
 )
-from bayescatrack.association.segmentation_events import detect_segmentation_events
+from bayescatrack.association.segmentation_events import (
+    SegmentationEventConfig,
+    detect_segmentation_events,
+)
 from bayescatrack.association.session_adaptive_calibration import (
     SessionAdaptiveCalibrationConfig,
     apply_session_context_offset,
@@ -62,6 +68,48 @@ def test_segmentation_events_detect_split_and_merge() -> None:
         for event in events
         if event.event_type == "split"
     )
+
+
+@pytest.mark.parametrize(
+    ("factory", "message"),
+    [
+        (
+            lambda: SegmentationEventConfig(max_area_ratio_cost=np.nan),
+            "max_area_ratio_cost must be finite",
+        ),
+        (
+            lambda: SegmentationEventConfig(min_children=1),
+            "min_children must be at least two",
+        ),
+        (
+            lambda: SegmentationEventConfig(min_children=2.5),
+            "min_children must be a positive integer",
+        ),
+        (
+            lambda: SegmentationEventConfig(max_children=1),
+            "max_children must be >= min_children",
+        ),
+        (
+            lambda: detect_segmentation_events(
+                {"weighted_dice_similarity": np.ones((2, 2))},
+                config={"min_similarity": np.nan},
+            ),
+            "min_similarity must be finite",
+        ),
+        (
+            lambda: detect_segmentation_events(
+                {"weighted_dice_similarity": np.ones((2, 2))},
+                config={"min_children": 1.5},
+            ),
+            "min_children must be a positive integer",
+        ),
+    ],
+)
+def test_segmentation_events_reject_silent_candidate_knob_coercions(
+    factory, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        factory()
 
 
 def test_context_descriptors_return_pairwise_planes_and_patch_moments() -> None:
@@ -103,6 +151,46 @@ def test_multi_hypothesis_edge_set_consensus_respects_min_votes() -> None:
     consensus = consensus_edges((candidates_a, candidates_b), min_votes=2)
 
     assert consensus == {(0, 1, 0, 1): 2}
+
+
+@pytest.mark.parametrize(
+    ("factory", "message"),
+    [
+        (
+            lambda: HypothesisConfig(edge_top_k=1.5),
+            "edge_top_k must be a positive integer",
+        ),
+        (
+            lambda: HypothesisConfig(max_edge_cost=np.nan),
+            "max_edge_cost must be finite",
+        ),
+        (
+            lambda: top_k_edge_candidates([[1.0]], edge=(0, 1), row_top_k=True),
+            "row_top_k must be finite",
+        ),
+        (
+            lambda: top_k_edge_candidates([[1.0]], edge=(0, 1), max_cost=np.nan),
+            "max_cost must be finite",
+        ),
+        (
+            lambda: consensus_edges((((0, 1, 0, 1),),), min_votes=0),
+            "min_votes must be a positive integer",
+        ),
+        (
+            lambda: consensus_edges((((0, 1, 0, 1),),), min_support_fraction=0.0),
+            "min_support_fraction must be a finite value in \\(0, 1\\]",
+        ),
+        (
+            lambda: edge_union_costs(({(0, 1, 0, 1): 0},)),
+            "vote_count must be a positive integer",
+        ),
+    ],
+)
+def test_multi_hypothesis_rejects_silent_candidate_knob_coercions(
+    factory, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        factory()
 
 
 def test_joint_registration_anchor_selection_uses_probability_and_margin() -> None:

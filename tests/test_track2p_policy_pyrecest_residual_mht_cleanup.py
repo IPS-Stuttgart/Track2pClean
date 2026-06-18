@@ -11,7 +11,6 @@ import pytest
 
 from bayescatrack.experiments import track2p_policy_growth_veto_cleanup as cleanup
 
-
 FORBIDDEN_AUDIT_COLUMNS = frozenset(
     {
         "edge_status_against_gt",
@@ -294,15 +293,19 @@ def test_high_overlap_pocket_does_not_read_audit_only_columns(
         require_complete_component=True,
     )
 
-    candidates = residual_mht_module._candidate_rows(  # pylint: disable=protected-access
-        [row],
-        gate=gate,
-        options=options,
-        n_sessions=7,
+    candidates = (
+        residual_mht_module._candidate_rows(  # pylint: disable=protected-access
+            [row],
+            gate=gate,
+            options=options,
+            n_sessions=7,
+        )
     )
-    pyrecest_candidate = residual_mht_module._to_pyrecest_candidate(  # pylint: disable=protected-access
-        candidates[0],
-        options=options,
+    pyrecest_candidate = (
+        residual_mht_module._to_pyrecest_candidate(  # pylint: disable=protected-access
+            candidates[0],
+            options=options,
+        )
     )
 
     assert len(candidates) == 1
@@ -366,11 +369,13 @@ def test_high_overlap_selection_matches_sanitized_rows(residual_mht_module) -> N
         options=options,
         n_sessions=7,
     )
-    sanitized_selected = residual_mht_module._candidate_rows(  # pylint: disable=protected-access
-        sanitized_rows,
-        gate=gate,
-        options=options,
-        n_sessions=7,
+    sanitized_selected = (
+        residual_mht_module._candidate_rows(  # pylint: disable=protected-access
+            sanitized_rows,
+            gate=gate,
+            options=options,
+            n_sessions=7,
+        )
     )
 
     assert [row["pyrecest_candidate_id"] for row in selected] == [
@@ -392,7 +397,9 @@ def _split_candidate(module, **overrides: object) -> dict[str, object]:
     """Build a growth-veto split candidate row with a PyRecEst candidate id."""
 
     row = _candidate_row(**overrides)
-    row["pyrecest_candidate_id"] = module._candidate_id(row)  # pylint: disable=protected-access
+    row["pyrecest_candidate_id"] = module._candidate_id(
+        row
+    )  # pylint: disable=protected-access
     return row
 
 
@@ -466,13 +473,21 @@ def test_global_rescore_prefers_less_fragmenting_hypothesis(
     # The additive ranking that PyRecEst would use prefers the two-edit set,
     # because it sums the high-residual middle edit and the terminal edit.
     additive_score = {
-        terminal_id: residual_mht_module._candidate_score(terminal, options=options)  # pylint: disable=protected-access
+        terminal_id: residual_mht_module._candidate_score(
+            terminal, options=options
+        )  # pylint: disable=protected-access
         - options.edit_penalty,
-        middle_id: residual_mht_module._candidate_score(middle, options=options)  # pylint: disable=protected-access
+        middle_id: residual_mht_module._candidate_score(
+            middle, options=options
+        )  # pylint: disable=protected-access
         - options.edit_penalty,
         f"{terminal_id};{middle_id}": (
-            residual_mht_module._candidate_score(terminal, options=options)  # pylint: disable=protected-access
-            + residual_mht_module._candidate_score(middle, options=options)  # pylint: disable=protected-access
+            residual_mht_module._candidate_score(
+                terminal, options=options
+            )  # pylint: disable=protected-access
+            + residual_mht_module._candidate_score(
+                middle, options=options
+            )  # pylint: disable=protected-access
             - 2 * options.edit_penalty
         ),
     }
@@ -714,7 +729,9 @@ def test_pyrecest_mht_summary_reports_applied_edge_labels(
 
     summary = {
         row["subject"]: row
-        for row in residual_mht_module._summary_rows(rows)  # pylint: disable=protected-access
+        for row in residual_mht_module._summary_rows(
+            rows
+        )  # pylint: disable=protected-access
     }
 
     assert summary["jm038"]["selected_true_positive_edges"] == 1
@@ -951,10 +968,8 @@ def test_calibrated_heldout_scoring_does_not_read_audit_only_columns(
         calibrator=calibrator,
         threshold=0.5,
     )
-    pyrecest_candidate = (
-        calibrated_mht_module._to_calibrated_pyrecest_candidate(  # pylint: disable=protected-access
-            candidates[0],
-        )
+    pyrecest_candidate = calibrated_mht_module._to_calibrated_pyrecest_candidate(  # pylint: disable=protected-access
+        candidates[0],
     )
 
     assert len(candidates) == 1

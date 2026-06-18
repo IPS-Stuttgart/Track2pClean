@@ -40,7 +40,12 @@ def test_growth_veto_parser_exposes_defaults() -> None:
 
 @pytest.mark.parametrize(
     "option",
-    ["--suffix-path-length", "--max-stitches-per-subject", "--edge-top-k", "--path-beam-width"],
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
 )
 def test_growth_veto_parser_rejects_nonpositive_search_budgets(option: str) -> None:
     with pytest.raises(SystemExit):

@@ -233,13 +233,13 @@ TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_STRUCTURAL_FIELDS = (
 TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_FIELDS = (
     TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_STRUCTURAL_FIELDS
     | {
-    "mht_max_edits_per_subject",
-    "mht_max_hypotheses",
-    "mht_edit_penalty",
-    "mht_score_threshold",
-    "calibrated_fp_logistic_c",
-    "calibrated_fp_min_training_positives",
-}
+        "mht_max_edits_per_subject",
+        "mht_max_hypotheses",
+        "mht_edit_penalty",
+        "mht_score_threshold",
+        "calibrated_fp_logistic_c",
+        "calibrated_fp_min_training_positives",
+    }
 )
 TRACK2P_POLICY_TEACHER_ADJACENT_RESCUE_FIELDS = TRACK2P_POLICY_COMPONENT_FIELDS | {
     "allow_completing_rescue",
@@ -1029,8 +1029,7 @@ def _configurable_loso_runner_kwargs(run_data: ManifestObject) -> dict[str, Any]
         if scalar_fields:
             raise ValueError(
                 "Use either 'hard_negative_options' or scalar hard-negative fields, "
-                "not both: "
-                + ", ".join(scalar_fields)
+                "not both: " + ", ".join(scalar_fields)
             )
         from bayescatrack.experiments.calibration_hard_negatives import (
             CandidateHardNegativeOptions,
@@ -1067,8 +1066,7 @@ def _monotone_loso_runner_kwargs(run_data: ManifestObject) -> dict[str, Any]:
         if alias_fields:
             raise ValueError(
                 "Use either 'monotone_options' or monotone-ranker kwargs fields, "
-                "not both: "
-                + ", ".join(alias_fields)
+                "not both: " + ", ".join(alias_fields)
             )
         from bayescatrack.association.monotone_ranker import MonotoneRankerOptions
 

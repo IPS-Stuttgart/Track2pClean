@@ -17,6 +17,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
 import numpy as np
+
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import (
     track2p_policy_coherence_suffix_stitch_whatif as suffix,
@@ -85,9 +86,7 @@ class CalibratedResidualMHTOptions:
     def __post_init__(self) -> None:
         residual_mht._set_positive_int_field(self, "max_edits_per_subject")
         residual_mht._set_positive_int_field(self, "max_hypotheses")
-        residual_mht._set_nonnegative_int_field(
-            self, "min_training_positive_examples"
-        )
+        residual_mht._set_nonnegative_int_field(self, "min_training_positive_examples")
 
 
 @dataclass(frozen=True)
@@ -277,9 +276,7 @@ def run_track2p_policy_pyrecest_calibrated_mht_cleanup(
                     sum(_false_positive_label(row) for row in training_structural_rows)
                 ),
                 "track2p_pyrecest_calibrated_mht_threshold": float(threshold),
-                "track2p_pyrecest_calibrated_mht_candidates": int(
-                    len(candidate_rows)
-                ),
+                "track2p_pyrecest_calibrated_mht_candidates": int(len(candidate_rows)),
                 "track2p_pyrecest_calibrated_mht_hypotheses": int(len(hypotheses)),
                 "track2p_pyrecest_calibrated_mht_selected": int(len(selected_rows)),
                 "track2p_pyrecest_calibrated_mht_applied": int(len(applied_keys)),
@@ -400,9 +397,7 @@ def _structural_candidate_gate_reason(
         return "growth_anchor_count_below_gate"
 
     row_rank = int(residual_mht._finite_float(row.get("row_rank"), float("inf")))
-    column_rank = int(
-        residual_mht._finite_float(row.get("column_rank"), float("inf"))
-    )
+    column_rank = int(residual_mht._finite_float(row.get("column_rank"), float("inf")))
     if row_rank <= 0 or row_rank > int(gate.max_row_rank):
         return "row_rank_above_gate"
     if column_rank <= 0 or column_rank > int(gate.max_column_rank):
@@ -507,7 +502,9 @@ def _fit_false_positive_calibrator(
             "Calibrated residual MHT requires scikit-learn for logistic calibration."
         ) from exc
 
-    features = np.asarray([_calibrated_feature_vector(row) for row in rows], dtype=float)
+    features = np.asarray(
+        [_calibrated_feature_vector(row) for row in rows], dtype=float
+    )
     mean = np.mean(features, axis=0)
     scale = np.std(features, axis=0)
     scale = np.where(scale > 0.0, scale, 1.0)
@@ -547,7 +544,8 @@ def _select_training_probability_threshold(
     best_threshold = 1.0
     for threshold in sorted({float(value) for value in probabilities}, reverse=True):
         selected = [
-            row for row, probability in zip(rows, probabilities, strict=True)
+            row
+            for row, probability in zip(rows, probabilities, strict=True)
             if float(probability) >= threshold
         ]
         if _selected_has_training_tp_loss(selected):
@@ -714,7 +712,9 @@ def _diagnostic_rows(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = cleanup.build_arg_parser()
-    parser.prog = "bayescatrack benchmark track2p-policy-pyrecest-calibrated-mht-cleanup"
+    parser.prog = (
+        "bayescatrack benchmark track2p-policy-pyrecest-calibrated-mht-cleanup"
+    )
     parser.description = (
         "Run LOSO-calibrated PyRecEst residual MHT over structurally valid "
         "CoherenceSuffixStitch edit candidates."
@@ -756,8 +756,7 @@ def _reject_unsupported_calibrated_options(
         parser.error(
             "track2p-policy-pyrecest-calibrated-mht-cleanup does not apply "
             "growth-residual, overlap, shifted-IoU, or deterministic veto-count "
-            "gates; use MHT/calibration options instead of "
-            + ", ".join(unsupported)
+            "gates; use MHT/calibration options instead of " + ", ".join(unsupported)
         )
 
 

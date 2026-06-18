@@ -27,7 +27,12 @@ def test_teacher_free_adjacent_rescue_audit_cli_aliases() -> None:
 
 @pytest.mark.parametrize(
     "option",
-    ["--suffix-path-length", "--max-stitches-per-subject", "--edge-top-k", "--path-beam-width"],
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
 )
 def test_teacher_free_adjacent_rescue_parser_rejects_nonpositive_search_budgets(
     option: str,

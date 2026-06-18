@@ -915,16 +915,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=suffix._positive_int_arg,
         default=1,
     )
-    parser.add_argument(
-        "--growth-veto-base",
-        choices=("teacher-rescue", "coherence-suffix"),
-        default="teacher-rescue",
-        help=(
-            "Prediction matrix to audit and split. The default preserves the "
-            "teacher-assisted top row; coherence-suffix tests growth veto after "
-            "CoherenceSuffixStitch without applying teacher-adjacent rescue."
-        ),
-    )
     return parser
 
 

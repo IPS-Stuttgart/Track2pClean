@@ -43,7 +43,12 @@ def test_growth_field_residual_audit_parser_exposes_anchor_defaults() -> None:
 
 @pytest.mark.parametrize(
     "option",
-    ["--suffix-path-length", "--max-stitches-per-subject", "--edge-top-k", "--path-beam-width"],
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
 )
 def test_growth_field_residual_audit_parser_rejects_nonpositive_search_budgets(
     option: str,

@@ -485,9 +485,7 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-component-pyrecest-safe-frontier-mht-cleanup": (
         "track2p-policy-pyrecest-safe-frontier-mht-cleanup"
     ),
-    "track2p-pyrecest-mht-conflict-demo": (
-        "track2p-policy-pyrecest-mht-conflict-demo"
-    ),
+    "track2p-pyrecest-mht-conflict-demo": ("track2p-policy-pyrecest-mht-conflict-demo"),
     "track2p-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"
     ),

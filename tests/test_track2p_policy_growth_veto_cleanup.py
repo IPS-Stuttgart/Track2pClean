@@ -209,7 +209,9 @@ def test_growth_veto_cleanup_parser_rejects_invalid_integer_controls(
         )
 
 
-def test_coherence_suffix_growth_veto_wrapper_honors_equals_coherence_override() -> None:
+def test_coherence_suffix_growth_veto_wrapper_honors_equals_coherence_override() -> (
+    None
+):
     args = suffix_cleanup._with_coherence_suffix_default(
         ["--growth-veto-base=coherence-suffix"]
     )
@@ -616,15 +618,17 @@ def test_growth_veto_application_rechecks_complete_component_after_prior_edit() 
         is_last_session_edge=0,
     )
 
-    edited, applied = cleanup._apply_growth_veto_rows(  # pylint: disable=protected-access
-        tracks,
-        [terminal, middle],
-        gate=cleanup.GrowthVetoGate(
-            require_terminal_edge=False,
-            require_last_session_edge=False,
-            require_complete_component=True,
-            max_vetoes_per_subject=2,
-        ),
+    edited, applied = (
+        cleanup._apply_growth_veto_rows(  # pylint: disable=protected-access
+            tracks,
+            [terminal, middle],
+            gate=cleanup.GrowthVetoGate(
+                require_terminal_edge=False,
+                require_last_session_edge=False,
+                require_complete_component=True,
+                max_vetoes_per_subject=2,
+            ),
+        )
     )
 
     assert applied == ((2, 3, 12, 13, 0),)

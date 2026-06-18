@@ -19,6 +19,11 @@ from typing import Any
 import numpy as np
 from bayescatrack.core.bridge import Track2pSession
 
+from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
+from ._numeric_validation import finite_positive_float as _finite_positive_float
+from ._numeric_validation import positive_integer as _positive_integer
+from ._numeric_validation import validated_numeric_float as _validated_numeric_float
+
 SessionEdge = tuple[int, int]
 
 
@@ -51,18 +56,40 @@ class TeacherEdgePriorConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if self.relief < 0.0 or not np.isfinite(self.relief):
-            raise ValueError("relief must be a finite non-negative value")
-        if self.non_teacher_penalty < 0.0 or not np.isfinite(self.non_teacher_penalty):
-            raise ValueError("non_teacher_penalty must be a finite non-negative value")
-        if self.teacher_cost_cap is not None and not np.isfinite(self.teacher_cost_cap):
-            raise ValueError("teacher_cost_cap must be finite when provided")
-        if not np.isfinite(self.min_cost):
-            raise ValueError("min_cost must be finite")
-        if self.max_gap is not None and int(self.max_gap) < 1:
-            raise ValueError("max_gap must be at least 1 when provided")
-        if self.large_cost <= 0.0 or not np.isfinite(self.large_cost):
-            raise ValueError("large_cost must be a positive finite value")
+        object.__setattr__(
+            self, "relief", _finite_nonnegative_float(self.relief, name="relief")
+        )
+        object.__setattr__(
+            self,
+            "non_teacher_penalty",
+            _finite_nonnegative_float(
+                self.non_teacher_penalty,
+                name="non_teacher_penalty",
+            ),
+        )
+        if self.teacher_cost_cap is not None:
+            object.__setattr__(
+                self,
+                "teacher_cost_cap",
+                _finite_nonnegative_float(
+                    self.teacher_cost_cap,
+                    name="teacher_cost_cap",
+                ),
+            )
+        object.__setattr__(
+            self, "min_cost", _validated_numeric_float(self.min_cost, name="min_cost")
+        )
+        if self.max_gap is not None:
+            object.__setattr__(
+                self, "max_gap", _positive_integer(self.max_gap, name="max_gap")
+            )
+        if not isinstance(self.consecutive_only, bool):
+            raise ValueError("consecutive_only must be a boolean")
+        object.__setattr__(
+            self,
+            "large_cost",
+            _finite_positive_float(self.large_cost, name="large_cost"),
+        )
 
 
 def teacher_edge_prior_config_from_mapping(

@@ -35,7 +35,12 @@ def test_coherence_teacher_overlay_audit_parser_uses_suffix_gate_defaults() -> N
 
 @pytest.mark.parametrize(
     "option",
-    ["--suffix-path-length", "--max-stitches-per-subject", "--edge-top-k", "--path-beam-width"],
+    [
+        "--suffix-path-length",
+        "--max-stitches-per-subject",
+        "--edge-top-k",
+        "--path-beam-width",
+    ],
 )
 def test_coherence_teacher_overlay_parser_rejects_nonpositive_search_budgets(
     option: str,

@@ -182,9 +182,7 @@ def run_track2p_policy_coherence_pareto_whatif(
     """Score exact one-edit Pareto candidates after coherence suffix stitching."""
 
     edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
-    path_beam_width = _positive_int_value(
-        path_beam_width, name="path_beam_width"
-    )
+    path_beam_width = _positive_int_value(path_beam_width, name="path_beam_width")
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,

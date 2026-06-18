@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -244,7 +245,7 @@ def format_reference_gap_summary(
             f"{_format_value(_as_float(row['reference_value']))} | "
             f"{row['best_non_reference_approach']} | "
             f"{_format_value(_as_float(row['best_non_reference_value']))} | "
-            f"{_format_delta(_as_float(row['gap_to_reference']))} |"
+            f"{_format_optional_delta(row['gap_to_reference'])} |"
         )
     return "\n".join(body)
 
@@ -351,7 +352,7 @@ def build_reference_gap_rows(
                 "reference_value": reference_value,
                 "best_non_reference_approach": ", ".join(competitor_names),
                 "best_non_reference_value": competitor_value,
-                "gap_to_reference": competitor_value - reference_value,
+                "gap_to_reference": _metric_gap(competitor_value, reference_value),
             }
         )
     return gap_rows
@@ -372,7 +373,7 @@ def build_metric_rows(
     metric_rows: list[dict[str, float | int | str]] = []
     for column in _best_metric_columns():
         reference_value = _as_float(reference[column])
-        best_value = max(_as_float(row[column]) for row in rows)
+        best_value = _best_value(rows, column)
         ranks = _descending_competition_ranks([_as_float(row[column]) for row in rows])
         for row in rows:
             value = _as_float(row[column])
@@ -384,11 +385,11 @@ def build_metric_rows(
                     "approach": approach,
                     "subjects": int(row["subjects"]),
                     "value": value,
-                    "rank": ranks[value],
+                    "rank": _rank_for_value(value, ranks),
                     "is_best": _format_bool(_value_is_best(value, best_value)),
                     "reference_approach": reference_name,
                     "reference_value": reference_value,
-                    "gap_to_reference": value - reference_value,
+                    "gap_to_reference": _metric_gap(value, reference_value),
                     "is_reference": _format_bool(approach == reference_name),
                 }
             )
@@ -430,7 +431,7 @@ def build_subject_metric_rows(
                         "metric_column": metric_column,
                         "approach": row["approach"],
                         "value": value,
-                        "rank": ranks[value],
+                        "rank": _rank_for_value(value, ranks),
                         "true_positives": _int_value(
                             row, f"{count_prefix}_true_positives"
                         ),
@@ -444,11 +445,7 @@ def build_subject_metric_rows(
                         "reference_value": (
                             reference_value if reference_value is not None else ""
                         ),
-                        "gap_to_reference": (
-                            value - reference_value
-                            if reference_value is not None
-                            else ""
-                        ),
+                        "gap_to_reference": _metric_gap(value, reference_value),
                         "is_reference": _format_bool(row["approach"] == reference_name),
                     }
                 )
@@ -731,11 +728,16 @@ def _aggregate_approach(
 
 
 def _mean(rows: Sequence[dict[str, str]], key: str) -> float:
-    return float(mean(_float_values(rows, key)))
+    values = _float_values(rows, key)
+    if not values:
+        return float("nan")
+    return float(mean(values))
 
 
 def _stdev(rows: Sequence[dict[str, str]], key: str) -> float:
     values = _float_values(rows, key)
+    if not values:
+        return float("nan")
     if len(values) < 2:
         return 0.0
     return float(stdev(values))
@@ -757,7 +759,9 @@ def _float_values(rows: Sequence[dict[str, str]], key: str) -> list[float]:
         value = row.get(key)
         if value is None or value == "":
             continue
-        values.append(float(value))
+        numeric = float(value)
+        if math.isfinite(numeric):
+            values.append(numeric)
     return values
 
 
@@ -857,10 +861,7 @@ def _compute_best_values(
 ) -> dict[str, float]:
     if not rows:
         return {}
-    return {
-        column: max(_as_float(row[column]) for row in rows)
-        for column in _best_metric_columns()
-    }
+    return {column: _best_value(rows, column) for column in _best_metric_columns()}
 
 
 def _compute_best_rows(
@@ -928,7 +929,7 @@ def _subject_reference_value(
 def _best_competitor_rows(
     rows: Sequence[dict[str, float | int | str]], column: str
 ) -> tuple[tuple[str, ...], float]:
-    value = max(_as_float(row[column]) for row in rows)
+    value = _best_value(rows, column)
     return (
         tuple(
             str(row["approach"])
@@ -940,15 +941,40 @@ def _best_competitor_rows(
 
 
 def _value_is_best(actual: float, expected: float) -> bool:
+    if not math.isfinite(actual) or not math.isfinite(expected):
+        return False
     return abs(actual - expected) < 1e-12
 
 
 def _descending_competition_ranks(values: Sequence[float]) -> dict[float, int]:
-    unique_values = sorted(set(values), reverse=True)
+    finite_values = [value for value in values if math.isfinite(value)]
+    unique_values = sorted(set(finite_values), reverse=True)
     return {
-        value: sum(1 for candidate in values if candidate > value) + 1
+        value: sum(1 for candidate in finite_values if candidate > value) + 1
         for value in unique_values
     }
+
+
+def _best_value(rows: Sequence[dict[str, float | int | str]], column: str) -> float:
+    values = [_as_float(row[column]) for row in rows]
+    finite_values = [value for value in values if math.isfinite(value)]
+    if not finite_values:
+        return float("nan")
+    return max(finite_values)
+
+
+def _rank_for_value(value: float, ranks: dict[float, int]) -> int:
+    if not math.isfinite(value):
+        return 0
+    return ranks[value]
+
+
+def _metric_gap(value: float, reference_value: float | None) -> float | str:
+    if reference_value is None:
+        return ""
+    if not math.isfinite(value) or not math.isfinite(reference_value):
+        return ""
+    return value - reference_value
 
 
 def _format_bool(value: bool) -> str:
@@ -967,6 +993,12 @@ def _format_value(value: float | int | str, *, bold: bool = False) -> str:
 
 def _format_delta(value: float) -> str:
     return f"{value:+.3f}"
+
+
+def _format_optional_delta(value: float | int | str) -> str:
+    if value == "":
+        return ""
+    return _format_delta(_as_float(value))
 
 
 def _as_float(value: float | int | str) -> float:

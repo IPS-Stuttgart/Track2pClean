@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import math
 
 import pytest
 from bayescatrack.experiments.benchmark_comparison import (
@@ -192,6 +193,46 @@ def test_aggregate_rows_reports_macro_and_micro_f1(tmp_path):
     assert "test approach" in format_markdown_table(rows)
 
 
+def test_aggregate_rows_ignores_nonfinite_macro_metrics(tmp_path):
+    result_path = tmp_path / "approach.csv"
+    _write_result_csv(
+        result_path,
+        [
+            {
+                "subject": "empty",
+                "pairwise_f1": "nan",
+                "complete_track_f1": "nan",
+                "pairwise_true_positives": "0",
+                "pairwise_false_positives": "0",
+                "pairwise_false_negatives": "0",
+                "complete_track_true_positives": "0",
+                "complete_track_false_positives": "0",
+                "complete_track_false_negatives": "0",
+            },
+            {
+                "subject": "informative",
+                "pairwise_f1": "0.5",
+                "complete_track_f1": "0.75",
+                "pairwise_true_positives": "1",
+                "pairwise_false_positives": "1",
+                "pairwise_false_negatives": "1",
+                "complete_track_true_positives": "3",
+                "complete_track_false_positives": "1",
+                "complete_track_false_negatives": "1",
+            },
+        ],
+    )
+
+    rows = aggregate_rows(load_labeled_rows([ComparisonInput("test", result_path)]))
+
+    assert rows[0]["subjects"] == 2
+    assert rows[0]["pairwise_f1_macro"] == pytest.approx(0.5)
+    assert rows[0]["pairwise_f1_sd"] == pytest.approx(0.0)
+    assert rows[0]["complete_track_f1_macro"] == pytest.approx(0.75)
+    assert rows[0]["complete_track_f1_sd"] == pytest.approx(0.0)
+    assert rows[0]["pairwise_f1_micro"] == pytest.approx(0.5)
+
+
 def test_markdown_table_highlights_best_cells():
     rows: list[dict[str, float | int | str]] = [
         _aggregate_summary_row(
@@ -220,6 +261,36 @@ def test_markdown_table_highlights_best_cells():
     assert "**0.900**" in table
     assert "**0.700**" in table
     assert "**0.880**" in table
+
+
+def test_best_summary_ignores_nonfinite_metric_values():
+    rows: list[dict[str, float | int | str]] = [
+        _aggregate_summary_row(
+            "No denominator",
+            pairwise_f1_macro=float("nan"),
+            pairwise_f1_sd=float("nan"),
+            pairwise_f1_micro=0.0,
+            complete_track_f1_macro=float("nan"),
+            complete_track_f1_sd=float("nan"),
+            complete_track_f1_micro=0.0,
+        ),
+        _aggregate_summary_row(
+            "Finite",
+            pairwise_f1_macro=0.80,
+            pairwise_f1_micro=0.75,
+            complete_track_f1_macro=0.70,
+            complete_track_f1_micro=0.65,
+        ),
+    ]
+
+    summary = format_best_summary(rows)
+    table = format_markdown_table(rows, highlight_best=True)
+
+    assert "| pairwise F1 mean | Finite | 0.800 |" in summary
+    assert "| complete-track F1 mean | Finite | 0.700 |" in summary
+    assert "| pairwise F1 mean | No denominator | nan |" not in summary
+    assert "**0.800**" in table
+    assert "**nan**" not in table
 
 
 def test_best_summary_names_best_approach_for_main_metrics():
@@ -318,6 +389,38 @@ def test_reference_gap_csv_is_machine_readable(tmp_path):
     assert float(csv_rows[0]["gap_to_reference"]) == pytest.approx(-0.25)
 
 
+def test_reference_gap_rows_leave_nonfinite_gaps_blank():
+    rows: list[dict[str, float | int | str]] = [
+        _aggregate_summary_row(
+            "Track2p",
+            pairwise_f1_macro=0.95,
+            pairwise_f1_sd=0.01,
+            pairwise_f1_micro=0.96,
+            complete_track_f1_macro=0.90,
+            complete_track_f1_sd=0.03,
+            complete_track_f1_micro=0.91,
+        ),
+        _aggregate_summary_row(
+            "No denominator",
+            pairwise_f1_macro=float("nan"),
+            pairwise_f1_micro=0.72,
+            complete_track_f1_macro=0.60,
+            complete_track_f1_micro=0.62,
+        ),
+    ]
+
+    gap_rows = build_reference_gap_rows(rows, reference_approach="Track2p")
+    summary = format_reference_gap_summary(rows, reference_approach="Track2p")
+    pairwise_mean = next(
+        row for row in gap_rows if row["metric_column"] == "pairwise_f1_macro"
+    )
+
+    assert pairwise_mean["best_non_reference_approach"] == ""
+    assert math.isnan(float(pairwise_mean["best_non_reference_value"]))
+    assert pairwise_mean["gap_to_reference"] == ""
+    assert "| pairwise F1 mean | 0.950 |  | nan |  |" in summary
+
+
 def test_metric_csv_reports_ranks_and_reference_gaps(tmp_path):
     rows: list[dict[str, float | int | str]] = [
         _aggregate_summary_row(
@@ -368,6 +471,47 @@ def test_metric_csv_reports_ranks_and_reference_gaps(tmp_path):
     assert csv_rows[0]["is_reference"] == "true"
 
 
+def test_metric_rows_do_not_rank_nonfinite_reference_values():
+    rows: list[dict[str, float | int | str]] = [
+        _aggregate_summary_row(
+            "Track2p",
+            pairwise_f1_macro=float("nan"),
+            pairwise_f1_sd=float("nan"),
+            pairwise_f1_micro=0.96,
+            complete_track_f1_macro=0.90,
+            complete_track_f1_sd=0.03,
+            complete_track_f1_micro=0.91,
+        ),
+        _aggregate_summary_row(
+            "Tuned",
+            pairwise_f1_macro=0.80,
+            pairwise_f1_micro=0.72,
+            complete_track_f1_macro=0.60,
+            complete_track_f1_micro=0.62,
+        ),
+    ]
+
+    metric_rows = build_metric_rows(rows, reference_approach="Track2p")
+    reference_pairwise = next(
+        row
+        for row in metric_rows
+        if row["approach"] == "Track2p" and row["metric_column"] == "pairwise_f1_macro"
+    )
+    tuned_pairwise = next(
+        row
+        for row in metric_rows
+        if row["approach"] == "Tuned" and row["metric_column"] == "pairwise_f1_macro"
+    )
+
+    assert math.isnan(float(reference_pairwise["value"]))
+    assert reference_pairwise["rank"] == 0
+    assert reference_pairwise["is_best"] == "false"
+    assert reference_pairwise["gap_to_reference"] == ""
+    assert tuned_pairwise["rank"] == 1
+    assert tuned_pairwise["is_best"] == "true"
+    assert tuned_pairwise["gap_to_reference"] == ""
+
+
 def test_subject_metric_csv_reports_per_subject_reference_gaps(tmp_path):
     rows = _subject_comparison_rows()
 
@@ -402,6 +546,45 @@ def test_subject_metric_csv_reports_per_subject_reference_gaps(tmp_path):
     assert csv_rows[0]["approach"] == "Track2p"
     assert csv_rows[0]["true_positives"] == "9"
     assert csv_rows[0]["is_reference"] == "true"
+
+
+def test_subject_metric_rows_do_not_rank_nonfinite_reference_values():
+    rows = [
+        _subject_result_row(
+            "Track2p",
+            "jm_empty",
+            pairwise_f1="nan",
+            complete_track_f1="0.8",
+            pairwise_counts=(0, 0, 0),
+            complete_track_counts=(8, 2, 2),
+        ),
+        _subject_result_row(
+            "Tuned",
+            "jm_empty",
+            pairwise_f1="0.75",
+            complete_track_f1="0.7",
+            pairwise_counts=(6, 2, 2),
+            complete_track_counts=(7, 3, 3),
+        ),
+    ]
+
+    subject_rows = build_subject_metric_rows(rows, reference_approach="Track2p")
+    reference_pairwise = next(
+        row
+        for row in subject_rows
+        if row["approach"] == "Track2p" and row["metric_column"] == "pairwise_f1"
+    )
+    tuned_pairwise = next(
+        row
+        for row in subject_rows
+        if row["approach"] == "Tuned" and row["metric_column"] == "pairwise_f1"
+    )
+
+    assert math.isnan(float(reference_pairwise["value"]))
+    assert reference_pairwise["rank"] == 0
+    assert reference_pairwise["gap_to_reference"] == ""
+    assert tuned_pairwise["rank"] == 1
+    assert tuned_pairwise["gap_to_reference"] == ""
 
 
 def test_subject_gap_summary_reports_worst_non_reference_rows(tmp_path):

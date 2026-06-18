@@ -74,9 +74,7 @@ def run_track2p_policy_coherence_suffix_exposure_audit(
     """Return per-subject suffix-gate exposure rows without loading GT."""
 
     edge_top_k = _positive_int_value(edge_top_k, name="edge_top_k")
-    path_beam_width = _positive_int_value(
-        path_beam_width, name="path_beam_width"
-    )
+    path_beam_width = _positive_int_value(path_beam_width, name="path_beam_width")
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,

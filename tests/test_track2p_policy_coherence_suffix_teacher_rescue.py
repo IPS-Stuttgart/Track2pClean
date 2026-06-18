@@ -103,15 +103,14 @@ def test_coherence_suffix_teacher_rescue_rejects_invalid_budget_args(
 def test_coherence_suffix_teacher_rescue_rejects_invalid_budget_values(
     kwargs: dict[str, int], match: str
 ) -> None:
-    config = Track2pBenchmarkConfig(data=Path("missing-data"), method="global-assignment")
+    config = Track2pBenchmarkConfig(
+        data=Path("missing-data"), method="global-assignment"
+    )
 
     with pytest.raises(ValueError, match=match):
         (
-            track2p_policy_coherence_suffix_teacher_rescue
-            .run_track2p_policy_coherence_suffix_teacher_rescue
-        )(
-            config, **kwargs
-        )
+            track2p_policy_coherence_suffix_teacher_rescue.run_track2p_policy_coherence_suffix_teacher_rescue
+        )(config, **kwargs)
 
 
 def test_coherence_suffix_teacher_rescue_exposes_completing_seed_source_filter() -> (
