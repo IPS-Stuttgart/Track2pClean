@@ -781,6 +781,40 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     assert (tmp_path / "results" / "growth-veto-cleanup.csv").exists()
 
 
+@pytest.mark.parametrize("value", [0, 1.5])
+def test_benchmark_manifest_rejects_invalid_cleanup_min_side_observations(
+    tmp_path, monkeypatch, value
+):
+    from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
+
+    def fake_growth_veto_cleanup(*_args, **_kwargs):
+        raise AssertionError("runner should not be called for invalid options")
+
+    monkeypatch.setattr(
+        track2p_policy_growth_veto_cleanup,
+        "run_track2p_policy_growth_veto_cleanup",
+        fake_growth_veto_cleanup,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-cleanup",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "output": "results/growth-veto-cleanup.csv",
+                    "min_side_observations": value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="min_side_observations"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
 def test_benchmark_manifest_growth_veto_defaults_keep_upper_iou_caps(
     tmp_path, monkeypatch
 ):
