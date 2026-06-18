@@ -29,6 +29,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
 import numpy as np
+
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import (
     track2p_policy_coherence_suffix_stitch_whatif as suffix,
@@ -234,9 +235,7 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
                 "track2p_pyrecest_mht_selected": int(len(selected_rows)),
                 "track2p_pyrecest_mht_applied": int(len(applied_keys)),
                 "track2p_pyrecest_mht_selected_score": float(selected_hypothesis.score),
-                "track2p_pyrecest_mht_selection_mode": str(
-                    mht_options.selection_mode
-                ),
+                "track2p_pyrecest_mht_selection_mode": str(mht_options.selection_mode),
                 "track2p_pyrecest_mht_selected_objective": float(selected_objective),
                 "track2p_pyrecest_mht_fragmentation_penalty": float(
                     mht_options.fragmentation_penalty
@@ -583,9 +582,7 @@ def _global_hypothesis_objective(
     if not applied_keys:
         return 0.0, 0
     applied_set = set(applied_keys)
-    applied_rows = [
-        row for row in rows if cleanup._edge_row_key(row) in applied_set
-    ]
+    applied_rows = [row for row in rows if cleanup._edge_row_key(row) in applied_set]
     benefit = sum(_candidate_score(row, options=options) for row in applied_rows)
     edited_short_fragments = _track_short_fragment_count(
         edited_tracks,
@@ -764,8 +761,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "candidate pocket to PyRecEst MHT."
         ),
     )
-    parser.add_argument("--mht-high-overlap-min-registered-iou", type=float, default=0.85)
-    parser.add_argument("--mht-high-overlap-max-growth-residual", type=float, default=0.50)
+    parser.add_argument(
+        "--mht-high-overlap-min-registered-iou", type=float, default=0.85
+    )
+    parser.add_argument(
+        "--mht-high-overlap-max-growth-residual", type=float, default=0.50
+    )
     parser.add_argument(
         "--mht-high-overlap-min-growth-residual-mahalanobis",
         type=float,
