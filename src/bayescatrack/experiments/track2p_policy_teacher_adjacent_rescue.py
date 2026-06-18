@@ -178,6 +178,12 @@ def _nonnegative_int_value(value: Any, *, name: str) -> int:
     return numeric
 
 
+def _bool_value(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
+
+
 def _positive_int_arg(value: str) -> int:
     try:
         return _positive_int_value(value, name="value")
@@ -230,9 +236,16 @@ class TeacherEdgeFeatureGate:
         require_assigned_by_hungarian: bool | None = None,
     ) -> None:
         if require_hungarian_assignment is not None:
-            require_hungarian = bool(require_hungarian_assignment)
+            require_hungarian = _bool_value(
+                require_hungarian_assignment, name="require_hungarian_assignment"
+            )
         if require_assigned_by_hungarian is not None:
-            require_hungarian = bool(require_assigned_by_hungarian)
+            require_hungarian = _bool_value(
+                require_assigned_by_hungarian, name="require_assigned_by_hungarian"
+            )
+        require_hungarian = _bool_value(
+            require_hungarian, name="require_hungarian"
+        )
         object.__setattr__(self, "min_registered_iou", min_registered_iou)
         object.__setattr__(self, "max_registered_iou", max_registered_iou)
         object.__setattr__(self, "min_threshold_margin", min_threshold_margin)
@@ -241,7 +254,7 @@ class TeacherEdgeFeatureGate:
         object.__setattr__(self, "max_centroid_distance", max_centroid_distance)
         object.__setattr__(self, "min_area_ratio", min_area_ratio)
         object.__setattr__(self, "min_cell_probability", min_cell_probability)
-        object.__setattr__(self, "require_hungarian", bool(require_hungarian))
+        object.__setattr__(self, "require_hungarian", require_hungarian)
 
     @property
     def require_hungarian_assignment(self) -> bool:

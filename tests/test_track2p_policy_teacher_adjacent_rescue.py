@@ -33,6 +33,21 @@ def test_teacher_completion_gate_kwargs_preserve_exact_aliases() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"require_hungarian": "false"}, "require_hungarian"),
+        ({"require_hungarian_assignment": 1}, "require_hungarian_assignment"),
+        ({"require_assigned_by_hungarian": "true"}, "require_assigned_by_hungarian"),
+    ],
+)
+def test_teacher_edge_feature_gate_rejects_invalid_boolean_controls(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        TeacherEdgeFeatureGate(**kwargs)
+
+
 def test_teacher_edge_order_requires_feature_index_for_seed_confidence() -> None:
     assert _teacher_edge_order_requires_feature_index("confidence")
     assert _teacher_edge_order_requires_feature_index("cell-confidence")
