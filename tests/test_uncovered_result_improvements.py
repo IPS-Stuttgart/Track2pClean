@@ -26,6 +26,7 @@ from bayescatrack.association.multi_hypothesis import (
     top_k_edge_candidates,
 )
 from bayescatrack.association.multiplane_consistency import (
+    MultiPlaneConsistencyConfig,
     PlaneRegistrationQuality,
     apply_multiplane_quality_penalty,
     shared_registration_reliability,
@@ -299,6 +300,41 @@ def test_multiplane_quality_penalty_and_session_offset() -> None:
     assert 0.0 < reliability < 1.0
     assert np.all(penalized > 0.0)
     assert shifted[0, 0] > 0.0
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("shared_shift_weight", True),
+        ("shared_shift_weight", float("nan")),
+        ("shared_shift_weight", float("inf")),
+        ("shared_shift_weight", -0.1),
+        ("shared_quality_weight", False),
+        ("shared_quality_weight", float("nan")),
+        ("shared_quality_weight", float("inf")),
+        ("shared_quality_weight", -0.1),
+        ("min_plane_count", True),
+        ("min_plane_count", 1.5),
+        ("min_plane_count", 0),
+    ],
+)
+def test_multiplane_consistency_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        MultiPlaneConsistencyConfig(**{field: value})
+
+
+@pytest.mark.parametrize("penalty_weight", [True, float("nan"), float("inf"), -0.1])
+def test_multiplane_quality_penalty_rejects_invalid_weight(
+    penalty_weight: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="penalty_weight"):
+        apply_multiplane_quality_penalty(
+            [[0.0]],
+            [PlaneRegistrationQuality("plane0", registration_rmse=1.0)],
+            penalty_weight=penalty_weight,
+        )
 
 
 @pytest.mark.parametrize(
