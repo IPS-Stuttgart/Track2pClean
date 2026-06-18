@@ -15,9 +15,13 @@ from bayescatrack.association.context_descriptors import (
     pairwise_context_components,
 )
 from bayescatrack.association.growth_priors import (
+    GrowthPriorConfig,
+    affine_growth_penalty_matrix,
     affine_growth_residuals,
     estimate_affine_growth_field,
+    fit_affine_growth_transform,
     growth_penalty_matrix,
+    radial_growth_penalty_matrix,
 )
 from bayescatrack.association.joint_registration_assignment import (
     JointRegistrationAssignmentConfig,
@@ -343,6 +347,57 @@ def test_growth_priors_prefer_affine_consistent_matches() -> None:
 
     assert np.max(residuals) < 1.0e-10
     assert np.argmin(penalties, axis=1).tolist() == [0, 1, 2]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("affine_weight", True),
+        ("affine_weight", float("nan")),
+        ("affine_weight", float("inf")),
+        ("affine_weight", -0.1),
+        ("radial_weight", False),
+        ("radial_weight", float("nan")),
+        ("radial_weight", float("inf")),
+        ("radial_weight", -0.1),
+        ("displacement_scale", True),
+        ("displacement_scale", float("nan")),
+        ("displacement_scale", float("inf")),
+        ("displacement_scale", 0.0),
+        ("regularization", False),
+        ("regularization", float("nan")),
+        ("regularization", float("inf")),
+        ("regularization", -0.1),
+    ],
+)
+def test_growth_prior_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        GrowthPriorConfig(**{field: value})
+
+
+@pytest.mark.parametrize("regularization", [True, float("nan"), float("inf"), -0.1])
+def test_fit_affine_growth_transform_rejects_invalid_regularization(
+    regularization: float | bool,
+) -> None:
+    points = np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=float)
+
+    with pytest.raises(ValueError, match="regularization"):
+        fit_affine_growth_transform(points, points, regularization=regularization)
+
+
+@pytest.mark.parametrize("scale", [True, float("nan"), float("inf"), 0.0])
+def test_growth_penalty_helpers_reject_invalid_scale(scale: float | bool) -> None:
+    points = np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=float)
+    affine = np.asarray([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=float)
+
+    with pytest.raises(ValueError, match="scale"):
+        affine_growth_penalty_matrix(points, points, affine, scale=scale)
+    with pytest.raises(ValueError, match="scale"):
+        growth_penalty_matrix(points, points, affine=affine, scale=scale)
+    with pytest.raises(ValueError, match="scale"):
+        radial_growth_penalty_matrix(points, points, scale=scale)
 
 
 def test_multiplane_quality_penalty_and_session_offset() -> None:

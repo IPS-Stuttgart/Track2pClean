@@ -18,12 +18,26 @@ class GrowthPriorConfig:
     regularization: float = 1.0e-6
 
     def __post_init__(self) -> None:
-        if self.affine_weight < 0.0 or self.radial_weight < 0.0:
-            raise ValueError("growth prior weights must be non-negative")
-        if self.displacement_scale <= 0.0:
-            raise ValueError("displacement_scale must be positive")
-        if self.regularization < 0.0:
-            raise ValueError("regularization must be non-negative")
+        object.__setattr__(
+            self,
+            "affine_weight",
+            _finite_nonnegative_float(self.affine_weight, "affine_weight"),
+        )
+        object.__setattr__(
+            self,
+            "radial_weight",
+            _finite_nonnegative_float(self.radial_weight, "radial_weight"),
+        )
+        object.__setattr__(
+            self,
+            "displacement_scale",
+            _finite_positive_float(self.displacement_scale, "displacement_scale"),
+        )
+        object.__setattr__(
+            self,
+            "regularization",
+            _finite_nonnegative_float(self.regularization, "regularization"),
+        )
 
 
 def fit_affine_growth_transform(
@@ -31,6 +45,7 @@ def fit_affine_growth_transform(
 ) -> np.ndarray:
     """Fit an affine transform mapping source points to target points."""
 
+    regularization = _finite_nonnegative_float(regularization, "regularization")
     source = np.asarray(source_points_xy, dtype=float)
     target = np.asarray(target_points_xy, dtype=float)
     if source.shape != target.shape or source.ndim != 2 or source.shape[1] != 2:
@@ -40,7 +55,7 @@ def fit_affine_growth_transform(
     if source.shape[0] < 3:
         raise ValueError("At least three point pairs are required for affine growth")
     design = np.column_stack((source, np.ones(source.shape[0], dtype=float)))
-    normal = design.T @ design + float(regularization) * np.eye(3)
+    normal = design.T @ design + regularization * np.eye(3)
     rhs = design.T @ target
     coef = np.linalg.solve(normal, rhs)
     return np.asarray(coef.T, dtype=float)
@@ -83,6 +98,7 @@ def affine_growth_penalty_matrix(
 ) -> np.ndarray:
     """Return normalized displacement residuals under an affine growth field."""
 
+    scale = _finite_positive_float(scale, "scale")
     ref = np.asarray(reference_centroids_xy, dtype=float)
     meas = np.asarray(measurement_centroids_xy, dtype=float)
     matrix = np.asarray(affine_xy, dtype=float)
@@ -90,7 +106,7 @@ def affine_growth_penalty_matrix(
         raise ValueError("affine_xy must have shape (2, 3)")
     predicted = ref @ matrix[:, :2].T + matrix[:, 2][None, :]
     diffs = predicted[:, None, :] - meas[None, :, :]
-    return np.linalg.norm(diffs, axis=2) / max(float(scale), 1.0e-12)
+    return np.linalg.norm(diffs, axis=2) / max(scale, 1.0e-12)
 
 
 def growth_penalty_matrix(
@@ -102,6 +118,7 @@ def growth_penalty_matrix(
 ) -> np.ndarray:
     """Return pairwise growth-consistency penalties."""
 
+    scale = _finite_positive_float(scale, "scale")
     affine_xy = (
         estimate_affine_growth_field(reference_centroids_xy, measurement_centroids_xy)
         if affine is None
@@ -124,6 +141,7 @@ def radial_growth_penalty_matrix(
 ) -> np.ndarray:
     """Return penalty for radial displacement inconsistency."""
 
+    scale = _finite_positive_float(scale, "scale")
     ref = np.asarray(reference_centroids_xy, dtype=float)
     meas = np.asarray(measurement_centroids_xy, dtype=float)
     if center_xy is None:
@@ -133,7 +151,7 @@ def radial_growth_penalty_matrix(
     ref_r = np.linalg.norm(ref - center[None, :], axis=1)
     meas_r = np.linalg.norm(meas - center[None, :], axis=1)
     radial_diff = np.abs(ref_r[:, None] - meas_r[None, :])
-    return radial_diff / max(float(scale), 1.0e-12)
+    return radial_diff / max(scale, 1.0e-12)
 
 
 def apply_growth_prior_to_costs(
@@ -200,3 +218,26 @@ def estimate_growth_from_track_rows(
         np.vstack(target_points),
         regularization=cfg.regularization,
     )
+
+
+def _finite_nonnegative_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _finite_positive_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be finite and positive")
+    return numeric
+
+
+def _finite_float_value(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
