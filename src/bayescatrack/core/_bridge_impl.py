@@ -708,6 +708,19 @@ def load_suite2p_plane(
 ) -> CalciumPlaneData:
     """Load one Suite2p plane folder into a :class:`CalciumPlaneData` instance."""
 
+    include_non_cells = _strict_bool(include_non_cells, name="include_non_cells")
+    weighted_masks = _strict_bool(weighted_masks, name="weighted_masks")
+    exclude_overlapping_pixels = _strict_bool(
+        exclude_overlapping_pixels, name="exclude_overlapping_pixels"
+    )
+    load_traces = _strict_bool(load_traces, name="load_traces")
+    load_spike_traces = _strict_bool(load_spike_traces, name="load_spike_traces")
+    load_neuropil_traces = _strict_bool(
+        load_neuropil_traces, name="load_neuropil_traces"
+    )
+    cell_probability_threshold = _finite_float(
+        cell_probability_threshold, name="cell_probability_threshold"
+    )
     if not 0.0 <= cell_probability_threshold <= 1.0:
         raise ValueError("cell_probability_threshold must be between 0 and 1")
 

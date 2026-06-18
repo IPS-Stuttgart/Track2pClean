@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from bayescatrack import CalciumPlaneData, load_suite2p_plane
+from bayescatrack import CalciumPlaneData, load_suite2p_plane, load_track2p_subject
 from bayescatrack.association.dynamic_edge_priors import (
     DynamicEdgePriorConfig,
     apply_dynamic_edge_priors,
@@ -246,6 +246,58 @@ def test_load_suite2p_plane_rejects_mismatched_iscell_rows(tmp_path):
 
     with pytest.raises(ValueError, match="iscell.npy first dimension"):
         load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)
+
+
+def _write_minimal_suite2p_plane(plane_dir):
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([0], dtype=int),
+                "xpix": np.asarray([0], dtype=int),
+                "lam": np.asarray([1.0], dtype=float),
+            }
+        ],
+        dtype=object,
+    )
+    np.save(plane_dir / "stat.npy", stat)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"include_non_cells": "false"}, "include_non_cells"),
+        ({"weighted_masks": "true"}, "weighted_masks"),
+        ({"exclude_overlapping_pixels": "false"}, "exclude_overlapping_pixels"),
+        ({"load_traces": "false"}, "load_traces"),
+        ({"load_spike_traces": 1}, "load_spike_traces"),
+        ({"load_neuropil_traces": np.bool_(False)}, "load_neuropil_traces"),
+        ({"cell_probability_threshold": True}, "cell_probability_threshold"),
+        ({"cell_probability_threshold": np.nan}, "cell_probability_threshold"),
+        ({"cell_probability_threshold": -0.1}, "cell_probability_threshold"),
+        ({"cell_probability_threshold": 1.1}, "cell_probability_threshold"),
+    ],
+)
+def test_load_suite2p_plane_rejects_invalid_loader_controls(
+    tmp_path, kwargs, message
+):
+    _write_minimal_suite2p_plane(tmp_path)
+    base_kwargs = {"load_traces": False, "load_spike_traces": False}
+    base_kwargs.update(kwargs)
+
+    with pytest.raises(ValueError, match=message):
+        load_suite2p_plane(tmp_path, **base_kwargs)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"include_behavior": "false"}, "include_behavior"),
+        ({"strict": 1}, "strict"),
+    ],
+)
+def test_load_track2p_subject_rejects_invalid_loader_flags(tmp_path, kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        load_track2p_subject(tmp_path, **kwargs)
 
 
 def test_load_suite2p_plane_accepts_single_column_iscell_without_scalar_warning(
