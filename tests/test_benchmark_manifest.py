@@ -638,6 +638,51 @@ def test_benchmark_manifest_dispatches_coherence_suffix_teacher_rescue_options(
     assert (tmp_path / "results" / "suffix-teacher-rescue.csv").exists()
 
 
+@pytest.mark.parametrize(
+    ("options", "match"),
+    [
+        (
+            {"min_teacher_component_observations": 0},
+            "min_teacher_component_observations",
+        ),
+        ({"max_applied_teacher_edits": -2}, "max_applied_teacher_edits"),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_coherence_suffix_teacher_budgets(
+    tmp_path, monkeypatch, options, match
+):
+    from bayescatrack.experiments import (
+        track2p_policy_coherence_suffix_teacher_rescue,
+    )
+
+    def fake_suffix_teacher_rescue(*_args, **_kwargs):
+        raise AssertionError("runner should not be called for invalid options")
+
+    monkeypatch.setattr(
+        track2p_policy_coherence_suffix_teacher_rescue,
+        "run_track2p_policy_coherence_suffix_teacher_rescue",
+        fake_suffix_teacher_rescue,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "suffix-teacher-rescue",
+                    "runner": "track2p-policy-coherence-suffix-teacher-rescue",
+                    "data": "data",
+                    "output": "results/suffix-teacher-rescue.csv",
+                    **options,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=match):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
 def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     tmp_path, monkeypatch
 ):
@@ -736,6 +781,40 @@ def test_benchmark_manifest_dispatches_growth_veto_cleanup_options(
     assert (tmp_path / "results" / "growth-veto-cleanup.csv").exists()
 
 
+@pytest.mark.parametrize("value", [0, 1.5])
+def test_benchmark_manifest_rejects_invalid_cleanup_min_side_observations(
+    tmp_path, monkeypatch, value
+):
+    from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
+
+    def fake_growth_veto_cleanup(*_args, **_kwargs):
+        raise AssertionError("runner should not be called for invalid options")
+
+    monkeypatch.setattr(
+        track2p_policy_growth_veto_cleanup,
+        "run_track2p_policy_growth_veto_cleanup",
+        fake_growth_veto_cleanup,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-cleanup",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    "output": "results/growth-veto-cleanup.csv",
+                    "min_side_observations": value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="min_side_observations"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
 def test_benchmark_manifest_growth_veto_defaults_keep_upper_iou_caps(
     tmp_path, monkeypatch
 ):
@@ -779,7 +858,6 @@ def test_benchmark_manifest_growth_veto_defaults_keep_upper_iou_caps(
                     "runner": "track2p-policy-growth-veto-cleanup",
                     "data": "data",
                     "output": "results/growth-veto-default-caps.csv",
-                    "min_veto_anchor_count": -3,
                     "min_veto_complete_component_size": None,
                     "max_veto_local_neighbor_distortion": "none",
                 }
@@ -871,6 +949,44 @@ def test_benchmark_manifest_rejects_negative_growth_veto_component_size(tmp_path
     )
 
     with pytest.raises(ValueError, match="min_veto_complete_component_size"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "match"),
+    [
+        ("suffix_path_length", 0, "suffix_path_length"),
+        ("max_stitches_per_subject", 0, "max_stitches_per_subject"),
+        ("edge_top_k", 0, "edge_top_k"),
+        ("path_beam_width", 0, "path_beam_width"),
+        ("min_veto_anchor_count", -1, "anchor_count"),
+        ("max_veto_row_rank", 0, "max_veto_row_rank"),
+        ("max_veto_column_rank", 0, "max_veto_column_rank"),
+        ("max_vetoes_per_subject", 0, "max_vetoes_per_subject"),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_suffix_growth_veto_integer_controls(
+    tmp_path,
+    field: str,
+    value: int,
+    match: str,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "growth-veto-invalid-integer",
+                    "runner": "track2p-policy-growth-veto-cleanup",
+                    "data": "data",
+                    field: value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=match):
         run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
 
@@ -1053,7 +1169,7 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
                     "max_veto_shifted_iou": 0.90,
                     "max_veto_min_cell_probability": 0.65,
                     "max_veto_local_neighbor_distortion": None,
-                    "growth_veto_min_anchor_count": -2,
+                    "growth_veto_min_anchor_count": 2,
                     "max_veto_row_rank": 2,
                     "max_veto_column_rank": 2,
                     "growth_veto_base": "coherence-suffix",
@@ -1089,7 +1205,7 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
     assert growth_gate.min_growth_residual == 2.0
     assert growth_gate.max_row_rank == 2
     assert growth_gate.max_column_rank == 2
-    assert growth_gate.min_anchor_count == 0
+    assert growth_gate.min_anchor_count == 2
     assert growth_gate.max_local_neighbor_distortion is None
     mht_options = calls["kwargs"]["mht_options"]
     assert mht_options.candidate_top_k == 8
@@ -1345,6 +1461,71 @@ def test_benchmark_manifest_rejects_invalid_pyrecest_mht_selection_mode(tmp_path
     )
 
     with pytest.raises(ValueError, match="mht_selection_mode"):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("mht_candidate_top_k", 0),
+        ("mht_max_edits_per_subject", 0),
+        ("mht_max_hypotheses", 0),
+        ("mht_min_meaningful_track_length", 0),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_pyrecest_residual_mht_integer_options(
+    tmp_path,
+    field: str,
+    value: int,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-invalid-integer",
+                    "runner": "track2p-policy-pyrecest-residual-mht-cleanup",
+                    "data": "data",
+                    field: value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=field):
+        run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("mht_max_edits_per_subject", 0),
+        ("mht_max_hypotheses", 0),
+        ("calibrated_fp_min_training_positives", -1),
+    ],
+)
+def test_benchmark_manifest_rejects_invalid_pyrecest_calibrated_mht_integer_options(
+    tmp_path,
+    field: str,
+    value: int,
+):
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "pyrecest-calibrated-invalid-integer",
+                    "runner": "track2p-policy-pyrecest-calibrated-mht-cleanup",
+                    "data": "data",
+                    field: value,
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match=field):
         run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
 

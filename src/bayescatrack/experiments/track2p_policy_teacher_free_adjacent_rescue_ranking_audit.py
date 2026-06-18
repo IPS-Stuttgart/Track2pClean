@@ -76,6 +76,10 @@ def run_track2p_policy_teacher_free_adjacent_rescue_ranking_audit(
 ) -> TeacherFreeAdjacentRescueRankingAuditResult:
     """Rank conflict-free adjacent continuation candidates from non-GT features."""
 
+    edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
+    path_beam_width = suffix._positive_int_value(
+        path_beam_width, name="path_beam_width"
+    )
     policy_config = track2p_policy_config(
         config,
         transform_type=transform_type,
@@ -104,8 +108,8 @@ def run_track2p_policy_teacher_free_adjacent_rescue_ranking_audit(
                 threshold_method=threshold_method,
                 iou_distance_threshold=float(iou_distance_threshold),
                 base_prediction=base_prediction,
-                edge_top_k=int(edge_top_k),
-                path_beam_width=int(path_beam_width),
+                edge_top_k=edge_top_k,
+                path_beam_width=path_beam_width,
                 anchor_min_registered_iou=float(anchor_min_registered_iou),
                 anchor_min_shifted_iou=float(anchor_min_shifted_iou),
                 anchor_min_cell_probability=float(anchor_min_cell_probability),
@@ -382,7 +386,7 @@ def _sequential_target_extension_candidate_paths(
 ) -> tuple[tuple[rank._EdgeCandidate, ...], ...]:
     output: list[tuple[rank._EdgeCandidate, ...]] = []
     seen: set[tuple[TrackEdge, ...]] = set()
-    top_k = max(1, min(int(edge_top_k), 25))
+    top_k = min(suffix._positive_int_value(edge_top_k, name="edge_top_k"), 25)
     for row in np.asarray(predicted, dtype=int):
         for session_index in range(max(0, row.size - 2)):
             if int(row[session_index]) < 0:
@@ -521,7 +525,7 @@ def _top_reverse_edge_candidates(
             )
         )
     candidates.sort(key=lambda edge: edge.edge_score, reverse=True)
-    return tuple(candidates[: int(top_k)])
+    return tuple(candidates[:top_k])
 
 
 def _candidate_row(

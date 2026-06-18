@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.experiments.track2p_policy_component_residual_audit import (
     ResidualFeature,
 )
@@ -732,6 +733,25 @@ def test_teacher_rescue_parser_accepts_completing_rescue_preset() -> None:
     assert args.teacher_repair_preset == "completing-rescue-action-specific"
 
 
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--min-component-observations", "0"),
+        ("--max-applied-edits", "-1"),
+        ("--max-target-extension-edits", "-1"),
+        ("--max-source-backfill-edits", "-1"),
+        ("--max-seed-source-backfill-edits", "-1"),
+        ("--max-fragment-merge-edits", "-1"),
+        ("--max-completing-rescue-edits", "-1"),
+    ],
+)
+def test_teacher_rescue_parser_rejects_invalid_edit_budget_options(
+    option: str, value: str
+) -> None:
+    with pytest.raises(SystemExit):
+        build_arg_parser().parse_args(["--data", "track2p-root", option, value])
+
+
 def test_completing_rescue_action_specific_preset_applies_confirmed_completion() -> (
     None
 ):
@@ -1113,6 +1133,29 @@ def test_teacher_adjacent_rescue_enforces_per_action_edit_caps() -> None:
     assert any(
         row["reason"] == "max_seed_source_backfill_edits_reached" for row in report.rows
     )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"min_component_observations": 0}, "min_component_observations"),
+        ({"max_applied_edits": -1}, "max_applied_edits"),
+        ({"max_target_extension_edits": -1}, "max_target_extension_edits"),
+    ],
+)
+def test_teacher_adjacent_rescue_rejects_invalid_edit_budget_values(
+    kwargs: dict[str, int], match: str
+) -> None:
+    predicted = np.asarray([[10, -1]], dtype=int)
+    teacher = np.asarray([[10, 20]], dtype=int)
+
+    with pytest.raises(ValueError, match=match):
+        apply_teacher_adjacent_rescue_edges(
+            predicted,
+            teacher,
+            seed_session=0,
+            **kwargs,
+        )
 
 
 def test_teacher_adjacent_rescue_accepts_seed_completing_backfill_alias() -> None:
