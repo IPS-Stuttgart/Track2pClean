@@ -78,7 +78,7 @@ _UNSUPPORTED_RESIDUAL_GROWTH_VETO_OPTIONS = (
 
 
 def _integral_value(value: Any, *, name: str) -> int:
-    if isinstance(value, bool):
+    if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be an integer")
     if isinstance(value, Integral):
         return int(value)
@@ -126,6 +126,36 @@ def _nonnegative_int_arg(value: str) -> int:
     return numeric
 
 
+def _bool_value(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
+
+
+def _finite_float_value(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _finite_nonnegative_float_value(value: Any, *, name: str) -> float:
+    numeric = _finite_float_value(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _optional_finite_nonnegative_float_value(
+    value: Any, *, name: str
+) -> float | None:
+    if value is None:
+        return None
+    return _finite_nonnegative_float_value(value, name=name)
+
+
 @dataclass(frozen=True)
 class PyRecEstResidualMHTOptions:
     """BayesCaTrack-side controls for the PyRecEst residual-MHT row."""
@@ -150,6 +180,70 @@ class PyRecEstResidualMHTOptions:
         _set_positive_int_field(self, "max_edits_per_subject")
         _set_positive_int_field(self, "max_hypotheses")
         _set_positive_int_field(self, "min_meaningful_track_length")
+        object.__setattr__(
+            self,
+            "edit_penalty",
+            _finite_nonnegative_float_value(self.edit_penalty, name="edit_penalty"),
+        )
+        object.__setattr__(
+            self,
+            "score_threshold",
+            _finite_float_value(self.score_threshold, name="score_threshold"),
+        )
+        object.__setattr__(
+            self,
+            "fragmentation_penalty",
+            _finite_nonnegative_float_value(
+                self.fragmentation_penalty, name="fragmentation_penalty"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "include_high_overlap_low_motion",
+            _bool_value(
+                self.include_high_overlap_low_motion,
+                name="include_high_overlap_low_motion",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "high_overlap_min_registered_iou",
+            _finite_nonnegative_float_value(
+                self.high_overlap_min_registered_iou,
+                name="high_overlap_min_registered_iou",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "high_overlap_max_growth_residual",
+            _finite_nonnegative_float_value(
+                self.high_overlap_max_growth_residual,
+                name="high_overlap_max_growth_residual",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "high_overlap_min_growth_residual_mahalanobis",
+            _finite_nonnegative_float_value(
+                self.high_overlap_min_growth_residual_mahalanobis,
+                name="high_overlap_min_growth_residual_mahalanobis",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "high_overlap_min_cell_probability",
+            _optional_finite_nonnegative_float_value(
+                self.high_overlap_min_cell_probability,
+                name="high_overlap_min_cell_probability",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "high_overlap_score_bonus",
+            _finite_float_value(
+                self.high_overlap_score_bonus, name="high_overlap_score_bonus"
+            ),
+        )
         if self.selection_mode not in ("additive", "global-rescore"):
             raise ValueError(
                 "selection_mode must be either 'additive' or 'global-rescore'"

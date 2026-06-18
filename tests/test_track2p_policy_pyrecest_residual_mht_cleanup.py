@@ -171,6 +171,35 @@ def test_high_overlap_pocket_is_opt_in(residual_mht_module) -> None:
     assert reason == "high_overlap_low_motion_disabled"
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"candidate_top_k": True}, "candidate_top_k"),
+        ({"edit_penalty": -0.1}, "edit_penalty"),
+        ({"score_threshold": float("nan")}, "score_threshold"),
+        ({"fragmentation_penalty": -0.1}, "fragmentation_penalty"),
+        (
+            {"include_high_overlap_low_motion": "false"},
+            "include_high_overlap_low_motion",
+        ),
+        (
+            {"high_overlap_min_registered_iou": -0.1},
+            "high_overlap_min_registered_iou",
+        ),
+        (
+            {"high_overlap_min_cell_probability": float("inf")},
+            "high_overlap_min_cell_probability",
+        ),
+        ({"high_overlap_score_bonus": float("nan")}, "high_overlap_score_bonus"),
+    ],
+)
+def test_residual_mht_options_reject_invalid_controls(
+    residual_mht_module, kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        residual_mht_module.PyRecEstResidualMHTOptions(**kwargs)
+
+
 def test_high_overlap_pocket_exposes_cell_probability_gate(
     residual_mht_module,
 ) -> None:
