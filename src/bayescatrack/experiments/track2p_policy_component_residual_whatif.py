@@ -32,6 +32,7 @@ import json
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal
 
@@ -60,6 +61,30 @@ _DEFAULT_CUMULATIVE_GROUP_FIELDS = (
     "support_bucket",
     "reason_bucket",
 )
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a positive integer")
+    if isinstance(value, Integral):
+        parsed = int(value)
+    elif isinstance(value, str):
+        try:
+            parsed = int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be a positive integer") from exc
+    else:
+        raise ValueError(f"{name} must be a positive integer")
+    if parsed <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return parsed
+
+
+def _positive_int_arg(value: str) -> int:
+    try:
+        return _positive_int_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 @dataclass(frozen=True)
@@ -225,9 +250,7 @@ def residual_whatif_bundle_rows(
     tracker variants still need their own conflict-aware benchmark row.
     """
 
-    max_bundle_size = max(0, int(max_bundle_size))
-    if max_bundle_size == 0:
-        return []
+    max_bundle_size = _positive_int_value(max_bundle_size, name="max_bundle_size")
 
     groups: dict[tuple[str, str, str], list[Mapping[str, Any]]] = defaultdict(list)
     for row in candidate_rows:
@@ -480,7 +503,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--max-bundle-size",
-        type=int,
+        type=_positive_int_arg,
         default=5,
         help="Maximum number of candidates to accumulate per bundle family.",
     )

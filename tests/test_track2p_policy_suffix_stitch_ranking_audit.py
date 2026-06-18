@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_suffix_stitch_ranking_audit as audit
 
@@ -14,6 +15,54 @@ def test_suffix_stitch_ranking_audit_is_registered() -> None:
     assert cli._BENCHMARK_COMMANDS[canonical].module == (
         "bayescatrack.experiments.track2p_policy_suffix_stitch_ranking_audit"
     )
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["--max-suffix-length", "--edge-top-k", "--path-beam-width"],
+)
+def test_suffix_stitch_ranking_parser_rejects_nonpositive_search_budgets(
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        audit.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--output",
+                "ranking.csv",
+                option,
+                "0",
+            ]
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_suffix_length", 0),
+        ("edge_top_k", 0),
+        ("path_beam_width", 0),
+    ],
+)
+def test_ranked_suffix_paths_rejects_nonpositive_search_budgets(
+    field: str,
+    value: int,
+) -> None:
+    kwargs = {
+        "max_suffix_length": 2,
+        "edge_top_k": 5,
+        "path_beam_width": 5,
+        field: value,
+    }
+    with pytest.raises(ValueError, match=field):
+        audit._ranked_suffix_paths(
+            np.asarray([[1, 2, -1]], dtype=int),
+            np.asarray([[1, 2, 3]], dtype=int),
+            subject="s",
+            feature_cache=None,  # type: ignore[arg-type]
+            **kwargs,
+        )
 
 
 def test_suffix_fragment_span_requires_contiguous_observations() -> None:

@@ -9,6 +9,7 @@ import re
 import sys
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, fields, replace
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -1483,8 +1484,10 @@ def _run_track2p_policy_component_rows(
             "split_penalty",
             default=cleanup_defaults.split_penalty,
         ),
-        min_side_observations=int(
-            options.get("min_side_observations", cleanup_defaults.min_side_observations)
+        min_side_observations=_positive_int_option(
+            options,
+            "min_side_observations",
+            default=cleanup_defaults.min_side_observations,
         ),
         threshold_margin_weight=_float_option(
             options,
@@ -1577,8 +1580,10 @@ def _run_track2p_policy_coherence_suffix_rows(
             "split_penalty",
             default=cleanup_defaults.split_penalty,
         ),
-        min_side_observations=int(
-            options.get("min_side_observations", cleanup_defaults.min_side_observations)
+        min_side_observations=_positive_int_option(
+            options,
+            "min_side_observations",
+            default=cleanup_defaults.min_side_observations,
         ),
         threshold_margin_weight=_float_option(
             options,
@@ -1608,8 +1613,8 @@ def _run_track2p_policy_coherence_suffix_rows(
     )
     gate_defaults = CoherenceSuffixStitchGate()
     gate = CoherenceSuffixStitchGate(
-        suffix_path_length=int(
-            options.get("suffix_path_length", gate_defaults.suffix_path_length)
+        suffix_path_length=_positive_int_option(
+            options, "suffix_path_length", default=gate_defaults.suffix_path_length
         ),
         min_cell_probability=_float_option(
             options,
@@ -1641,11 +1646,10 @@ def _run_track2p_policy_coherence_suffix_rows(
             "min_shape_consistency",
             default=gate_defaults.min_shape_consistency,
         ),
-        max_stitches_per_subject=int(
-            options.get(
-                "max_stitches_per_subject",
-                gate_defaults.max_stitches_per_subject,
-            )
+        max_stitches_per_subject=_positive_int_option(
+            options,
+            "max_stitches_per_subject",
+            default=gate_defaults.max_stitches_per_subject,
         ),
     )
     output = run_track2p_policy_coherence_suffix_stitch_whatif(
@@ -1662,8 +1666,8 @@ def _run_track2p_policy_coherence_suffix_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=cleanup_config,
         gate=gate,
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
     )
     return [
         dict(row) for row in output.result_rows if str(row.get("subject", "")) != "ALL"
@@ -1719,8 +1723,10 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
             "split_penalty",
             default=cleanup_defaults.split_penalty,
         ),
-        min_side_observations=int(
-            options.get("min_side_observations", cleanup_defaults.min_side_observations)
+        min_side_observations=_positive_int_option(
+            options,
+            "min_side_observations",
+            default=cleanup_defaults.min_side_observations,
         ),
         threshold_margin_weight=_float_option(
             options,
@@ -1750,8 +1756,8 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
     )
     gate_defaults = CoherenceSuffixStitchGate()
     gate = CoherenceSuffixStitchGate(
-        suffix_path_length=int(
-            options.get("suffix_path_length", gate_defaults.suffix_path_length)
+        suffix_path_length=_positive_int_option(
+            options, "suffix_path_length", default=gate_defaults.suffix_path_length
         ),
         min_cell_probability=_float_option(
             options,
@@ -1783,16 +1789,15 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
             "min_shape_consistency",
             default=gate_defaults.min_shape_consistency,
         ),
-        max_stitches_per_subject=int(
-            options.get(
-                "max_stitches_per_subject",
-                gate_defaults.max_stitches_per_subject,
-            )
+        max_stitches_per_subject=_positive_int_option(
+            options,
+            "max_stitches_per_subject",
+            default=gate_defaults.max_stitches_per_subject,
         ),
     )
     raw_max_edits = options.get("max_applied_teacher_edits")
-    max_applied_teacher_edits = (
-        None if raw_max_edits is None or int(raw_max_edits) < 0 else int(raw_max_edits)
+    max_applied_teacher_edits = _minus_one_or_nonnegative_int_or_none(
+        raw_max_edits, name="max_applied_teacher_edits"
     )
     allow_completing_rescue = None
     if "allow_completing_rescue" in options:
@@ -1813,8 +1818,8 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=cleanup_config,
         suffix_gate=gate,
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
         teacher_edge_order=str(options.get("teacher_edge_order", "structural")),
         teacher_action_filter=str(options.get("teacher_action_filter", "all")),
         teacher_feature_preset=str(options.get("teacher_feature_preset", "none")),
@@ -1845,8 +1850,8 @@ def _run_track2p_policy_coherence_suffix_teacher_rescue_rows(
         allow_fragment_merges=_bool_option(
             options, "allow_fragment_merges", default=True
         ),
-        min_teacher_component_observations=int(
-            options.get("min_teacher_component_observations", 1)
+        min_teacher_component_observations=_positive_int_option(
+            options, "min_teacher_component_observations", default=1
         ),
         max_applied_teacher_edits=max_applied_teacher_edits,
     )
@@ -1902,8 +1907,10 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
             "split_penalty",
             default=cleanup_defaults.split_penalty,
         ),
-        min_side_observations=int(
-            options.get("min_side_observations", cleanup_defaults.min_side_observations)
+        min_side_observations=_positive_int_option(
+            options,
+            "min_side_observations",
+            default=cleanup_defaults.min_side_observations,
         ),
         threshold_margin_weight=_float_option(
             options,
@@ -1933,8 +1940,8 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
     )
     suffix_defaults = CoherenceSuffixStitchGate()
     suffix_gate = CoherenceSuffixStitchGate(
-        suffix_path_length=int(
-            options.get("suffix_path_length", suffix_defaults.suffix_path_length)
+        suffix_path_length=_positive_int_option(
+            options, "suffix_path_length", default=suffix_defaults.suffix_path_length
         ),
         min_cell_probability=_float_option(
             options,
@@ -1966,11 +1973,10 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
             "min_shape_consistency",
             default=suffix_defaults.min_shape_consistency,
         ),
-        max_stitches_per_subject=int(
-            options.get(
-                "max_stitches_per_subject",
-                suffix_defaults.max_stitches_per_subject,
-            )
+        max_stitches_per_subject=_positive_int_option(
+            options,
+            "max_stitches_per_subject",
+            default=suffix_defaults.max_stitches_per_subject,
         ),
     )
     growth_veto_gate = _growth_veto_gate_from_options(options)
@@ -1988,8 +1994,8 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=cleanup_config,
         suffix_gate=suffix_gate,
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
         anchor_min_registered_iou=_float_option(
             options, "anchor_min_registered_iou", default=0.50
         ),
@@ -2049,8 +2055,8 @@ def _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=_coherence_suffix_cleanup_config_from_options(options),
         suffix_gate=_coherence_suffix_gate_from_options(options),
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
         anchor_min_registered_iou=_float_option(
             options, "anchor_min_registered_iou", default=0.50
         ),
@@ -2062,17 +2068,23 @@ def _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(
         ),
         growth_veto_gate=_growth_veto_gate_from_options(options),
         mht_options=PyRecEstResidualMHTOptions(
-            candidate_top_k=int(options.get("mht_candidate_top_k", 4)),
-            max_edits_per_subject=int(options.get("mht_max_edits_per_subject", 2)),
-            max_hypotheses=int(options.get("mht_max_hypotheses", 16)),
+            candidate_top_k=_positive_int_option(
+                options, "mht_candidate_top_k", default=4
+            ),
+            max_edits_per_subject=_positive_int_option(
+                options, "mht_max_edits_per_subject", default=2
+            ),
+            max_hypotheses=_positive_int_option(
+                options, "mht_max_hypotheses", default=16
+            ),
             edit_penalty=_float_option(options, "mht_edit_penalty", default=0.25),
             score_threshold=_float_option(options, "mht_score_threshold", default=1.0),
             selection_mode=_residual_mht_selection_mode(options),
             fragmentation_penalty=_float_option(
                 options, "mht_fragmentation_penalty", default=0.5
             ),
-            min_meaningful_track_length=int(
-                options.get("mht_min_meaningful_track_length", 2)
+            min_meaningful_track_length=_positive_int_option(
+                options, "mht_min_meaningful_track_length", default=2
             ),
             include_high_overlap_low_motion=_bool_option(
                 options,
@@ -2128,8 +2140,8 @@ def _run_track2p_policy_pyrecest_calibrated_mht_cleanup_rows(
         cell_probability_threshold=config.cell_probability_threshold,
         cleanup_config=_coherence_suffix_cleanup_config_from_options(options),
         suffix_gate=_coherence_suffix_gate_from_options(options),
-        edge_top_k=int(options.get("edge_top_k", 25)),
-        path_beam_width=int(options.get("path_beam_width", 100)),
+        edge_top_k=_positive_int_option(options, "edge_top_k", default=25),
+        path_beam_width=_positive_int_option(options, "path_beam_width", default=100),
         anchor_min_registered_iou=_float_option(
             options, "anchor_min_registered_iou", default=0.50
         ),
@@ -2141,14 +2153,17 @@ def _run_track2p_policy_pyrecest_calibrated_mht_cleanup_rows(
         ),
         structural_gate=_growth_veto_gate_from_options(options),
         mht_options=CalibratedResidualMHTOptions(
-            max_edits_per_subject=int(options.get("mht_max_edits_per_subject", 4)),
-            max_hypotheses=int(options.get("mht_max_hypotheses", 64)),
+            max_edits_per_subject=_positive_int_option(
+                options, "mht_max_edits_per_subject", default=4
+            ),
+            max_hypotheses=_positive_int_option(
+                options, "mht_max_hypotheses", default=64
+            ),
             edit_penalty=_float_option(options, "mht_edit_penalty", default=0.0),
             score_threshold=_float_option(options, "mht_score_threshold", default=0.0),
             logistic_c=_float_option(options, "calibrated_fp_logistic_c", default=0.5),
-            min_training_positive_examples=max(
-                0,
-                int(options.get("calibrated_fp_min_training_positives", 1)),
+            min_training_positive_examples=_nonnegative_int_option(
+                options, "calibrated_fp_min_training_positives", default=1
             ),
         ),
     )
@@ -2270,8 +2285,10 @@ def _coherence_suffix_cleanup_config_from_options(options: ManifestObject) -> An
             "split_penalty",
             default=cleanup_defaults.split_penalty,
         ),
-        min_side_observations=int(
-            options.get("min_side_observations", cleanup_defaults.min_side_observations)
+        min_side_observations=_positive_int_option(
+            options,
+            "min_side_observations",
+            default=cleanup_defaults.min_side_observations,
         ),
         threshold_margin_weight=_float_option(
             options,
@@ -2308,8 +2325,8 @@ def _coherence_suffix_gate_from_options(options: ManifestObject) -> Any:
 
     gate_defaults = CoherenceSuffixStitchGate()
     return CoherenceSuffixStitchGate(
-        suffix_path_length=int(
-            options.get("suffix_path_length", gate_defaults.suffix_path_length)
+        suffix_path_length=_positive_int_option(
+            options, "suffix_path_length", default=gate_defaults.suffix_path_length
         ),
         min_cell_probability=_float_option(
             options,
@@ -2341,11 +2358,10 @@ def _coherence_suffix_gate_from_options(options: ManifestObject) -> Any:
             "min_shape_consistency",
             default=gate_defaults.min_shape_consistency,
         ),
-        max_stitches_per_subject=int(
-            options.get(
-                "max_stitches_per_subject",
-                gate_defaults.max_stitches_per_subject,
-            )
+        max_stitches_per_subject=_positive_int_option(
+            options,
+            "max_stitches_per_subject",
+            default=gate_defaults.max_stitches_per_subject,
         ),
     )
 
@@ -2473,17 +2489,18 @@ def _growth_veto_gate_from_options(options: ManifestObject) -> Any:
             or "growth_veto_max_local_neighbor_distortion" in options
             else gate_defaults.max_local_neighbor_distortion
         ),
-        min_anchor_count=max(
-            0,
-            int(
-                options.get(
+        min_anchor_count=_nonnegative_int_option(
+            {
+                "min_anchor_count": options.get(
                     "min_veto_anchor_count",
                     options.get(
                         "growth_veto_min_anchor_count",
                         gate_defaults.min_anchor_count,
                     ),
                 )
-            ),
+            },
+            "min_anchor_count",
+            default=gate_defaults.min_anchor_count,
         ),
         min_complete_component_size=(
             None
@@ -2497,9 +2514,11 @@ def _growth_veto_gate_from_options(options: ManifestObject) -> Any:
                 name="min_veto_complete_component_size",
             )
         ),
-        max_row_rank=int(options.get("max_veto_row_rank", gate_defaults.max_row_rank)),
-        max_column_rank=int(
-            options.get("max_veto_column_rank", gate_defaults.max_column_rank)
+        max_row_rank=_positive_int_option(
+            options, "max_veto_row_rank", default=gate_defaults.max_row_rank
+        ),
+        max_column_rank=_positive_int_option(
+            options, "max_veto_column_rank", default=gate_defaults.max_column_rank
         ),
         require_not_suffix_edge=_bool_option(
             options,
@@ -2521,14 +2540,18 @@ def _growth_veto_gate_from_options(options: ManifestObject) -> Any:
             "require_veto_complete_component",
             default=gate_defaults.require_complete_component,
         ),
-        max_vetoes_per_subject=int(
-            options.get(
-                "max_vetoes_per_subject",
-                options.get(
-                    "growth_veto_max_vetoes_per_subject",
-                    gate_defaults.max_vetoes_per_subject,
-                ),
-            )
+        max_vetoes_per_subject=_positive_int_option(
+            {
+                "max_vetoes_per_subject": options.get(
+                    "max_vetoes_per_subject",
+                    options.get(
+                        "growth_veto_max_vetoes_per_subject",
+                        gate_defaults.max_vetoes_per_subject,
+                    ),
+                )
+            },
+            "max_vetoes_per_subject",
+            default=gate_defaults.max_vetoes_per_subject,
         ),
     )
 
@@ -2580,8 +2603,10 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
             "split_penalty",
             default=cleanup_defaults.split_penalty,
         ),
-        min_side_observations=int(
-            options.get("min_side_observations", cleanup_defaults.min_side_observations)
+        min_side_observations=_positive_int_option(
+            options,
+            "min_side_observations",
+            default=cleanup_defaults.min_side_observations,
         ),
         threshold_margin_weight=_float_option(
             options,
@@ -2727,9 +2752,29 @@ def _run_track2p_policy_teacher_adjacent_rescue_rows(
         ),
         teacher_edge_order=str(options.get("teacher_edge_order", "structural")),
         teacher_action_filter=str(options.get("teacher_action_filter", "all")),
-        min_component_observations=int(options.get("min_component_observations", 1)),
+        min_component_observations=_positive_int_option(
+            options, "min_component_observations", default=1
+        ),
         max_applied_edits=_nonnegative_int_or_none(
             options.get("max_applied_edits"), name="max_applied_edits"
+        ),
+        max_target_extension_edits=_nonnegative_int_or_none(
+            options.get("max_target_extension_edits"),
+            name="max_target_extension_edits",
+        ),
+        max_source_backfill_edits=_nonnegative_int_or_none(
+            options.get("max_source_backfill_edits"), name="max_source_backfill_edits"
+        ),
+        max_seed_source_backfill_edits=_nonnegative_int_or_none(
+            options.get("max_seed_source_backfill_edits"),
+            name="max_seed_source_backfill_edits",
+        ),
+        max_fragment_merge_edits=_nonnegative_int_or_none(
+            options.get("max_fragment_merge_edits"), name="max_fragment_merge_edits"
+        ),
+        max_completing_rescue_edits=_nonnegative_int_or_none(
+            options.get("max_completing_rescue_edits"),
+            name="max_completing_rescue_edits",
         ),
         teacher_feature_gate=teacher_feature_gate,
         teacher_repair_preset=str(options.get("teacher_repair_preset", "none")),
@@ -2763,15 +2808,23 @@ def _run_configurable_loso_rows(
             )
         )
     else:
+        candidate_top_k = getattr(config, "calibration_candidate_top_k_per_anchor", 20)
         hard_negative_options = CandidateHardNegativeOptions(
             negative_to_positive_ratio=_float_option(
-                options, "hard_negative_ratio", default=4.0
+                options,
+                "hard_negative_ratio",
+                default=float(getattr(config, "calibration_hard_negative_ratio", 4.0)),
             ),
             candidate_top_k_per_anchor=_positive_int_or_none(
-                options.get("hard_negative_top_k", 20), name="hard_negative_top_k"
+                options.get("hard_negative_top_k", candidate_top_k),
+                name="hard_negative_top_k",
             ),
             include_column_candidates=_bool_option(
-                options, "hard_negative_column_candidates", default=True
+                options,
+                "hard_negative_column_candidates",
+                default=bool(
+                    getattr(config, "calibration_include_column_candidates", True)
+                ),
             ),
             hardness_feature_names=_string_tuple(
                 options.get("hard_negative_features", ()),
@@ -2790,7 +2843,12 @@ def _run_configurable_loso_rows(
         )
 
     kwargs: dict[str, Any] = {
-        "sample_weight_strategy": str(options.get("sample_weight_strategy", "none")),
+        "sample_weight_strategy": str(
+            options.get(
+                "sample_weight_strategy",
+                getattr(config, "calibration_sample_weight_strategy", "none"),
+            )
+        ),
         "model_kind": str(
             options.get("model_kind", options.get("calibration_model", "logistic"))
         ),
@@ -3149,6 +3207,37 @@ def _bool_option(options: ManifestObject, key: str, *, default: bool) -> bool:
     return value
 
 
+def _integer_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    raise ValueError(f"{name} must be an integer")
+
+
+def _integer_option(options: ManifestObject, key: str, *, default: int) -> int:
+    return _integer_value(options.get(key, default), name=key)
+
+
+def _positive_int_option(options: ManifestObject, key: str, *, default: int) -> int:
+    value = _integer_option(options, key, default=default)
+    if value <= 0:
+        raise ValueError(f"{key} must be positive")
+    return value
+
+
+def _nonnegative_int_option(options: ManifestObject, key: str, *, default: int) -> int:
+    value = _integer_option(options, key, default=default)
+    if value < 0:
+        raise ValueError(f"{key} must be non-negative")
+    return value
+
+
 def _first_bool_option(options: ManifestObject, *keys: str, default: bool) -> bool:
     for key in keys:
         if key in options:
@@ -3161,9 +3250,20 @@ def _nonnegative_int_or_none(value: Any, *, name: str) -> int | None:
         return None
     if isinstance(value, str) and value.casefold() in {"none", "null", "all"}:
         return None
-    parsed = int(value)
+    parsed = _integer_value(value, name=name)
     if parsed < 0:
         raise ValueError(f"{name} must be non-negative or null")
+    return parsed
+
+
+def _minus_one_or_nonnegative_int_or_none(value: Any, *, name: str) -> int | None:
+    if value is None:
+        return None
+    parsed = _integer_value(value, name=name)
+    if parsed == -1:
+        return None
+    if parsed < -1:
+        raise ValueError(f"{name} must be -1, non-negative, or null")
     return parsed
 
 
@@ -3172,7 +3272,7 @@ def _positive_int_or_none(value: Any, *, name: str) -> int | None:
         return None
     if isinstance(value, str) and value.casefold() in {"none", "null", "all"}:
         return None
-    parsed = int(value)
+    parsed = _integer_value(value, name=name)
     if parsed <= 0:
         raise ValueError(f"{name} must be positive or null")
     return parsed

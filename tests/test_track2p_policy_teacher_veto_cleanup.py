@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_teacher_veto_cleanup as veto
 from bayescatrack.experiments.track2p_policy_component_residual_audit import (
@@ -287,6 +288,40 @@ def test_teacher_veto_can_try_weakest_edge_first_with_cap() -> None:
     assert applied_rows[0]["roi_b"] == 22
 
 
+def test_teacher_veto_zero_cap_prevents_vetoes() -> None:
+    predicted = np.asarray([[10, 11, 12, -1]], dtype=int)
+    teacher = np.asarray([[10, 11, -1, -1]], dtype=int)
+    edge = (1, 2, 11, 12)
+
+    report = veto.apply_teacher_veto_edges(
+        predicted,
+        teacher,
+        feature_index={edge: _weak_feature()},
+        config=veto.TeacherVetoConfig(
+            min_fragment_observations=1,
+            max_applied_vetoes=0,
+        ),
+    )
+
+    assert report.rows[0]["applied"] == 0
+    assert report.rows[0]["reason"] == "max_applied_vetoes_reached"
+    np.testing.assert_array_equal(report.tracks, predicted)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"min_fragment_observations": 0}, "min_fragment_observations"),
+        ({"max_applied_vetoes": -1}, "max_applied_vetoes"),
+    ],
+)
+def test_teacher_veto_config_rejects_invalid_budget_values(
+    kwargs: dict[str, int], match: str
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        veto.TeacherVetoConfig(**kwargs)
+
+
 def test_teacher_veto_rejects_centroid_too_close_when_requested() -> None:
     predicted = np.asarray([[10, 11, 12, -1]], dtype=int)
     teacher = np.asarray([[10, 11, -1, -1]], dtype=int)
@@ -547,3 +582,17 @@ def test_teacher_veto_parser_exposes_order_and_cap() -> None:
     assert args.require_teacher_conflict is True
     assert args.complete_track_veto_only is True
     assert args.include_teacher_supported_complete_track_edges is True
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        ("--min-veto-fragment-observations", "0"),
+        ("--max-applied-vetoes", "-1"),
+    ],
+)
+def test_teacher_veto_parser_rejects_invalid_budget_args(
+    option: str, value: str
+) -> None:
+    with pytest.raises(SystemExit):
+        veto.build_arg_parser().parse_args(["--data", "track2p-root", option, value])

@@ -41,6 +41,28 @@ def test_growth_field_residual_audit_parser_exposes_anchor_defaults() -> None:
     assert args.anchor_min_cell_probability == 0.80
 
 
+@pytest.mark.parametrize(
+    "option",
+    ["--suffix-path-length", "--max-stitches-per-subject", "--edge-top-k", "--path-beam-width"],
+)
+def test_growth_field_residual_audit_parser_rejects_nonpositive_search_budgets(
+    option: str,
+) -> None:
+    with pytest.raises(SystemExit):
+        growth_audit.build_arg_parser().parse_args(
+            [
+                "--data",
+                "track2p-root",
+                "--reference",
+                "manual-gt",
+                "--output",
+                "growth_edges.csv",
+                option,
+                "0",
+            ]
+        )
+
+
 def test_fit_growth_model_recovers_affine_translation(monkeypatch) -> None:
     source = {
         (0, 1): np.asarray([0.0, 0.0]),

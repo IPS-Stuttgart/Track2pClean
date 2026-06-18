@@ -8,6 +8,7 @@ from bayescatrack.association.calibrated_costs import (
 from bayescatrack.experiments import (
     track2p_benchmark,
     track2p_configurable_loso_calibration,
+    track2p_monotone_loso_calibration,
 )
 from bayescatrack.experiments.track2p_loso_calibration import (
     calibration_feature_names,
@@ -89,3 +90,55 @@ def test_configurable_loso_cli_accepts_activity_calibration_feature_set():
         calibration_feature_names(args.calibration_feature_set)
         == ACTIVITY_ASSOCIATION_FEATURES
     )
+
+
+# pylint: disable=protected-access
+def test_configurable_loso_cli_forwards_activity_tie_breaker_config():
+    args = track2p_configurable_loso_calibration.build_arg_parser().parse_args(
+        [
+            "--data",
+            "dataset",
+            "--activity-tie-breaker-weight",
+            "0.125",
+            "--activity-tie-breaker-component",
+            "spike_similarity_cost",
+            "--activity-trace-source",
+            "spike_traces",
+            "--activity-event-threshold",
+            "0.2",
+            "--no-progress",
+        ]
+    )
+
+    config = track2p_configurable_loso_calibration._config_from_args(args)
+
+    assert config.activity_tie_breaker_weight == 0.125
+    assert config.activity_tie_breaker_component == "spike_similarity_cost"
+    assert config.activity_trace_source == "spike_traces"
+    assert config.activity_event_threshold == 0.2
+
+
+# pylint: disable=protected-access
+def test_monotone_loso_cli_forwards_activity_tie_breaker_config():
+    args = track2p_monotone_loso_calibration.build_arg_parser().parse_args(
+        [
+            "--data",
+            "dataset",
+            "--activity-tie-breaker-weight",
+            "0.125",
+            "--activity-tie-breaker-component",
+            "spike_similarity_cost",
+            "--activity-trace-source",
+            "spike_traces",
+            "--activity-event-threshold",
+            "0.2",
+            "--no-progress",
+        ]
+    )
+
+    config = track2p_monotone_loso_calibration._config_from_args(args)
+
+    assert config.activity_tie_breaker_weight == 0.125
+    assert config.activity_tie_breaker_component == "spike_similarity_cost"
+    assert config.activity_trace_source == "spike_traces"
+    assert config.activity_event_threshold == 0.2
