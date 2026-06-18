@@ -40,13 +40,26 @@ class EdgeUncertaintyConfig:
     max_penalty: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if self.temperature <= 0.0:
+        if _finite_float_value(self.temperature, "temperature") <= 0.0:
             raise ValueError("temperature must be positive")
-        if self.uncertainty_penalty_weight < 0.0:
-            raise ValueError("uncertainty_penalty_weight must be non-negative")
-        if self.min_reliability <= 0.0 or self.min_reliability > 1.0:
+        for name in (
+            "uncertainty_penalty_weight",
+            "registration_rmse_weight",
+            "invalid_warp_fraction_weight",
+            "empty_registered_roi_weight",
+            "gated_edge_weight",
+            "covariance_logdet_weight",
+            "local_margin_weight",
+            "activity_missing_weight",
+        ):
+            if _finite_float_value(getattr(self, name), name) < 0.0:
+                raise ValueError(f"{name} must be non-negative")
+        min_reliability = _finite_float_value(
+            self.min_reliability, "min_reliability"
+        )
+        if min_reliability <= 0.0 or min_reliability > 1.0:
             raise ValueError("min_reliability must lie in (0, 1]")
-        if self.max_penalty <= 0.0:
+        if _finite_float_value(self.max_penalty, "max_penalty") <= 0.0:
             raise ValueError("max_penalty must be positive")
 
 
@@ -76,6 +89,15 @@ def edge_uncertainty_config_from_mapping(
     if isinstance(value, EdgeUncertaintyConfig):
         return value
     return EdgeUncertaintyConfig(**dict(value))
+
+
+def _finite_float_value(value: float, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
 
 
 def uncertainty_aware_cost_matrix(

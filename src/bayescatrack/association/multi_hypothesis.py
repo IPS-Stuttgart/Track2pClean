@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -21,12 +22,25 @@ class HypothesisConfig:
     fill_value: int = -1
 
     def __post_init__(self) -> None:
-        if self.edge_top_k <= 0:
-            raise ValueError("edge_top_k must be positive")
-        if self.beam_width <= 0:
-            raise ValueError("beam_width must be positive")
-        if self.min_consensus_votes <= 0:
-            raise ValueError("min_consensus_votes must be positive")
+        object.__setattr__(
+            self, "edge_top_k", _positive_int_value(self.edge_top_k, "edge_top_k")
+        )
+        object.__setattr__(
+            self, "beam_width", _positive_int_value(self.beam_width, "beam_width")
+        )
+        object.__setattr__(
+            self,
+            "min_consensus_votes",
+            _positive_int_value(self.min_consensus_votes, "min_consensus_votes"),
+        )
+        object.__setattr__(
+            self,
+            "max_edge_cost",
+            _finite_float_or_none(self.max_edge_cost, "max_edge_cost"),
+        )
+        object.__setattr__(
+            self, "fill_value", _integer_value(self.fill_value, "fill_value")
+        )
 
 
 @dataclass(frozen=True)
@@ -46,8 +60,8 @@ def top_k_edge_candidates(
 ) -> tuple[Edge, ...]:
     """Return top-k target candidates for each source row on one session edge."""
 
-    if row_top_k <= 0:
-        raise ValueError("row_top_k must be positive")
+    row_top_k = _positive_int_value(row_top_k, "row_top_k")
+    max_cost = _finite_float_or_none(max_cost, "max_cost")
     costs = np.asarray(cost_matrix, dtype=float)
     if costs.ndim != 2:
         raise ValueError("cost_matrix must be two-dimensional")
@@ -176,11 +190,16 @@ def consensus_edges(
     """Return edges that appear in enough prediction matrices or edge sets."""
 
     inputs = tuple(track_matrices)
-    threshold = (
-        int(np.ceil(float(min_support_fraction) * len(inputs)))
-        if min_support_fraction is not None
-        else int(min_votes or 1)
-    )
+    fill_value = _integer_value(fill_value, "fill_value")
+    if min_support_fraction is not None:
+        support_fraction = _support_fraction_value(
+            min_support_fraction, "min_support_fraction"
+        )
+        threshold = int(np.ceil(support_fraction * len(inputs)))
+    else:
+        threshold = _positive_int_value(
+            min_votes if min_votes is not None else 1, "min_votes"
+        )
     counts: dict[Edge, int] = {}
     for matrix_values in inputs:
         matrix = np.asarray(matrix_values, dtype=int)
@@ -202,6 +221,43 @@ def consensus_edges(
         for edge in seen_this_model:
             counts[edge] = counts.get(edge, 0) + 1
     return {edge: votes for edge, votes in counts.items() if votes >= threshold}
+
+
+def _positive_int_value(value: Any, name: str) -> int:
+    integer_value = _integer_value(value, name)
+    if integer_value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return integer_value
+
+
+def _integer_value(value: Any, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    return int(integer_value)
+
+
+def _finite_float_or_none(value: Any, name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _support_fraction_value(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must lie in (0, 1]")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric <= 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must lie in (0, 1]")
+    return numeric
 
 
 def _is_edge_set_input(matrix_values: Any, matrix: np.ndarray) -> bool:
