@@ -95,6 +95,8 @@ def test_component_cleanup_sweep_best_only_filters_rows(monkeypatch) -> None:
         ({"min_side_observations": (1.5,)}, "positive integers"),
         ({"min_side_observations": (True,)}, "positive integers"),
         ({"require_complete_track_options": ("maybe",)}, "boolean"),
+        ({"include_baseline": "false"}, "include_baseline"),
+        ({"best_only": 1}, "best_only"),
     ],
 )
 def test_component_cleanup_sweep_config_rejects_invalid_grid_entries(

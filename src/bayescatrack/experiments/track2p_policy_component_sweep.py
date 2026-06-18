@@ -91,7 +91,16 @@ class ComponentCleanupSweepConfig:
         object.__setattr__(
             self, "require_complete_track_options", require_complete_track_options
         )
-        object.__setattr__(self, "include_baseline", bool(self.include_baseline))
+        object.__setattr__(
+            self,
+            "include_baseline",
+            _strict_boolean_value(self.include_baseline, name="include_baseline"),
+        )
+        object.__setattr__(
+            self,
+            "best_only",
+            _strict_boolean_value(self.best_only, name="best_only"),
+        )
         object.__setattr__(self, "pairwise_f1_floor_delta", pairwise_f1_floor_delta)
 
 
@@ -426,6 +435,12 @@ def _boolean_value(value: Any, *, name: str) -> bool:
         if token in {"0", "false", "no", "n"}:
             return False
     raise ValueError(f"{name} entries must be boolean values")
+
+
+def _strict_boolean_value(value: Any, *, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be a boolean")
+    return value
 
 
 def _cleanup_grid(
