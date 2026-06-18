@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import operator
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -76,14 +77,22 @@ def _soft_iou_pairwise_cost_matrix(
     other: CalciumPlaneData,
     **kwargs: Any,
 ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
-    soft_iou_radius = int(kwargs.pop("soft_iou_radius", 0) or 0)
-    iou_weight = float(kwargs.get("iou_weight", 6.0))
+    soft_iou_radius = _nonnegative_int(
+        kwargs.pop("soft_iou_radius", 0), name="soft_iou_radius"
+    )
+    iou_weight = _finite_nonnegative_float(
+        kwargs.get("iou_weight", 6.0), name="iou_weight"
+    )
     if iou_weight <= 0.0:
         return original_method(self, other, **kwargs)
 
-    return_components = bool(kwargs.get("return_components", False))
-    similarity_epsilon = float(kwargs.get("similarity_epsilon", 1.0e-6))
-    large_cost = float(kwargs.get("large_cost", 1.0e6))
+    return_components = _strict_bool(
+        kwargs.get("return_components", False), name="return_components"
+    )
+    similarity_epsilon = _finite_positive_float(
+        kwargs.get("similarity_epsilon", 1.0e-6), name="similarity_epsilon"
+    )
+    large_cost = _finite_positive_float(kwargs.get("large_cost", 1.0e6), name="large_cost")
     if soft_iou_radius <= 0 and _is_iou_only_cost(kwargs):
         exact_iou = _pairwise_iou_matrix_sparse(self.roi_masks, other.roi_masks)
         iou_cost = -np.log(np.clip(exact_iou, similarity_epsilon, 1.0))
@@ -134,12 +143,26 @@ def _soft_iou_pairwise_cost_matrix(
 
 def _is_iou_only_cost(kwargs: dict[str, Any]) -> bool:
     return (
-        float(kwargs.get("centroid_weight", 1.0)) == 0.0
+        _finite_nonnegative_float(
+            kwargs.get("centroid_weight", 1.0), name="centroid_weight"
+        )
+        == 0.0
         and kwargs.get("max_centroid_distance") is None
-        and float(kwargs.get("mask_cosine_weight", 2.0)) == 0.0
-        and float(kwargs.get("area_weight", 0.5)) == 0.0
-        and float(kwargs.get("roi_feature_weight", 0.25)) == 0.0
-        and float(kwargs.get("cell_probability_weight", 0.0)) == 0.0
+        and _finite_nonnegative_float(
+            kwargs.get("mask_cosine_weight", 2.0), name="mask_cosine_weight"
+        )
+        == 0.0
+        and _finite_nonnegative_float(kwargs.get("area_weight", 0.5), name="area_weight")
+        == 0.0
+        and _finite_nonnegative_float(
+            kwargs.get("roi_feature_weight", 0.25), name="roi_feature_weight"
+        )
+        == 0.0
+        and _finite_nonnegative_float(
+            kwargs.get("cell_probability_weight", 0.0),
+            name="cell_probability_weight",
+        )
+        == 0.0
     )
 
 
@@ -235,11 +258,10 @@ def _pairwise_iou_matrix_sparse(
 
 
 def _dilate_mask_stack(masks: np.ndarray, *, radius: int) -> np.ndarray:
+    radius = _nonnegative_int(radius, name="soft_iou_radius")
     mask_array = np.asarray(masks) > 0
     if mask_array.ndim != 3:
         raise ValueError("ROI masks must have shape (n_roi, height, width)")
-    if radius < 0:
-        raise ValueError("soft_iou_radius must be non-negative")
     if radius == 0 or mask_array.shape[0] == 0:
         return mask_array
 
@@ -268,6 +290,66 @@ def _ensure_finite_cost_matrix(
         sanitized[invalid] = large_cost
     sanitized[sanitized < 0.0] = 0.0
     return sanitized
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric_value = float(stripped)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(numeric_value)
+    else:
+        try:
+            integer_value = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    if integer_value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return int(integer_value)
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=False)
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=True)
+
+
+def _finite_float(
+    value: Any, *, name: str, lower_bound: float, positive: bool
+) -> float:
+    qualifier = "positive" if positive else "non-negative"
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite {qualifier} value")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite {qualifier} value") from exc
+    violates_bound = (
+        numeric_value <= lower_bound if positive else numeric_value < lower_bound
+    )
+    if not np.isfinite(numeric_value) or violates_bound:
+        raise ValueError(f"{name} must be a finite {qualifier} value")
+    return numeric_value
 
 
 def _write_stdout(rows: list[dict[str, Any]], output_format: str) -> None:

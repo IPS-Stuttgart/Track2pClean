@@ -4,6 +4,7 @@
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack import CalciumPlaneData
 from bayescatrack.association.pyrecest_global_assignment import (
     registered_iou_cost_kwargs,
@@ -58,3 +59,52 @@ def test_radius_zero_iou_only_cost_matches_reference_implementation():
     )
 
     npt.assert_allclose(actual, expected)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"soft_iou_radius": True}, "soft_iou_radius"),
+        ({"soft_iou_radius": 1.5}, "soft_iou_radius"),
+        ({"soft_iou_radius": -1}, "soft_iou_radius"),
+        ({"return_components": 1}, "return_components"),
+        ({"similarity_epsilon": 0.0}, "similarity_epsilon"),
+        ({"similarity_epsilon": np.nan}, "similarity_epsilon"),
+        ({"large_cost": np.inf}, "large_cost"),
+        ({"iou_weight": True}, "iou_weight"),
+        ({"iou_weight": -0.1}, "iou_weight"),
+        ({"centroid_weight": np.nan, "soft_iou_radius": 0}, "centroid_weight"),
+    ],
+)
+def test_soft_iou_benchmark_cost_rejects_invalid_runtime_controls(
+    kwargs: dict[str, object], message: str
+) -> None:
+    reference = np.zeros((1, 8, 8), dtype=bool)
+    measurement = np.zeros((1, 8, 8), dtype=bool)
+    reference[0, 2:4, 2:4] = True
+    measurement[0, 2:4, 3:5] = True
+    reference_plane = CalciumPlaneData(reference)
+    measurement_plane = CalciumPlaneData(measurement)
+
+    common_kwargs = registered_iou_cost_kwargs()
+    common_kwargs["soft_iou_radius"] = 1
+    common_kwargs.update(kwargs)
+
+    with pytest.raises(ValueError, match=message):
+        _soft_iou_pairwise_cost_matrix(
+            CalciumPlaneData.build_pairwise_cost_matrix,
+            reference_plane,
+            measurement_plane,
+            **common_kwargs,
+        )
+
+
+@pytest.mark.parametrize("radius", [True, 1.5, np.nan])
+def test_benchmark_soft_iou_dilation_rejects_non_integer_radius(
+    radius: object,
+) -> None:
+    masks = np.zeros((1, 5, 5), dtype=bool)
+    masks[0, 2, 2] = True
+
+    with pytest.raises(ValueError, match="soft_iou_radius"):
+        _dilate_mask_stack(masks, radius=radius)
