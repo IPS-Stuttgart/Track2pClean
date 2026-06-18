@@ -7,14 +7,21 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 from bayescatrack.association.context_descriptors import (
+    ContextDescriptorConfig,
+    fov_patch_moment_descriptors,
     fov_patch_moments,
     local_density_descriptor,
+    neighbor_graph_signature,
     pairwise_context_components,
 )
 from bayescatrack.association.growth_priors import (
+    GrowthPriorConfig,
+    affine_growth_penalty_matrix,
     affine_growth_residuals,
     estimate_affine_growth_field,
+    fit_affine_growth_transform,
     growth_penalty_matrix,
+    radial_growth_penalty_matrix,
 )
 from bayescatrack.association.joint_registration_assignment import (
     JointRegistrationAssignmentConfig,
@@ -149,6 +156,75 @@ def test_context_descriptors_return_pairwise_planes_and_patch_moments() -> None:
     assert np.isclose(moments[0, 0], 12.0)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("patch_radius", True),
+        ("patch_radius", 1.5),
+        ("patch_radius", -1),
+        ("neighbor_k", False),
+        ("neighbor_k", 1.5),
+        ("neighbor_k", 0),
+        ("density_radius", True),
+        ("density_radius", float("nan")),
+        ("density_radius", float("inf")),
+        ("density_radius", 0.0),
+        ("histogram_bins", False),
+        ("histogram_bins", 1.5),
+        ("histogram_bins", 1),
+    ],
+)
+def test_context_descriptor_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        ContextDescriptorConfig(**{field: value})
+
+
+@pytest.mark.parametrize("radius", [True, float("nan"), float("inf"), 0.0])
+def test_local_density_descriptor_rejects_invalid_radius(
+    radius: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="radius"):
+        local_density_descriptor([[0.0, 0.0]], radius=radius)
+
+
+@pytest.mark.parametrize("density_radius", [True, float("nan"), float("inf"), 0.0])
+def test_pairwise_context_components_rejects_invalid_mapping_radius(
+    density_radius: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="density_radius"):
+        pairwise_context_components(
+            [[0.0, 0.0]], [[1.0, 1.0]], config={"density_radius": density_radius}
+        )
+
+
+@pytest.mark.parametrize("neighbor_k", [True, 1.5, 0])
+def test_neighbor_graph_signature_rejects_invalid_neighbor_k(
+    neighbor_k: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="neighbor_k"):
+        neighbor_graph_signature([[0.0, 0.0]], neighbor_k=neighbor_k)
+
+
+@pytest.mark.parametrize("patch_radius", [True, 1.5, -1])
+def test_fov_patch_moments_rejects_invalid_patch_radius(
+    patch_radius: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="patch_radius"):
+        fov_patch_moments([[1.0]], [[0.0, 0.0]], patch_radius=patch_radius)
+
+
+@pytest.mark.parametrize("histogram_bins", [True, 1.5, 1])
+def test_fov_patch_moment_descriptors_rejects_invalid_histogram_bins(
+    histogram_bins: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="histogram_bins"):
+        fov_patch_moment_descriptors(
+            [[1.0]], [[0.0, 0.0]], patch_radius=0, histogram_bins=histogram_bins
+        )
+
+
 def test_multi_hypothesis_candidates_and_consensus() -> None:
     candidates_a = top_k_edge_candidates(
         [[1.0, 0.2, 3.0], [0.5, 2.0, 0.1]], edge=(0, 1), row_top_k=1
@@ -271,6 +347,57 @@ def test_growth_priors_prefer_affine_consistent_matches() -> None:
 
     assert np.max(residuals) < 1.0e-10
     assert np.argmin(penalties, axis=1).tolist() == [0, 1, 2]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("affine_weight", True),
+        ("affine_weight", float("nan")),
+        ("affine_weight", float("inf")),
+        ("affine_weight", -0.1),
+        ("radial_weight", False),
+        ("radial_weight", float("nan")),
+        ("radial_weight", float("inf")),
+        ("radial_weight", -0.1),
+        ("displacement_scale", True),
+        ("displacement_scale", float("nan")),
+        ("displacement_scale", float("inf")),
+        ("displacement_scale", 0.0),
+        ("regularization", False),
+        ("regularization", float("nan")),
+        ("regularization", float("inf")),
+        ("regularization", -0.1),
+    ],
+)
+def test_growth_prior_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        GrowthPriorConfig(**{field: value})
+
+
+@pytest.mark.parametrize("regularization", [True, float("nan"), float("inf"), -0.1])
+def test_fit_affine_growth_transform_rejects_invalid_regularization(
+    regularization: float | bool,
+) -> None:
+    points = np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=float)
+
+    with pytest.raises(ValueError, match="regularization"):
+        fit_affine_growth_transform(points, points, regularization=regularization)
+
+
+@pytest.mark.parametrize("scale", [True, float("nan"), float("inf"), 0.0])
+def test_growth_penalty_helpers_reject_invalid_scale(scale: float | bool) -> None:
+    points = np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=float)
+    affine = np.asarray([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=float)
+
+    with pytest.raises(ValueError, match="scale"):
+        affine_growth_penalty_matrix(points, points, affine, scale=scale)
+    with pytest.raises(ValueError, match="scale"):
+        growth_penalty_matrix(points, points, affine=affine, scale=scale)
+    with pytest.raises(ValueError, match="scale"):
+        radial_growth_penalty_matrix(points, points, scale=scale)
 
 
 def test_multiplane_quality_penalty_and_session_offset() -> None:
