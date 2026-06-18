@@ -37,6 +37,9 @@ TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER = (
     "track2p-policy-coherence-suffix-teacher-rescue"
 )
 TRACK2P_POLICY_GROWTH_VETO_RUNNER = "track2p-policy-growth-veto-cleanup"
+TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER = (
+    "track2p-policy-coherence-suffix-growth-veto-cleanup"
+)
 TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER = (
     "track2p-policy-pyrecest-residual-mht-cleanup"
 )
@@ -59,6 +62,7 @@ BenchmarkRunner = Literal[
     "track2p-policy-coherence-suffix-stitch",
     "track2p-policy-coherence-suffix-teacher-rescue",
     "track2p-policy-growth-veto-cleanup",
+    "track2p-policy-coherence-suffix-growth-veto-cleanup",
     "track2p-policy-pyrecest-residual-mht-cleanup",
     "track2p-policy-pyrecest-calibrated-mht-cleanup",
     "track2p-policy-pyrecest-frontier-mht-cleanup",
@@ -359,6 +363,9 @@ RUNNER_CONFIG_FIELDS: dict[str, set[str]] = {
     TRACK2P_POLICY_GROWTH_VETO_RUNNER: set(
         TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_GROWTH_VETO_FIELDS
     ),
+    TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER: set(
+        TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_GROWTH_VETO_FIELDS
+    ),
     TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER: set(
         TRACK2P_CONFIG_FIELDS | TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS
     ),
@@ -408,6 +415,15 @@ RUNNER_ALIASES = {
     "track2p-coherence-suffix-teacher-growth-veto": (TRACK2P_POLICY_GROWTH_VETO_RUNNER),
     "track2p-policy-coherence-suffix-teacher-growth-veto": (
         TRACK2P_POLICY_GROWTH_VETO_RUNNER
+    ),
+    TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER: (
+        TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER
+    ),
+    "track2p-coherence-suffix-growth-veto-cleanup": (
+        TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER
+    ),
+    "track2p-component-coherence-suffix-growth-veto-cleanup": (
+        TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER
     ),
     TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER: (
         TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER
@@ -737,6 +753,11 @@ def _run_benchmark_rows(run_spec: BenchmarkRunSpec) -> list[dict[str, Any]]:
             cast(Track2pBenchmarkConfig, run_spec.config),
             dict(run_spec.runner_kwargs or {}),
         )
+    if run_spec.runner == TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER:
+        return _run_track2p_policy_coherence_suffix_growth_veto_cleanup_rows(
+            cast(Track2pBenchmarkConfig, run_spec.config),
+            dict(run_spec.runner_kwargs or {}),
+        )
     if run_spec.runner == TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER:
         return _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(
             cast(Track2pBenchmarkConfig, run_spec.config),
@@ -825,6 +846,8 @@ def _runner_specific_fields(runner: str) -> set[str]:
         return set(TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_FIELDS)
     if runner == TRACK2P_POLICY_GROWTH_VETO_RUNNER:
         return set(TRACK2P_POLICY_GROWTH_VETO_FIELDS)
+    if runner == TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER:
+        return set(TRACK2P_POLICY_GROWTH_VETO_FIELDS)
     if runner == TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER:
         return set(TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_FIELDS)
     if runner == TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER:
@@ -880,6 +903,12 @@ def _runner_kwargs(run_data: ManifestObject, runner: str) -> dict[str, Any]:
             if key in run_data
         }
     if runner == TRACK2P_POLICY_GROWTH_VETO_RUNNER:
+        return {
+            key: run_data[key]
+            for key in TRACK2P_POLICY_GROWTH_VETO_FIELDS
+            if key in run_data
+        }
+    if runner == TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER:
         return {
             key: run_data[key]
             for key in TRACK2P_POLICY_GROWTH_VETO_FIELDS
@@ -1036,6 +1065,7 @@ def _run_config(
         TRACK2P_POLICY_COHERENCE_SUFFIX_RUNNER,
         TRACK2P_POLICY_COHERENCE_SUFFIX_TEACHER_RESCUE_RUNNER,
         TRACK2P_POLICY_GROWTH_VETO_RUNNER,
+        TRACK2P_POLICY_COHERENCE_SUFFIX_GROWTH_VETO_RUNNER,
         TRACK2P_POLICY_PYRECEST_RESIDUAL_MHT_RUNNER,
         TRACK2P_POLICY_PYRECEST_CALIBRATED_MHT_RUNNER,
         TRACK2P_POLICY_PYRECEST_FRONTIER_MHT_RUNNER,
@@ -2032,6 +2062,21 @@ def _run_track2p_policy_growth_veto_cleanup_rows(
         ),
     )
     return [result.to_dict() for result in output.results]
+
+
+def _run_track2p_policy_coherence_suffix_growth_veto_cleanup_rows(
+    config: Track2pBenchmarkConfig, options: ManifestObject
+) -> list[dict[str, Any]]:
+    growth_veto_base = str(options.get("growth_veto_base", "coherence-suffix"))
+    if growth_veto_base != "coherence-suffix":
+        raise ValueError(
+            "track2p-policy-coherence-suffix-growth-veto-cleanup manifests must use "
+            "growth_veto_base='coherence-suffix'"
+        )
+    return _run_track2p_policy_growth_veto_cleanup_rows(
+        config,
+        {**dict(options), "growth_veto_base": "coherence-suffix"},
+    )
 
 
 def _run_track2p_policy_pyrecest_residual_mht_cleanup_rows(

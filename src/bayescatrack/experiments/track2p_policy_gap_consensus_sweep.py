@@ -418,9 +418,9 @@ def _rank_aggregates(
     ranked = sorted(
         enriched,
         key=lambda row: (
-            -float(row["gap_consensus_sweep_objective"]),
-            -float(row["complete_track_f1_micro"]),
-            -float(row["pairwise_f1_micro"]),
+            -_finite_rank_value(row["gap_consensus_sweep_objective"]),
+            -_finite_rank_value(row["complete_track_f1_micro"]),
+            -_finite_rank_value(row["pairwise_f1_micro"]),
             str(row["approach"]),
         ),
     )
@@ -438,6 +438,13 @@ def _objective_value(
             float(row["complete_track_f1_micro"]) + float(row["pairwise_f1_micro"])
         )
     return float(row[objective])
+
+
+def _finite_rank_value(value: float | int | str) -> float:
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        return float("-inf")
+    return numeric
 
 
 def _annotate_subject_rows(

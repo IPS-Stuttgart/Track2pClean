@@ -649,6 +649,61 @@ def test_benchmark_manifest_rejects_negative_growth_veto_component_size(tmp_path
         run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
 
+def test_benchmark_manifest_accepts_coherence_suffix_growth_veto_runner(
+    tmp_path, monkeypatch
+):
+    from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
+
+    calls = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {
+                "subject": "jm_growth_veto",
+                "variant": "fake coherence suffix growth veto cleanup",
+                "method": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                "n_sessions": 7,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+        edge_rows = ()
+        summary_rows = ()
+
+    def fake_growth_veto_cleanup(config, **kwargs):
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_growth_veto_cleanup,
+        "run_track2p_policy_growth_veto_cleanup",
+        fake_growth_veto_cleanup,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "coherence-suffix-growth-veto",
+                    "runner": "track2p-policy-coherence-suffix-growth-veto-cleanup",
+                    "data": "data",
+                    "output": "results/coherence-suffix-growth-veto.csv",
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["kwargs"]["prediction_base"] == "coherence-suffix"
+    assert (tmp_path / "results" / "coherence-suffix-growth-veto.csv").exists()
+
+
 def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
     tmp_path, monkeypatch
 ):

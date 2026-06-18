@@ -87,6 +87,46 @@ def test_component_cleanup_sweep_best_only_filters_rows(monkeypatch) -> None:
     assert len(output.aggregate_rows) == 2
 
 
+def test_component_cleanup_sweep_ranker_places_nonfinite_candidates_last() -> None:
+    rows = (
+        _aggregate_row(
+            "no-denominator",
+            pairwise=float("nan"),
+            complete=float("nan"),
+        ),
+        _aggregate_row("finite", pairwise=0.70, complete=0.60),
+    )
+
+    ranked = sweep_module._rank_aggregates(
+        rows,
+        objective="pairwise_f1_micro",
+    )
+
+    assert [row["approach"] for row in ranked] == ["finite", "no-denominator"]
+    assert math.isnan(float(ranked[1]["component_sweep_objective"]))
+
+
+def test_component_cleanup_sweep_ignores_nonfinite_pairwise_floor() -> None:
+    rows = (
+        _aggregate_row(
+            sweep_module.NO_SPLIT_COMPONENT_CANDIDATE,
+            pairwise=float("nan"),
+            complete=0.60,
+        ),
+        _aggregate_row("finite", pairwise=0.70, complete=0.70),
+    )
+
+    ranked = sweep_module._rank_aggregates(
+        rows,
+        objective="complete_track_f1_micro",
+        pairwise_f1_floor=float("nan"),
+    )
+
+    assert ranked[0]["approach"] == "finite"
+    assert ranked[0]["component_sweep_pairwise_f1_floor"] == ""
+    assert ranked[0]["component_sweep_pairwise_floor_feasible"] == 1
+
+
 @pytest.mark.parametrize(
     "kwargs, message",
     [
@@ -352,3 +392,18 @@ def _sweep_output(
 
 def _f1(tp: int, fp: int, fn: int) -> float:
     return 2.0 * tp / (2 * tp + fp + fn)
+
+
+def _aggregate_row(
+    approach: str, *, pairwise: float, complete: float
+) -> dict[str, float | int | str]:
+    return {
+        "approach": approach,
+        "subjects": 1,
+        "pairwise_f1_macro": pairwise,
+        "pairwise_f1_sd": 0.0,
+        "pairwise_f1_micro": pairwise,
+        "complete_track_f1_macro": complete,
+        "complete_track_f1_sd": 0.0,
+        "complete_track_f1_micro": complete,
+    }

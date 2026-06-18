@@ -87,6 +87,40 @@ class GrowthVetoGate:
     require_complete_component: bool = True
     max_vetoes_per_subject: int = 1
 
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "min_anchor_count",
+            _nonnegative_integer(self.min_anchor_count, name="min_anchor_count"),
+        )
+        if self.min_complete_component_size is not None:
+            object.__setattr__(
+                self,
+                "min_complete_component_size",
+                _nonnegative_integer(
+                    self.min_complete_component_size,
+                    name="min_complete_component_size",
+                ),
+            )
+        object.__setattr__(
+            self,
+            "max_row_rank",
+            _positive_integer(self.max_row_rank, name="max_row_rank"),
+        )
+        object.__setattr__(
+            self,
+            "max_column_rank",
+            _positive_integer(self.max_column_rank, name="max_column_rank"),
+        )
+        object.__setattr__(
+            self,
+            "max_vetoes_per_subject",
+            _positive_integer(
+                self.max_vetoes_per_subject,
+                name="max_vetoes_per_subject",
+            ),
+        )
+
 
 @dataclass(frozen=True)
 class GrowthVetoCleanupResult:
@@ -690,6 +724,29 @@ def _finite_float(value: Any, fallback: float) -> float:
     return numeric if np.isfinite(numeric) else float(fallback)
 
 
+def _validated_numeric_float(value: Any, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 1.0:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric)
+
+
+def _nonnegative_integer(value: Any, *, name: str) -> int:
+    numeric = _validated_numeric_float(value, name=name)
+    if not numeric.is_integer() or numeric < 0.0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return int(numeric)
+
+
 def _optional_float_arg(value: str) -> float | None:
     if str(value).strip().lower() in {"none", "null", "off", "disabled"}:
         return None
@@ -849,16 +906,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=int,
         default=1,
     )
-    parser.add_argument(
-        "--growth-veto-base",
-        choices=("teacher-rescue", "coherence-suffix"),
-        default="teacher-rescue",
-        help=(
-            "Prediction matrix to audit and split. The default preserves the "
-            "teacher-assisted top row; coherence-suffix tests growth veto after "
-            "CoherenceSuffixStitch without applying teacher-adjacent rescue."
-        ),
-    )
     return parser
 
 
@@ -957,6 +1004,12 @@ def main(argv: list[str] | None = None) -> int:
             result.edge_rows,
             args.diagnostics_output,
             output_format=cast(Literal["csv", "json"], args.diagnostics_format),
+        )
+    if args.candidate_output is not None:
+        veto.write_rows(
+            result.edge_rows,
+            args.candidate_output,
+            output_format=cast(Literal["csv", "json"], args.format),
         )
     if args.summary_output is not None:
         veto.write_rows(

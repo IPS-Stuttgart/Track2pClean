@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
 from bayescatrack.experiments.calibration_hard_negatives import (
     CandidateHardNegativeOptions,
@@ -82,6 +83,34 @@ def test_candidate_limited_hard_negatives_ignore_unsupervised_pairs():
         float(value) for value in features[labels == 0, 0]
     )
     assert selected_centroid_distances == [0.1]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {"negative_to_positive_ratio": True},
+            "negative_to_positive_ratio must be finite",
+        ),
+        (
+            {"candidate_top_k_per_anchor": 1.5},
+            "candidate_top_k_per_anchor must be positive or None",
+        ),
+        (
+            {"candidate_top_k_per_anchor": True},
+            "candidate_top_k_per_anchor must be positive or None",
+        ),
+        (
+            {"include_column_candidates": 1},
+            "include_column_candidates must be a boolean",
+        ),
+    ],
+)
+def test_hard_negative_options_reject_silent_candidate_knob_coercions(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        CandidateHardNegativeOptions(**kwargs)
 
 
 def test_balanced_binary_sample_weights_are_inverse_frequency():

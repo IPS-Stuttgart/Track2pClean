@@ -11,7 +11,9 @@ requires-python = ">=3.11,<3.15"
 dependencies = [
     "numpy",
     "scipy",
-    "pyrecest @ git+https://github.com/FlorianPfaff/PyRecEst.git@6ad4680a187f13b88e2cd6e4485e16c7f115962a",
+    "scikit-image==0.24.0; python_version < '3.13'",
+    "scikit-image>=0.25.2; python_version >= '3.13'",
+    "pyrecest @ git+https://github.com/FlorianPfaff/PyRecEst.git@b08e94ad68ab073cf57a3932d56c0698c2de3f77",
 ]
 
 [project.optional-dependencies]
@@ -19,7 +21,7 @@ calibration = [
     "scikit-learn",
 ]
 track2p = [
-    "track2p==0.6.2",
+    "track2p==0.6.2; python_version < '3.13'",
 ]
 
 [project.scripts]
@@ -38,7 +40,7 @@ bayescatrack = ["configs/*.yaml", "py.typed"]
 requires-poetry = ">=2.1"
 
 [tool.poetry.group.dev.dependencies]
-pytest = ">=8"
+pytest = ">=9.1.0"
 
 [tool.setuptools.packages.find]
 where = ["src"]

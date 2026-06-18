@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
 from bayescatrack.association.monotone_ranker import (
     MonotoneRankerOptions,
@@ -77,3 +78,30 @@ def test_monotone_ranker_cost_is_monotone_in_badness_features():
     costs = model.pairwise_cost_matrix(ordered_features)
 
     assert costs[0] <= costs[1] <= costs[2]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"margin": np.nan}, "margin must be finite"),
+        (
+            {"max_negatives_per_positive": 1.5},
+            "max_negatives_per_positive must be a positive integer",
+        ),
+        ({"include_row_negatives": 1}, "include_row_negatives must be a boolean"),
+        ({"include_column_negatives": 0}, "include_column_negatives must be a boolean"),
+        ({"max_iter": True}, "max_iter must be finite"),
+        ({"learning_rate": 0.0}, "learning_rate must be finite and positive"),
+        ({"l2_regularization": np.nan}, "l2_regularization must be finite"),
+        (
+            {"binary_loss_weight": -0.1},
+            "binary_loss_weight must be finite and non-negative",
+        ),
+        ({"tolerance": True}, "tolerance must be finite"),
+    ],
+)
+def test_monotone_ranker_options_reject_silent_training_knob_coercions(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        MonotoneRankerOptions(**kwargs)
