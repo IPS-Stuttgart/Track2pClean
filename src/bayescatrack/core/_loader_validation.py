@@ -40,12 +40,17 @@ def install_loader_validation_patches(bridge_impl: ModuleType) -> None:
             _validate_suite2p_stat_coordinates(
                 Path(plane_dir),
                 bridge_impl,
-                include_non_cells=bool(kwargs.get("include_non_cells", False)),
-                cell_probability_threshold=float(
-                    kwargs.get("cell_probability_threshold", 0.5)
+                include_non_cells=_strict_bool(
+                    kwargs.get("include_non_cells", False),
+                    name="include_non_cells",
                 ),
-                exclude_overlapping_pixels=bool(
-                    kwargs.get("exclude_overlapping_pixels", True)
+                cell_probability_threshold=_finite_probability(
+                    kwargs.get("cell_probability_threshold", 0.5),
+                    name="cell_probability_threshold",
+                ),
+                exclude_overlapping_pixels=_strict_bool(
+                    kwargs.get("exclude_overlapping_pixels", True),
+                    name="exclude_overlapping_pixels",
                 ),
             )
             return original_suite2p_loader(plane_dir, *args, **kwargs)
@@ -215,6 +220,8 @@ def _load_track2p_subject_with_auto_fallback_impl(
     strict: bool,
     **suite2p_kwargs: Any,
 ) -> list[Any]:
+    include_behavior = _strict_bool(include_behavior, name="include_behavior")
+    strict = _strict_bool(strict, name="strict")
     if input_format not in {"auto", "suite2p", "npy"}:
         raise ValueError("input_format must be 'auto', 'suite2p', or 'npy'")
 
@@ -324,3 +331,21 @@ def _load_auto_plane_with_fallback(
         warnings.warn(message, RuntimeWarning, stacklevel=2)
         return None
     raise FileNotFoundError(message)
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _finite_probability(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite probability")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite probability") from exc
+    if not np.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must be a finite probability")
+    return numeric

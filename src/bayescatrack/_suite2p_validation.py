@@ -37,12 +37,16 @@ def load_suite2p_plane(plane_dir: str | Path, *args: Any, **kwargs: Any) -> Any:
     if not args:
         _validate_suite2p_stat_shapes(
             plane_dir,
-            include_non_cells=bool(kwargs.get("include_non_cells", False)),
-            cell_probability_threshold=float(
-                kwargs.get("cell_probability_threshold", 0.5)
+            include_non_cells=_strict_bool(
+                kwargs.get("include_non_cells", False), name="include_non_cells"
             ),
-            exclude_overlapping_pixels=bool(
-                kwargs.get("exclude_overlapping_pixels", True)
+            cell_probability_threshold=_finite_probability(
+                kwargs.get("cell_probability_threshold", 0.5),
+                name="cell_probability_threshold",
+            ),
+            exclude_overlapping_pixels=_strict_bool(
+                kwargs.get("exclude_overlapping_pixels", True),
+                name="exclude_overlapping_pixels",
             ),
         )
     return original(plane_dir, *args, **kwargs)
@@ -140,6 +144,24 @@ def _original_load_suite2p_plane() -> Callable[..., Any]:
     if original is None:
         raise RuntimeError("Suite2p stat validation wrapper is not installed")
     return original
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _finite_probability(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite probability")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite probability") from exc
+    if not np.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must be a finite probability")
+    return numeric
 
 
 __all__ = ["install_suite2p_stat_validation", "load_suite2p_plane"]
