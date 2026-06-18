@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
@@ -19,14 +20,35 @@ class JointRefinementConfig:
     convergence_tolerance: float = 1.0e-6
 
     def __post_init__(self) -> None:
-        if self.max_iterations <= 0:
-            raise ValueError("max_iterations must be positive")
-        if not 0.0 <= self.high_confidence_quantile <= 1.0:
-            raise ValueError("high_confidence_quantile must lie in [0, 1]")
-        if self.min_anchor_edges < 1:
-            raise ValueError("min_anchor_edges must be positive")
-        if self.cost_relief < 0.0:
-            raise ValueError("cost_relief must be non-negative")
+        object.__setattr__(
+            self,
+            "max_iterations",
+            _positive_int_value(self.max_iterations, "max_iterations"),
+        )
+        object.__setattr__(
+            self,
+            "high_confidence_quantile",
+            _unit_interval_float(
+                self.high_confidence_quantile, "high_confidence_quantile"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_anchor_edges",
+            _positive_int_value(self.min_anchor_edges, "min_anchor_edges"),
+        )
+        object.__setattr__(
+            self,
+            "cost_relief",
+            _finite_nonnegative_float(self.cost_relief, "cost_relief"),
+        )
+        object.__setattr__(
+            self,
+            "convergence_tolerance",
+            _finite_nonnegative_float(
+                self.convergence_tolerance, "convergence_tolerance"
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -38,12 +60,23 @@ class JointRegistrationAssignmentConfig:
     min_anchors: int = 8
 
     def __post_init__(self) -> None:
-        if not 0.0 <= self.min_anchor_probability <= 1.0:
-            raise ValueError("min_anchor_probability must lie in [0, 1]")
-        if self.min_anchor_margin < 0.0:
-            raise ValueError("min_anchor_margin must be non-negative")
-        if self.min_anchors < 1:
-            raise ValueError("min_anchors must be positive")
+        object.__setattr__(
+            self,
+            "min_anchor_probability",
+            _unit_interval_float(
+                self.min_anchor_probability, "min_anchor_probability"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_anchor_margin",
+            _finite_nonnegative_float(self.min_anchor_margin, "min_anchor_margin"),
+        )
+        object.__setattr__(
+            self,
+            "min_anchors",
+            _positive_int_value(self.min_anchors, "min_anchors"),
+        )
 
 
 @dataclass(frozen=True)
@@ -104,6 +137,8 @@ def high_confidence_anchor_edges(
 ) -> tuple[tuple[int, int], ...]:
     """Return mutual low-cost row/column anchors from a cost matrix."""
 
+    quantile = _unit_interval_float(quantile, "quantile")
+    min_anchor_edges = _positive_int_value(min_anchor_edges, "min_anchor_edges")
     costs = np.asarray(cost_matrix, dtype=float)
     if costs.ndim != 2:
         raise ValueError("cost_matrix must be two-dimensional")
@@ -139,6 +174,7 @@ def anchor_relief_cost_matrix(
 ) -> np.ndarray:
     """Return a copy of costs with a small relief around trusted anchors."""
 
+    relief = _finite_nonnegative_float(relief, "relief")
     costs = np.asarray(cost_matrix, dtype=float).copy()
     if relief <= 0.0 or not anchor_edges:
         return costs
@@ -232,6 +268,36 @@ def apply_joint_anchor_relief_to_pairwise_costs(
             matrix, anchors, relief=cfg.cost_relief
         )
     return adjusted
+
+
+def _positive_int_value(value: Any, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if integer_value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return int(integer_value)
+
+
+def _finite_nonnegative_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and non-negative")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _unit_interval_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must lie in [0, 1]")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must lie in [0, 1]")
+    return numeric
 
 
 def state_summary_rows(
