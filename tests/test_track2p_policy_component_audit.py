@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 from bayescatrack.experiments.track2p_policy_component_audit import (
     ComponentCleanupConfig,
     apply_weakest_bridge_splits,
@@ -51,6 +52,22 @@ def test_edge_risk_score_prefers_weak_bridge() -> None:
 
     assert edge_risk_score(weak) > 3.0
     assert edge_risk_score(strong) == 0.0
+
+
+@pytest.mark.parametrize("bad_value", [True, False, 0, -1, 1.5, "1.5"])
+def test_component_cleanup_config_rejects_invalid_min_side_observations(
+    bad_value,
+) -> None:
+    with pytest.raises(ValueError, match="min_side_observations"):
+        ComponentCleanupConfig(min_side_observations=bad_value)
+
+
+def test_component_cleanup_config_normalizes_integer_like_min_side_observations() -> (
+    None
+):
+    config = ComponentCleanupConfig(min_side_observations="3")
+
+    assert config.min_side_observations == 3
 
 
 def test_split_track_at_bridge_returns_left_and_right_fragments() -> None:
