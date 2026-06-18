@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -38,24 +39,55 @@ class MonotoneRankerOptions:
 
     def __post_init__(self) -> None:
         object.__setattr__(
-            self, "monotone_feature_names", tuple(self.monotone_feature_names or ())
+            self,
+            "monotone_feature_names",
+            _feature_name_tuple(self.monotone_feature_names, "monotone_feature_names"),
         )
-        if self.margin <= 0.0:
-            raise ValueError("margin must be positive")
-        if self.max_negatives_per_positive <= 0:
-            raise ValueError("max_negatives_per_positive must be positive")
+        object.__setattr__(
+            self, "margin", _finite_positive_float(self.margin, "margin")
+        )
+        object.__setattr__(
+            self,
+            "max_negatives_per_positive",
+            _positive_int_value(
+                self.max_negatives_per_positive, "max_negatives_per_positive"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "include_row_negatives",
+            _bool_value(self.include_row_negatives, "include_row_negatives"),
+        )
+        object.__setattr__(
+            self,
+            "include_column_negatives",
+            _bool_value(self.include_column_negatives, "include_column_negatives"),
+        )
         if not self.include_row_negatives and not self.include_column_negatives:
             raise ValueError("At least one negative source must be enabled")
-        if self.max_iter <= 0:
-            raise ValueError("max_iter must be positive")
-        if self.learning_rate <= 0.0:
-            raise ValueError("learning_rate must be positive")
-        if self.l2_regularization < 0.0:
-            raise ValueError("l2_regularization must be non-negative")
-        if self.binary_loss_weight < 0.0:
-            raise ValueError("binary_loss_weight must be non-negative")
-        if self.tolerance < 0.0:
-            raise ValueError("tolerance must be non-negative")
+        object.__setattr__(
+            self, "max_iter", _positive_int_value(self.max_iter, "max_iter")
+        )
+        object.__setattr__(
+            self,
+            "learning_rate",
+            _finite_positive_float(self.learning_rate, "learning_rate"),
+        )
+        object.__setattr__(
+            self,
+            "l2_regularization",
+            _finite_nonnegative_float(self.l2_regularization, "l2_regularization"),
+        )
+        object.__setattr__(
+            self,
+            "binary_loss_weight",
+            _finite_nonnegative_float(self.binary_loss_weight, "binary_loss_weight"),
+        )
+        object.__setattr__(
+            self,
+            "tolerance",
+            _finite_nonnegative_float(self.tolerance, "tolerance"),
+        )
 
 
 @dataclass(frozen=True)
@@ -440,3 +472,65 @@ def _sigmoid(values: Any) -> np.ndarray:
 def _softplus(values: Any) -> np.ndarray:
     values = np.asarray(values, dtype=float)
     return np.log1p(np.exp(-np.abs(values))) + np.maximum(values, 0.0)
+
+
+def _feature_name_tuple(value: Any, name: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        raw_values = value.split(",")
+    else:
+        try:
+            raw_values = tuple(value)
+        except TypeError as exc:
+            raise ValueError(f"{name} must be a sequence of feature names") from exc
+    output: list[str] = []
+    for raw in raw_values:
+        if not isinstance(raw, str):
+            raise ValueError(f"{name} entries must be non-empty strings")
+        token = raw.strip()
+        if not token:
+            raise ValueError(f"{name} entries must be non-empty strings")
+        output.append(token)
+    return tuple(output)
+
+
+def _positive_int_value(value: Any, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if integer_value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return int(integer_value)
+
+
+def _finite_positive_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be finite and positive")
+    return numeric
+
+
+def _finite_nonnegative_float(value: Any, name: str) -> float:
+    numeric = _finite_float_value(value, name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _finite_float_value(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _bool_value(value: Any, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
