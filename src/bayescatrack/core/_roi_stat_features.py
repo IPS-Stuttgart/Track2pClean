@@ -64,6 +64,7 @@ def install_split_roi_stat_pairwise_features(calcium_plane_cls: type[Any]) -> No
         similarity_epsilon = _finite_positive_float(
             similarity_epsilon, name="similarity_epsilon"
         )
+        return_components = _strict_bool(return_components, name="return_components")
 
         result = original_build_pairwise_cost_matrix(
             self,
@@ -260,3 +261,9 @@ def _finite_positive_float(value: Any, *, name: str) -> float:
     if not np.isfinite(number) or number <= 0.0:
         raise ValueError(f"{name} must be a finite positive value")
     return number
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value

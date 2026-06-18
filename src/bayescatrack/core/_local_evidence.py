@@ -86,6 +86,9 @@ def install_local_evidence_pairwise_features(calcium_plane_cls: type[Any]) -> No
         local_evidence_components = _strict_bool(
             local_evidence_components, name="local_evidence_components"
         )
+        return_components = _strict_bool(
+            return_components, name="return_components"
+        )
         normalize_weighted_overlap = _strict_bool(
             normalize_weighted_overlap, name="normalize_weighted_overlap"
         )
