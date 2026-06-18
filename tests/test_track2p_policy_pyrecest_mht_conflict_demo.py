@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bayescatrack.experiments import track2p_policy_pyrecest_mht_conflict_demo as demo
 
 _TRUE_COLLISION_EDGE = "demo:1:2:11:12:0"

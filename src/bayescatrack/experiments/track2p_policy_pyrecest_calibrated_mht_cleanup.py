@@ -17,7 +17,6 @@ from dataclasses import dataclass, replace
 from typing import Any, Literal, cast
 
 import numpy as np
-
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import (
     track2p_policy_coherence_suffix_stitch_whatif as suffix,
