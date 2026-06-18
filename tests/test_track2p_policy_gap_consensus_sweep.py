@@ -88,6 +88,7 @@ def test_gap_consensus_sweep_best_only_filters_rows(monkeypatch) -> None:
         ({"max_gaps": (0,)}, "positive integers"),
         ({"consensus_modes": ("unsupported",)}, "unsupported consensus mode"),
         ({"min_support_fraction": 0.0}, "lie in"),
+        ({"best_only": "false"}, "best_only"),
     ],
 )
 def test_gap_consensus_sweep_config_rejects_invalid_grid_entries(

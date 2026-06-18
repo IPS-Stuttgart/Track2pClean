@@ -148,6 +148,11 @@ class GapConsensusSweepConfig:
             raise ValueError(
                 "objective must be one of: " + ", ".join(GAP_CONSENSUS_SWEEP_OBJECTIVES)
             )
+        object.__setattr__(
+            self,
+            "best_only",
+            _strict_boolean_value(self.best_only, name="best_only"),
+        )
 
 
 @dataclass(frozen=True)
@@ -562,6 +567,12 @@ def _boolean_value(value: Any, *, name: str) -> bool:
         if token in {"0", "false", "no", "n"}:
             return False
     raise ValueError(f"{name} entries must be boolean values")
+
+
+def _strict_boolean_value(value: Any, *, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be a boolean")
+    return value
 
 
 def _consensus_mode_tuple(values: Sequence[Any]) -> tuple[ConsensusMode, ...]:
