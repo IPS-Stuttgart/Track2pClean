@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 
+import pytest
 from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_component_residual_whatif as whatif
 
@@ -131,6 +132,15 @@ def test_residual_whatif_bundle_rows_accumulate_same_support_family() -> None:
     assert bundle["pairwise_f1_delta"] > single_fn["pairwise_f1_delta"]
 
 
+def test_residual_whatif_bundle_rows_rejects_non_positive_limit() -> None:
+    with pytest.raises(ValueError, match="max_bundle_size"):
+        whatif.residual_whatif_bundle_rows(
+            [],
+            whatif.MicroCounts(0, 0, 0, 0, 0, 0),
+            max_bundle_size=0,
+        )
+
+
 def test_residual_cumulative_whatif_scores_same_bucket_prefixes() -> None:
     base = whatif.MicroCounts(
         pairwise_tp=586,
@@ -206,6 +216,23 @@ def test_residual_cumulative_whatif_rejects_non_positive_limit() -> None:
         assert "max_edits_per_group" in str(exc)
     else:  # pragma: no cover - defensive assertion
         raise AssertionError("expected non-positive max_edits_per_group to fail")
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_residual_whatif_parser_rejects_invalid_bundle_limit(value: str) -> None:
+    with pytest.raises(SystemExit):
+        whatif.build_arg_parser().parse_args(
+            [
+                "--residual-audit",
+                "residual.csv",
+                "--component-benchmark",
+                "component.csv",
+                "--output",
+                "whatif.csv",
+                "--max-bundle-size",
+                value,
+            ]
+        )
 
 
 def test_load_base_counts_sums_subject_rows(tmp_path) -> None:

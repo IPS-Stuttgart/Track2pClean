@@ -49,6 +49,9 @@ from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
     TeacherActionFilter,
     TeacherEdgeFeatureGate,
     TeacherEdgeOrder,
+    _integral_value,
+    _positive_int_arg,
+    _positive_int_value,
     _teacher_edge_order_requires_feature_index,
     _teacher_feature_gate_enabled,
     apply_teacher_adjacent_rescue_edges,
@@ -57,6 +60,25 @@ from bayescatrack.experiments.track2p_policy_teacher_adjacent_rescue import (
 )
 
 METHOD = "track2p-policy-coherence-suffix-teacher-rescue"
+
+
+def _teacher_edit_cap_value(value: Any, *, name: str) -> int | None:
+    if value is None:
+        return None
+    numeric = _integral_value(value, name=name)
+    if numeric == -1:
+        return None
+    if numeric < -1:
+        raise ValueError(f"{name} must be -1 or non-negative")
+    return numeric
+
+
+def _teacher_edit_cap_arg(value: str) -> int:
+    try:
+        parsed = _teacher_edit_cap_value(value, name="value")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    return -1 if parsed is None else parsed
 
 
 @dataclass(frozen=True)
@@ -98,6 +120,14 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
     edge_top_k = suffix._positive_int_value(edge_top_k, name="edge_top_k")
     path_beam_width = suffix._positive_int_value(
         path_beam_width, name="path_beam_width"
+    )
+    min_teacher_component_observations = _positive_int_value(
+        min_teacher_component_observations,
+        name="min_teacher_component_observations",
+    )
+    max_applied_teacher_edits = _teacher_edit_cap_value(
+        max_applied_teacher_edits,
+        name="max_applied_teacher_edits",
     )
     policy_config = track2p_policy_config(
         config,
@@ -141,7 +171,7 @@ def run_track2p_policy_coherence_suffix_teacher_rescue(
                 allow_completing_seed_source_backfill
             ),
             allow_fragment_merges=bool(allow_fragment_merges),
-            min_teacher_component_observations=int(min_teacher_component_observations),
+            min_teacher_component_observations=min_teacher_component_observations,
             max_applied_teacher_edits=max_applied_teacher_edits,
         )
         rows.append(row)
@@ -174,6 +204,14 @@ def _subject_row(
     min_teacher_component_observations: int,
     max_applied_teacher_edits: int | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    min_teacher_component_observations = _positive_int_value(
+        min_teacher_component_observations,
+        name="min_teacher_component_observations",
+    )
+    max_applied_teacher_edits = _teacher_edit_cap_value(
+        max_applied_teacher_edits,
+        name="max_applied_teacher_edits",
+    )
     reference = _load_reference_for_subject(
         subject_dir, data_root=config.data, config=config
     )
@@ -269,7 +307,7 @@ def _subject_row(
         ),
         target_extension_feature_gate=target_extension_feature_gate,
         seed_source_feature_gate=seed_source_feature_gate,
-        min_component_observations=max(1, int(min_teacher_component_observations)),
+        min_component_observations=min_teacher_component_observations,
         max_applied_edits=max_applied_teacher_edits,
     )
     scores = dict(score_track_matrices(teacher_report.tracks, reference_eval))
@@ -512,12 +550,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--min-teacher-component-observations",
-        type=int,
+        type=_positive_int_arg,
         default=1,
     )
     parser.add_argument(
         "--max-applied-teacher-edits",
-        type=int,
+        type=_teacher_edit_cap_arg,
         default=-1,
         help="Cap accepted teacher edits per subject; -1 leaves the rescue uncapped.",
     )
@@ -594,11 +632,10 @@ def main(argv: list[str] | None = None) -> int:
             args.allow_completing_seed_source_backfill
         ),
         allow_fragment_merges=bool(args.allow_fragment_merges),
-        min_teacher_component_observations=int(args.min_teacher_component_observations),
-        max_applied_teacher_edits=(
-            None
-            if int(args.max_applied_teacher_edits) < 0
-            else int(args.max_applied_teacher_edits)
+        min_teacher_component_observations=args.min_teacher_component_observations,
+        max_applied_teacher_edits=_teacher_edit_cap_value(
+            args.max_applied_teacher_edits,
+            name="max_applied_teacher_edits",
         ),
     )
     suffix.write_rows(
