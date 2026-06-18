@@ -2,6 +2,7 @@
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack.association.higher_order_consistency import (
     HigherOrderConsistencyConfig,
     apply_higher_order_consistency,
@@ -71,3 +72,48 @@ def test_zero_weight_returns_numeric_copies_without_changes():
     for edge, matrix in costs.items():
         npt.assert_allclose(adjusted[edge], matrix)
         assert adjusted[edge] is not matrix
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("triplet_weight", True),
+        ("triplet_weight", False),
+        ("triplet_weight", float("nan")),
+        ("triplet_weight", float("inf")),
+        ("triplet_weight", -0.1),
+        ("support_cost_cap", True),
+        ("support_cost_cap", False),
+        ("support_cost_cap", float("nan")),
+        ("support_cost_cap", float("inf")),
+        ("support_cost_cap", -0.1),
+        ("max_penalty", True),
+        ("max_penalty", False),
+        ("max_penalty", float("nan")),
+        ("max_penalty", float("inf")),
+        ("max_penalty", -0.1),
+        ("large_cost", True),
+        ("large_cost", False),
+        ("large_cost", float("nan")),
+        ("large_cost", float("inf")),
+        ("large_cost", 0.0),
+    ],
+)
+def test_higher_order_config_rejects_invalid_float_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        HigherOrderConsistencyConfig(**{field: value})
+
+
+@pytest.mark.parametrize(
+    "support_top_k",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_higher_order_config_rejects_invalid_support_top_k(
+    support_top_k: object,
+) -> None:
+    with pytest.raises(ValueError, match="support_top_k"):
+        HigherOrderConsistencyConfig(
+            support_top_k=support_top_k  # type: ignore[arg-type]
+        )

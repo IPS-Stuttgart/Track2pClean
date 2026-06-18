@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -70,23 +71,35 @@ class Track2pPolicyDPConfig:
     def __post_init__(self) -> None:
         if self.threshold_method not in {"otsu", "min"}:
             raise ValueError("threshold_method must be 'otsu' or 'min'")
-        if self.iou_distance_threshold < 0.0:
+        if _finite_float_value(self.iou_distance_threshold, "iou_distance_threshold") < 0.0:
             raise ValueError("iou_distance_threshold must be non-negative")
-        if self.row_top_k <= 0:
-            raise ValueError("row_top_k must be positive")
-        if not 0.0 <= self.rescue_min_iou <= 1.0:
+        _positive_int_value(self.row_top_k, "row_top_k")
+        if not 0.0 <= _finite_float_value(self.rescue_min_iou, "rescue_min_iou") <= 1.0:
             raise ValueError("rescue_min_iou must lie in [0, 1]")
-        if self.threshold_rescue_margin < 0.0:
+        if (
+            _finite_float_value(
+                self.threshold_rescue_margin, "threshold_rescue_margin"
+            )
+            < 0.0
+        ):
             raise ValueError("threshold_rescue_margin must be non-negative")
-        if self.beam_width <= 0:
-            raise ValueError("beam_width must be positive")
-        if self.max_gap < 1:
-            raise ValueError("max_gap must be at least 1")
-        if self.path_candidates_per_seed <= 0:
-            raise ValueError("path_candidates_per_seed must be positive")
-        if self.path_selection_beam_width <= 0:
-            raise ValueError("path_selection_beam_width must be positive")
-        if not 0.0 < self.logit_epsilon < 0.5:
+        for field_name in (
+            "accepted_bonus",
+            "rescue_penalty",
+            "gap_penalty",
+            "threshold_margin_weight",
+        ):
+            _finite_float_value(getattr(self, field_name), field_name)
+        _positive_int_value(self.beam_width, "beam_width")
+        _positive_int_value(self.max_gap, "max_gap")
+        _positive_int_value(
+            self.path_candidates_per_seed, "path_candidates_per_seed"
+        )
+        _positive_int_value(
+            self.path_selection_beam_width, "path_selection_beam_width"
+        )
+        _integer_value(self.fill_value, "fill_value")
+        if not 0.0 < _finite_float_value(self.logit_epsilon, "logit_epsilon") < 0.5:
             raise ValueError("logit_epsilon must lie in (0, 0.5)")
 
 
@@ -958,6 +971,28 @@ def main(argv: list[str] | None = None) -> int:
 
         _write_stdout(rows, cast(OutputFormat, args.format))
     return 0
+
+
+def _finite_float_value(value: float, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _positive_int_value(value: int, name: str) -> int:
+    numeric = _integer_value(value, name)
+    if numeric < 1:
+        raise ValueError(f"{name} must be positive")
+    return numeric
+
+
+def _integer_value(value: int, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    return int(value)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -18,6 +18,7 @@ import argparse
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -75,8 +76,9 @@ class MultiSplitCleanupConfig:
     max_splits_per_component: int = 2
 
     def __post_init__(self) -> None:
-        if int(self.max_splits_per_component) < 1:
-            raise ValueError("max_splits_per_component must be at least 1")
+        _require_positive_int(
+            self.max_splits_per_component, name="max_splits_per_component"
+        )
 
 
 def run_track2p_policy_multisplit_cleanup(
@@ -642,6 +644,13 @@ def _format_metadata_value(value: Any) -> str:
     if isinstance(value, float):
         return f"{value:g}"
     return str(value)
+
+
+def _require_positive_int(value: int, *, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    if int(value) < 1:
+        raise ValueError(f"{name} must be at least 1")
 
 
 if __name__ == "__main__":  # pragma: no cover

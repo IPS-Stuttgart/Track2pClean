@@ -15,6 +15,7 @@ import json
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -79,8 +80,7 @@ class StrictGapGateConfig:
     min_threshold_margin: float = 0.20
 
     def __post_init__(self) -> None:
-        if int(self.gap_length) < 1:
-            raise ValueError("gap_length must be at least 1")
+        _require_positive_int(self.gap_length, name="gap_length")
         _require_probability_like(self.min_area_ratio, name="min_area_ratio")
         _require_probability_like(
             self.min_cell_probability, name="min_cell_probability"
@@ -984,20 +984,35 @@ def _observation_counter(track_matrix: np.ndarray) -> Counter[tuple[int, int]]:
     return counts
 
 
-def _require_probability_like(value: float, *, name: str) -> None:
+def _require_positive_int(value: int, *, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    if int(value) < 1:
+        raise ValueError(f"{name} must be at least 1")
+
+
+def _finite_float_value(value: float, *, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
     numeric = float(value)
+    if not np.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
+
+
+def _require_probability_like(value: float, *, name: str) -> None:
+    numeric = _finite_float_value(value, name=name)
     if numeric < 0.0 or numeric > 1.0:
         raise ValueError(f"{name} must be between 0 and 1")
 
 
 def _require_nonnegative(value: float, *, name: str) -> None:
-    if float(value) < 0.0:
+    if _finite_float_value(value, name=name) < 0.0:
         raise ValueError(f"{name} must be non-negative")
 
 
 def _require_finite(value: float, *, name: str) -> None:
-    if not np.isfinite(float(value)):
-        raise ValueError(f"{name} must be finite")
+    _finite_float_value(value, name=name)
 
 
 if __name__ == "__main__":  # pragma: no cover

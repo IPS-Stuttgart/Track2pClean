@@ -12,7 +12,9 @@ registered link over a skipped session when enabled.
 from __future__ import annotations
 
 import argparse
+import math
 from dataclasses import replace
+from numbers import Integral
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -50,6 +52,14 @@ def track2p_policy_config(
 ) -> Track2pBenchmarkConfig:
     """Return ``config`` with the first-class Track2p-policy defaults applied."""
 
+    resolved_max_gap = _positive_int_value(
+        config.max_gap if max_gap is None else max_gap, "max_gap"
+    )
+    resolved_cell_probability_threshold = (
+        TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD
+        if cell_probability_threshold is None
+        else _probability_value(cell_probability_threshold, "cell_probability_threshold")
+    )
     return replace(
         config,
         method="global-assignment",
@@ -58,13 +68,9 @@ def track2p_policy_config(
             if transform_type is None
             else str(transform_type)
         ),
-        max_gap=int(config.max_gap) if max_gap is None else int(max_gap),
+        max_gap=resolved_max_gap,
         include_non_cells=False,
-        cell_probability_threshold=(
-            TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD
-            if cell_probability_threshold is None
-            else float(cell_probability_threshold)
-        ),
+        cell_probability_threshold=resolved_cell_probability_threshold,
         weighted_masks=False,
         weighted_centroids=False,
         exclude_overlapping_pixels=False,
@@ -243,6 +249,26 @@ def main(argv: list[str] | None = None) -> int:
 
         _write_stdout(rows, cast(OutputFormat, args.format))
     return 0
+
+
+def _positive_int_value(value: int, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise ValueError(f"{name} must be an integer")
+    numeric = int(value)
+    if numeric < 1:
+        raise ValueError(f"{name} must be at least 1")
+    return numeric
+
+
+def _probability_value(value: float, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    numeric = float(value)
+    if not math.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    if numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must be between 0 and 1")
+    return numeric
 
 
 if __name__ == "__main__":  # pragma: no cover

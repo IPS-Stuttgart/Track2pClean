@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.experiments import (
     track2p_policy_strict_gated_gap_cleanup as strict_gap,
 )
@@ -39,6 +40,60 @@ def test_strict_gated_gap_parser_defaults_match_audit_gate() -> None:
     assert args.gate_min_row_margin == 0.0
     assert args.gate_min_column_margin == 0.0
     assert args.gate_min_threshold_margin == 0.20
+
+
+@pytest.mark.parametrize(
+    "gap_length",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_strict_gap_gate_config_rejects_invalid_gap_length(
+    gap_length: object,
+) -> None:
+    with pytest.raises(ValueError, match="gap_length"):
+        strict_gap.StrictGapGateConfig(gap_length=gap_length)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("min_area_ratio", True),
+        ("min_area_ratio", False),
+        ("min_area_ratio", float("nan")),
+        ("min_area_ratio", float("inf")),
+        ("min_area_ratio", -0.1),
+        ("min_area_ratio", 1.1),
+        ("min_cell_probability", True),
+        ("min_cell_probability", False),
+        ("min_cell_probability", float("nan")),
+        ("min_cell_probability", float("inf")),
+        ("min_cell_probability", -0.1),
+        ("min_cell_probability", 1.1),
+        ("max_registered_iou", True),
+        ("max_registered_iou", False),
+        ("max_registered_iou", float("nan")),
+        ("max_registered_iou", float("inf")),
+        ("max_registered_iou", -0.1),
+        ("min_row_margin", True),
+        ("min_row_margin", False),
+        ("min_row_margin", float("nan")),
+        ("min_row_margin", float("inf")),
+        ("min_column_margin", True),
+        ("min_column_margin", False),
+        ("min_column_margin", float("nan")),
+        ("min_column_margin", float("inf")),
+        ("min_threshold_margin", True),
+        ("min_threshold_margin", False),
+        ("min_threshold_margin", float("nan")),
+        ("min_threshold_margin", float("inf")),
+    ],
+)
+def test_strict_gap_gate_config_rejects_invalid_float_controls(
+    field: str, value: float | bool
+) -> None:
+    kwargs = {field: value}
+
+    with pytest.raises(ValueError, match=field):
+        strict_gap.StrictGapGateConfig(**kwargs)
 
 
 def test_strict_gap_gate_accepts_audit_selected_feature(monkeypatch) -> None:

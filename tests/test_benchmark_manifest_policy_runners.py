@@ -1,10 +1,12 @@
 from pathlib import Path
 
+import pytest
 from bayescatrack.experiments.benchmark_manifest import (
     _run_config,
     _runner_kwargs,
     _runner_name,
 )
+from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
 from bayescatrack.experiments.track2p_policy_benchmark import track2p_policy_config
 
 
@@ -66,6 +68,48 @@ def test_policy_config_allows_explicit_max_gap_override() -> None:
     policy_config = track2p_policy_config(config, max_gap=1)
 
     assert policy_config.max_gap == 1
+
+
+@pytest.mark.parametrize(
+    "max_gap",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_policy_config_rejects_invalid_inherited_max_gap(max_gap: object) -> None:
+    config = Track2pBenchmarkConfig(
+        data=Path("data-root"),
+        method="global-assignment",
+        max_gap=max_gap,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(ValueError, match="max_gap"):
+        track2p_policy_config(config)
+
+
+@pytest.mark.parametrize(
+    "max_gap",
+    [True, False, 0, -1, 1.5, "2", float("nan"), float("inf")],
+)
+def test_policy_config_rejects_invalid_explicit_max_gap(max_gap: object) -> None:
+    config = Track2pBenchmarkConfig(data=Path("data-root"), method="global-assignment")
+
+    with pytest.raises(ValueError, match="max_gap"):
+        track2p_policy_config(config, max_gap=max_gap)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "cell_probability_threshold",
+    [True, False, float("nan"), float("inf"), -0.1, 1.1],
+)
+def test_policy_config_rejects_invalid_cell_probability_threshold(
+    cell_probability_threshold: float | bool,
+) -> None:
+    config = Track2pBenchmarkConfig(data=Path("data-root"), method="global-assignment")
+
+    with pytest.raises(ValueError, match="cell_probability_threshold"):
+        track2p_policy_config(
+            config,
+            cell_probability_threshold=cell_probability_threshold,
+        )
 
 
 def test_policy_runner_kwargs_are_separate_from_track2p_config() -> None:
