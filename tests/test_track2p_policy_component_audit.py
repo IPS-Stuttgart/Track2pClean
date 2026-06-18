@@ -65,9 +65,17 @@ def test_component_cleanup_config_rejects_invalid_min_side_observations(
 def test_component_cleanup_config_normalizes_integer_like_min_side_observations() -> (
     None
 ):
-    config = ComponentCleanupConfig(min_side_observations="3")
+    config = ComponentCleanupConfig(
+        min_side_observations="3",
+        split_penalty="0.25",  # type: ignore[arg-type]
+        threshold_margin_weight="2.0",  # type: ignore[arg-type]
+        require_complete_track=np.bool_(False),  # type: ignore[arg-type]
+    )
 
     assert config.min_side_observations == 3
+    assert config.split_penalty == 0.25
+    assert config.threshold_margin_weight == 2.0
+    assert config.require_complete_track is False
 
 
 @pytest.mark.parametrize(
@@ -79,14 +87,27 @@ def test_component_cleanup_config_normalizes_integer_like_min_side_observations(
         "centroid_distance_scale",
         "split_risk_threshold",
         "split_penalty",
+        "threshold_margin_weight",
+        "row_margin_weight",
+        "column_margin_weight",
+        "centroid_distance_weight",
+        "area_ratio_weight",
     ],
 )
-@pytest.mark.parametrize("bad_value", [True, False, float("nan"), float("inf")])
+@pytest.mark.parametrize("bad_value", [True, False, -1.0, float("nan"), float("inf")])
 def test_component_cleanup_config_rejects_invalid_float_controls(
     field: str, bad_value: float | bool
 ) -> None:
     with pytest.raises(ValueError, match=field):
         ComponentCleanupConfig(**{field: bad_value})
+
+
+@pytest.mark.parametrize("bad_value", ["false", 1])
+def test_component_cleanup_config_rejects_invalid_boolean_controls(
+    bad_value: object,
+) -> None:
+    with pytest.raises(ValueError, match="require_complete_track"):
+        ComponentCleanupConfig(require_complete_track=bad_value)  # type: ignore[arg-type]
 
 
 def test_split_track_at_bridge_returns_left_and_right_fragments() -> None:
