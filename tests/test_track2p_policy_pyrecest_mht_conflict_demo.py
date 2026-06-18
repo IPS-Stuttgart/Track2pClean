@@ -57,6 +57,21 @@ def test_deterministic_arm_screens_out_collision_edges():
     }
 
 
+@pytest.mark.parametrize("max_edits", [0, -1])
+def test_demo_rejects_invalid_max_edits(max_edits):
+    scenario = demo.build_default_scenario()
+
+    with pytest.raises(ValueError, match="max_edits"):
+        demo.evaluate_scenario(scenario, max_edits=max_edits)
+
+    with pytest.raises(ValueError, match="max_edits"):
+        demo.greedy_select(
+            scenario.candidates,
+            score_threshold=0.0,
+            max_edits=max_edits,
+        )
+
+
 def test_metric_ordering_shows_mht_repairs_what_greedy_corrupts():
     scenario = demo.build_default_scenario()
     arms = _by_arm(demo.evaluate_scenario(scenario))
@@ -105,3 +120,9 @@ def test_selection_does_not_read_ground_truth_field():
     assert [demo.residual_mht._candidate_id(row) for row in with_truth] == [
         demo.residual_mht._candidate_id(row) for row in without_truth
     ]
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_demo_parser_rejects_invalid_max_edits(value):
+    with pytest.raises(SystemExit):
+        demo.build_arg_parser().parse_args(["--max-edits", value])
