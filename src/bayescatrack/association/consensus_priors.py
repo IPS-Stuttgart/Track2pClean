@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -28,14 +29,33 @@ class ConsensusPriorConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if self.min_votes < 1:
-            raise ValueError("min_votes must be positive")
-        if self.relief < 0.0 or self.max_relief < 0.0:
-            raise ValueError("consensus relief values must be non-negative")
-        if self.large_cost <= 0.0 or not np.isfinite(self.large_cost):
-            raise ValueError("large_cost must be a positive finite value")
         object.__setattr__(
-            self, "variant_costs", tuple(str(value) for value in self.variant_costs)
+            self,
+            "variant_costs",
+            _variant_cost_tuple(self.variant_costs, "variant_costs"),
+        )
+        object.__setattr__(
+            self, "min_votes", _positive_int_value(self.min_votes, "min_votes")
+        )
+        object.__setattr__(
+            self,
+            "relief",
+            _finite_nonnegative_float(self.relief, "relief"),
+        )
+        object.__setattr__(
+            self,
+            "max_relief",
+            _finite_nonnegative_float(self.max_relief, "max_relief"),
+        )
+        object.__setattr__(
+            self,
+            "large_cost",
+            _finite_positive_float(self.large_cost, "large_cost"),
+        )
+        object.__setattr__(
+            self,
+            "ignore_variant_failures",
+            _bool_value(self.ignore_variant_failures, "ignore_variant_failures"),
         )
 
 
@@ -109,7 +129,8 @@ def apply_consensus_edge_priors(
         return adjusted
 
     for (source, target, source_roi, target_roi), vote_count in votes.items():
-        if int(vote_count) < cfg.min_votes:
+        votes_for_edge = _nonnegative_int_value(vote_count, "vote_count")
+        if votes_for_edge < cfg.min_votes:
             continue
         matrix = adjusted.get((int(source), int(target)))
         if matrix is None:
@@ -123,9 +144,78 @@ def apply_consensus_edge_priors(
         old_value = float(matrix[source_roi, target_roi])
         if not np.isfinite(old_value) or old_value >= cfg.large_cost:
             continue
-        relief = min(cfg.max_relief, cfg.relief * int(vote_count))
+        relief = min(cfg.max_relief, cfg.relief * votes_for_edge)
         matrix[source_roi, target_roi] = max(0.0, old_value - relief)
     return adjusted
+
+
+def _variant_cost_tuple(value: Any, name: str) -> tuple[str, ...]:
+    if isinstance(value, str):
+        raw_values = value.split(",")
+    else:
+        try:
+            raw_values = tuple(value)
+        except TypeError as exc:
+            raise ValueError(f"{name} must be a non-empty sequence") from exc
+    output: list[str] = []
+    for raw in raw_values:
+        if not isinstance(raw, str):
+            raise ValueError(f"{name} entries must be non-empty strings")
+        token = raw.strip()
+        if not token:
+            raise ValueError(f"{name} entries must be non-empty strings")
+        output.append(token)
+    if not output:
+        raise ValueError(f"{name} must be a non-empty sequence")
+    return tuple(output)
+
+
+def _positive_int_value(value: Any, name: str) -> int:
+    integer_value = _integer_value(value, name)
+    if integer_value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return integer_value
+
+
+def _nonnegative_int_value(value: Any, name: str) -> int:
+    integer_value = _integer_value(value, name)
+    if integer_value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return integer_value
+
+
+def _integer_value(value: Any, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    return int(integer_value)
+
+
+def _finite_nonnegative_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and non-negative")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _finite_positive_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a positive finite value")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric <= 0.0:
+        raise ValueError(f"{name} must be a positive finite value")
+    return numeric
+
+
+def _bool_value(value: Any, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
 
 
 __all__ = (

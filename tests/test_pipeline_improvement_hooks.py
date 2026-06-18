@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.association.absence_model import apply_absence_adjustment
 from bayescatrack.association.consensus_priors import (
+    ConsensusPriorConfig,
     apply_consensus_edge_priors,
     edge_votes_from_tracks,
 )
@@ -75,6 +77,52 @@ def test_consensus_prior_relieves_edges_with_enough_votes():
 
     assert adjusted[(0, 1)][0, 1] == 1.5
     assert adjusted[(0, 1)][0, 0] == 1.0
+
+
+def test_consensus_prior_direct_string_variant_cost_is_not_split_into_characters():
+    config = ConsensusPriorConfig(variant_costs="registered-iou, roi-aware-shifted")
+
+    assert config.variant_costs == ("registered-iou", "roi-aware-shifted")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("variant_costs", ()),
+        ("variant_costs", ("registered-iou", "")),
+        ("variant_costs", ("registered-iou", True)),
+        ("min_votes", True),
+        ("min_votes", 1.5),
+        ("min_votes", 0),
+        ("relief", True),
+        ("relief", float("nan")),
+        ("relief", float("inf")),
+        ("relief", -0.1),
+        ("max_relief", False),
+        ("max_relief", float("nan")),
+        ("max_relief", float("inf")),
+        ("max_relief", -0.1),
+        ("large_cost", True),
+        ("large_cost", float("nan")),
+        ("large_cost", float("inf")),
+        ("large_cost", 0.0),
+        ("ignore_variant_failures", "true"),
+    ],
+)
+def test_consensus_prior_config_rejects_invalid_controls(
+    field: str, value: object
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        ConsensusPriorConfig(**{field: value})
+
+
+@pytest.mark.parametrize("vote_count", [True, 1.5, -1])
+def test_consensus_prior_rejects_invalid_vote_counts(vote_count: object) -> None:
+    with pytest.raises(ValueError, match="vote_count"):
+        apply_consensus_edge_priors(
+            {(0, 1): np.array([[1.0]], dtype=float)},
+            {(0, 1, 0, 0): vote_count},
+        )
 
 
 def test_consensus_votes_ignore_missing_negative_roi_entries():
