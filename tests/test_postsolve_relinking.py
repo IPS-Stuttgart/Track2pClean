@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.association.postsolve_relinking import (
     PostSolveRelinkingConfig,
     relink_tracks_at_geometry_issues,
@@ -62,3 +63,30 @@ def test_relink_can_disable_outgoing_edge_evidence_for_legacy_behavior():
     )
 
     assert relinked.tolist() == [[10, 20, 30]]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_edge_cost", True),
+        ("max_edge_cost", float("nan")),
+        ("max_edge_cost", float("inf")),
+        ("max_edge_cost", -0.1),
+        ("min_cost_improvement", False),
+        ("min_cost_improvement", float("nan")),
+        ("min_cost_improvement", float("inf")),
+        ("min_cost_improvement", -0.1),
+        ("enforce_unique_session_rois", 1),
+        ("fill_value", True),
+        ("fill_value", 1.5),
+        ("bidirectional_next_weight", True),
+        ("bidirectional_next_weight", float("nan")),
+        ("bidirectional_next_weight", float("inf")),
+        ("bidirectional_next_weight", -0.1),
+    ],
+)
+def test_postsolve_relinking_config_rejects_invalid_controls(
+    field: str, value: object
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        PostSolveRelinkingConfig(**{field: value})

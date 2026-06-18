@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
 from bayescatrack.association.monotone_ranker import (
     MonotoneRankerOptions,
@@ -77,3 +78,53 @@ def test_monotone_ranker_cost_is_monotone_in_badness_features():
     costs = model.pairwise_cost_matrix(ordered_features)
 
     assert costs[0] <= costs[1] <= costs[2]
+
+
+def test_monotone_ranker_options_direct_string_feature_names_are_not_split():
+    options = MonotoneRankerOptions(
+        monotone_feature_names="centroid_distance, one_minus_iou"
+    )
+
+    assert options.monotone_feature_names == ("centroid_distance", "one_minus_iou")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("monotone_feature_names", ("centroid_distance", "")),
+        ("monotone_feature_names", ("centroid_distance", True)),
+        ("margin", True),
+        ("margin", float("nan")),
+        ("margin", float("inf")),
+        ("margin", 0.0),
+        ("max_negatives_per_positive", False),
+        ("max_negatives_per_positive", 1.5),
+        ("max_negatives_per_positive", 0),
+        ("include_row_negatives", 1),
+        ("include_column_negatives", 0),
+        ("max_iter", True),
+        ("max_iter", 1.5),
+        ("max_iter", 0),
+        ("learning_rate", False),
+        ("learning_rate", float("nan")),
+        ("learning_rate", float("inf")),
+        ("learning_rate", 0.0),
+        ("l2_regularization", True),
+        ("l2_regularization", float("nan")),
+        ("l2_regularization", float("inf")),
+        ("l2_regularization", -0.1),
+        ("binary_loss_weight", False),
+        ("binary_loss_weight", float("nan")),
+        ("binary_loss_weight", float("inf")),
+        ("binary_loss_weight", -0.1),
+        ("tolerance", True),
+        ("tolerance", float("nan")),
+        ("tolerance", float("inf")),
+        ("tolerance", -0.1),
+    ],
+)
+def test_monotone_ranker_options_reject_invalid_controls(
+    field: str, value: object
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        MonotoneRankerOptions(**{field: value})

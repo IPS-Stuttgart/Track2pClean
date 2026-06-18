@@ -32,8 +32,12 @@ from bayescatrack.association.multiplane_consistency import (
 )
 from bayescatrack.association.segmentation_events import detect_segmentation_events
 from bayescatrack.association.session_adaptive_calibration import (
+    AdaptiveCalibrationConfig,
     SessionAdaptiveCalibrationConfig,
+    SessionContext,
+    apply_context_intercept_to_costs,
     apply_session_context_offset,
+    probability_cost_matrix,
     session_context_cost_offset,
 )
 
@@ -235,3 +239,94 @@ def test_multiplane_quality_penalty_and_session_offset() -> None:
     assert 0.0 < reliability < 1.0
     assert np.all(penalized > 0.0)
     assert shifted[0, 0] > 0.0
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("base_intercept", True),
+        ("base_intercept", float("nan")),
+        ("base_intercept", float("inf")),
+        ("session_gap_weight", False),
+        ("session_gap_weight", float("nan")),
+        ("session_gap_weight", float("inf")),
+        ("roi_density_weight", True),
+        ("roi_density_weight", float("nan")),
+        ("roi_density_weight", float("inf")),
+        ("low_cell_probability_weight", False),
+        ("low_cell_probability_weight", float("nan")),
+        ("low_cell_probability_weight", float("inf")),
+        ("registration_rmse_weight", True),
+        ("registration_rmse_weight", float("nan")),
+        ("registration_rmse_weight", float("inf")),
+        ("invalid_warp_weight", False),
+        ("invalid_warp_weight", float("nan")),
+        ("invalid_warp_weight", float("inf")),
+        ("trace_available_weight", True),
+        ("trace_available_weight", float("nan")),
+        ("trace_available_weight", float("inf")),
+        ("max_abs_intercept", False),
+        ("max_abs_intercept", float("nan")),
+        ("max_abs_intercept", float("inf")),
+        ("max_abs_intercept", 0.0),
+    ],
+)
+def test_adaptive_calibration_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        AdaptiveCalibrationConfig(**{field: value})
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("session_gap_weight", True),
+        ("session_gap_weight", float("nan")),
+        ("session_gap_weight", float("inf")),
+        ("session_gap_weight", -0.1),
+        ("registration_rmse_weight", False),
+        ("registration_rmse_weight", float("nan")),
+        ("registration_rmse_weight", float("inf")),
+        ("registration_rmse_weight", -0.1),
+        ("invalid_fraction_weight", True),
+        ("invalid_fraction_weight", float("nan")),
+        ("invalid_fraction_weight", float("inf")),
+        ("invalid_fraction_weight", -0.1),
+        ("low_cell_probability_weight", False),
+        ("low_cell_probability_weight", float("nan")),
+        ("low_cell_probability_weight", float("inf")),
+        ("low_cell_probability_weight", -0.1),
+    ],
+)
+def test_session_adaptive_calibration_config_rejects_invalid_controls(
+    field: str, value: float | bool
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        SessionAdaptiveCalibrationConfig(**{field: value})
+
+
+@pytest.mark.parametrize("epsilon", [True, float("nan"), float("inf"), 0.0])
+def test_probability_cost_matrix_rejects_invalid_epsilon(
+    epsilon: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="epsilon"):
+        probability_cost_matrix([[0.5]], epsilon=epsilon)
+
+
+@pytest.mark.parametrize("temperature", [False, float("nan"), float("inf"), 0.0])
+def test_apply_context_intercept_to_costs_rejects_invalid_temperature(
+    temperature: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="temperature"):
+        apply_context_intercept_to_costs(
+            [[1.0]], SessionContext(), temperature=temperature
+        )
+
+
+@pytest.mark.parametrize("offset", [True, float("nan"), float("inf")])
+def test_apply_session_context_offset_rejects_invalid_offset(
+    offset: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="offset"):
+        apply_session_context_offset([[1.0]], offset)
