@@ -40,16 +40,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from pyrecest.tracking import (
-    ResidualEditCandidate,
-    ResidualMHTConfig,
-    select_residual_hypothesis,
-)
-
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import track2p_policy_growth_veto_whatif as veto
 from bayescatrack.experiments import (
     track2p_policy_pyrecest_residual_mht_cleanup as residual_mht,
+)
+from pyrecest.tracking import (
+    ResidualEditCandidate,
+    ResidualMHTConfig,
+    select_residual_hypothesis,
 )
 
 METHOD = "track2p-policy-pyrecest-mht-conflict-demo"

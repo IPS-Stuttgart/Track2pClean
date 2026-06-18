@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-
 from bayescatrack.experiments import track2p_policy_growth_veto_cleanup as cleanup
 
 FORBIDDEN_AUDIT_COLUMNS = frozenset(

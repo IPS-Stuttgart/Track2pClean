@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 from bayescatrack.experiments import (
-    track2p_policy_coherence_suffix_teacher_rescue,
     track2p_policy_coherence_suffix_stitch_whatif,
+    track2p_policy_coherence_suffix_teacher_rescue,
     track2p_policy_coherence_teacher_overlay_audit,
     track2p_policy_growth_field_residual_audit,
     track2p_policy_growth_veto_cleanup,
