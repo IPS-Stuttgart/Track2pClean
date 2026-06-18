@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 from bayescatrack.association.track_refinement import (
     TrackSmoothingConfig,
+    smoothed_track_positions,
+    split_tracks_at_issues,
     track_geometry_issues,
 )
 
@@ -50,3 +52,47 @@ def test_track_geometry_keeps_clean_linear_tracks_unflagged() -> None:
     )
 
     assert issues == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("residual_z_threshold", True),
+        ("residual_z_threshold", float("nan")),
+        ("residual_z_threshold", float("inf")),
+        ("residual_z_threshold", 0.0),
+        ("min_track_detections", False),
+        ("min_track_detections", 1.5),
+        ("min_track_detections", 1),
+        ("min_edge_residual", True),
+        ("min_edge_residual", float("nan")),
+        ("min_edge_residual", float("inf")),
+        ("min_edge_residual", -0.1),
+        ("split_bad_edges", 1),
+        ("fill_value", True),
+        ("fill_value", 1.5),
+    ],
+)
+def test_track_smoothing_config_rejects_invalid_controls(
+    field: str, value: float | bool | int
+) -> None:
+    with pytest.raises(ValueError, match=field):
+        TrackSmoothingConfig(**{field: value})
+
+
+@pytest.mark.parametrize("fill_value", [True, 1.5])
+def test_smoothed_track_positions_rejects_invalid_fill_value(
+    fill_value: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="fill_value"):
+        smoothed_track_positions(
+            [[0]], ({0: np.asarray([0.0, 0.0])},), fill_value=fill_value
+        )
+
+
+@pytest.mark.parametrize("fill_value", [True, 1.5])
+def test_split_tracks_at_issues_rejects_invalid_fill_value(
+    fill_value: float | bool,
+) -> None:
+    with pytest.raises(ValueError, match="fill_value"):
+        split_tracks_at_issues([[0]], (), fill_value=fill_value)
