@@ -153,8 +153,9 @@ def _pairwise_covariance_shape_components(
         raise ValueError("covariances_self must have shape (2, 2, n_roi)")
     if covariances_other.ndim != 3 or covariances_other.shape[:2] != (2, 2):
         raise ValueError("covariances_other must have shape (2, 2, n_roi)")
-    if epsilon <= 0.0:
-        raise ValueError("epsilon must be strictly positive")
+    epsilon = _calibrated_costs._coerce_positive_finite_float(  # pylint: disable=protected-access
+        "epsilon", epsilon
+    )
     n_self = covariances_self.shape[2]
     n_other = covariances_other.shape[2]
     if n_self == 0 or n_other == 0:

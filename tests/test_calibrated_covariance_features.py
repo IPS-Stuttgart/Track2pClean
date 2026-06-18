@@ -9,6 +9,10 @@ from bayescatrack.association.calibrated_costs import (
     pairwise_feature_tensor,
     with_session_gap_component,
 )
+from bayescatrack._pyrecest_pairwise_features import (
+    pairwise_covariance_shape_components,
+    pairwise_mahalanobis_distances,
+)
 from bayescatrack.core.bridge import SessionAssociationBundle
 
 
@@ -138,4 +142,47 @@ def test_session_gap_component_requires_positive_gap():
     with pytest.raises(ValueError, match="session_gap must be positive"):
         with_session_gap_component(
             {"centroid_distance": np.zeros((1, 1))}, session_gap=0
+        )
+
+
+@pytest.mark.parametrize("session_gap", [True, float("nan"), float("inf"), -1.0])
+def test_session_gap_component_rejects_invalid_numeric_controls(session_gap):
+    with pytest.raises(ValueError, match="session_gap"):
+        with_session_gap_component(
+            {"centroid_distance": np.zeros((1, 1))}, session_gap=session_gap
+        )
+
+
+@pytest.mark.parametrize("covariance_epsilon", [True, float("nan"), float("inf"), 0.0])
+def test_pairwise_components_from_bundle_rejects_invalid_covariance_epsilon(
+    covariance_epsilon,
+):
+    covariance = np.stack([np.diag([4.0, 1.0])], axis=-1)
+    with pytest.raises(ValueError, match="epsilon"):
+        pairwise_components_from_bundle(
+            _association_bundle(covariance, covariance),
+            covariance_epsilon=covariance_epsilon,
+        )
+
+
+@pytest.mark.parametrize("epsilon", [True, float("nan"), float("inf"), 0.0, -1.0])
+def test_pyrecest_covariance_shape_wrapper_rejects_invalid_epsilon(epsilon):
+    covariance = np.stack([np.eye(2)], axis=-1)
+    with pytest.raises(ValueError, match="epsilon"):
+        pairwise_covariance_shape_components(covariance, covariance, epsilon=epsilon)
+
+
+@pytest.mark.parametrize(
+    "regularization", [True, float("nan"), float("inf"), -1.0]
+)
+def test_pyrecest_mahalanobis_wrapper_rejects_invalid_regularization(regularization):
+    means = np.zeros((2, 1), dtype=float)
+    covariances = np.stack([np.eye(2)], axis=-1)
+    with pytest.raises(ValueError, match="regularization"):
+        pairwise_mahalanobis_distances(
+            means,
+            covariances,
+            means,
+            covariances,
+            regularization=regularization,
         )
