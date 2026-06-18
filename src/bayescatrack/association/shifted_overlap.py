@@ -77,37 +77,38 @@ def shifted_iou_pairwise_cost_matrix(
     shifted_iou_radius = _nonnegative_int(
         kwargs.pop("shifted_iou_radius", 0), name="shifted_iou_radius"
     )
-    shifted_iou_weight = float(kwargs.pop("shifted_iou_weight", 0.0) or 0.0)
-    shifted_mask_cosine_weight = float(
-        kwargs.pop("shifted_mask_cosine_weight", 0.0) or 0.0
+    shifted_iou_weight = _finite_nonnegative_float(
+        kwargs.pop("shifted_iou_weight", 0.0), name="shifted_iou_weight"
     )
-    shifted_iou_shift_penalty_weight = float(
-        kwargs.pop("shifted_iou_shift_penalty_weight", 0.0) or 0.0
+    shifted_mask_cosine_weight = _finite_nonnegative_float(
+        kwargs.pop("shifted_mask_cosine_weight", 0.0),
+        name="shifted_mask_cosine_weight",
+    )
+    shifted_iou_shift_penalty_weight = _finite_nonnegative_float(
+        kwargs.pop("shifted_iou_shift_penalty_weight", 0.0),
+        name="shifted_iou_shift_penalty_weight",
     )
     shifted_iou_shift_penalty_scale = kwargs.pop(
         "shifted_iou_shift_penalty_scale", None
     )
-    use_shifted_iou_for_iou_cost = bool(
-        kwargs.pop("use_shifted_iou_for_iou_cost", False)
+    use_shifted_iou_for_iou_cost = _strict_bool(
+        kwargs.pop("use_shifted_iou_for_iou_cost", False),
+        name="use_shifted_iou_for_iou_cost",
     )
-    use_shifted_mask_cosine_for_mask_cosine_cost = bool(
-        kwargs.pop("use_shifted_mask_cosine_for_mask_cosine_cost", False)
+    use_shifted_mask_cosine_for_mask_cosine_cost = _strict_bool(
+        kwargs.pop("use_shifted_mask_cosine_for_mask_cosine_cost", False),
+        name="use_shifted_mask_cosine_for_mask_cosine_cost",
     )
 
-    if shifted_iou_weight < 0.0:
-        raise ValueError("shifted_iou_weight must be non-negative")
-    if shifted_mask_cosine_weight < 0.0:
-        raise ValueError("shifted_mask_cosine_weight must be non-negative")
-    if shifted_iou_shift_penalty_weight < 0.0:
-        raise ValueError("shifted_iou_shift_penalty_weight must be non-negative")
     if shifted_iou_shift_penalty_scale is not None:
-        shifted_iou_shift_penalty_scale = float(shifted_iou_shift_penalty_scale)
-        if shifted_iou_shift_penalty_scale <= 0.0:
-            raise ValueError(
-                "shifted_iou_shift_penalty_scale must be strictly positive"
-            )
+        shifted_iou_shift_penalty_scale = _finite_positive_float(
+            shifted_iou_shift_penalty_scale,
+            name="shifted_iou_shift_penalty_scale",
+        )
 
-    return_components = bool(kwargs.get("return_components", False))
+    return_components = _strict_bool(
+        kwargs.get("return_components", False), name="return_components"
+    )
     uses_shifted_overlap = shifted_iou_radius > 0 and (
         return_components
         or use_shifted_iou_for_iou_cost
@@ -119,10 +120,14 @@ def shifted_iou_pairwise_cost_matrix(
     if not uses_shifted_overlap:
         return original_method(self, other, **kwargs)
 
-    similarity_epsilon = float(kwargs.get("similarity_epsilon", 1.0e-6))
-    large_cost = float(kwargs.get("large_cost", 1.0e6))
-    iou_weight = float(kwargs.get("iou_weight", 6.0) or 0.0)
-    mask_cosine_weight = float(kwargs.get("mask_cosine_weight", 2.0) or 0.0)
+    similarity_epsilon = _finite_positive_float(
+        kwargs.get("similarity_epsilon", 1.0e-6), name="similarity_epsilon"
+    )
+    large_cost = _finite_positive_float(kwargs.get("large_cost", 1.0e6), name="large_cost")
+    iou_weight = _finite_nonnegative_float(kwargs.get("iou_weight", 6.0), name="iou_weight")
+    mask_cosine_weight = _finite_nonnegative_float(
+        kwargs.get("mask_cosine_weight", 2.0), name="mask_cosine_weight"
+    )
 
     base_kwargs = dict(kwargs)
     if use_shifted_iou_for_iou_cost:
@@ -239,8 +244,12 @@ def pairwise_shifted_overlap_matrices(
     """Return best local integer-shift IoU/cosine matrices for all ROI pairs."""
 
     radius = _nonnegative_int(radius, name="radius")
-    if similarity_epsilon <= 0.0:
-        raise ValueError("similarity_epsilon must be strictly positive")
+    include_mask_cosine = _strict_bool(
+        include_mask_cosine, name="include_mask_cosine"
+    )
+    similarity_epsilon = _finite_positive_float(
+        similarity_epsilon, name="similarity_epsilon"
+    )
 
     reference_array = np.asarray(reference_masks)
     measurement_array = np.asarray(measurement_masks)
@@ -574,6 +583,38 @@ def _ensure_finite_cost_matrix(
         sanitized[invalid] = large_cost
     sanitized[sanitized < 0.0] = 0.0
     return sanitized
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=False)
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=True)
+
+
+def _finite_float(
+    value: Any, *, name: str, lower_bound: float, positive: bool
+) -> float:
+    qualifier = "positive" if positive else "non-negative"
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite {qualifier} value")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite {qualifier} value") from exc
+    violates_bound = (
+        numeric_value <= lower_bound if positive else numeric_value < lower_bound
+    )
+    if not np.isfinite(numeric_value) or violates_bound:
+        raise ValueError(f"{name} must be a finite {qualifier} value")
+    return numeric_value
 
 
 def _nonnegative_int(value: Any, *, name: str) -> int:

@@ -248,6 +248,83 @@ def test_shifted_iou_shift_penalty_validates_weight_and_scale():
         CalciumPlaneData.build_pairwise_cost_matrix = original_method  # type: ignore[method-assign]
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"use_shifted_iou_for_iou_cost": "false"}, "use_shifted_iou_for_iou_cost"),
+        (
+            {"use_shifted_mask_cosine_for_mask_cosine_cost": 1},
+            "use_shifted_mask_cosine_for_mask_cosine_cost",
+        ),
+        ({"return_components": 1}, "return_components"),
+        ({"shifted_iou_weight": np.nan}, "shifted_iou_weight"),
+        ({"shifted_mask_cosine_weight": np.inf}, "shifted_mask_cosine_weight"),
+        (
+            {"shifted_iou_shift_penalty_weight": -0.1},
+            "shifted_iou_shift_penalty_weight",
+        ),
+        ({"shifted_iou_shift_penalty_scale": np.nan}, "shifted_iou_shift_penalty_scale"),
+        ({"shifted_iou_shift_penalty_scale": 0.0}, "shifted_iou_shift_penalty_scale"),
+        ({"similarity_epsilon": 0.0}, "similarity_epsilon"),
+        ({"large_cost": np.inf}, "large_cost"),
+        ({"iou_weight": True}, "iou_weight"),
+        ({"mask_cosine_weight": -0.1}, "mask_cosine_weight"),
+    ],
+)
+def test_shifted_iou_wrapper_rejects_invalid_runtime_controls(
+    kwargs: dict[str, object], message: str
+) -> None:
+    reference = np.zeros((1, 5, 5), dtype=bool)
+    measurement = np.zeros((1, 5, 5), dtype=bool)
+    reference[0, 1:3, 1:3] = True
+    measurement[0, 1:3, 2:4] = True
+    reference_plane = CalciumPlaneData(reference)
+    measurement_plane = CalciumPlaneData(measurement)
+
+    def original_method(self, other, **method_kwargs):
+        del self, other, method_kwargs
+        return np.zeros((1, 1), dtype=float)
+
+    common_kwargs: dict[str, object] = {
+        "shifted_iou_radius": 1,
+        "use_shifted_iou_for_iou_cost": True,
+    }
+    common_kwargs.update(kwargs)
+
+    with pytest.raises(ValueError, match=message):
+        shifted_iou_pairwise_cost_matrix(
+            original_method,
+            reference_plane,
+            measurement_plane,
+            **common_kwargs,
+        )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"include_mask_cosine": "false"}, "include_mask_cosine"),
+        ({"similarity_epsilon": np.nan}, "similarity_epsilon"),
+        ({"similarity_epsilon": 0.0}, "similarity_epsilon"),
+    ],
+)
+def test_shifted_overlap_components_reject_invalid_runtime_controls(
+    kwargs: dict[str, object], message: str
+) -> None:
+    reference = np.zeros((1, 5, 5), dtype=bool)
+    measurement = np.zeros((1, 5, 5), dtype=bool)
+    reference[0, 1:3, 1:3] = True
+    measurement[0, 1:3, 2:4] = True
+
+    with pytest.raises(ValueError, match=message):
+        pairwise_shifted_overlap_matrices(
+            reference,
+            measurement,
+            radius=1,
+            **kwargs,
+        )
+
+
 def test_shifted_iou_patch_install_is_idempotent():
     original_method = install_shifted_overlap_cost_patch()
     try:

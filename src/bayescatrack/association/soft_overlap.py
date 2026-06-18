@@ -10,6 +10,7 @@ so it is mostly useful as an ablation and as a compatibility fix for the
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -67,20 +68,24 @@ def soft_iou_pairwise_cost_matrix(
     use_soft_iou_for_iou_cost = kwargs.pop(
         "use_soft_iou_for_iou_cost", soft_iou_radius > 0
     )
-    use_soft_iou_for_iou_cost = bool(use_soft_iou_for_iou_cost)
+    use_soft_iou_for_iou_cost = _strict_bool(
+        use_soft_iou_for_iou_cost, name="use_soft_iou_for_iou_cost"
+    )
 
-    return_components = bool(kwargs.get("return_components", False))
+    return_components = _strict_bool(
+        kwargs.get("return_components", False), name="return_components"
+    )
     uses_soft_iou = soft_iou_radius > 0 and (
         use_soft_iou_for_iou_cost or return_components
     )
     if not uses_soft_iou:
         return original_method(self, other, **kwargs)
 
-    similarity_epsilon = float(kwargs.get("similarity_epsilon", 1.0e-6))
-    if similarity_epsilon <= 0.0:
-        raise ValueError("similarity_epsilon must be strictly positive")
-    large_cost = float(kwargs.get("large_cost", 1.0e6))
-    iou_weight = float(kwargs.get("iou_weight", 6.0) or 0.0)
+    similarity_epsilon = _finite_positive_float(
+        kwargs.get("similarity_epsilon", 1.0e-6), name="similarity_epsilon"
+    )
+    large_cost = _finite_positive_float(kwargs.get("large_cost", 1.0e6), name="large_cost")
+    iou_weight = _finite_nonnegative_float(kwargs.get("iou_weight", 6.0), name="iou_weight")
 
     base_kwargs = dict(kwargs)
     if use_soft_iou_for_iou_cost:
@@ -212,10 +217,60 @@ def _ensure_finite_cost_matrix(
 
 
 def _nonnegative_int(value: Any, *, name: str) -> int:
-    try:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{name} must be an integer")
         integer_value = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{name} must be an integer") from exc
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric_value = float(stripped)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(numeric_value)
+    else:
+        try:
+            integer_value = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
     if integer_value < 0:
         raise ValueError(f"{name} must be non-negative")
-    return integer_value
+    return int(integer_value)
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=False)
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=True)
+
+
+def _finite_float(
+    value: Any, *, name: str, lower_bound: float, positive: bool
+) -> float:
+    qualifier = "positive" if positive else "non-negative"
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite {qualifier} value")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite {qualifier} value") from exc
+    violates_bound = (
+        numeric_value <= lower_bound if positive else numeric_value < lower_bound
+    )
+    if not np.isfinite(numeric_value) or violates_bound:
+        raise ValueError(f"{name} must be a finite {qualifier} value")
+    return numeric_value
