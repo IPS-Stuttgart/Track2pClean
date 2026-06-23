@@ -20,6 +20,8 @@ FORBIDDEN_AUDIT_COLUMNS = frozenset(
         "complete_tp_delta_if_removed",
         "complete_fp_delta_if_removed",
         "complete_fn_delta_if_removed",
+        "pairwise_delta_if_removed",
+        "complete_delta_if_removed",
         "reference_track_id",
         "reference_track_identity",
         "reference_identity",
@@ -39,6 +41,7 @@ def _is_audit_only_column(key: str) -> bool:
         or "against_gt" in key
         or key.endswith("_delta_if_removed")
         or key.startswith("manual_gt_")
+        or key.startswith("nearest_gt_")
         or key.startswith("new_pairwise_")
         or key.startswith("new_complete_")
     )
@@ -380,6 +383,204 @@ def test_high_overlap_selection_matches_sanitized_rows(residual_mht_module) -> N
 
     assert [row["pyrecest_candidate_id"] for row in selected] == [
         row["pyrecest_candidate_id"] for row in sanitized_selected
+    ]
+
+
+def test_cell_gated_mht_selection_is_invariant_to_gt_audit_columns(
+    residual_mht_module,
+) -> None:
+    rows = [
+        _candidate_row(
+            subject="jm038",
+            session_a=5,
+            roi_a=32,
+            session_b=6,
+            roi_b=99,
+            registered_iou=0.8777777777777778,
+            growth_residual=0.46222393481884133,
+            growth_residual_mahalanobis=1.3731953406260218,
+            cell_probability_a=0.890800603800884,
+            cell_probability_b=0.9822738475874983,
+            edge_status_against_gt="false_positive",
+            complete_fp_delta_if_removed=-1,
+            complete_tp_delta_if_removed=0,
+            pairwise_fp_delta_if_removed=-1,
+            pairwise_tp_delta_if_removed=0,
+            manual_gt_reference_identity="jm038:false-positive-edge",
+            new_complete_track_f1_micro=0.9743589743589743,
+            score_delta=1000.0,
+        ),
+        _candidate_row(
+            subject="jm038",
+            session_a=5,
+            roi_a=465,
+            session_b=6,
+            roi_b=688,
+            registered_iou=0.8392857142857143,
+            growth_residual=0.6215081442166852,
+            growth_residual_mahalanobis=1.7132699281977866,
+            cell_probability_a=0.7905560080037428,
+            cell_probability_b=0.8846230422542894,
+            edge_status_against_gt="false_positive",
+            complete_fp_delta_if_removed=-1,
+            complete_tp_delta_if_removed=0,
+            pairwise_fp_delta_if_removed=-1,
+            pairwise_tp_delta_if_removed=0,
+            nearest_gt_track_id="jm038:nearest-fp",
+            new_pairwise_f1_micro=0.9671052631578947,
+            score_delta=900.0,
+        ),
+        _candidate_row(
+            subject="jm046",
+            session_a=5,
+            roi_a=2309,
+            session_b=6,
+            roi_b=1210,
+            registered_iou=0.5517241379310345,
+            shifted_iou=0.704225352112676,
+            growth_residual=2.9436203964141385,
+            growth_residual_mahalanobis=26.070096472338143,
+            cell_probability_a=0.5705685023400026,
+            cell_probability_b=0.8061736096846192,
+            edge_status_against_gt="false_positive",
+            complete_fp_delta_if_removed=-1,
+            complete_tp_delta_if_removed=0,
+            pairwise_fp_delta_if_removed=-1,
+            pairwise_tp_delta_if_removed=0,
+            reference_track_identity="jm046:false-positive-edge",
+            score_delta=800.0,
+        ),
+        _candidate_row(
+            subject="jm038",
+            session_a=4,
+            roi_a=101,
+            session_b=5,
+            roi_b=202,
+            registered_iou=0.20,
+            growth_residual=0.10,
+            growth_residual_mahalanobis=0.20,
+            edge_status_against_gt="false_positive",
+            complete_fp_delta_if_removed=-99,
+            complete_tp_delta_if_removed=99,
+            pairwise_delta_if_removed=-99,
+            reference_identity="adversarial-audit-only-decoy",
+            score_delta=9999.0,
+        ),
+    ]
+    sanitized_rows = [
+        {key: value for key, value in row.items() if not _is_audit_only_column(key)}
+        for row in rows
+    ]
+    poisoned_rows = []
+    for row in rows:
+        poisoned = dict(row)
+        poisoned.update(
+            {
+                "edge_status_against_gt": "true_positive",
+                "pairwise_tp_delta_if_removed": -999,
+                "pairwise_fp_delta_if_removed": 999,
+                "pairwise_delta_if_removed": 999,
+                "complete_tp_delta_if_removed": -999,
+                "complete_fp_delta_if_removed": 999,
+                "complete_delta_if_removed": 999,
+                "reference_track_id": "poisoned-reference-track",
+                "reference_identity": "poisoned-reference-identity",
+                "manual_gt_reference_identity": "poisoned-manual-identity",
+                "nearest_gt_track_id": "poisoned-nearest-track",
+                "new_pairwise_f1_micro": -1.0,
+                "new_complete_track_f1_micro": -1.0,
+                "score_delta": -9999.0,
+            }
+        )
+        poisoned_rows.append(poisoned)
+    guarded_rows = [_AuditGuardRow(row) for row in poisoned_rows]
+    options = residual_mht_module.PyRecEstResidualMHTOptions(
+        candidate_top_k=8,
+        include_high_overlap_low_motion=True,
+        high_overlap_min_registered_iou=0.83,
+        high_overlap_max_growth_residual=0.65,
+        high_overlap_min_growth_residual_mahalanobis=1.0,
+        high_overlap_min_cell_probability=0.75,
+        high_overlap_score_bonus=2.0,
+    )
+    gate = cleanup.GrowthVetoGate(
+        min_growth_residual_mahalanobis=20.0,
+        min_growth_residual=2.5,
+        min_registered_iou=0.45,
+        max_registered_iou=0.60,
+        min_shifted_iou=0.60,
+        max_shifted_iou=0.80,
+        min_cell_probability=0.50,
+        max_min_cell_probability=None,
+        max_local_neighbor_distortion=None,
+        max_row_rank=1,
+        max_column_rank=1,
+        require_not_suffix_edge=True,
+        require_terminal_edge=True,
+        require_last_session_edge=True,
+        require_complete_component=True,
+    )
+
+    def candidate_signature(
+        candidate_rows: list[Mapping[str, Any]],
+    ) -> list[tuple[str, str, float, frozenset[str], Mapping[str, Any]]]:
+        signature = []
+        for row in candidate_rows:
+            guarded_candidate = _AuditGuardRow(dict(row))
+            pyrecest_candidate = residual_mht_module._to_pyrecest_candidate(  # pylint: disable=protected-access
+                guarded_candidate,
+                options=options,
+            )
+            assert set(pyrecest_candidate.metadata) == {
+                "subject",
+                "session_a",
+                "session_b",
+                "roi_a",
+                "roi_b",
+            }
+            signature.append(
+                (
+                    pyrecest_candidate.candidate_id,
+                    str(row["pyrecest_candidate_family"]),
+                    round(float(pyrecest_candidate.score), 12),
+                    pyrecest_candidate.conflict_keys,
+                    pyrecest_candidate.metadata,
+                )
+            )
+        return signature
+
+    selected = residual_mht_module._candidate_rows(  # pylint: disable=protected-access
+        rows,
+        gate=gate,
+        options=options,
+        n_sessions=7,
+    )
+    sanitized_selected = residual_mht_module._candidate_rows(  # pylint: disable=protected-access
+        sanitized_rows,
+        gate=gate,
+        options=options,
+        n_sessions=7,
+    )
+    poisoned_selected = residual_mht_module._candidate_rows(  # pylint: disable=protected-access
+        poisoned_rows,
+        gate=gate,
+        options=options,
+        n_sessions=7,
+    )
+    guarded_selected = residual_mht_module._candidate_rows(  # pylint: disable=protected-access
+        guarded_rows,
+        gate=gate,
+        options=options,
+        n_sessions=7,
+    )
+
+    assert candidate_signature(selected) == candidate_signature(sanitized_selected)
+    assert candidate_signature(selected) == candidate_signature(poisoned_selected)
+    assert candidate_signature(selected) == candidate_signature(guarded_selected)
+    assert [row["pyrecest_candidate_id"] for row in selected] == [
+        "jm046:5:6:2309:1210:0",
+        "jm038:5:6:465:688:0",
+        "jm038:5:6:32:99:0",
     ]
 
 
