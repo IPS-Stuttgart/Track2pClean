@@ -383,6 +383,196 @@ def test_high_overlap_selection_matches_sanitized_rows(residual_mht_module) -> N
     ]
 
 
+def test_compact_low_overlap_pocket_is_opt_in(residual_mht_module) -> None:
+    options = residual_mht_module.PyRecEstResidualMHTOptions(
+        include_compact_low_overlap=False,
+    )
+
+    reason = residual_mht_module._compact_low_overlap_reason(  # pylint: disable=protected-access
+        _candidate_row(registered_iou=0.45, growth_residual=2.0),
+        gate=cleanup.GrowthVetoGate(max_local_neighbor_distortion=None),
+        options=options,
+    )
+
+    assert reason == "compact_low_overlap_disabled"
+
+
+def test_compact_low_overlap_pocket_exposes_cli_gates(residual_mht_module) -> None:
+    args = residual_mht_module.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "mht.csv",
+            "--mht-include-compact-low-overlap-candidates",
+            "--mht-compact-min-registered-iou",
+            "0.30",
+            "--mht-compact-max-registered-iou",
+            "0.55",
+            "--mht-compact-component-size",
+            "4",
+        ]
+    )
+
+    assert args.mht_include_compact_low_overlap_candidates is True
+    assert args.mht_compact_min_registered_iou == 0.30
+    assert args.mht_compact_max_registered_iou == 0.55
+    assert args.mht_compact_component_size == 4
+
+
+def test_compact_low_overlap_pocket_accepts_matching_row(residual_mht_module) -> None:
+    options = residual_mht_module.PyRecEstResidualMHTOptions(
+        candidate_top_k=1,
+        include_compact_low_overlap=True,
+    )
+    gate = cleanup.GrowthVetoGate(
+        min_growth_residual_mahalanobis=20.0,
+        min_growth_residual=2.5,
+        max_local_neighbor_distortion=None,
+        max_row_rank=1,
+        max_column_rank=1,
+        require_not_suffix_edge=True,
+        require_terminal_edge=True,
+        require_last_session_edge=True,
+        require_complete_component=True,
+    )
+
+    candidates = residual_mht_module._candidate_rows(  # pylint: disable=protected-access
+        [
+            _candidate_row(
+                complete_component_size=4,
+                registered_iou=0.45,
+                growth_residual=2.0,
+                growth_residual_mahalanobis=3.0,
+                cell_probability_a=0.80,
+                cell_probability_b=0.90,
+                is_last_session_edge=0,
+            )
+        ],
+        gate=gate,
+        options=options,
+        n_sessions=7,
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["pyrecest_candidate_family"] == "compact_low_overlap"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_reason"),
+    [
+        ({"complete_component_size": 5}, "compact_component_size_outside_gate"),
+        ({"registered_iou": 0.20}, "compact_registered_iou_below_gate"),
+        ({"registered_iou": 0.70}, "compact_registered_iou_above_gate"),
+        ({"growth_residual": 0.20}, "compact_growth_residual_below_gate"),
+        ({"growth_residual": 3.00}, "compact_growth_residual_above_gate"),
+        (
+            {"growth_residual_mahalanobis": 1.50},
+            "compact_mahalanobis_below_gate",
+        ),
+        (
+            {"growth_residual_mahalanobis": 7.00},
+            "compact_mahalanobis_above_gate",
+        ),
+        ({"cell_probability_a": 0.70}, "compact_cell_probability_below_gate"),
+    ],
+)
+def test_compact_low_overlap_pocket_rejects_gate_failures(
+    residual_mht_module,
+    overrides: dict[str, object],
+    expected_reason: str,
+) -> None:
+    options = residual_mht_module.PyRecEstResidualMHTOptions(
+        include_compact_low_overlap=True,
+    )
+    row_kwargs: dict[str, object] = {
+        "complete_component_size": 4,
+        "registered_iou": 0.45,
+        "growth_residual": 2.0,
+        "growth_residual_mahalanobis": 3.0,
+        "cell_probability_a": 0.80,
+        "cell_probability_b": 0.90,
+    }
+    row_kwargs.update(overrides)
+    row = _candidate_row(**row_kwargs)
+
+    reason = residual_mht_module._compact_low_overlap_reason(  # pylint: disable=protected-access
+        row,
+        gate=cleanup.GrowthVetoGate(max_local_neighbor_distortion=None),
+        options=options,
+    )
+
+    assert reason == expected_reason
+
+
+def test_compact_low_overlap_pocket_does_not_read_audit_only_columns(
+    residual_mht_module,
+) -> None:
+    row = _AuditGuardRow(
+        _candidate_row(
+            subject="jm046",
+            session_a=2,
+            session_b=3,
+            roi_a=1312,
+            roi_b=1830,
+            complete_component_size=4,
+            registered_iou=0.45,
+            growth_residual=2.0,
+            growth_residual_mahalanobis=3.0,
+            cell_probability_a=0.80,
+            cell_probability_b=0.90,
+            edge_status_against_gt="false_positive",
+            pairwise_fp_delta_if_removed=-1,
+            pairwise_tp_delta_if_removed=0,
+            complete_fp_delta_if_removed=0,
+            complete_tp_delta_if_removed=0,
+            reference_track_id="jm046:manual-fp",
+            manual_gt_reference_identity="jm046:true-track",
+            new_pairwise_f1_micro=0.971,
+            new_complete_track_f1_micro=0.974,
+            score_delta=100.0,
+        )
+    )
+    options = residual_mht_module.PyRecEstResidualMHTOptions(
+        candidate_top_k=1,
+        include_compact_low_overlap=True,
+    )
+    gate = cleanup.GrowthVetoGate(
+        min_growth_residual_mahalanobis=20.0,
+        min_growth_residual=2.5,
+        max_local_neighbor_distortion=None,
+        max_row_rank=1,
+        max_column_rank=1,
+        require_not_suffix_edge=True,
+        require_terminal_edge=True,
+        require_last_session_edge=True,
+        require_complete_component=True,
+    )
+
+    candidates = residual_mht_module._candidate_rows(  # pylint: disable=protected-access
+        [row],
+        gate=gate,
+        options=options,
+        n_sessions=7,
+    )
+    pyrecest_candidate = residual_mht_module._to_pyrecest_candidate(  # pylint: disable=protected-access
+        candidates[0],
+        options=options,
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["pyrecest_candidate_family"] == "compact_low_overlap"
+    assert pyrecest_candidate.candidate_id == "jm046:2:3:1312:1830:0"
+    assert pyrecest_candidate.score > 0.0
+    assert set(pyrecest_candidate.metadata) == {
+        "subject",
+        "session_a",
+        "session_b",
+        "roi_a",
+        "roi_b",
+    }
+
+
 def _hypothesis(*candidate_ids: str) -> types.SimpleNamespace:
     """Build a minimal stand-in for a PyRecEst ``ResidualHypothesis``."""
 

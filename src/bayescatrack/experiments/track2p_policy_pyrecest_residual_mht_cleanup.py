@@ -145,6 +145,15 @@ class PyRecEstResidualMHTOptions:
     high_overlap_min_growth_residual_mahalanobis: float = 1.0
     high_overlap_min_cell_probability: float | None = None
     high_overlap_score_bonus: float = 2.0
+    include_compact_low_overlap: bool = False
+    compact_min_registered_iou: float = 0.30
+    compact_max_registered_iou: float = 0.55
+    compact_min_growth_residual: float = 0.50
+    compact_max_growth_residual: float = 2.50
+    compact_min_growth_residual_mahalanobis: float = 2.0
+    compact_max_growth_residual_mahalanobis: float = 6.0
+    compact_min_cell_probability: float = 0.75
+    compact_component_size: int | None = 4
 
     def __post_init__(self) -> None:
         _set_positive_int_field(self, "candidate_top_k")
@@ -406,6 +415,11 @@ def _candidate_rows(
             options=options,
             n_sessions=n_sessions,
         )
+        compact_reason = _compact_low_overlap_reason(
+            row,
+            gate=gate,
+            options=options,
+        )
         if growth_reason == "accepted":
             candidate = {
                 **dict(row),
@@ -419,6 +433,14 @@ def _candidate_rows(
                 **dict(row),
                 "pyrecest_candidate_id": _candidate_id(row),
                 "pyrecest_candidate_family": "high_overlap_low_motion",
+            }
+            candidates[str(candidate["pyrecest_candidate_id"])] = candidate
+            continue
+        if compact_reason == "accepted":
+            candidate = {
+                **dict(row),
+                "pyrecest_candidate_id": _candidate_id(row),
+                "pyrecest_candidate_family": "compact_low_overlap",
             }
             candidates[str(candidate["pyrecest_candidate_id"])] = candidate
     sorted_candidates = list(candidates.values())
@@ -453,6 +475,13 @@ def _candidate_gate_reason(
     )
     if high_overlap_reason == "accepted":
         return "high_overlap_low_motion_accepted"
+    compact_reason = _compact_low_overlap_reason(
+        row,
+        gate=gate,
+        options=options,
+    )
+    if compact_reason == "accepted":
+        return "compact_low_overlap_accepted"
     return growth_reason
 
 
@@ -529,6 +558,78 @@ def _high_overlap_low_motion_reason(
         gate.max_min_cell_probability
     ):
         return "min_cell_probability_above_gate"
+    if gate.max_local_neighbor_distortion is not None:
+        distortion = _finite_float(row.get("local_neighbor_distortion"), float("nan"))
+        if not np.isfinite(distortion) or distortion > float(
+            gate.max_local_neighbor_distortion
+        ):
+            return "local_neighbor_distortion_above_gate"
+    return "accepted"
+
+
+def _compact_low_overlap_reason(
+    row: Mapping[str, Any],
+    *,
+    gate: cleanup.GrowthVetoGate,
+    options: PyRecEstResidualMHTOptions,
+) -> str:
+    """Return accepted for an opt-in compact low-overlap residual pocket."""
+
+    if not options.include_compact_low_overlap:
+        return "compact_low_overlap_disabled"
+    if gate.require_not_suffix_edge and str(row.get("edge_source", "")) == "suffix":
+        return "coherence_suffix_edge"
+    if str(row.get("remove_reason", "")) != "split_edge":
+        return "not_splittable"
+    if int(row.get("would_split_component", 0)) <= 0:
+        return "does_not_split_component"
+
+    row_rank = int(_finite_float(row.get("row_rank"), float("inf")))
+    column_rank = int(_finite_float(row.get("column_rank"), float("inf")))
+    if row_rank <= 0 or row_rank > int(gate.max_row_rank):
+        return "row_rank_above_gate"
+    if column_rank <= 0 or column_rank > int(gate.max_column_rank):
+        return "column_rank_above_gate"
+
+    if options.compact_component_size is not None:
+        component_size = int(row.get("complete_component_size", 0))
+        if component_size != int(options.compact_component_size):
+            return "compact_component_size_outside_gate"
+
+    registered_iou = _finite_float(row.get("registered_iou"), float("nan"))
+    if not np.isfinite(registered_iou):
+        return "registered_iou_missing"
+    if registered_iou < float(options.compact_min_registered_iou):
+        return "compact_registered_iou_below_gate"
+    if registered_iou > float(options.compact_max_registered_iou):
+        return "compact_registered_iou_above_gate"
+
+    growth_residual = _finite_float(row.get("growth_residual"), float("nan"))
+    if not np.isfinite(growth_residual):
+        return "growth_residual_missing"
+    if growth_residual < float(options.compact_min_growth_residual):
+        return "compact_growth_residual_below_gate"
+    if growth_residual > float(options.compact_max_growth_residual):
+        return "compact_growth_residual_above_gate"
+
+    growth_mahalanobis = _finite_float(
+        row.get("growth_residual_mahalanobis"),
+        float("nan"),
+    )
+    if not np.isfinite(growth_mahalanobis):
+        return "growth_residual_mahalanobis_missing"
+    if growth_mahalanobis < float(options.compact_min_growth_residual_mahalanobis):
+        return "compact_mahalanobis_below_gate"
+    if growth_mahalanobis > float(options.compact_max_growth_residual_mahalanobis):
+        return "compact_mahalanobis_above_gate"
+
+    cell_a = _finite_float(row.get("cell_probability_a"), float("nan"))
+    cell_b = _finite_float(row.get("cell_probability_b"), float("nan"))
+    if not np.isfinite(cell_a) or not np.isfinite(cell_b):
+        return "cell_probability_missing"
+    if min(cell_a, cell_b) < float(options.compact_min_cell_probability):
+        return "compact_cell_probability_below_gate"
+
     if gate.max_local_neighbor_distortion is not None:
         distortion = _finite_float(row.get("local_neighbor_distortion"), float("nan"))
         if not np.isfinite(distortion) or distortion > float(
@@ -871,6 +972,30 @@ def build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--mht-high-overlap-score-bonus", type=float, default=2.0)
+    parser.add_argument(
+        "--mht-include-compact-low-overlap-candidates",
+        action="store_true",
+        help=(
+            "Also expose a compact low-registered-IoU residual candidate pocket "
+            "to PyRecEst MHT."
+        ),
+    )
+    parser.add_argument("--mht-compact-min-registered-iou", type=float, default=0.30)
+    parser.add_argument("--mht-compact-max-registered-iou", type=float, default=0.55)
+    parser.add_argument("--mht-compact-min-growth-residual", type=float, default=0.50)
+    parser.add_argument("--mht-compact-max-growth-residual", type=float, default=2.50)
+    parser.add_argument(
+        "--mht-compact-min-growth-residual-mahalanobis",
+        type=float,
+        default=2.0,
+    )
+    parser.add_argument(
+        "--mht-compact-max-growth-residual-mahalanobis",
+        type=float,
+        default=6.0,
+    )
+    parser.add_argument("--mht-compact-min-cell-probability", type=float, default=0.75)
+    parser.add_argument("--mht-compact-component-size", type=int, default=4)
     return parser
 
 
@@ -1016,6 +1141,27 @@ def main(argv: list[str] | None = None) -> int:
                 else float(args.mht_high_overlap_min_cell_probability)
             ),
             high_overlap_score_bonus=float(args.mht_high_overlap_score_bonus),
+            include_compact_low_overlap=bool(
+                args.mht_include_compact_low_overlap_candidates
+            ),
+            compact_min_registered_iou=float(args.mht_compact_min_registered_iou),
+            compact_max_registered_iou=float(args.mht_compact_max_registered_iou),
+            compact_min_growth_residual=float(args.mht_compact_min_growth_residual),
+            compact_max_growth_residual=float(args.mht_compact_max_growth_residual),
+            compact_min_growth_residual_mahalanobis=float(
+                args.mht_compact_min_growth_residual_mahalanobis
+            ),
+            compact_max_growth_residual_mahalanobis=float(
+                args.mht_compact_max_growth_residual_mahalanobis
+            ),
+            compact_min_cell_probability=float(
+                args.mht_compact_min_cell_probability
+            ),
+            compact_component_size=(
+                None
+                if args.mht_compact_component_size is None
+                else int(args.mht_compact_component_size)
+            ),
         ),
         progress=bool(args.progress),
     )
