@@ -813,6 +813,26 @@ def test_short_fragment_count_counts_singletons(residual_mht_module) -> None:
     assert count == 1
 
 
+def test_apply_selected_growth_veto_rows_accepts_empty_selection(
+    residual_mht_module,
+) -> None:
+    import numpy as np
+
+    tracks = np.array([[10, 11, 12]])
+    gate = cleanup.GrowthVetoGate(max_local_neighbor_distortion=None)
+
+    edited_tracks, applied_keys = (
+        residual_mht_module._apply_selected_growth_veto_rows(  # pylint: disable=protected-access
+            tracks,
+            [],
+            gate=gate,
+        )
+    )
+
+    assert edited_tracks is tracks
+    assert applied_keys == set()
+
+
 def test_global_rescore_prefers_less_fragmenting_hypothesis(
     residual_mht_module,
 ) -> None:

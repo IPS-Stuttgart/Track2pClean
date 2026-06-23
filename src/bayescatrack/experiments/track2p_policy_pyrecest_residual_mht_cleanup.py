@@ -296,14 +296,10 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
             for row in candidate_rows
             if str(row["pyrecest_candidate_id"]) in selected_ids
         ]
-        apply_gate = replace(
-            growth_veto_gate,
-            max_vetoes_per_subject=max(0, len(selected_rows)),
-        )
-        mht_tracks, applied_keys = cleanup._apply_growth_veto_rows(
+        mht_tracks, applied_keys = _apply_selected_growth_veto_rows(
             state.combined,
             selected_rows,
-            gate=apply_gate,
+            gate=growth_veto_gate,
         )
         scores = dict(score_track_matrices(mht_tracks, state.reference))
         scores.update(
@@ -731,6 +727,23 @@ def _track_short_fragment_count(
     return int(np.sum((observed > 0) & (observed < threshold)))
 
 
+def _apply_selected_growth_veto_rows(
+    tracks: np.ndarray,
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    gate: cleanup.GrowthVetoGate,
+) -> tuple[np.ndarray, set[tuple[str, int, int, int, int, int]]]:
+    if not rows:
+        return tracks, set()
+    apply_gate = replace(gate, max_vetoes_per_subject=len(rows))
+    edited_tracks, applied_keys = cleanup._apply_growth_veto_rows(
+        tracks,
+        rows,
+        gate=apply_gate,
+    )
+    return edited_tracks, set(applied_keys)
+
+
 def _global_hypothesis_objective(
     base_matrix: np.ndarray,
     base_short_fragments: int,
@@ -749,11 +762,10 @@ def _global_hypothesis_objective(
 
     if not rows:
         return 0.0, 0
-    apply_gate = replace(gate, max_vetoes_per_subject=len(rows))
-    edited_tracks, applied_keys = cleanup._apply_growth_veto_rows(
+    edited_tracks, applied_keys = _apply_selected_growth_veto_rows(
         base_matrix,
         rows,
-        gate=apply_gate,
+        gate=gate,
     )
     if not applied_keys:
         return 0.0, 0
