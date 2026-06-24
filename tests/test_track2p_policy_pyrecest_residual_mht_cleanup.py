@@ -1033,6 +1033,63 @@ def test_residual_mht_cli_exposes_global_rescore_knobs(residual_mht_module) -> N
     assert args.mht_fragmentation_penalty == 0.75
 
 
+def test_residual_mht_cli_exposes_deterministic_gating_mode(
+    residual_mht_module,
+) -> None:
+    args = residual_mht_module.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "mht.csv",
+            "--mht-selection-mode",
+            "deterministic-gating",
+        ]
+    )
+
+    assert args.mht_selection_mode == "deterministic-gating"
+
+
+def test_deterministic_gating_selects_top_individual_scores(
+    residual_mht_module,
+) -> None:
+    low = _split_candidate(
+        residual_mht_module,
+        roi_b=101,
+        growth_residual_mahalanobis=1.0,
+        growth_residual=0.0,
+        registered_iou=0.0,
+        shifted_iou=0.0,
+    )
+    medium = _split_candidate(
+        residual_mht_module,
+        roi_b=100,
+        growth_residual_mahalanobis=20.0,
+        growth_residual=1.0,
+    )
+    high = _split_candidate(
+        residual_mht_module,
+        roi_b=99,
+        growth_residual_mahalanobis=80.0,
+        growth_residual=3.0,
+    )
+    options = residual_mht_module.PyRecEstResidualMHTOptions(
+        max_edits_per_subject=1,
+        edit_penalty=0.25,
+        score_threshold=1.0,
+        selection_mode="deterministic-gating",
+    )
+
+    selected = residual_mht_module._select_deterministic_gating_rows(  # pylint: disable=protected-access
+        [low, medium, high],
+        options=options,
+    )
+
+    assert [row["pyrecest_candidate_id"] for row in selected] == [
+        high["pyrecest_candidate_id"]
+    ]
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

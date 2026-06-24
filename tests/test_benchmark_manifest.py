@@ -1225,6 +1225,65 @@ def test_benchmark_manifest_dispatches_pyrecest_residual_mht_options(
     assert (tmp_path / "results" / "pyrecest-dual-pocket.csv").exists()
 
 
+def test_benchmark_manifest_dispatches_deterministic_gating_ablation(
+    tmp_path, monkeypatch
+):
+    track2p_policy_pyrecest_residual_mht_cleanup = importlib.import_module(
+        "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup"
+    )
+
+    calls = {}
+
+    class _FakeResult:
+        def to_dict(self):
+            return {
+                "subject": "jm_pyrecest",
+                "variant": "fake deterministic gate",
+                "method": "track2p-policy-pyrecest-residual-mht-cleanup",
+                "n_sessions": 7,
+                "reference_source": "ground_truth_csv",
+                "pairwise_f1": 1.0,
+                "complete_track_f1": 1.0,
+            }
+
+    class _FakeOutput:
+        results = (_FakeResult(),)
+        candidate_rows = ()
+        summary_rows = ()
+
+    def fake_residual_mht(config, **kwargs):
+        calls["kwargs"] = dict(kwargs)
+        return _FakeOutput()
+
+    monkeypatch.setattr(
+        track2p_policy_pyrecest_residual_mht_cleanup,
+        "run_track2p_policy_pyrecest_residual_mht_cleanup",
+        fake_residual_mht,
+    )
+    manifest_path = tmp_path / "benchmarks.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "runs": [
+                {
+                    "name": "deterministic-gate",
+                    "runner": "track2p-policy-pyrecest-residual-mht-cleanup",
+                    "data": "data",
+                    "output": "results/deterministic-gate.csv",
+                    "growth_veto_base": "coherence-suffix",
+                    "mht_selection_mode": "deterministic-gating",
+                }
+            ],
+        },
+    )
+
+    result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
+
+    assert result.runs[0].rows == 1
+    assert calls["kwargs"]["mht_options"].selection_mode == "deterministic-gating"
+    assert (tmp_path / "results" / "deterministic-gate.csv").exists()
+
+
 def test_benchmark_manifest_dispatches_pyrecest_frontier_mht_defaults(
     tmp_path, monkeypatch
 ):

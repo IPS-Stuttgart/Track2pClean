@@ -2237,13 +2237,14 @@ def _growth_veto_prediction_base(
 
 def _residual_mht_selection_mode(
     options: ManifestObject,
-) -> Literal["additive", "global-rescore"]:
+) -> Literal["additive", "global-rescore", "deterministic-gating"]:
     value = str(options.get("mht_selection_mode", "additive"))
-    if value not in {"additive", "global-rescore"}:
+    if value not in {"additive", "global-rescore", "deterministic-gating"}:
         raise ValueError(
-            "mht_selection_mode must be either 'additive' or 'global-rescore'"
+            "mht_selection_mode must be one of 'additive', 'global-rescore', "
+            "or 'deterministic-gating'"
         )
-    return cast(Literal["additive", "global-rescore"], value)
+    return cast(Literal["additive", "global-rescore", "deterministic-gating"], value)
 
 
 def _coherence_suffix_cleanup_config_from_options(options: ManifestObject) -> Any:

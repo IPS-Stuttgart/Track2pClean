@@ -10,7 +10,7 @@ Selection uses only label-free fields.  Manual-GT labels and score deltas can
 appear in diagnostic rows inherited from growth-veto what-if machinery, but they
 are never passed into the PyRecEst candidate score or conflict keys.
 
-Two selection modes are available.  The default ``additive`` mode keeps the
+Three selection modes are available.  The default ``additive`` mode keeps the
 historical behaviour: PyRecEst ranks hypotheses by the sum of independent
 per-edit candidate scores minus a flat edit penalty.  The opt-in
 ``global-rescore`` mode instead re-ranks the enumerated, conflict-free
@@ -18,6 +18,9 @@ hypotheses by the label-free structural quality of the *resulting* edited track
 configuration, so it can reject an edit set whose members each look locally
 plausible but which jointly over-fragment a track.  Both modes remain label-free
 and fall back to the no-edit hypothesis when nothing clears the score threshold.
+The ``deterministic-gating`` ablation bypasses PyRecEst selection and greedily
+applies the top individually scored candidate rows from the exact same candidate
+ledger.
 """
 
 from __future__ import annotations
@@ -72,6 +75,7 @@ except ImportError as exc:  # pragma: no cover - exercised only with stale PyRec
     ) from exc
 
 METHOD = "track2p-policy-pyrecest-residual-mht-cleanup"
+ResidualSelectionMode = Literal["additive", "global-rescore", "deterministic-gating"]
 _UNSUPPORTED_RESIDUAL_GROWTH_VETO_OPTIONS = (
     "--max-vetoes-per-subject",
     "--growth-veto-max-vetoes-per-subject",
@@ -136,7 +140,7 @@ class PyRecEstResidualMHTOptions:
     max_hypotheses: int = 16
     edit_penalty: float = 0.25
     score_threshold: float = 1.0
-    selection_mode: Literal["additive", "global-rescore"] = "additive"
+    selection_mode: ResidualSelectionMode = "additive"
     fragmentation_penalty: float = 0.5
     min_meaningful_track_length: int = 2
     include_high_overlap_low_motion: bool = False
@@ -160,9 +164,14 @@ class PyRecEstResidualMHTOptions:
         _set_positive_int_field(self, "max_edits_per_subject")
         _set_positive_int_field(self, "max_hypotheses")
         _set_positive_int_field(self, "min_meaningful_track_length")
-        if self.selection_mode not in ("additive", "global-rescore"):
+        if self.selection_mode not in (
+            "additive",
+            "global-rescore",
+            "deterministic-gating",
+        ):
             raise ValueError(
-                "selection_mode must be either 'additive' or 'global-rescore'"
+                "selection_mode must be one of 'additive', 'global-rescore', "
+                "or 'deterministic-gating'"
             )
 
 
@@ -263,39 +272,57 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
         pyrecest_candidates = [
             _to_pyrecest_candidate(row, options=mht_options) for row in candidate_rows
         ]
-        pyrecest_config = ResidualMHTConfig(
-            max_edits=int(mht_options.max_edits_per_subject),
-            max_hypotheses=int(mht_options.max_hypotheses),
-            edit_penalty=float(mht_options.edit_penalty),
-            score_threshold=float(mht_options.score_threshold),
-            include_empty=True,
-        )
-        hypotheses = enumerate_residual_hypotheses(
-            pyrecest_candidates,
-            config=pyrecest_config,
-        )
-        if mht_options.selection_mode == "global-rescore":
-            selected_hypothesis, selected_objective = (
-                _select_residual_hypothesis_global_rescore(
-                    hypotheses,
-                    candidate_rows,
-                    base_tracks=state.combined,
-                    gate=growth_veto_gate,
-                    options=mht_options,
-                )
+        selected_hypothesis_score = 0.0
+        if mht_options.selection_mode == "deterministic-gating":
+            hypotheses = ()
+            selected_rows = _select_deterministic_gating_rows(
+                candidate_rows,
+                options=mht_options,
             )
+            selected_hypothesis_ids = [
+                str(row["pyrecest_candidate_id"]) for row in selected_rows
+            ]
+            selected_objective = _deterministic_gating_score(
+                selected_rows,
+                options=mht_options,
+            )
+            selected_hypothesis_score = selected_objective
         else:
-            selected_hypothesis = select_residual_hypothesis(
+            pyrecest_config = ResidualMHTConfig(
+                max_edits=int(mht_options.max_edits_per_subject),
+                max_hypotheses=int(mht_options.max_hypotheses),
+                edit_penalty=float(mht_options.edit_penalty),
+                score_threshold=float(mht_options.score_threshold),
+                include_empty=True,
+            )
+            hypotheses = enumerate_residual_hypotheses(
                 pyrecest_candidates,
                 config=pyrecest_config,
             )
-            selected_objective = float(selected_hypothesis.score)
-        selected_ids = set(selected_hypothesis.candidate_ids)
-        selected_rows = [
-            row
-            for row in candidate_rows
-            if str(row["pyrecest_candidate_id"]) in selected_ids
-        ]
+            if mht_options.selection_mode == "global-rescore":
+                selected_hypothesis, selected_objective = (
+                    _select_residual_hypothesis_global_rescore(
+                        hypotheses,
+                        candidate_rows,
+                        base_tracks=state.combined,
+                        gate=growth_veto_gate,
+                        options=mht_options,
+                    )
+                )
+            else:
+                selected_hypothesis = select_residual_hypothesis(
+                    pyrecest_candidates,
+                    config=pyrecest_config,
+                )
+                selected_objective = float(selected_hypothesis.score)
+            selected_hypothesis_score = float(selected_hypothesis.score)
+            selected_hypothesis_ids = list(selected_hypothesis.candidate_ids)
+            selected_ids = set(selected_hypothesis.candidate_ids)
+            selected_rows = [
+                row
+                for row in candidate_rows
+                if str(row["pyrecest_candidate_id"]) in selected_ids
+            ]
         mht_tracks, applied_keys = _apply_selected_growth_veto_rows(
             state.combined,
             selected_rows,
@@ -308,7 +335,9 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
                 "track2p_pyrecest_mht_hypotheses": int(len(hypotheses)),
                 "track2p_pyrecest_mht_selected": int(len(selected_rows)),
                 "track2p_pyrecest_mht_applied": int(len(applied_keys)),
-                "track2p_pyrecest_mht_selected_score": float(selected_hypothesis.score),
+                "track2p_pyrecest_mht_selected_score": float(
+                    selected_hypothesis_score
+                ),
                 "track2p_pyrecest_mht_selection_mode": str(mht_options.selection_mode),
                 "track2p_pyrecest_mht_selected_objective": float(selected_objective),
                 "track2p_pyrecest_mht_fragmentation_penalty": float(
@@ -368,10 +397,10 @@ def run_track2p_policy_pyrecest_residual_mht_cleanup(
                     "selected_by_pyrecest_mht": int(key in selected_keys),
                     "applied_by_pyrecest_mht": int(key in applied_set),
                     "pyrecest_selected_hypothesis": ";".join(
-                        selected_hypothesis.candidate_ids
+                        selected_hypothesis_ids
                     ),
                     "pyrecest_selected_hypothesis_score": float(
-                        selected_hypothesis.score
+                        selected_hypothesis_score
                     ),
                     "pyrecest_hypothesis_count": int(len(hypotheses)),
                     "pyrecest_top_hypotheses": "|".join(hypothesis_ids[:5]),
@@ -447,6 +476,42 @@ def _candidate_rows(
         )
     )
     return sorted_candidates[: int(options.candidate_top_k)]
+
+
+def _deterministic_gating_score(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    options: PyRecEstResidualMHTOptions,
+) -> float:
+    return float(
+        sum(
+            _candidate_score(row, options=options) - float(options.edit_penalty)
+            for row in rows
+        )
+    )
+
+
+def _select_deterministic_gating_rows(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    options: PyRecEstResidualMHTOptions,
+) -> list[Mapping[str, Any]]:
+    selected: list[Mapping[str, Any]] = []
+    for row in sorted(
+        rows,
+        key=lambda candidate: (
+            -_candidate_score(candidate, options=options),
+            str(candidate["pyrecest_candidate_id"]),
+        ),
+    ):
+        if len(selected) >= int(options.max_edits_per_subject):
+            break
+        if (
+            _candidate_score(row, options=options) - float(options.edit_penalty)
+        ) < float(options.score_threshold):
+            continue
+        selected.append(row)
+    return selected
 
 
 def _candidate_gate_reason(
@@ -926,14 +991,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mht-score-threshold", type=float, default=1.0)
     parser.add_argument(
         "--mht-selection-mode",
-        choices=("additive", "global-rescore"),
+        choices=("additive", "global-rescore", "deterministic-gating"),
         default="additive",
         help=(
             "How PyRecEst hypotheses are ranked. 'additive' (default) keeps the "
             "historical sum-of-edit-scores ranking. 'global-rescore' re-ranks the "
             "enumerated conflict-free hypotheses by the label-free structural "
             "quality of the resulting edited track configuration, penalising edit "
-            "sets that jointly over-fragment a track."
+            "sets that jointly over-fragment a track. 'deterministic-gating' is "
+            "an ablation that bypasses PyRecEst selection and greedily applies "
+            "top-scoring candidates from the same ledger."
         ),
     )
     parser.add_argument(
@@ -1130,9 +1197,7 @@ def main(argv: list[str] | None = None) -> int:
             max_hypotheses=int(args.mht_max_hypotheses),
             edit_penalty=float(args.mht_edit_penalty),
             score_threshold=float(args.mht_score_threshold),
-            selection_mode=cast(
-                Literal["additive", "global-rescore"], args.mht_selection_mode
-            ),
+            selection_mode=cast(ResidualSelectionMode, args.mht_selection_mode),
             fragmentation_penalty=float(args.mht_fragmentation_penalty),
             min_meaningful_track_length=int(args.mht_min_meaningful_track_length),
             include_high_overlap_low_motion=bool(
