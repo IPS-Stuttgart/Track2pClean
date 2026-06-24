@@ -13,7 +13,7 @@ import argparse
 import csv
 import json
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -244,7 +244,8 @@ def _subject_state_no_gt(
         f"{METHOD}: {subject_dir.name}: suffix candidates={len(paths)} selected={len(selected)}",
     )
 
-    anchor_edges = veto._anchor_edges_from_policy_diagnostics(
+    _log_progress(progress, f"{METHOD}: {subject_dir.name}: build growth anchors")
+    anchor_edges = _anchor_edges_from_policy_diagnostics_no_gt(
         sessions,
         feature_cache=feature_cache,
         diagnostics=policy_prediction.diagnostics,
@@ -277,6 +278,89 @@ def _subject_state_no_gt(
         growth_context=growth_context,
         baseline_scores={},
     )
+
+
+def _anchor_edges_from_policy_diagnostics_no_gt(
+    sessions: Sequence[Any],
+    *,
+    feature_cache: _FeatureCache,
+    diagnostics: Sequence[Any],
+    track2p: np.ndarray,
+    component_cleanup: np.ndarray,
+    combined: np.ndarray,
+    min_registered_iou: float,
+    min_shifted_iou: float = 0.0,
+    min_cell_probability: float,
+) -> dict[tuple[int, int], tuple[tuple[int, int, int, int], ...]]:
+    """Return label-free growth anchors with per-pair ROI lookup caches."""
+
+    track2p_edges = set(track_edge_counter(track2p))
+    cleanup_or_combined = set(track_edge_counter(component_cleanup)) | set(
+        track_edge_counter(combined)
+    )
+    roi_indices_by_session = [veto._roi_indices(session) for session in sessions]
+    matrices_by_pair: dict[int, Any] = {}
+    index_by_pair: dict[int, tuple[dict[int, int], dict[int, int]]] = {}
+    by_pair: dict[tuple[int, int], list[tuple[int, int, int, int]]] = defaultdict(list)
+
+    for diagnostic in diagnostics:
+        session_a = int(diagnostic.session_index)
+        session_b = session_a + 1
+        if session_a < 0 or session_b >= len(roi_indices_by_session):
+            continue
+        source_indices = roi_indices_by_session[session_a]
+        target_indices = roi_indices_by_session[session_b]
+        local_a = int(diagnostic.local_roi_a)
+        local_b = int(diagnostic.local_roi_b)
+        if local_a >= len(source_indices) or local_b >= len(target_indices):
+            continue
+        roi_a = int(source_indices[local_a])
+        roi_b = int(target_indices[local_b])
+        edge = (session_a, session_b, roi_a, roi_b)
+        if edge not in track2p_edges or edge not in cleanup_or_combined:
+            continue
+
+        registered_iou = float(diagnostic.assigned_iou)
+        shifted_iou = float("nan")
+        matrices = matrices_by_pair.get(session_a)
+        if matrices is None:
+            matrices = feature_cache.pair(session_a)
+            matrices_by_pair[session_a] = matrices
+            index_by_pair[session_a] = (
+                {int(roi): index for index, roi in enumerate(matrices.source_indices)},
+                {int(roi): index for index, roi in enumerate(matrices.target_indices)},
+            )
+        source_lookup, target_lookup = index_by_pair[session_a]
+        feature_local_a = source_lookup.get(roi_a, -1)
+        feature_local_b = target_lookup.get(roi_b, -1)
+        if feature_local_a >= 0 and feature_local_b >= 0:
+            registered_iou = float(
+                matrices.registered_iou[feature_local_a, feature_local_b]
+            )
+            shifted_iou = float(matrices.shifted_iou[feature_local_a, feature_local_b])
+        if registered_iou < float(min_registered_iou):
+            continue
+        if float(min_shifted_iou) > 0.0 and (
+            not np.isfinite(shifted_iou) or shifted_iou < float(min_shifted_iou)
+        ):
+            continue
+        cell_a = veto._cell_probability(sessions, session_a, roi_a)
+        cell_b = veto._cell_probability(sessions, session_b, roi_b)
+        if min(cell_a, cell_b) < float(min_cell_probability):
+            continue
+        by_pair[(session_a, session_b)].append(edge)
+
+    output: dict[tuple[int, int], tuple[tuple[int, int, int, int], ...]] = {}
+    for pair, edges in by_pair.items():
+        source_counts = Counter((edge[0], edge[2]) for edge in edges)
+        target_counts = Counter((edge[1], edge[3]) for edge in edges)
+        output[pair] = tuple(
+            edge
+            for edge in edges
+            if source_counts[(edge[0], edge[2])] == 1
+            and target_counts[(edge[1], edge[3])] == 1
+        )
+    return output
 
 
 def _accepted_edge_rows_no_gt(state: veto._SubjectState) -> list[dict[str, Any]]:
