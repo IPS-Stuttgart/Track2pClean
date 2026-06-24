@@ -10,7 +10,10 @@ import numpy as np
 def validated_numeric_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite")
-    numeric = float(value)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be finite") from exc
     if not np.isfinite(numeric):
         raise ValueError(f"{name} must be finite")
     return numeric
