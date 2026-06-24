@@ -21,7 +21,6 @@ from typing import Any, Literal, cast
 
 import numpy as np
 
-from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 from bayescatrack.experiments import (
     track2p_policy_coherence_suffix_stitch_whatif as suffix,
 )
@@ -36,6 +35,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     discover_subject_dirs,
 )
 from bayescatrack.experiments.track2p_emulation_benchmark import ThresholdMethod
+from bayescatrack.experiments.track2p_policy_audit import track_edge_counter
 from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
@@ -108,8 +108,10 @@ def run_track2p_policy_pyrecest_mht_exposure_audit(
     if not subject_dirs:
         raise ValueError(f"No Track2p-style subject directories found under {policy_config.data}")
 
-    states = [
-        _subject_state_no_gt(
+    summary_rows: list[dict[str, Any]] = []
+    detail_rows: list[dict[str, Any]] = []
+    for subject_dir in subject_dirs:
+        state = _subject_state_no_gt(
             subject_dir,
             config=policy_config,
             cleanup_config=cleanup_config,
@@ -123,22 +125,8 @@ def run_track2p_policy_pyrecest_mht_exposure_audit(
             anchor_min_cell_probability=float(anchor_min_cell_probability),
             progress=progress,
         )
-        for subject_dir in subject_dirs
-    ]
-    global_baseline_scores = veto._global_scores(state.baseline_scores for state in states)
-
-    summary_rows: list[dict[str, Any]] = []
-    detail_rows: list[dict[str, Any]] = []
-    for state in states:
         _log_progress(progress, f"{METHOD}: {state.subject}: enumerate candidates")
-        edge_rows = veto._accepted_edge_rows(
-            state,
-            global_baseline_scores=global_baseline_scores,
-            threshold_method=threshold_method,
-            iou_distance_threshold=float(iou_distance_threshold),
-            cell_probability_threshold=float(policy_config.cell_probability_threshold),
-            transform_type=str(policy_config.transform_type),
-        )
+        edge_rows = _accepted_edge_rows_no_gt(state)
         edge_rows = cleanup._augment_growth_veto_candidate_shifted_iou(
             edge_rows,
             state.sessions,
@@ -268,7 +256,12 @@ def _subject_state_no_gt(
         min_cell_probability=float(anchor_min_cell_probability),
     )
     growth_models = veto._growth_models_by_pair(sessions, anchor_edges)
+    _log_progress(
+        progress,
+        f"{METHOD}: {subject_dir.name}: growth anchor pairs={len(anchor_edges)}",
+    )
     growth_context = veto._growth_feature_context(sessions, stitched, anchor_edges)
+    _log_progress(progress, f"{METHOD}: {subject_dir.name}: growth context ready")
     return veto._SubjectState(
         subject=subject_dir.name,
         sessions=sessions,
@@ -282,8 +275,80 @@ def _subject_state_no_gt(
         anchor_edges=anchor_edges,
         growth_models=growth_models,
         growth_context=growth_context,
-        baseline_scores=dict(score_track_matrices(stitched, empty_reference)),
+        baseline_scores={},
     )
+
+
+def _accepted_edge_rows_no_gt(state: veto._SubjectState) -> list[dict[str, Any]]:
+    """Return label-free accepted-edge rows for candidate exposure only."""
+
+    combined_counts = track_edge_counter(state.combined)
+    policy_counts = track_edge_counter(state.policy)
+    cleanup_counts = track_edge_counter(state.component_cleanup)
+    suffix_counts = track_edge_counter(state.coherence_suffix)
+    teacher_counts = track_edge_counter(state.teacher)
+
+    rows: list[dict[str, Any]] = []
+    for edge in sorted(combined_counts):
+        if edge[1] != edge[0] + 1:
+            continue
+        model = state.growth_models.get((edge[0], edge[1]), veto._identity_growth_model())
+        for occurrence_index in range(int(combined_counts[edge])):
+            growth = veto._edge_growth_features_fast(
+                state.growth_context,
+                edge,
+                model=model,
+            )
+            split = veto._remove_edge_occurrence(
+                state.combined,
+                edge,
+                occurrence_index=occurrence_index,
+            )
+            edge_source = veto._edge_source(
+                edge,
+                occurrence_index=occurrence_index,
+                policy_counts=policy_counts,
+                cleanup_counts=cleanup_counts,
+                suffix_counts=suffix_counts,
+            )
+            rows.append(
+                {
+                    "subject": state.subject,
+                    "session_a": int(edge[0]),
+                    "session_b": int(edge[1]),
+                    "roi_a": int(edge[2]),
+                    "roi_b": int(edge[3]),
+                    "occurrence_index": int(occurrence_index),
+                    "edge_source": edge_source,
+                    "is_terminal_edge": int(split.is_terminal_edge),
+                    "is_last_session_edge": int(split.is_last_session_edge),
+                    "track2p_supported": int(
+                        teacher_counts.get(edge, 0) > occurrence_index
+                    ),
+                    "policy_supported": int(
+                        policy_counts.get(edge, 0) > occurrence_index
+                    ),
+                    "teacher_supported": int(
+                        teacher_counts.get(edge, 0) > occurrence_index
+                    ),
+                    "component_cleanup_supported": int(
+                        cleanup_counts.get(edge, 0) > occurrence_index
+                    ),
+                    "coherence_suffix_supported": int(
+                        suffix_counts.get(edge, 0) > occurrence_index
+                    ),
+                    "growth_residual": growth.growth_residual,
+                    "growth_residual_mahalanobis": growth.growth_residual_mahalanobis,
+                    "growth_model_type": model.model_type,
+                    "growth_anchor_count": int(model.anchor_count),
+                    "growth_inlier_count": int(model.inlier_count),
+                    "complete_component_size": int(split.complete_component_size),
+                    "component_risk": veto._component_risk(growth),
+                    "would_split_component": int(split.would_split_component),
+                    "remove_reason": split.reason,
+                }
+            )
+    return veto._augment_with_sparse_edge_features(rows, state.sessions, state.edge_features)
 
 
 def _select_candidate_rows(
