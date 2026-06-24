@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping, Sequence
 from typing import Any, TypeAlias
 
@@ -285,13 +286,22 @@ def _validate_probability_label_inputs(
 
 
 def _validate_n_bins(n_bins: int) -> int:
-    try:
+    if isinstance(n_bins, (bool, np.bool_)):
+        raise ValueError("n_bins must be a positive integer")
+
+    if isinstance(n_bins, (float, np.floating)):
+        if not np.isfinite(n_bins) or not float(n_bins).is_integer():
+            raise ValueError("n_bins must be a positive integer")
         parsed = int(n_bins)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("n_bins must be a positive integer") from exc
+    else:
+        try:
+            parsed = operator.index(n_bins)
+        except TypeError as exc:
+            raise ValueError("n_bins must be a positive integer") from exc
+
     if parsed <= 0:
         raise ValueError("n_bins must be a positive integer")
-    return parsed
+    return int(parsed)
 
 
 def _empty_bin_row(bin_index: int, edges: np.ndarray) -> CalibrationBinRow:
