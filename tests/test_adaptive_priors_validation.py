@@ -6,6 +6,23 @@ from bayescatrack.association.adaptive_priors import AdaptiveEdgePriorConfig
 
 
 @pytest.mark.parametrize(
+    "field",
+    [
+        "session_gap_weight",
+        "border_proximity_weight",
+        "low_cell_probability_weight",
+        "mask_fragility_weight",
+    ],
+)
+@pytest.mark.parametrize("bad_value", [True, np.bool_(False), -0.1, np.nan, np.inf])
+def test_adaptive_edge_prior_config_rejects_invalid_nonnegative_weights(
+    field: str, bad_value: object
+) -> None:
+    with pytest.raises(ValueError, match=f"{field} must be finite and non-negative"):
+        AdaptiveEdgePriorConfig(**{field: bad_value})
+
+
+@pytest.mark.parametrize(
     ("learned_gap_costs", "message"),
     [
         ({0: 1.0}, "learned_gap_costs key must be a positive integer"),
