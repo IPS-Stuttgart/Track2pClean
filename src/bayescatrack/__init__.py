@@ -12,6 +12,9 @@ from ._confidence_ordered_strict_gap_cli import (
 from ._fov_affine_validation import (
     install_fov_affine_warp_validation as _install_fov_affine_warp_validation,
 )
+from ._ground_truth_track_validation import (
+    install_ground_truth_track_validation as _install_ground_truth_track_validation,
+)
 from ._integer_translation_validation import (
     install_integer_image_translation_validation as _install_integer_image_translation_validation,
 )
@@ -61,6 +64,7 @@ _install_advanced_roi_components()
 _install_advanced_weight_validation()
 _install_integer_image_translation_validation()
 _install_fov_affine_warp_validation()
+_install_ground_truth_track_validation()
 _install_registration_selection_validation()
 _install_strict_config_validation()
 _install_session_gap_validation()
