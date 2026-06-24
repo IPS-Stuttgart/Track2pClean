@@ -64,10 +64,11 @@ def _normalize_integer_shift_yx(shift_yx: Any) -> tuple[int, int]:
     if flattened_shift.size != 2:
         raise ValueError(_SHIFT_ERROR)
 
-    return tuple(
+    shift_y, shift_x = (
         _normalize_integer_shift_component(value)
         for value in flattened_shift.tolist()
-    )  # type: ignore[return-value]
+    )
+    return shift_y, shift_x
 
 
 def _normalize_integer_shift_component(value: Any) -> int:
