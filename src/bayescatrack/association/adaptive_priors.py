@@ -74,10 +74,14 @@ def apply_adaptive_edge_priors(
 
     resolved = _coerce_config(config)
     sessions = tuple(sessions)
-    copied = {
-        (int(edge[0]), int(edge[1])): np.asarray(matrix, dtype=float).copy()
-        for edge, matrix in pairwise_costs.items()
-    }
+    copied: dict[SessionEdge, np.ndarray] = {}
+    for edge, matrix in pairwise_costs.items():
+        normalized_edge = _validate_session_edge_key(edge)
+        if normalized_edge in copied:
+            raise ValueError(
+                f"Duplicate pairwise cost matrix for session edge {normalized_edge!r}"
+            )
+        copied[normalized_edge] = np.asarray(matrix, dtype=float).copy()
     if not resolved.enabled:
         return copied
 
@@ -201,6 +205,35 @@ def _finite_costs(costs: np.ndarray, *, large_cost: float) -> np.ndarray:
     result[invalid] = large_cost
     result[result < 0.0] = 0.0
     return result
+
+
+def _validate_session_edge_key(edge: Any) -> SessionEdge:
+    if isinstance(edge, (str, bytes)):
+        raise ValueError("pairwise_costs keys must be length-2 session-edge pairs")
+    try:
+        values = tuple(edge)
+    except TypeError as exc:
+        raise ValueError(
+            "pairwise_costs keys must be length-2 session-edge pairs"
+        ) from exc
+    if len(values) != 2:
+        raise ValueError("pairwise_costs keys must be length-2 session-edge pairs")
+    return (
+        _nonnegative_int(values[0], name="session edge source"),
+        _nonnegative_int(values[1], name="session edge target"),
+    )
+
+
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a non-negative integer")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a non-negative integer") from exc
+    if not np.isfinite(numeric) or not numeric.is_integer() or numeric < 0.0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return int(numeric)
 
 
 def _validated_learned_gap_costs(
