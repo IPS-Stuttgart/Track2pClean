@@ -3,6 +3,7 @@
 # pylint: disable=duplicate-code
 
 from . import cli as _cli
+from . import matching as _matching
 from ._advanced_weight_validation import (
     install_advanced_weight_validation as _install_advanced_weight_validation,
 )
@@ -14,6 +15,9 @@ from ._fov_affine_validation import (
 )
 from ._integer_translation_validation import (
     install_integer_image_translation_validation as _install_integer_image_translation_validation,
+)
+from ._matching_validation import (
+    install_matching_layout_validation as _install_matching_layout_validation,
 )
 from ._registration_selection_validation import (
     install_registration_selection_validation as _install_registration_selection_validation,
@@ -56,6 +60,7 @@ main = _cli.main
 summarize_subject = _bridge.summarize_subject
 
 _install_confidence_ordered_strict_gap_cli(_cli)
+_install_matching_layout_validation(_matching)
 _install_soft_overlap_costs()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
