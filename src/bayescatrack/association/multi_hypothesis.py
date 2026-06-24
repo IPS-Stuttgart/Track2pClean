@@ -240,11 +240,14 @@ def _is_edge_set_input(matrix_values: Any, matrix: np.ndarray) -> bool:
         return False
     if isinstance(matrix_values, np.ndarray):
         # A dense ndarray with four columns is ambiguous with a four-session
-        # track matrix. Keep ndarray inputs on the established track-matrix path
-        # and treat the native tuples returned by top_k_edge_candidates as edge
-        # sets.
+        # track matrix. Keep ndarray inputs on the established track-matrix path.
         return False
-    return True
+    if not isinstance(matrix_values, tuple):
+        # Python lists are the natural representation of track matrices in tests,
+        # scripts, and JSON-loaded manifests. Do not reinterpret four-session
+        # lists as explicit edge sets.
+        return False
+    return all(isinstance(row, tuple) and len(row) == 4 for row in matrix_values)
 
 
 def hypotheses_to_matrix(hypotheses: Sequence[TrackHypothesis]) -> np.ndarray:
