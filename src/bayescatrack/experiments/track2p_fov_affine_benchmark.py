@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import operator
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -76,7 +77,7 @@ def _soft_iou_pairwise_cost_matrix(
     other: CalciumPlaneData,
     **kwargs: Any,
 ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
-    soft_iou_radius = int(kwargs.pop("soft_iou_radius", 0) or 0)
+    soft_iou_radius = _nonnegative_int(kwargs.pop("soft_iou_radius", 0), name="soft_iou_radius")
     iou_weight = float(kwargs.get("iou_weight", 6.0))
     if iou_weight <= 0.0:
         return original_method(self, other, **kwargs)
@@ -257,6 +258,26 @@ def _dilate_mask_stack(masks: np.ndarray, *, radius: int) -> np.ndarray:
             dst_x = slice(max(0, dx), min(width, width + dx))
             result[:, dst_y, dst_x] |= mask_array[:, src_y, src_x]
     return result
+
+
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError:
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(numeric_value)
+    if integer_value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return int(integer_value)
 
 
 def _ensure_finite_cost_matrix(
