@@ -174,6 +174,19 @@ def test_candidate_mask_from_cost_matrix_rejects_boolean_float_values(kwargs, me
         )
 
 
+@pytest.mark.parametrize("shape", [(0, 3), (3, 0), (0, 0)])
+def test_candidate_mask_from_cost_matrix_handles_empty_margin_gate(shape):
+    mask = candidate_mask_from_cost_matrix(
+        np.zeros(shape, dtype=float),
+        top_k=1,
+        gate_margin=0.25,
+    )
+
+    assert mask.shape == shape
+    assert mask.dtype == np.dtype(bool)
+    assert not np.any(mask)
+
+
 @pytest.mark.parametrize("bad_radial_bins", [True, False, 1.5, "1.5", np.nan, np.inf])
 def test_shape_descriptors_reject_invalid_radial_bins(bad_radial_bins):
     masks = np.zeros((1, 4, 4), dtype=bool)
