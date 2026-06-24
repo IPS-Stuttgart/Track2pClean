@@ -31,9 +31,7 @@ class AbsenceModelConfig:
             "trace_missing_discount",
             "min_cost",
         ):
-            value = float(getattr(self, name))
-            if not np.isfinite(value) or value < 0.0:
-                raise ValueError(f"{name} must be finite and non-negative")
+            value = _validated_non_negative_finite_float(name, getattr(self, name))
             object.__setattr__(self, name, value)
 
 
@@ -182,6 +180,15 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
             float(np.max(cost_values)) if cost_values.size else float("nan")
         ),
     }
+
+
+def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
+    if isinstance(raw_value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and non-negative")
+    value = float(raw_value)
+    if not np.isfinite(value) or value < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return value
 
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:
