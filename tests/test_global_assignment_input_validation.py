@@ -8,6 +8,28 @@ import pytest
 from bayescatrack.association import pyrecest_global_assignment as assignment
 
 
+@pytest.mark.parametrize("max_gap", [True, 0, 1.5, "2.5", float("nan")])
+def test_session_edge_pairs_rejects_invalid_max_gap(max_gap: object) -> None:
+    with pytest.raises(ValueError, match="max_gap"):
+        assignment.session_edge_pairs(3, max_gap=max_gap)
+
+
+@pytest.mark.parametrize("num_sessions", [True, -1, 2.5, "3.5", float("inf")])
+def test_session_edge_pairs_rejects_invalid_num_sessions(num_sessions: object) -> None:
+    with pytest.raises(ValueError, match="num_sessions"):
+        assignment.session_edge_pairs(num_sessions, max_gap=1)
+
+
+def test_session_edge_pairs_accepts_integer_like_inputs() -> None:
+    assert assignment.session_edge_pairs("4", max_gap="2") == (
+        (0, 1),
+        (0, 2),
+        (1, 2),
+        (1, 3),
+        (2, 3),
+    )
+
+
 @dataclass(frozen=True)
 class _DummySolverResult:
     tracks: tuple[dict[int, int], ...] = ()
