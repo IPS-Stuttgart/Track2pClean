@@ -132,12 +132,24 @@ def _normalize_integer_control(value: Any, field_name: str) -> int:
     try:
         return int(operator.index(value))
     except TypeError:
-        if not isinstance(value, (float, np.floating)):
-            raise ValueError(f"{field_name} must be an integer") from None
-        numeric_value = float(value)
-        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+        pass
+
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
             raise ValueError(f"{field_name} must be an integer")
-        return int(numeric_value)
+        try:
+            numeric_value = float(text)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be an integer") from exc
+    elif isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+    else:
+        raise ValueError(f"{field_name} must be an integer")
+
+    if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+        raise ValueError(f"{field_name} must be an integer")
+    return int(numeric_value)
 
 
 __all__ = ["install_matching_control_validation"]
