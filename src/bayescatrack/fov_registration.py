@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Literal, Mapping, Sequence
 
@@ -94,10 +95,13 @@ def _fov_association_options_from_kwargs(
     if "subpixel_refinement" in normalized_kwargs:
         subpixel_refinement_value = normalized_kwargs.pop("subpixel_refinement")
         if subpixel_refinement_value is not None:
-            subpixel_refinement = bool(subpixel_refinement_value)
+            subpixel_refinement = _strict_bool(
+                subpixel_refinement_value, name="subpixel_refinement"
+            )
             if (
                 "subpixel" in normalized_kwargs
-                and bool(normalized_kwargs["subpixel"]) != subpixel_refinement
+                and _strict_bool(normalized_kwargs["subpixel"], name="subpixel")
+                != subpixel_refinement
             ):
                 raise ValueError("subpixel and subpixel_refinement disagree")
             normalized_kwargs["subpixel"] = subpixel_refinement
@@ -113,6 +117,16 @@ def _fov_association_options_from_kwargs(
             **normalized_kwargs,
         }
     )
+    _strict_bool(options.subtract_mean, name="subtract_mean")
+    _strict_bool(options.weighted_centroids, name="weighted_centroids")
+    _strict_bool(
+        options.return_pairwise_components, name="return_pairwise_components"
+    )
+    _strict_bool(options.subpixel, name="subpixel")
+    _finite_nonnegative_float(
+        options.subpixel_refinement_radius, name="subpixel_refinement_radius"
+    )
+    _validate_subpixel_interpolation_order(options.subpixel_interpolation_order)
     _validate_mask_interpolation(options.mask_interpolation)
     return options
 
@@ -123,6 +137,7 @@ def _prepare_fov_phase_correlation_inputs(
     *,
     subtract_mean: bool,
 ) -> tuple[np.ndarray, np.ndarray]:
+    subtract_mean = _strict_bool(subtract_mean, name="subtract_mean")
     reference = np.asarray(reference_fov, dtype=float)
     measurement = np.asarray(measurement_fov, dtype=float)
     if reference.ndim != 2 or measurement.ndim != 2:
@@ -216,9 +231,9 @@ def estimate_subpixel_fov_shift(
 ) -> tuple[np.ndarray, float]:
     """Return a subpixel shift to apply to ``measurement_fov``."""
 
-    refinement_radius = float(refinement_radius)
-    if not np.isfinite(refinement_radius) or refinement_radius < 0.0:
-        raise ValueError("refinement_radius must be a finite non-negative value")
+    refinement_radius = _finite_nonnegative_float(
+        refinement_radius, name="refinement_radius"
+    )
     interpolation_order = _validate_subpixel_interpolation_order(interpolation_order)
 
     reference, measurement = _prepare_fov_phase_correlation_inputs(
@@ -249,6 +264,9 @@ def estimate_fov_shift(
 ) -> tuple[np.ndarray, float]:
     """Return the FOV shift, preserving the older subpixel-refinement API."""
 
+    subpixel_refinement = _strict_bool(
+        subpixel_refinement, name="subpixel_refinement"
+    )
     if subpixel_refinement:
         return estimate_subpixel_fov_shift(
             reference_fov,
@@ -380,9 +398,58 @@ def apply_integer_image_translation(
     return result
 
 
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite non-negative value")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite non-negative value") from exc
+    if not np.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return numeric
+
+
 def _validate_subpixel_interpolation_order(interpolation_order: int) -> int:
-    order = int(interpolation_order)
-    if order != interpolation_order or order < 0 or order > 5:
+    if isinstance(interpolation_order, (bool, np.bool_)):
+        raise ValueError(
+            "subpixel interpolation order must be an integer between 0 and 5"
+        )
+    if isinstance(interpolation_order, (float, np.floating)):
+        if not np.isfinite(interpolation_order) or not float(
+            interpolation_order
+        ).is_integer():
+            raise ValueError(
+                "subpixel interpolation order must be an integer between 0 and 5"
+            )
+        order = int(interpolation_order)
+    elif isinstance(interpolation_order, str):
+        stripped = interpolation_order.strip()
+        try:
+            numeric_order = float(stripped)
+        except ValueError as exc:
+            raise ValueError(
+                "subpixel interpolation order must be an integer between 0 and 5"
+            ) from exc
+        if not np.isfinite(numeric_order) or not numeric_order.is_integer():
+            raise ValueError(
+                "subpixel interpolation order must be an integer between 0 and 5"
+            )
+        order = int(numeric_order)
+    else:
+        try:
+            order = operator.index(interpolation_order)
+        except TypeError as exc:
+            raise ValueError(
+                "subpixel interpolation order must be an integer between 0 and 5"
+            ) from exc
+    if order < 0 or order > 5:
         raise ValueError(
             "subpixel interpolation order must be an integer between 0 and 5"
         )
@@ -539,8 +606,15 @@ def register_measurement_plane_by_fov_translation(
         raise ValueError(
             "Both planes must provide fov images for FOV-based registration"
         )
+    subpixel = _strict_bool(subpixel, name="subpixel")
     if subpixel_refinement is not None:
-        subpixel = bool(subpixel_refinement)
+        subpixel = _strict_bool(subpixel_refinement, name="subpixel_refinement")
+    subpixel_refinement_radius = _finite_nonnegative_float(
+        subpixel_refinement_radius, name="subpixel_refinement_radius"
+    )
+    subpixel_interpolation_order = _validate_subpixel_interpolation_order(
+        subpixel_interpolation_order
+    )
     mask_interpolation_order = _interpolation_order_from_mask_interpolation(
         mask_interpolation
     )
