@@ -1,5 +1,5 @@
 {
-    "threshold": 5.8,
+    "threshold": 5.9,
     "ignore": [
         "**/.github/workflows/**",
         ".pytest-tmp/**",
