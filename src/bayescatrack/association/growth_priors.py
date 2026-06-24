@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -18,12 +19,17 @@ class GrowthPriorConfig:
     regularization: float = 1.0e-6
 
     def __post_init__(self) -> None:
-        if self.affine_weight < 0.0 or self.radial_weight < 0.0:
-            raise ValueError("growth prior weights must be non-negative")
-        if self.displacement_scale <= 0.0:
-            raise ValueError("displacement_scale must be positive")
-        if self.regularization < 0.0:
-            raise ValueError("regularization must be non-negative")
+        for name in ("affine_weight", "radial_weight", "regularization"):
+            object.__setattr__(
+                self,
+                name,
+                _nonnegative_float(getattr(self, name), name=name),
+            )
+        object.__setattr__(
+            self,
+            "displacement_scale",
+            _positive_float(self.displacement_scale, name="displacement_scale"),
+        )
 
 
 def fit_affine_growth_transform(
@@ -33,6 +39,7 @@ def fit_affine_growth_transform(
 
     source = np.asarray(source_points_xy, dtype=float)
     target = np.asarray(target_points_xy, dtype=float)
+    regularization = _nonnegative_float(regularization, name="regularization")
     if source.shape != target.shape or source.ndim != 2 or source.shape[1] != 2:
         raise ValueError(
             "source_points_xy and target_points_xy must both have shape (n, 2)"
@@ -40,7 +47,7 @@ def fit_affine_growth_transform(
     if source.shape[0] < 3:
         raise ValueError("At least three point pairs are required for affine growth")
     design = np.column_stack((source, np.ones(source.shape[0], dtype=float)))
-    normal = design.T @ design + float(regularization) * np.eye(3)
+    normal = design.T @ design + regularization * np.eye(3)
     rhs = design.T @ target
     coef = np.linalg.solve(normal, rhs)
     return np.asarray(coef.T, dtype=float)
@@ -86,11 +93,12 @@ def affine_growth_penalty_matrix(
     ref = np.asarray(reference_centroids_xy, dtype=float)
     meas = np.asarray(measurement_centroids_xy, dtype=float)
     matrix = np.asarray(affine_xy, dtype=float)
+    scale = _positive_float(scale, name="scale")
     if matrix.shape != (2, 3):
         raise ValueError("affine_xy must have shape (2, 3)")
     predicted = ref @ matrix[:, :2].T + matrix[:, 2][None, :]
     diffs = predicted[:, None, :] - meas[None, :, :]
-    return np.linalg.norm(diffs, axis=2) / max(float(scale), 1.0e-12)
+    return np.linalg.norm(diffs, axis=2) / scale
 
 
 def growth_penalty_matrix(
@@ -126,6 +134,7 @@ def radial_growth_penalty_matrix(
 
     ref = np.asarray(reference_centroids_xy, dtype=float)
     meas = np.asarray(measurement_centroids_xy, dtype=float)
+    scale = _positive_float(scale, name="scale")
     if center_xy is None:
         center = np.nanmean(ref, axis=0) if ref.size else np.zeros((2,), dtype=float)
     else:
@@ -133,7 +142,7 @@ def radial_growth_penalty_matrix(
     ref_r = np.linalg.norm(ref - center[None, :], axis=1)
     meas_r = np.linalg.norm(meas - center[None, :], axis=1)
     radial_diff = np.abs(ref_r[:, None] - meas_r[None, :])
-    return radial_diff / max(float(scale), 1.0e-12)
+    return radial_diff / scale
 
 
 def apply_growth_prior_to_costs(
@@ -200,3 +209,29 @@ def estimate_growth_from_track_rows(
         np.vstack(target_points),
         regularization=cfg.regularization,
     )
+
+
+def _nonnegative_float(value: Any, *, name: str) -> float:
+    numeric = _finite_float(value, name=name)
+    if numeric < 0.0:
+        raise ValueError(f"{name} must be non-negative")
+    return numeric
+
+
+def _positive_float(value: Any, *, name: str) -> float:
+    numeric = _finite_float(value, name=name)
+    if numeric <= 0.0:
+        raise ValueError(f"{name} must be positive")
+    return numeric
+
+
+def _finite_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be finite") from exc
+    if not math.isfinite(numeric):
+        raise ValueError(f"{name} must be finite")
+    return numeric
