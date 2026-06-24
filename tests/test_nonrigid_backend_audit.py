@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from bayescatrack.experiments.nonrigid_backend_audit import (
+    _gt_link_count,
     format_nonrigid_registration_backend_audit_table,
     summarize_registration_backend_audit_edges,
 )
@@ -81,3 +82,32 @@ def test_nonrigid_backend_audit_surfaces_dense_warp_diagnostics():
     table = format_nonrigid_registration_backend_audit_table(audit_rows)
     assert "median_nonrigid_registration_fit_rmse" in table
     assert "thin-plate-spline-landmark-warp" in table
+
+
+def test_gt_link_count_ignores_sparse_reference_sentinels():
+    reference_matrix = np.asarray(
+        [
+            [0, 1, 2],
+            [3, -1, 4],
+            [-1, 5, 6],
+            [7, np.nan, 8],
+            [9, None, 10],
+        ],
+        dtype=object,
+    )
+
+    assert _gt_link_count(reference_matrix, 0, 1) == 1
+    assert _gt_link_count(reference_matrix, 1, 2) == 2
+
+
+def test_gt_link_count_accepts_zero_as_valid_roi_index():
+    reference_matrix = np.asarray(
+        [
+            [0, 0],
+            [1, -1],
+            [-1, 2],
+        ],
+        dtype=int,
+    )
+
+    assert _gt_link_count(reference_matrix, 0, 1) == 1
