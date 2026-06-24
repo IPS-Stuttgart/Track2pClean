@@ -58,14 +58,24 @@ def centroid_candidate_mask(
     ----------
     reference_centroids, measurement_centroids
         Arrays with shape ``(2, n_roi)`` or ``(n_roi, 2)``. The function accepts
-        either common convention and normalizes internally.
+        either common convention and normalizes internally. Ambiguous ``(2, 2)``
+        arrays inherit the peer centroid layout when the peer layout is
+        unambiguous; otherwise they keep the historical coordinate-row layout.
     config
         Candidate policy. ``None`` returns a dense all-true mask.
     """
 
     cfg = config or CentroidCandidatePrefilterConfig()
-    reference = _as_point_matrix(reference_centroids, name="reference_centroids")
-    measurement = _as_point_matrix(measurement_centroids, name="measurement_centroids")
+    reference = _as_point_matrix(
+        reference_centroids,
+        name="reference_centroids",
+        peer_values=measurement_centroids,
+    )
+    measurement = _as_point_matrix(
+        measurement_centroids,
+        name="measurement_centroids",
+        peer_values=reference_centroids,
+    )
     distances = _pairwise_distances(reference, measurement)
     mask = np.ones(distances.shape, dtype=bool)
 
@@ -113,15 +123,38 @@ def candidate_edges_from_mask(
     )
 
 
-def _as_point_matrix(values: np.ndarray, *, name: str) -> np.ndarray:
+def _as_point_matrix(
+    values: np.ndarray,
+    *,
+    name: str,
+    peer_values: np.ndarray | None = None,
+) -> np.ndarray:
     points = np.asarray(values, dtype=float)
     if points.ndim != 2:
         raise ValueError(f"{name} must be two-dimensional")
+    if points.shape == (2, 2):
+        peer_layout = _unambiguous_centroid_layout(peer_values)
+        if peer_layout == "point_rows":
+            return np.ascontiguousarray(points, dtype=float)
+        return np.ascontiguousarray(points.T, dtype=float)
     if points.shape[0] == 2:
         points = points.T
     elif points.shape[1] != 2:
         raise ValueError(f"{name} must have shape (2, n) or (n, 2)")
     return np.ascontiguousarray(points, dtype=float)
+
+
+def _unambiguous_centroid_layout(values: np.ndarray | None) -> str | None:
+    if values is None:
+        return None
+    points = np.asarray(values)
+    if points.ndim != 2:
+        return None
+    if points.shape[1] == 2 and points.shape[0] != 2:
+        return "point_rows"
+    if points.shape[0] == 2 and points.shape[1] != 2:
+        return "coordinate_rows"
+    return None
 
 
 def _pairwise_distances(reference: np.ndarray, measurement: np.ndarray) -> np.ndarray:
