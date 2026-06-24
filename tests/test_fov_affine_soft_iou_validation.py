@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
 from typing import Any
 
 import numpy as np
 import pytest
 from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.experiments.track2p_fov_affine_benchmark import (
+    _add_soft_iou_options,
     _soft_iou_pairwise_cost_matrix,
 )
 
@@ -17,11 +19,7 @@ def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
     return CalciumPlaneData(roi_masks=roi_masks)
 
 
-def _unexpected_original_method(
-    self: CalciumPlaneData,
-    other: CalciumPlaneData,
-    **kwargs: Any,
-) -> np.ndarray:
+def _unexpected_original_method(*_args: Any, **_kwargs: Any) -> np.ndarray:
     raise AssertionError(
         "invalid soft_iou_radius should be rejected before fallback cost computation"
     )
@@ -56,3 +54,11 @@ def test_fov_affine_soft_iou_radius_rejects_invalid_values_before_iou_only_fast_
             cell_probability_weight=0.0,
             soft_iou_radius=soft_iou_radius,
         )
+
+
+def test_fov_affine_soft_iou_radius_cli_rejects_negative_values() -> None:
+    parser = argparse.ArgumentParser()
+    _add_soft_iou_options(parser)
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--soft-iou-radius", "-1"])
