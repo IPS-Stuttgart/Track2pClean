@@ -23,6 +23,19 @@ def test_centroid_candidate_mask_supports_distance_and_row_top_k():
     assert mask.tolist() == [[True, False, False], [False, True, False]]
 
 
+def test_centroid_candidate_mask_preserves_ambiguous_point_row_centroids():
+    reference = np.array([[0.0, 0.0], [10.0, 0.0]])
+    measurement = np.array([[0.1, 0.0], [9.8, 0.0], [0.1, 10.0]])
+
+    mask = centroid_candidate_mask(
+        reference,
+        measurement,
+        config=CentroidCandidatePrefilterConfig(max_distance=1.0, row_top_k=1),
+    )
+
+    assert mask.tolist() == [[True, False, False], [False, True, False]]
+
+
 def test_centroid_candidate_mask_can_require_column_top_k_intersection():
     reference = np.array([[0.0, 0.5, 10.0], [0.0, 0.0, 0.0]])
     measurement = np.array([[0.1, 9.9], [0.0, 0.0]])
