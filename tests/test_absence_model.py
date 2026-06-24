@@ -34,6 +34,24 @@ def test_absence_model_config_rejects_negative_discounts() -> None:
         AbsenceModelConfig(trace_missing_discount=-0.1)
 
 
+@pytest.mark.parametrize(
+    "field",
+    (
+        "base_absence_cost",
+        "out_of_fov_discount",
+        "low_cell_probability_discount",
+        "empty_registered_mask_discount",
+        "high_local_density_discount",
+        "trace_missing_discount",
+        "min_cost",
+    ),
+)
+@pytest.mark.parametrize("value", (True, False, np.bool_(True), np.bool_(False)))
+def test_absence_model_config_rejects_boolean_scalars(field: str, value: object) -> None:
+    with pytest.raises(ValueError, match=field):
+        AbsenceModelConfig(**{field: value})
+
+
 def test_gap_penalty_matrix_rejects_invalid_session_gap() -> None:
     reference = _plane(1)
     measurement = _plane(1)

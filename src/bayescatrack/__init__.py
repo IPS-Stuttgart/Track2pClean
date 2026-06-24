@@ -9,6 +9,9 @@ from ._advanced_weight_validation import (
 from ._confidence_ordered_strict_gap_cli import (
     install_confidence_ordered_strict_gap_cli as _install_confidence_ordered_strict_gap_cli,
 )
+from ._registration_selection_validation import (
+    install_registration_selection_validation as _install_registration_selection_validation,
+)
 from ._session_gap_validation import (
     install_session_gap_validation as _install_session_gap_validation,
 )
@@ -17,6 +20,9 @@ from ._strict_config_validation import (
 )
 from ._suite2p_validation import (
     install_suite2p_stat_validation as _install_suite2p_stat_validation,
+)
+from ._tracking_start_roi_validation import (
+    install_tracking_start_roi_validation as _install_tracking_start_roi_validation,
 )
 from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
@@ -47,7 +53,9 @@ _install_confidence_ordered_strict_gap_cli(_cli)
 _install_soft_overlap_costs()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
+_install_registration_selection_validation()
 _install_strict_config_validation()
 _install_session_gap_validation()
+_install_tracking_start_roi_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
