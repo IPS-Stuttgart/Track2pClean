@@ -12,6 +12,9 @@ from ._confidence_ordered_strict_gap_cli import (
 from ._integer_translation_validation import (
     install_integer_image_translation_validation as _install_integer_image_translation_validation,
 )
+from ._reference_validation import (
+    install_reference_validation as _install_reference_validation,
+)
 from ._registration_selection_validation import (
     install_registration_selection_validation as _install_registration_selection_validation,
 )
@@ -57,6 +60,7 @@ _install_soft_overlap_costs()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
 _install_integer_image_translation_validation()
+_install_reference_validation()
 _install_registration_selection_validation()
 _install_strict_config_validation()
 _install_session_gap_validation()
