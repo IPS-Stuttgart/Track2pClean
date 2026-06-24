@@ -8,7 +8,7 @@ import numpy as np
 
 
 def validated_numeric_float(value: Any, *, name: str) -> float:
-    if isinstance(value, bool):
+    if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite")
     numeric = float(value)
     if not np.isfinite(numeric):
