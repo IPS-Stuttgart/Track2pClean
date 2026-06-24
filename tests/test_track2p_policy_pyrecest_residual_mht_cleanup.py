@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from bayescatrack import cli
 from bayescatrack.experiments import track2p_policy_growth_veto_cleanup as cleanup
 
 FORBIDDEN_AUDIT_COLUMNS = frozenset(
@@ -156,6 +157,120 @@ def calibrated_mht_module(monkeypatch: pytest.MonkeyPatch):
 
     sys.modules.pop(module_name, None)
     sys.modules.pop(residual_module, None)
+
+
+@pytest.fixture()
+def mht_exposure_audit_module(monkeypatch: pytest.MonkeyPatch):
+    tracking = types.ModuleType("pyrecest.tracking")
+    tracking.ResidualEditCandidate = _ResidualEditCandidate
+    tracking.ResidualMHTConfig = _ResidualMHTConfig
+    tracking.enumerate_residual_hypotheses = lambda *args, **kwargs: ()
+    tracking.select_residual_hypothesis = lambda *args, **kwargs: None
+
+    pyrecest = types.ModuleType("pyrecest")
+    pyrecest.tracking = tracking
+
+    monkeypatch.setitem(sys.modules, "pyrecest", pyrecest)
+    monkeypatch.setitem(sys.modules, "pyrecest.tracking", tracking)
+    residual_module = (
+        "bayescatrack.experiments.track2p_policy_pyrecest_residual_mht_cleanup"
+    )
+    module_name = "bayescatrack.experiments.track2p_policy_pyrecest_mht_exposure_audit"
+    sys.modules.pop(residual_module, None)
+    sys.modules.pop(module_name, None)
+
+    module = importlib.import_module(module_name)
+    yield module
+
+    sys.modules.pop(module_name, None)
+    sys.modules.pop(residual_module, None)
+
+
+def test_pyrecest_mht_exposure_audit_is_registered() -> None:
+    canonical = cli._BENCHMARK_ALIASES["track2p-pyrecest-mht-exposure-audit"]
+
+    assert canonical == "track2p-policy-pyrecest-mht-exposure-audit"
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-component-pyrecest-mht-exposure-audit"]
+        == canonical
+    )
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_pyrecest_mht_exposure_audit"
+    )
+
+
+def test_pyrecest_mht_exposure_audit_parser_does_not_require_reference(
+    mht_exposure_audit_module,
+) -> None:
+    args = mht_exposure_audit_module.build_arg_parser().parse_args(
+        [
+            "--data",
+            "track2p-root",
+            "--output",
+            "exposure.csv",
+            "--mht-include-high-overlap-low-motion-candidates",
+        ]
+    )
+
+    assert args.data.name == "track2p-root"
+    assert not hasattr(args, "reference")
+    assert args.mht_include_high_overlap_low_motion_candidates is True
+
+
+def test_pyrecest_mht_exposure_row_counts_candidate_pockets(
+    mht_exposure_audit_module,
+) -> None:
+    growth = _candidate_row(
+        pyrecest_candidate_id="growth",
+        pyrecest_candidate_family="growth_veto",
+    )
+    high_overlap = _candidate_row(
+        roi_b=100,
+        pyrecest_candidate_id="high",
+        pyrecest_candidate_family="high_overlap_low_motion",
+    )
+
+    row = mht_exposure_audit_module._exposure_row(  # pylint: disable=protected-access
+        "jm038",
+        [growth, high_overlap],
+        [growth],
+        {cleanup._edge_row_key(growth)},
+        accepted_edges=12,
+        hypothesis_count=3,
+    )
+
+    assert row["accepted_edges"] == 12
+    assert row["growth_pocket_candidates"] == 1
+    assert row["high_overlap_low_motion_pocket_candidates"] == 1
+    assert row["selected_mht_edits"] == 1
+    assert row["applied_mht_edits"] == 1
+
+
+def test_pyrecest_mht_exposure_detail_rows_omit_gt_columns(
+    mht_exposure_audit_module,
+) -> None:
+    candidate = _candidate_row(
+        pyrecest_candidate_id="candidate",
+        pyrecest_candidate_family="high_overlap_low_motion",
+        edge_status_against_gt="true_positive",
+        pairwise_tp_delta_if_removed=-1,
+        complete_tp_delta_if_removed=-1,
+    )
+
+    rows = mht_exposure_audit_module._detail_rows(  # pylint: disable=protected-access
+        "jm038",
+        [candidate],
+        [candidate],
+        {cleanup._edge_row_key(candidate)},
+        options=mht_exposure_audit_module.residual_mht.PyRecEstResidualMHTOptions(
+            include_high_overlap_low_motion=True,
+        ),
+    )
+
+    forbidden = FORBIDDEN_AUDIT_COLUMNS | {"edge_status_against_gt"}
+    assert not (set(rows[0]) & forbidden)
+    assert rows[0]["selected_by_pyrecest_mht"] == 1
+    assert rows[0]["applied_by_pyrecest_mht"] == 1
 
 
 def test_high_overlap_pocket_is_opt_in(residual_mht_module) -> None:
