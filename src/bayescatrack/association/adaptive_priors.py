@@ -39,10 +39,11 @@ class AdaptiveEdgePriorConfig:
             "low_cell_probability_weight",
             "mask_fragility_weight",
         ):
-            value = float(getattr(self, name))
-            if not np.isfinite(value) or value < 0.0:
-                raise ValueError(f"{name} must be finite and non-negative")
-            object.__setattr__(self, name, value)
+            object.__setattr__(
+                self,
+                name,
+                _finite_nonnegative_float(getattr(self, name), name=name),
+            )
         large_cost = _finite_positive_float(self.large_cost, name="large_cost")
         object.__setattr__(self, "large_cost", large_cost)
         if self.learned_gap_costs is not None:
