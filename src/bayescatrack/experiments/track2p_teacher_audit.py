@@ -90,6 +90,8 @@ def audit_track_matrices(
     restrict_to_reference_seed_rois: bool = True,
 ) -> Track2pTeacherAuditResult:
     names = tuple(map(str, session_names))
+    seed_session = int(seed_session)
+    _validate_seed_session(seed_session, n_sessions=len(names))
     gt, t2p, bayes = (
         _norm(ground_truth_tracks),
         _norm(track2p_tracks),
@@ -490,6 +492,13 @@ def _parse_integer_like_text(text: str) -> int | None:
             return None
         value = int(numeric)
     return value if value >= 0 else None
+
+
+def _validate_seed_session(seed_session: int, *, n_sessions: int) -> None:
+    if seed_session < 0 or seed_session >= int(n_sessions):
+        raise IndexError(
+            f"seed_session {seed_session} out of bounds for {n_sessions} sessions"
+        )
 
 
 def _seed_filter(m: np.ndarray, seed_rois: set[int], seed: int) -> np.ndarray:
