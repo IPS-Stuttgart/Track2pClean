@@ -1,8 +1,22 @@
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
-from bayescatrack.association.adaptive_priors import AdaptiveEdgePriorConfig
+from bayescatrack.association.adaptive_priors import (
+    AdaptiveEdgePriorConfig,
+    fit_gap_costs_from_reference,
+)
+
+
+class _ReferenceForGapCosts:
+    def __init__(self, matrix: np.ndarray) -> None:
+        self._matrix = np.asarray(matrix, dtype=object)
+        self.n_sessions = int(self._matrix.shape[1])
+
+    def filtered_indices(self, *, curated_only: bool = False) -> np.ndarray:
+        return self._matrix
 
 
 @pytest.mark.parametrize(
@@ -63,3 +77,47 @@ def test_adaptive_edge_prior_config_rejects_invalid_large_cost(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         AdaptiveEdgePriorConfig(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"max_gap": True}, "max_gap must be a positive integer"),
+        ({"max_gap": 0}, "max_gap must be a positive integer"),
+        ({"max_gap": 1.5}, "max_gap must be a positive integer"),
+        ({"max_gap": np.inf}, "max_gap must be a positive integer"),
+        ({"smoothing": True}, "smoothing must be a positive finite value"),
+        ({"smoothing": 0.0}, "smoothing must be a positive finite value"),
+        ({"smoothing": np.nan}, "smoothing must be a positive finite value"),
+        ({"smoothing": np.inf}, "smoothing must be a positive finite value"),
+    ],
+)
+def test_fit_gap_costs_from_reference_rejects_invalid_controls(
+    kwargs: dict[str, Any],
+    message: str,
+) -> None:
+    reference = _ReferenceForGapCosts(np.asarray([[0, 0, 0]], dtype=object))
+
+    with pytest.raises(ValueError, match=message):
+        fit_gap_costs_from_reference(reference, **kwargs)
+
+
+def test_fit_gap_costs_from_reference_normalizes_numeric_controls() -> None:
+    reference = _ReferenceForGapCosts(
+        np.asarray(
+            [
+                [0, 0, 0],
+                [1, None, 1],
+            ],
+            dtype=object,
+        )
+    )
+
+    costs = fit_gap_costs_from_reference(
+        reference,
+        max_gap="2",  # type: ignore[arg-type]
+        smoothing="0.5",  # type: ignore[arg-type]
+    )
+
+    assert set(costs) == {1, 2}
+    assert all(np.isfinite(cost) for cost in costs.values())
