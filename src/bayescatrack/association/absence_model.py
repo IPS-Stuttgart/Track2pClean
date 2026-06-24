@@ -31,9 +31,7 @@ class AbsenceModelConfig:
             "trace_missing_discount",
             "min_cost",
         ):
-            value = float(getattr(self, name))
-            if not np.isfinite(value) or value < 0.0:
-                raise ValueError(f"{name} must be finite and non-negative")
+            value = _finite_nonnegative_config_value(getattr(self, name), name=name)
             object.__setattr__(self, name, value)
 
 
@@ -64,10 +62,8 @@ def absence_cost_vector(
 
     cell_probabilities = getattr(plane, "cell_probabilities", None)
     if cell_probabilities is not None:
-        probs = np.clip(
-            np.asarray(cell_probabilities, dtype=float).reshape(-1), 0.0, 1.0
-        )
-        if probs.shape == (n_rois,):
+        probs = _sanitized_probability_vector(cell_probabilities, n_rois=n_rois)
+        if probs is not None:
             costs -= cfg.low_cell_probability_discount * (1.0 - probs)
 
     if registered_empty_mask is not None:
@@ -76,9 +72,9 @@ def absence_cost_vector(
             costs[empty] -= cfg.empty_registered_mask_discount
 
     if local_density is not None:
-        density = np.asarray(local_density, dtype=float).reshape(-1)
-        if density.shape == (n_rois,) and density.size:
-            scale = float(np.nanpercentile(density, 90.0))
+        density = _sanitized_local_density_vector(local_density, n_rois=n_rois)
+        if density is not None and density.size:
+            scale = float(np.percentile(density, 90.0))
             if not np.isfinite(scale) or scale <= 1.0e-12:
                 scale = 1.0
             costs -= cfg.high_local_density_discount * np.clip(
@@ -91,7 +87,10 @@ def absence_cost_vector(
     ):
         costs -= cfg.trace_missing_discount
 
-    return np.maximum(costs, float(cfg.min_cost))
+    costs = np.maximum(costs, float(cfg.min_cost))
+    if not np.all(np.isfinite(costs)):
+        raise ValueError("absence costs must contain only finite values")
+    return costs
 
 
 def gap_penalty_matrix(
@@ -118,7 +117,11 @@ def gap_penalty_matrix(
             config=cfg,
         )
     else:
-        ref_cost = np.asarray(reference_absence_costs, dtype=float).reshape(-1)
+        ref_cost = _normalize_absence_cost_vector(
+            reference_absence_costs,
+            n_rois=n_ref,
+            name="reference_absence_costs",
+        )
     if measurement_absence_costs is None:
         meas_cost = absence_cost_vector(
             measurement_plane,
@@ -127,9 +130,11 @@ def gap_penalty_matrix(
             config=cfg,
         )
     else:
-        meas_cost = np.asarray(measurement_absence_costs, dtype=float).reshape(-1)
-    if ref_cost.shape != (n_ref,) or meas_cost.shape != (n_meas,):
-        raise ValueError("absence cost vectors must match plane ROI counts")
+        meas_cost = _normalize_absence_cost_vector(
+            measurement_absence_costs,
+            n_rois=n_meas,
+            name="measurement_absence_costs",
+        )
     gap = _validated_session_gap_offset(session_gap)
     return gap * 0.5 * (ref_cost[:, None] + meas_cost[None, :])
 
@@ -149,7 +154,7 @@ def apply_absence_adjustment(
 
     costs = np.asarray(cost_matrix, dtype=float)
     cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
-    return costs + gap_penalty_matrix(
+    adjusted = costs + gap_penalty_matrix(
         reference_plane,
         measurement_plane,
         session_gap=session_gap,
@@ -158,6 +163,9 @@ def apply_absence_adjustment(
         measurement_local_density=measurement_local_density,
         config=cfg,
     )
+    if not np.all(np.isfinite(adjusted)):
+        raise ValueError("absence-adjusted cost matrix must contain only finite values")
+    return adjusted
 
 
 def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float | int]:
@@ -167,6 +175,8 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
         cost_values = absence_cost_vector(plane)
     else:
         cost_values = np.asarray(costs, dtype=float).reshape(-1)
+        if not np.all(np.isfinite(cost_values)):
+            raise ValueError("costs must contain only finite values")
     return {
         "n_rois": int(cost_values.size),
         "mean_absence_cost": (
@@ -182,6 +192,44 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
             float(np.max(cost_values)) if cost_values.size else float("nan")
         ),
     }
+
+
+def _finite_nonnegative_config_value(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and non-negative")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _sanitized_probability_vector(value: Any, *, n_rois: int) -> np.ndarray | None:
+    probabilities = np.asarray(value, dtype=float).reshape(-1)
+    if probabilities.shape != (n_rois,):
+        return None
+    probabilities = np.nan_to_num(
+        probabilities,
+        nan=1.0,
+        posinf=1.0,
+        neginf=0.0,
+    )
+    return np.clip(probabilities, 0.0, 1.0)
+
+
+def _sanitized_local_density_vector(value: Any, *, n_rois: int) -> np.ndarray | None:
+    density = np.asarray(value, dtype=float).reshape(-1)
+    if density.shape != (n_rois,):
+        return None
+    return np.nan_to_num(density, nan=0.0, posinf=0.0, neginf=0.0)
+
+
+def _normalize_absence_cost_vector(value: Any, *, n_rois: int, name: str) -> np.ndarray:
+    costs = np.asarray(value, dtype=float).reshape(-1)
+    if costs.shape != (n_rois,):
+        raise ValueError("absence cost vectors must match plane ROI counts")
+    if not np.all(np.isfinite(costs)):
+        raise ValueError(f"{name} must contain only finite values")
+    return costs
 
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:
