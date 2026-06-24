@@ -153,6 +153,19 @@ def test_multi_hypothesis_edge_set_consensus_respects_min_votes() -> None:
     assert consensus == {(0, 1, 0, 1): 2}
 
 
+def test_multi_hypothesis_four_session_python_track_matrix_is_not_edge_set() -> None:
+    tracks_a = [[10, 11, 12, 13], [20, -1, 22, 23]]
+    tracks_b = [[10, 11, 12, 13]]
+
+    consensus = consensus_edges((tracks_a, tracks_b), min_votes=2)
+
+    assert consensus == {
+        (0, 1, 10, 11): 2,
+        (1, 2, 11, 12): 2,
+        (2, 3, 12, 13): 2,
+    }
+
+
 @pytest.mark.parametrize(
     ("factory", "message"),
     [
@@ -178,7 +191,7 @@ def test_multi_hypothesis_edge_set_consensus_respects_min_votes() -> None:
         ),
         (
             lambda: consensus_edges((((0, 1, 0, 1),),), min_support_fraction=0.0),
-            "min_support_fraction must be a finite value in \\(0, 1\\]",
+            r"min_support_fraction must be a finite value in \(0, 1\]",
         ),
         (
             lambda: edge_union_costs(({(0, 1, 0, 1): 0},)),
