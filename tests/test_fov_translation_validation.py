@@ -14,7 +14,7 @@ from bayescatrack.fov_registration import (
     [
         np.array([1.2, 0.0]),
         np.array([np.nan, 0.0]),
-        np.array([True, 0]),
+        np.array([True, 0], dtype=object),
         np.array([1, 2, 3]),
         np.array([[1], [2]]),
     ],
