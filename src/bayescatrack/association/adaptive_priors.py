@@ -136,14 +136,12 @@ def fit_gap_costs_from_reference(
     discriminative model.
     """
 
-    if max_gap < 1:
-        raise ValueError("max_gap must be at least 1")
-    if smoothing <= 0.0:
-        raise ValueError("smoothing must be positive")
+    max_gap = _positive_int(max_gap, name="max_gap")
+    smoothing = _finite_positive_float(smoothing, name="smoothing")
     matrix = reference.filtered_indices(curated_only=curated_only)
     present = np.vectorize(lambda value: value is not None, otypes=[bool])(matrix)
     costs: dict[int, float] = {}
-    for gap in range(1, int(max_gap) + 1):
+    for gap in range(1, max_gap + 1):
         opportunities = 0
         positives = 0
         for source in range(reference.n_sessions - gap):
