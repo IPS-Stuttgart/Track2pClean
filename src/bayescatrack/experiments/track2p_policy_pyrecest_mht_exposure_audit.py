@@ -292,15 +292,16 @@ def _anchor_edges_from_policy_diagnostics_no_gt(
     min_shifted_iou: float = 0.0,
     min_cell_probability: float,
 ) -> dict[tuple[int, int], tuple[tuple[int, int, int, int], ...]]:
-    """Return label-free growth anchors with per-pair ROI lookup caches."""
+    """Return label-free growth anchors using sparse shifted-IoU checks."""
 
     track2p_edges = set(track_edge_counter(track2p))
     cleanup_or_combined = set(track_edge_counter(component_cleanup)) | set(
         track_edge_counter(combined)
     )
     roi_indices_by_session = [veto._roi_indices(session) for session in sessions]
-    matrices_by_pair: dict[int, Any] = {}
-    index_by_pair: dict[int, tuple[dict[int, int], dict[int, int]]] = {}
+    candidates_by_pair: dict[tuple[int, int], list[tuple[int, int, int, int]]] = (
+        defaultdict(list)
+    )
     by_pair: dict[tuple[int, int], list[tuple[int, int, int, int]]] = defaultdict(list)
 
     for diagnostic in diagnostics:
@@ -321,34 +322,32 @@ def _anchor_edges_from_policy_diagnostics_no_gt(
             continue
 
         registered_iou = float(diagnostic.assigned_iou)
-        shifted_iou = float("nan")
-        matrices = matrices_by_pair.get(session_a)
-        if matrices is None:
-            matrices = feature_cache.pair(session_a)
-            matrices_by_pair[session_a] = matrices
-            index_by_pair[session_a] = (
-                {int(roi): index for index, roi in enumerate(matrices.source_indices)},
-                {int(roi): index for index, roi in enumerate(matrices.target_indices)},
-            )
-        source_lookup, target_lookup = index_by_pair[session_a]
-        feature_local_a = source_lookup.get(roi_a, -1)
-        feature_local_b = target_lookup.get(roi_b, -1)
-        if feature_local_a >= 0 and feature_local_b >= 0:
-            registered_iou = float(
-                matrices.registered_iou[feature_local_a, feature_local_b]
-            )
-            shifted_iou = float(matrices.shifted_iou[feature_local_a, feature_local_b])
         if registered_iou < float(min_registered_iou):
-            continue
-        if float(min_shifted_iou) > 0.0 and (
-            not np.isfinite(shifted_iou) or shifted_iou < float(min_shifted_iou)
-        ):
             continue
         cell_a = veto._cell_probability(sessions, session_a, roi_a)
         cell_b = veto._cell_probability(sessions, session_b, roi_b)
         if min(cell_a, cell_b) < float(min_cell_probability):
             continue
-        by_pair[(session_a, session_b)].append(edge)
+        candidates_by_pair[(session_a, session_b)].append(edge)
+
+    for (session_a, session_b), edges in candidates_by_pair.items():
+        shifted_values: Mapping[tuple[int, int], float]
+        if float(min_shifted_iou) > 0.0:
+            shifted_values = cleanup._sparse_shifted_iou_for_edges(
+                sessions,
+                session_a=int(session_a),
+                session_b=int(session_b),
+                transform_type=str(feature_cache.transform_type),
+                requested_edges=[(edge[2], edge[3]) for edge in edges],
+            )
+        else:
+            shifted_values = {}
+        for edge in edges:
+            if float(min_shifted_iou) > 0.0:
+                shifted_iou = float(shifted_values.get((edge[2], edge[3]), float("nan")))
+                if not np.isfinite(shifted_iou) or shifted_iou < float(min_shifted_iou):
+                    continue
+            by_pair[(session_a, session_b)].append(edge)
 
     output: dict[tuple[int, int], tuple[tuple[int, int, int, int], ...]] = {}
     for pair, edges in by_pair.items():
