@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -199,6 +200,7 @@ def consensus_edges(
     """Return edges that appear in enough prediction matrices or edge sets."""
 
     inputs = tuple(track_matrices)
+    fill_value = _integer(fill_value, name="fill_value")
     if min_support_fraction is not None:
         support_fraction = _probability(
             min_support_fraction,
@@ -212,15 +214,15 @@ def consensus_edges(
         )
     counts: dict[Edge, int] = {}
     for matrix_values in inputs:
-        matrix = np.asarray(matrix_values, dtype=int)
-        if matrix.ndim != 2:
-            raise ValueError("track matrices or edge sets must be two-dimensional")
+        matrix = _normalize_consensus_matrix(matrix_values)
         seen_this_model: set[Edge] = set()
         if _is_edge_set_input(matrix_values, matrix):
+            _validate_explicit_edge_set(matrix)
             seen_this_model.update(
                 (int(row[0]), int(row[1]), int(row[2]), int(row[3])) for row in matrix
             )
         else:
+            _validate_track_matrix_roi_values(matrix, fill_value=fill_value)
             for row in matrix:
                 for session_index in range(matrix.shape[1] - 1):
                     a = int(row[session_index])
@@ -231,6 +233,42 @@ def consensus_edges(
         for edge in seen_this_model:
             counts[edge] = counts.get(edge, 0) + 1
     return {edge: votes for edge, votes in counts.items() if votes >= threshold}
+
+
+def _normalize_consensus_matrix(matrix_values: Any) -> np.ndarray:
+    raw_matrix = np.asarray(matrix_values, dtype=object)
+    if raw_matrix.ndim != 2:
+        raise ValueError("track matrices or edge sets must be two-dimensional")
+
+    normalized = np.empty(raw_matrix.shape, dtype=int)
+    for index, value in np.ndenumerate(raw_matrix):
+        normalized[index] = _normalize_consensus_integer_entry(value)
+    return normalized
+
+
+def _normalize_consensus_integer_entry(value: Any) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("track matrices or edge sets must contain integer entries")
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if not np.isfinite(numeric) or not numeric.is_integer():
+            raise ValueError("track matrices or edge sets must contain integer entries")
+        return int(numeric)
+    try:
+        return int(operator.index(value))
+    except TypeError as exc:
+        raise ValueError("track matrices or edge sets must contain integer entries") from exc
+
+
+def _validate_explicit_edge_set(matrix: np.ndarray) -> None:
+    if np.any(matrix < 0):
+        raise ValueError("explicit edge sets must contain non-negative session and ROI indices")
+
+
+def _validate_track_matrix_roi_values(matrix: np.ndarray, *, fill_value: int) -> None:
+    invalid = (matrix < 0) & (matrix != int(fill_value))
+    if np.any(invalid):
+        raise ValueError("track matrices must contain non-negative ROI indices or fill_value")
 
 
 def _is_edge_set_input(matrix_values: Any, matrix: np.ndarray) -> bool:
