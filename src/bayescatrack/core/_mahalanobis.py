@@ -38,8 +38,10 @@ def install_mahalanobis_pairwise_features(calcium_plane_cls: type[Any]) -> None:
         ``sqrt((mu_i - mu_j)^T (Sigma_i + Sigma_j)^-1 (mu_i - mu_j))``.
         """
 
-        if regularization < 0.0:
-            raise ValueError("regularization must be non-negative")
+        regularization = _validate_nonnegative_finite_scalar(
+            "regularization",
+            regularization,
+        )
         if self.n_rois == 0 or other.n_rois == 0:
             return np.zeros((self.n_rois, other.n_rois), dtype=float)
 
@@ -92,10 +94,14 @@ def install_mahalanobis_pairwise_features(calcium_plane_cls: type[Any]) -> None:
     ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
         """Build a ROI-aware association cost matrix with Mahalanobis features."""
 
-        if mahalanobis_regularization < 0.0:
-            raise ValueError("mahalanobis_regularization must be non-negative")
-        if mahalanobis_weight < 0.0:
-            raise ValueError("mahalanobis_weight must be non-negative")
+        mahalanobis_regularization = _validate_nonnegative_finite_scalar(
+            "mahalanobis_regularization",
+            mahalanobis_regularization,
+        )
+        mahalanobis_weight = _validate_nonnegative_finite_scalar(
+            "mahalanobis_weight",
+            mahalanobis_weight,
+        )
 
         base_cost, components = original_build_pairwise_cost_matrix(
             self,
@@ -150,3 +156,12 @@ def install_mahalanobis_pairwise_features(calcium_plane_cls: type[Any]) -> None:
     )
     calcium_plane_cls.build_pairwise_cost_matrix = build_pairwise_cost_matrix
     setattr(calcium_plane_cls, _MAHALANOBIS_INSTALLED_ATTR, True)
+
+
+def _validate_nonnegative_finite_scalar(name: str, raw_value: Any) -> float:
+    if isinstance(raw_value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite non-negative value")
+    value = float(raw_value)
+    if not np.isfinite(value) or value < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return value
