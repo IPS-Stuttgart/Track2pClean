@@ -233,12 +233,11 @@ def build_track_rows_from_matches(
     if len(matches) != max(len(session_names) - 1, 0):
         raise ValueError("matches must have length len(session_names) - 1")
 
-    start_session_index = int(start_session_index)
-    if start_session_index < 0 or start_session_index >= len(session_names):
-        raise IndexError(
-            f"start_session_index {start_session_index} out of bounds "
-            f"for {len(session_names)} sessions"
-        )
+    start_session_index = _normalize_session_index(
+        start_session_index,
+        "start_session_index",
+        num_sessions=len(session_names),
+    )
 
     normalized_matches = [_normalize_match_mapping(match) for match in matches]
 
@@ -379,11 +378,11 @@ def _bundle_roi_indices_for_session(
     """Return ROI indices for one session from consecutive association bundles."""
 
     n_sessions = len(bundles) + 1
-    session_index = int(session_index)
-    if session_index < 0 or session_index >= n_sessions:
-        raise IndexError(
-            f"start_session_index {session_index} out of bounds for {n_sessions} sessions"
-        )
+    session_index = _normalize_session_index(
+        session_index,
+        "start_session_index",
+        num_sessions=n_sessions,
+    )
     if session_index == 0:
         return np.asarray(bundles[0].reference_roi_indices, dtype=int)
     if session_index == n_sessions - 1:
@@ -490,6 +489,33 @@ def _normalize_roi_index(value: Any, field_name: str) -> int:
     normalized = int(normalized)
     if normalized < 0:
         raise ValueError(f"{field_name} must contain non-negative ROI indices")
+    return normalized
+
+
+def _normalize_session_index(
+    value: Any,
+    field_name: str,
+    *,
+    num_sessions: int | None = None,
+) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{field_name} must be an integer session index")
+
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{field_name} must be an integer session index")
+        normalized = int(value)
+    else:
+        try:
+            normalized = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{field_name} must be an integer session index") from exc
+
+    normalized = int(normalized)
+    if num_sessions is not None and (normalized < 0 or normalized >= num_sessions):
+        raise IndexError(
+            f"{field_name} {normalized} out of bounds for {num_sessions} sessions"
+        )
     return normalized
 
 
