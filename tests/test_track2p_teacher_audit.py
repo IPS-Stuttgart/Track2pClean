@@ -71,6 +71,19 @@ def test_audit_pair_mode_max_gap_and_seed_filter():
     assert all(row["roi_a"] != 9 for row in result.edge_rows)
 
 
+@pytest.mark.parametrize("seed_session", [-1, 2])
+def test_audit_track_matrices_rejects_out_of_bounds_seed_session(seed_session):
+    with pytest.raises(IndexError, match="seed_session .* out of bounds for 2 sessions"):
+        audit_track_matrices(
+            subject="jm001",
+            session_names=("s0", "s1"),
+            ground_truth_tracks=np.array([[0, 0]], dtype=object),
+            track2p_tracks=np.array([[0, 0]], dtype=object),
+            bayes_tracks=np.array([[0, 0]], dtype=object),
+            seed_session=seed_session,
+        )
+
+
 def test_teacher_training_rows_and_csv_output(tmp_path):
     result = audit_track_matrices(
         subject="jm001",
