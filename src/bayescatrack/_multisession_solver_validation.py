@@ -29,9 +29,11 @@ def install_multisession_solver_validation(module: Any | None = None) -> None:
     """Install strict normalization for PyRecEst multisession solver outputs."""
 
     if module is None:
-        from . import multisession_tracking as module
+        from . import multisession_tracking as target_module
+    else:
+        target_module = module
 
-    if getattr(module, _INSTALLED_FLAG, False):
+    if getattr(target_module, _INSTALLED_FLAG, False):
         return
 
     def _coerce_solver_tracks(
@@ -124,7 +126,7 @@ def install_multisession_solver_validation(module: Any | None = None) -> None:
                 roi_index_matrix[present, session_index] = lookup[column[present]]
         return roi_index_matrix
 
-    module._coerce_solver_tracks = _coerce_solver_tracks
-    module._tracks_to_matrix = _tracks_to_matrix
-    module._track_matrix_to_roi_index_matrix = _track_matrix_to_roi_index_matrix
-    setattr(module, _INSTALLED_FLAG, True)
+    target_module._coerce_solver_tracks = _coerce_solver_tracks
+    target_module._tracks_to_matrix = _tracks_to_matrix
+    target_module._track_matrix_to_roi_index_matrix = _track_matrix_to_roi_index_matrix
+    setattr(target_module, _INSTALLED_FLAG, True)
