@@ -9,6 +9,9 @@ from ._advanced_weight_validation import (
 from ._confidence_ordered_strict_gap_cli import (
     install_confidence_ordered_strict_gap_cli as _install_confidence_ordered_strict_gap_cli,
 )
+from ._matching_control_validation import (
+    install_matching_control_validation as _install_matching_control_validation,
+)
 from ._session_gap_validation import (
     install_session_gap_validation as _install_session_gap_validation,
 )
@@ -52,6 +55,7 @@ _install_advanced_roi_components()
 _install_advanced_weight_validation()
 _install_strict_config_validation()
 _install_session_gap_validation()
+_install_matching_control_validation()
 _install_tracking_start_roi_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
