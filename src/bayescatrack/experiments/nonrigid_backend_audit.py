@@ -284,9 +284,22 @@ def _gt_link_count(
 ) -> int:
     count = 0
     for track in reference_matrix:
-        if track[source_index] is not None and track[target_index] is not None:
+        source_roi = track[source_index]
+        target_roi = track[target_index]
+        if _is_present_roi_value(source_roi) and _is_present_roi_value(target_roi):
             count += 1
     return count
+
+
+def _is_present_roi_value(value: object) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, (float, np.floating)) and np.isnan(value):
+        return False
+    try:
+        return int(value) >= 0
+    except (TypeError, ValueError):
+        return False
 
 
 def _text_ops_value(ops: Mapping[str, Any], key: str) -> str:
