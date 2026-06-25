@@ -928,15 +928,11 @@ def _local_deformation_matrix(
         usable = predicted_norms > 1.0e-9
         if not np.any(usable):
             continue
-        for target_index, target in enumerate(target_xy):
-            observed_deltas = target[None, :] - anchor_target
-            residuals = np.linalg.norm(
-                observed_deltas[usable] - predicted_deltas[usable], axis=1
-            ) / np.maximum(predicted_norms[usable], 1.0)
-            if residuals.size:
-                output[int(source_index), int(target_index)] = float(
-                    np.median(residuals)
-                )
+        observed_deltas = target_xy[:, None, :] - anchor_target[None, usable, :]
+        residuals = np.linalg.norm(
+            observed_deltas - predicted_deltas[None, usable, :], axis=2
+        ) / np.maximum(predicted_norms[None, usable], 1.0)
+        output[int(source_index), :] = np.median(residuals, axis=1)
     return output
 
 
