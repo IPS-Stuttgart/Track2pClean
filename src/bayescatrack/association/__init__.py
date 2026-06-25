@@ -7,6 +7,7 @@ from . import (
     _calibrated_mahalanobis_bundle_patch as _calibrated_mahalanobis_bundle_patch,
 )
 from . import _calibrated_roi_stat_feature_patch as _calibrated_roi_stat_feature_patch
+from . import _calibrated_session_gap_validation as _calibrated_session_gap_validation
 from . import _dynamic_edge_prior_validation as _dynamic_edge_prior_validation
 from . import _global_assignment_input_validation as _global_assignment_input_validation
 from . import _roi_aware_local_validation as _roi_aware_local_validation
@@ -28,6 +29,7 @@ _PATCH_MODULES = (
     _activity_similarity_control_validation,
     _calibrated_mahalanobis_bundle_patch,
     _calibrated_roi_stat_feature_patch,
+    _calibrated_session_gap_validation,
     _dynamic_edge_prior_validation,
     _global_assignment_input_validation,
     _roi_aware_local_validation,
