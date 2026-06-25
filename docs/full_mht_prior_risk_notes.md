@@ -78,3 +78,40 @@ diagnostics, but not a method row. The evidence points toward a targeted,
 calibrated prior-edge risk model or a component-level complete-track objective:
 keep the proposal prior strong overall, and reject only a small number of risky
 proposal edges with better calibrated evidence.
+
+## Terminal History Risk Probe
+
+Output directory:
+
+`/home/florianpfaff/codex-runs/BayesCaTrack/results/full_mht_terminal_history_probe_20260625_232546`
+
+Completed subset comparison:
+
+`terminal_history_completed_subset_comparison.csv`
+
+The terminal reranker keeps the scan-level proposal prior intact and applies the
+prior-edge risk only when selecting among completed full-track hypotheses. This
+is closer to the desired complete-history MHT objective than local scan-time risk.
+The first completed Mahalanobis-only setting was:
+
+```text
+--track2p-prior-risk-mahalanobis-weight 1.0
+--track2p-prior-risk-mahalanobis-offset 2.5
+--track2p-prior-risk-scan-weight 0.0
+--terminal-history-risk-weight 1.0
+```
+
+| row | pairwise F1 micro | complete-track F1 micro |
+| --- | ---: | ---: |
+| Track2p | 0.965116 | 0.924370 |
+| FullMHTPrior2 | 0.965116 | 0.924370 |
+| TerminalMahal1Offset25 | 0.964256 | 0.924370 |
+
+The terminal reranker did exercise the full-history selection path: for `jm038`,
+it selected terminal rank 2 instead of rank 1. That changed the full identity
+history but did not rescue complete-track F1 and slightly reduced pairwise F1.
+
+Decision: terminal history reranking is a useful architectural hook, but scalar
+Mahalanobis prior-edge risk is still not selective enough. The next method layer
+should replace this scalar risk with a calibrated association likelihood or a
+component-level objective that explicitly models complete-track breakage.
