@@ -80,7 +80,7 @@ except ImportError as exc:  # pragma: no cover - stale PyRecEst environment
 
 
 METHOD = "track2p-policy-full-mht"
-SeedSource = Literal["reference", "all-cells"]
+SeedSource = Literal["reference", "all-cells", "track2p-output"]
 
 
 @dataclass(frozen=True)
@@ -233,12 +233,21 @@ def _run_subject_full_mht(
     if n_sessions < 2:
         raise ValueError(f"{subject_dir.name} has fewer than two sessions")
 
+    track2p_prediction = (
+        _track2p_prediction_for_subject(subject_dir, config=config)
+        if (
+            mht_config.seed_source == "track2p-output"
+            or float(mht_config.track2p_prior_weight) != 0.0
+        )
+        else None
+    )
     seed_rois = _seed_rois(
         sessions,
         reference_tracks,
         seed_session=int(config.seed_session),
         seed_source=mht_config.seed_source,
         cell_probability_threshold=float(config.cell_probability_threshold),
+        track2p_tracks=track2p_prediction,
     )
     if mht_config.max_seed_tracks is not None:
         seed_rois = seed_rois[: max(0, int(mht_config.max_seed_tracks))]
@@ -254,6 +263,7 @@ def _run_subject_full_mht(
         subject_dir,
         config=config,
         enabled=float(mht_config.track2p_prior_weight) != 0.0,
+        track2p_tracks=track2p_prediction,
     )
 
     feature_cache = rank._FeatureCache(
@@ -386,6 +396,7 @@ def _seed_rois(
     seed_session: int,
     seed_source: SeedSource,
     cell_probability_threshold: float,
+    track2p_tracks: np.ndarray | None = None,
 ) -> list[int]:
     if seed_source == "reference":
         rois = sorted(
@@ -396,6 +407,19 @@ def _seed_rois(
             }
         )
         return rois
+    if seed_source == "track2p-output":
+        if track2p_tracks is None:
+            raise ValueError("track2p-output seed source requires Track2p tracks")
+        tracks = np.asarray(track2p_tracks, dtype=int)
+        if tracks.ndim != 2 or int(seed_session) >= tracks.shape[1]:
+            return []
+        return sorted(
+            {
+                int(row[int(seed_session)])
+                for row in tracks
+                if int(row[int(seed_session)]) >= 0
+            }
+        )
     if seed_source != "all-cells":
         raise ValueError(f"Unsupported seed_source: {seed_source!r}")
     output: list[int] = []
@@ -409,13 +433,28 @@ def _seed_rois(
 
 
 def _track2p_prior_edges(
-    subject_dir: Path, *, config: Track2pBenchmarkConfig, enabled: bool
+    subject_dir: Path,
+    *,
+    config: Track2pBenchmarkConfig,
+    enabled: bool,
+    track2p_tracks: np.ndarray | None = None,
 ) -> frozenset[tuple[int, int, int, int]]:
     if not enabled:
         return frozenset()
+    predicted = (
+        np.asarray(track2p_tracks, dtype=int)
+        if track2p_tracks is not None
+        else _track2p_prediction_for_subject(subject_dir, config=config)
+    )
+    return _track_edges(np.asarray(predicted, dtype=int))
+
+
+def _track2p_prediction_for_subject(
+    subject_dir: Path, *, config: Track2pBenchmarkConfig
+) -> np.ndarray:
     baseline_config = replace(config, method="track2p-baseline")
     predicted, _variant = _predict_subject_tracks(subject_dir, baseline_config)
-    return _track_edges(np.asarray(predicted, dtype=int))
+    return np.asarray(predicted, dtype=int)
 
 
 def _track_edges(matrix: np.ndarray) -> frozenset[tuple[int, int, int, int]]:
@@ -1335,7 +1374,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-gap", type=int, default=1)
     parser.add_argument("--gap-reactivation-cost", type=float, default=1.0)
     parser.add_argument("--min-edge-score", type=float, default=0.25)
-    parser.add_argument("--seed-source", choices=("reference", "all-cells"), default="reference")
+    parser.add_argument(
+        "--seed-source",
+        choices=("reference", "all-cells", "track2p-output"),
+        default="reference",
+    )
     parser.add_argument("--max-seed-tracks", type=int, default=None)
     parser.add_argument("--registered-iou-weight", type=float, default=1.0)
     parser.add_argument("--shifted-iou-weight", type=float, default=1.5)

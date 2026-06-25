@@ -121,6 +121,40 @@ def test_full_mht_active_track_sources_keep_recent_misses_only():
     ] == [(0, 0, 5, 1), (1, 1, 8, 0), (2, 0, 9, 1)]
 
 
+def test_full_mht_track2p_output_seed_source_uses_prediction_rows():
+    reference_tracks = np.asarray([[1, 2], [3, 4]], dtype=int)
+    track2p_tracks = np.asarray(
+        [[9, 10], [5, -1], [-1, 6], [9, 11]], dtype=int
+    )
+
+    assert full_mht._seed_rois(
+        sessions=(object(),),
+        reference_tracks=reference_tracks,
+        seed_session=0,
+        seed_source="track2p-output",
+        cell_probability_threshold=0.5,
+        track2p_tracks=track2p_tracks,
+    ) == [5, 9]
+
+
+def test_full_mht_track2p_prior_edges_can_reuse_prediction_table():
+    track2p_tracks = np.asarray([[5, 9, -1], [6, 10, 12], [-1, 11, 13]], dtype=int)
+
+    assert full_mht._track2p_prior_edges(
+        subject_dir=object(),
+        config=object(),
+        enabled=True,
+        track2p_tracks=track2p_tracks,
+    ) == frozenset(
+        {
+            (0, 1, 5, 9),
+            (0, 1, 6, 10),
+            (1, 2, 10, 12),
+            (1, 2, 11, 13),
+        }
+    )
+
+
 def test_full_mht_scan_can_reactivate_a_recently_missed_track(monkeypatch):
     hypothesis = full_mht._MHTHypothesis(
         tracks=np.asarray([[5, -1, -1]], dtype=int), score=0.0, history=tuple()
