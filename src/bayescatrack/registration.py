@@ -16,17 +16,7 @@ cost-matrix and association-bundle construction.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping, TypedDict
-
-try:
-    from typing import Unpack
-except ImportError:  # pragma: no cover - compatibility for the py310 benchmark env.
-
-    class _UnpackCompat:
-        def __getitem__(self, item: Any) -> Any:
-            return item
-
-    Unpack = _UnpackCompat()
+from typing import Any, Literal, Mapping, TypedDict, Unpack
 
 import numpy as np
 
