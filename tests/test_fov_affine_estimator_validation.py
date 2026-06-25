@@ -10,6 +10,7 @@ from bayescatrack.fov_affine_registration import estimate_fov_affine_transform
     [
         0,
         1,
+        "false",
         "true",
         np.array(True),
         None,

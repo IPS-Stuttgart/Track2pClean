@@ -58,7 +58,7 @@ def absence_cost_vector(
     """Return per-ROI costs for allowing an observation gap/absence."""
 
     cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
-    n_rois = int(getattr(plane, "n_rois", 0))
+    n_rois = _validated_roi_count(plane, "plane")
     costs = np.full((n_rois,), float(cfg.base_absence_cost), dtype=float)
 
     cell_probabilities = getattr(plane, "cell_probabilities", None)
@@ -121,8 +121,8 @@ def gap_penalty_matrix(
     """Return pairwise gap penalties that account for observation absence cues."""
 
     cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
-    n_ref = int(getattr(reference_plane, "n_rois", 0))
-    n_meas = int(getattr(measurement_plane, "n_rois", 0))
+    n_ref = _validated_roi_count(reference_plane, "reference_plane")
+    n_meas = _validated_roi_count(measurement_plane, "measurement_plane")
     if reference_absence_costs is None:
         ref_cost = absence_cost_vector(
             reference_plane,
@@ -200,6 +200,28 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
             float(np.max(cost_values)) if cost_values.size else float("nan")
         ),
     }
+
+
+def _validated_roi_count(plane: Any, plane_name: str) -> int:
+    message = f"{plane_name}.n_rois must be a finite non-negative integer"
+    raw_count = getattr(plane, "n_rois", 0)
+    if isinstance(raw_count, (bool, np.bool_)):
+        raise ValueError(message)
+
+    try:
+        count = int(operator.index(raw_count))
+    except TypeError:
+        try:
+            numeric_count = float(raw_count)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(message) from exc
+        if not np.isfinite(numeric_count) or not numeric_count.is_integer():
+            raise ValueError(message)
+        count = int(numeric_count)
+
+    if count < 0:
+        raise ValueError(message)
+    return count
 
 
 def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:

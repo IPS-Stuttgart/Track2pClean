@@ -41,6 +41,14 @@ class CentroidCandidatePrefilterConfig:
                 object.__setattr__(self, name, _positive_int(value, name=name))
         object.__setattr__(
             self,
+            "include_diagonal_when_square",
+            _strict_bool(
+                self.include_diagonal_when_square,
+                name="include_diagonal_when_square",
+            ),
+        )
+        object.__setattr__(
+            self,
             "large_cost",
             _finite_positive_float(self.large_cost, name="large_cost"),
         )
@@ -262,6 +270,12 @@ def _positive_int(value: Any, *, name: str) -> int:
     if integer_value < 1:
         raise ValueError(f"{name} must be at least 1")
     return int(integer_value)
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:

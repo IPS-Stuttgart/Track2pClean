@@ -23,10 +23,10 @@ _MATRIX_ERROR = "matrix_xy must be a finite 2-by-3 affine matrix"
 _OUTPUT_SHAPE_ERROR = (
     "output_shape must contain exactly two non-negative integer values"
 )
+_SUBTRACT_MEAN_ERROR = "subtract_mean must be a boolean"
 _GRID_SHAPE_ERROR = "grid_shape must contain exactly two positive integer dimensions"
 _MIN_TILE_SIZE_ERROR = "min_tile_size must be a positive integer"
 _MAX_SHIFT_FRACTION_ERROR = "max_shift_fraction must be a finite non-negative value"
-_SUBTRACT_MEAN_ERROR = "subtract_mean must be a boolean"
 
 
 def install_fov_affine_warp_validation() -> None:
@@ -189,9 +189,9 @@ def _normalize_output_shape_component(value: Any) -> int:
 
 
 def _normalize_bool(value: Any, error_message: str) -> bool:
-    if isinstance(value, (bool, np.bool_)):
-        return bool(value)
-    raise ValueError(error_message)
+    if type(value) is not bool:
+        raise ValueError(error_message)
+    return value
 
 
 def _normalize_grid_shape(grid_shape: Any) -> tuple[int, int]:
