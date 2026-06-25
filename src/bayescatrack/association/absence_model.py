@@ -62,10 +62,13 @@ def absence_cost_vector(
 
     cell_probabilities = getattr(plane, "cell_probabilities", None)
     if cell_probabilities is not None:
-        probs = np.clip(
-            np.asarray(cell_probabilities, dtype=float).reshape(-1), 0.0, 1.0
-        )
-        if probs.shape == (n_rois,):
+        raw_probs = np.asarray(cell_probabilities, dtype=float).reshape(-1)
+        if raw_probs.shape == (n_rois,):
+            probs = np.clip(
+                np.nan_to_num(raw_probs, nan=0.0, posinf=1.0, neginf=0.0),
+                0.0,
+                1.0,
+            )
             costs -= cfg.low_cell_probability_discount * (1.0 - probs)
 
     if registered_empty_mask is not None:
