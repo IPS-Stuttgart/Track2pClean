@@ -13,8 +13,6 @@ from typing import Any
 
 import numpy as np
 
-from .association import shifted_overlap as _shifted_overlap
-
 _MARKER = "_bayescatrack_shifted_overlap_scalar_validation"
 _BOOLEAN_KWARGS = (
     "use_shifted_iou_for_iou_cost",
@@ -30,7 +28,9 @@ _NONNEGATIVE_FLOAT_KWARGS = (
 def install_shifted_overlap_scalar_validation() -> None:
     """Install idempotent validation around shifted-overlap scalar kwargs."""
 
-    current = _shifted_overlap.shifted_iou_pairwise_cost_matrix
+    from .association import shifted_overlap  # pylint: disable=import-outside-toplevel
+
+    current = shifted_overlap.shifted_iou_pairwise_cost_matrix
     if getattr(current, _MARKER, False):
         return
 
@@ -45,7 +45,7 @@ def install_shifted_overlap_scalar_validation() -> None:
 
     setattr(_validated_shifted_iou_pairwise_cost_matrix, _MARKER, True)
     setattr(_validated_shifted_iou_pairwise_cost_matrix, "_bayescatrack_original", current)
-    _shifted_overlap.shifted_iou_pairwise_cost_matrix = _validated_shifted_iou_pairwise_cost_matrix
+    shifted_overlap.shifted_iou_pairwise_cost_matrix = _validated_shifted_iou_pairwise_cost_matrix
 
 
 def _validate_shifted_overlap_scalar_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
