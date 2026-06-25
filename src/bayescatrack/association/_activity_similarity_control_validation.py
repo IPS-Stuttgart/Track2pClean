@@ -46,21 +46,37 @@ def install_activity_similarity_control_validation() -> None:
     setattr(_activity_similarity, _PATCH_MARKER, True)
 
 
-def _finite_positive_float(value: Any, *, name: str) -> float:
+def _coerce_scalar_float(value: Any, *, error_message: str) -> float:
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite positive value")
-    numeric_value = float(value)
+        raise ValueError(error_message)
+
+    if isinstance(value, np.ndarray):
+        if value.ndim != 0 or np.issubdtype(value.dtype, np.bool_):
+            raise ValueError(error_message)
+        value = value.item()
+
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(error_message)
+
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(error_message) from exc
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    error_message = f"{name} must be a finite positive value"
+    numeric_value = _coerce_scalar_float(value, error_message=error_message)
     if not np.isfinite(numeric_value) or numeric_value <= 0.0:
-        raise ValueError(f"{name} must be a finite positive value")
+        raise ValueError(error_message)
     return numeric_value
 
 
 def _finite_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be finite")
-    numeric_value = float(value)
+    error_message = f"{name} must be finite"
+    numeric_value = _coerce_scalar_float(value, error_message=error_message)
     if not np.isfinite(numeric_value):
-        raise ValueError(f"{name} must be finite")
+        raise ValueError(error_message)
     return numeric_value
 
 
