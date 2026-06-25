@@ -76,11 +76,21 @@ def absence_cost_vector(
     if local_density is not None:
         density = np.asarray(local_density, dtype=float).reshape(-1)
         if density.shape == (n_rois,) and density.size:
-            scale = float(np.nanpercentile(density, 90.0))
+            finite_density = density[np.isfinite(density)]
+            if finite_density.size:
+                scale = float(np.percentile(finite_density, 90.0))
+            else:
+                scale = 1.0
             if not np.isfinite(scale) or scale <= 1.0e-12:
                 scale = 1.0
+            sanitized_density = np.nan_to_num(
+                density,
+                nan=0.0,
+                posinf=scale,
+                neginf=0.0,
+            )
             costs -= cfg.high_local_density_discount * np.clip(
-                density / scale, 0.0, 1.0
+                sanitized_density / scale, 0.0, 1.0
             )
 
     if (
