@@ -60,6 +60,33 @@ class TrackHypothesis:
     cost: float
 
 
+def _validated_session_edge(
+    edge: Any,
+    *,
+    name: str,
+    n_sessions: int | None = None,
+) -> tuple[int, int]:
+    """Return a checked ``(source_session, target_session)`` edge key."""
+
+    if isinstance(edge, (str, bytes)):
+        raise ValueError(f"{name} must be a two-item session edge")
+    try:
+        edge_values = tuple(edge)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be a two-item session edge") from exc
+    if len(edge_values) != 2:
+        raise ValueError(f"{name} must be a two-item session edge")
+    source_session = _integer(edge_values[0], name=f"{name} source_session")
+    target_session = _integer(edge_values[1], name=f"{name} target_session")
+    if source_session < 0 or target_session < 0:
+        raise ValueError(f"{name} session indices must be non-negative")
+    if n_sessions is not None and (
+        source_session >= n_sessions or target_session >= n_sessions
+    ):
+        raise ValueError(f"{name} session indices must refer to existing sessions")
+    return source_session, target_session
+
+
 def top_k_edge_candidates(
     cost_matrix: Any,
     *,
@@ -75,7 +102,7 @@ def top_k_edge_candidates(
     costs = np.asarray(cost_matrix, dtype=float)
     if costs.ndim != 2:
         raise ValueError("cost_matrix must be two-dimensional")
-    source_session, target_session = edge
+    source_session, target_session = _validated_session_edge(edge, name="edge")
     candidates: list[Edge] = []
     for row_index, row in enumerate(costs):
         finite = np.isfinite(row)
@@ -101,9 +128,14 @@ def candidate_edge_map(
     """Return top-k candidate edges per source ROI for each session edge."""
 
     cfg = config or HypothesisConfig()
+    n_sessions = len(roi_indices_by_session)
     output: dict[tuple[int, int], list[tuple[int, int, float]]] = {}
     for edge, matrix_values in pairwise_costs.items():
-        source_session, target_session = edge
+        source_session, target_session = _validated_session_edge(
+            edge,
+            name="edge",
+            n_sessions=n_sessions,
+        )
         matrix = np.asarray(matrix_values, dtype=float)
         source_indices = np.asarray(roi_indices_by_session[source_session], dtype=int)
         target_indices = np.asarray(roi_indices_by_session[target_session], dtype=int)
@@ -129,7 +161,7 @@ def candidate_edge_map(
                         float(costs[col_index]),
                     )
                 )
-        output[edge] = rows
+        output[(source_session, target_session)] = rows
     return output
 
 
@@ -146,12 +178,17 @@ def enumerate_track_hypotheses(
     n_sessions = len(tuple(session_names))
     by_edge_source: dict[tuple[int, int], dict[int, list[tuple[int, float]]]] = {}
     for edge, candidates in edge_candidates.items():
+        source_session, target_session = _validated_session_edge(
+            edge,
+            name="edge",
+            n_sessions=n_sessions,
+        )
         source_lookup: dict[int, list[tuple[int, float]]] = {}
         for source_roi, target_roi, cost in candidates:
             source_lookup.setdefault(int(source_roi), []).append(
                 (int(target_roi), float(cost))
             )
-        by_edge_source[edge] = source_lookup
+        by_edge_source[(source_session, target_session)] = source_lookup
 
     hypotheses = [
         TrackHypothesis(row=(int(roi),), cost=0.0) for roi in start_roi_indices
