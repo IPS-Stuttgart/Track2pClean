@@ -53,13 +53,13 @@ def install_matching_bundle_roi_index_validation() -> None:
                 original=bundle,
                 reference_roi_indices=_normalize_bundle_roi_indices(
                     bundle.reference_roi_indices,
-                    "reference_roi_indices",
+                    "bundle.reference_roi_indices",
                     expected_length=int(cost_matrix.shape[0]),
                     axis_name="row",
                 ),
                 measurement_roi_indices=_normalize_bundle_roi_indices(
                     bundle.measurement_roi_indices,
-                    "measurement_roi_indices",
+                    "bundle.measurement_roi_indices",
                     expected_length=int(cost_matrix.shape[1]),
                     axis_name="column",
                 ),
