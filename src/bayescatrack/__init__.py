@@ -40,6 +40,9 @@ from ._reference_validation import (
 from ._matching_validation import (
     install_matching_layout_validation as _install_matching_layout_validation,
 )
+from ._multisession_solver_track_validation import (
+    install_multisession_solver_track_validation as _install_multisession_solver_track_validation,
+)
 from ._registration_selection_validation import (
     install_registration_selection_validation as _install_registration_selection_validation,
 )
@@ -118,6 +121,7 @@ _install_strict_config_validation()
 _install_empty_candidate_gate_margin_fix()
 _install_empty_registered_roi_mask_validation()
 _install_matching_bundle_roi_index_validation()
+_install_multisession_solver_track_validation()
 _install_session_gap_validation()
 _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
