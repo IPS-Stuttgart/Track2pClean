@@ -31,6 +31,11 @@ def _install_optional_int_parser_validation(reference_module: ModuleType) -> Non
     missing_strings = frozenset(reference_module._MISSING_STRINGS)  # pylint: disable=protected-access
 
     def _parse_optional_int_with_validation(value: Any) -> int | None:
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError(
+                "ROI index must be integer-like or an explicit missing value; "
+                f"got boolean {value!r}"
+            )
         parsed_value = original_parse_optional_int(value)
         if parsed_value is not None or _is_explicit_missing_roi_index(
             value,
@@ -123,13 +128,14 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
 
     def _validate_session_index_with_validation(
         session_index: Any, n_sessions: int
-    ) -> None:
+    ) -> int:
         normalized = _coerce_session_index(
             session_index,
             context="session index",
             allow_integer_like=False,
         )
         original_validate_session_index(normalized, n_sessions)
+        return normalized
 
     setattr(_validate_session_index_with_validation, _PATCH_ATTR, True)
     setattr(
