@@ -98,7 +98,10 @@ def _handle_module_command(
     if not callable(original_build_arg_parser):
         return _run_with_program_name(program_name, module.main, args)
 
-    def _build_native_arg_parser(*parser_args: Any, **parser_kwargs: Any) -> argparse.ArgumentParser:
+    def _build_native_arg_parser(
+        *parser_args: Any,
+        **parser_kwargs: Any,
+    ) -> argparse.ArgumentParser:
         parser = original_build_arg_parser(*parser_args, **parser_kwargs)
         _retitle_arg_parser(
             parser,
@@ -176,7 +179,9 @@ def _iter_child_arg_parsers(
         if not isinstance(choices, dict):
             continue
         child_parsers.extend(
-            choice for choice in choices.values() if isinstance(choice, argparse.ArgumentParser)
+            choice
+            for choice in choices.values()
+            if isinstance(choice, argparse.ArgumentParser)
         )
     return child_parsers
 
