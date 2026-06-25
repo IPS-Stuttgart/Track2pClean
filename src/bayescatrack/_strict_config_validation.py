@@ -135,12 +135,25 @@ def _original_function(wrapper: Callable[..., Any], name: str) -> Callable[..., 
 
 
 def _positive_int(value: Any, *, name: str) -> int:
-    if isinstance(value, (bool, np.bool_, str, bytes)):
+    if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be an integer")
     if isinstance(value, (float, np.floating)):
         if not np.isfinite(value) or not float(value).is_integer():
             raise ValueError(f"{name} must be an integer")
         integer_value = int(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric_value = float(stripped)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(numeric_value)
+    elif isinstance(value, bytes):
+        raise ValueError(f"{name} must be an integer")
     else:
         try:
             integer_value = operator.index(value)
