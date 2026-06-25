@@ -207,9 +207,17 @@ def _run_with_program_name(
     previous_argv = sys.argv
     try:
         sys.argv = [program_name, *args]
-        return int(main_func(args))
+        return _coerce_exit_code(main_func(args))
     finally:
         sys.argv = previous_argv
+
+
+def _coerce_exit_code(result: Any) -> int:
+    """Normalize delegated CLI return values to process exit codes."""
+
+    if result is None:
+        return 0
+    return int(result)
 
 
 __all__ = ["main"]
