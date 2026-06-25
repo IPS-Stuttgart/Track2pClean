@@ -1,4 +1,9 @@
-"""BayesCaTrack public package API."""
+"""Track2pClean public package API.
+
+The implementation currently keeps the historical ``bayescatrack`` Python
+namespace for backward compatibility. New user-facing documentation and the
+console entry point use the Track2pClean name.
+"""
 
 # pylint: disable=duplicate-code
 
