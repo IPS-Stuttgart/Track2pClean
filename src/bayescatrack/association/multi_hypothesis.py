@@ -10,6 +10,7 @@ import numpy as np
 
 from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
 from ._numeric_validation import integer as _integer
+from ._numeric_validation import nonnegative_integer as _nonnegative_integer
 from ._numeric_validation import positive_integer as _positive_integer
 from ._numeric_validation import probability as _probability
 
@@ -82,6 +83,8 @@ def _validated_session_edge(
     target_session = _integer(edge_values[1], name=f"{name} target_session")
     if source_session < 0 or target_session < 0:
         raise ValueError(f"{name} session indices must be non-negative")
+    if source_session >= target_session:
+        raise ValueError(f"{name} session edges must point forward in time")
     if n_sessions is not None and (
         source_session >= n_sessions or target_session >= n_sessions
     ):
@@ -306,6 +309,8 @@ def _validate_explicit_edge_set(matrix: np.ndarray) -> None:
         raise ValueError(
             "explicit edge sets must contain non-negative session and ROI indices"
         )
+    if np.any(matrix[:, 0] >= matrix[:, 1]):
+        raise ValueError("explicit edge sets must point forward in time")
 
 
 def _validate_track_matrix_roi_values(matrix: np.ndarray, *, fill_value: int) -> None:
@@ -314,6 +319,25 @@ def _validate_track_matrix_roi_values(matrix: np.ndarray, *, fill_value: int) ->
         raise ValueError(
             "track matrices must contain non-negative ROI indices or fill_value"
         )
+
+
+def _normalize_consensus_edge(edge: Any, *, name: str) -> Edge:
+    if isinstance(edge, (str, bytes)):
+        raise ValueError(f"{name} must be a four-item consensus edge")
+    try:
+        edge_values = tuple(edge)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be a four-item consensus edge") from exc
+    if len(edge_values) != 4:
+        raise ValueError(f"{name} must be a four-item consensus edge")
+
+    source_session, target_session = _validated_session_edge(
+        edge_values[:2],
+        name=name,
+    )
+    source_roi = _nonnegative_integer(edge_values[2], name=f"{name} source_roi")
+    target_roi = _nonnegative_integer(edge_values[3], name=f"{name} target_roi")
+    return int(source_session), int(target_session), int(source_roi), int(target_roi)
 
 
 def _is_edge_set_input(matrix_values: Any, matrix: np.ndarray) -> bool:
@@ -357,7 +381,8 @@ def edge_union_costs(edge_sets: Sequence[Mapping[Edge, int]]) -> dict[Edge, floa
     votes: dict[Edge, int] = {}
     for edge_set in edge_sets:
         for edge, vote_count in edge_set.items():
-            votes[edge] = votes.get(edge, 0) + _positive_integer(
-                vote_count, name="vote_count"
-            )
+            normalized_edge = _normalize_consensus_edge(edge, name="edge")
+            votes[normalized_edge] = votes.get(
+                normalized_edge, 0
+            ) + _positive_integer(vote_count, name="vote_count")
     return {edge: 1.0 / max(vote_count, 1) for edge, vote_count in votes.items()}
