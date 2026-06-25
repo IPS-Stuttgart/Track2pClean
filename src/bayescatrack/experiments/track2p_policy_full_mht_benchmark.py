@@ -90,6 +90,8 @@ class FullMHTConfig:
     scan_hypotheses: int = 8
     edge_top_k: int = 4
     miss_cost: float = 2.0
+    max_gap: int = 1
+    gap_reactivation_cost: float = 1.0
     min_edge_score: float = 0.25
     seed_source: SeedSource = "reference"
     max_seed_tracks: int | None = None
@@ -113,6 +115,14 @@ class _MHTHypothesis:
     tracks: np.ndarray
     score: float
     history: tuple[dict[str, Any], ...]
+
+
+@dataclass(frozen=True)
+class _ActiveTrackSource:
+    row_index: int
+    source_session: int
+    source_roi: int
+    gap_length: int
 
 
 @dataclass(frozen=True)
@@ -277,6 +287,11 @@ def _run_subject_full_mht(
                     "scan_assignment_cost": float(last.get("scan_cost", 0.0)),
                     "scan_assigned_edges": int(last.get("assigned_edges", 0)),
                     "scan_missed_tracks": int(last.get("missed_tracks", 0)),
+                    "scan_gap_active_tracks": int(last.get("gap_active_tracks", 0)),
+                    "scan_gap_reactivated_tracks": int(
+                        last.get("gap_reactivated_tracks", 0)
+                    ),
+                    "scan_max_gap_length": int(last.get("max_gap_length", 0)),
                     "scan_candidates": int(last.get("scan_candidates", 0)),
                     "scan_growth_anchor_count": int(
                         last.get("growth_anchor_count", 0)
@@ -301,6 +316,10 @@ def _run_subject_full_mht(
         "track2p_full_mht_scan_hypotheses": int(mht_config.scan_hypotheses),
         "track2p_full_mht_edge_top_k": int(mht_config.edge_top_k),
         "track2p_full_mht_miss_cost": float(mht_config.miss_cost),
+        "track2p_full_mht_max_gap": int(mht_config.max_gap),
+        "track2p_full_mht_gap_reactivation_cost": float(
+            mht_config.gap_reactivation_cost
+        ),
         "track2p_full_mht_growth_residual_weight": float(
             mht_config.growth_residual_weight
         ),
@@ -372,21 +391,26 @@ def _seed_rois(
 
 
 def _registered_pair(
-    sessions: Sequence[Any], feature_cache: rank._FeatureCache, *, session_index: int
+    sessions: Sequence[Any],
+    feature_cache: rank._FeatureCache,
+    *,
+    source_session: int,
+    target_session: int,
 ) -> Any:
     registered_cache = getattr(feature_cache, "_full_mht_registered_pairs", None)
     if registered_cache is None:
         registered_cache = {}
         setattr(feature_cache, "_full_mht_registered_pairs", registered_cache)
-    cached = registered_cache.get(int(session_index))
+    cache_key = (int(source_session), int(target_session))
+    cached = registered_cache.get(cache_key)
     if cached is not None:
         return cached
     registered = rank.register_plane_pair(
-        sessions[int(session_index)].plane_data,
-        sessions[int(session_index) + 1].plane_data,
+        sessions[int(source_session)].plane_data,
+        sessions[int(target_session)].plane_data,
         transform_type=feature_cache.transform_type,
     )
-    registered_cache[int(session_index)] = registered
+    registered_cache[cache_key] = registered
     return registered
 
 
@@ -420,7 +444,8 @@ def _sparse_pair_matrices(
     sessions: Sequence[Any],
     feature_cache: rank._FeatureCache,
     *,
-    session_index: int,
+    source_session: int,
+    target_session: int,
     source_rois: Sequence[int],
     edge_top_k: int,
     config: FullMHTConfig,
@@ -431,7 +456,8 @@ def _sparse_pair_matrices(
         sparse_cache = {}
         setattr(feature_cache, "_full_mht_sparse_matrices", sparse_cache)
     cache_key = (
-        int(session_index),
+        int(source_session),
+        int(target_session),
         source_rois_tuple,
         int(edge_top_k),
         float(config.growth_anchor_min_registered_iou),
@@ -442,9 +468,14 @@ def _sparse_pair_matrices(
     if cached is not None:
         return cached
 
-    reference_session = sessions[int(session_index)]
-    moving_session = sessions[int(session_index) + 1]
-    registered = _registered_pair(sessions, feature_cache, session_index=int(session_index))
+    reference_session = sessions[int(source_session)]
+    moving_session = sessions[int(target_session)]
+    registered = _registered_pair(
+        sessions,
+        feature_cache,
+        source_session=int(source_session),
+        target_session=int(target_session),
+    )
     all_source_indices = _roi_indices(reference_session)
     source_positions = {int(roi): idx for idx, roi in enumerate(all_source_indices)}
     selected_positions = [
@@ -459,7 +490,7 @@ def _sparse_pair_matrices(
     selected_target_positions = [
         idx
         for idx, roi in enumerate(all_target_indices)
-        if _cell_probability(sessions, int(session_index) + 1, int(roi))
+        if _cell_probability(sessions, int(target_session), int(roi))
         >= float(feature_cache.cell_probability_threshold)
     ]
     target_indices = np.asarray(
@@ -468,7 +499,7 @@ def _sparse_pair_matrices(
     )
     target_cell_probabilities = np.asarray(
         [
-            _cell_probability(sessions, int(session_index) + 1, int(roi))
+            _cell_probability(sessions, int(target_session), int(roi))
             for roi in target_indices
         ],
         dtype=float,
@@ -730,6 +761,51 @@ def _growth_residual_scale(residual_vectors: np.ndarray) -> float:
     return max(1.0, median + 1.4826 * mad)
 
 
+def _active_track_sources(
+    tracks: np.ndarray, *, session_index: int, max_gap: int
+) -> tuple[_ActiveTrackSource, ...]:
+    matrix = np.asarray(tracks, dtype=int)
+    current = int(session_index)
+    horizon = max(0, int(max_gap))
+    output: list[_ActiveTrackSource] = []
+    for row_index, row in enumerate(matrix):
+        observed = np.flatnonzero(np.asarray(row[: current + 1], dtype=int) >= 0)
+        if observed.size == 0:
+            continue
+        source_session = int(observed[-1])
+        gap_length = int(current - source_session)
+        if gap_length > horizon:
+            continue
+        output.append(
+            _ActiveTrackSource(
+                row_index=int(row_index),
+                source_session=source_session,
+                source_roi=int(row[source_session]),
+                gap_length=gap_length,
+            )
+        )
+    return tuple(output)
+
+
+def _matrix_diagnostics(
+    matrices_by_source_session: Mapping[int, _FullMHTPairMatrices],
+) -> dict[str, Any]:
+    if not matrices_by_source_session:
+        return {"growth_anchor_count": 0, "growth_model_type": "no_active_tracks"}
+    anchor_count = sum(
+        int(matrices.growth_anchor_count)
+        for matrices in matrices_by_source_session.values()
+    )
+    model_types = ";".join(
+        f"{int(source_session)}:{matrices.growth_model_type}"
+        for source_session, matrices in sorted(matrices_by_source_session.items())
+    )
+    return {
+        "growth_anchor_count": int(anchor_count),
+        "growth_model_type": model_types,
+    }
+
+
 def _advance_scan(
     hypotheses: Sequence[_MHTHypothesis],
     *,
@@ -763,12 +839,10 @@ def _expand_hypothesis_scan(
 ) -> list[_MHTHypothesis]:
     tracks = np.asarray(hypothesis.tracks, dtype=int)
     next_session = int(session_index) + 1
-    active_rows = [
-        row_index
-        for row_index, row in enumerate(tracks)
-        if int(row[int(session_index)]) >= 0
-    ]
-    if not active_rows:
+    active_sources = _active_track_sources(
+        tracks, session_index=int(session_index), max_gap=int(config.max_gap)
+    )
+    if not active_sources:
         carried = tracks.copy()
         return [
             _MHTHypothesis(
@@ -781,6 +855,9 @@ def _expand_hypothesis_scan(
                         "scan_cost": 0.0,
                         "assigned_edges": 0,
                         "missed_tracks": 0,
+                        "gap_active_tracks": 0,
+                        "gap_reactivated_tracks": 0,
+                        "max_gap_length": 0,
                         "scan_candidates": 0,
                         "growth_anchor_count": 0,
                         "growth_model_type": "no_active_tracks",
@@ -789,61 +866,101 @@ def _expand_hypothesis_scan(
             )
         ]
 
-    matrices = _sparse_pair_matrices(
-        sessions,
-        feature_cache,
-        session_index=int(session_index),
-        source_rois=[int(tracks[int(row_index), int(session_index)]) for row_index in active_rows],
-        edge_top_k=int(config.edge_top_k),
-        config=config,
+    source_rois_by_session: dict[int, list[int]] = {}
+    for active_source in active_sources:
+        source_rois_by_session.setdefault(int(active_source.source_session), []).append(
+            int(active_source.source_roi)
+        )
+    matrices_by_source_session = {
+        int(source_session): _sparse_pair_matrices(
+            sessions,
+            feature_cache,
+            source_session=int(source_session),
+            target_session=next_session,
+            source_rois=source_rois,
+            edge_top_k=int(config.edge_top_k),
+            config=config,
+        )
+        for source_session, source_rois in source_rois_by_session.items()
+    }
+    matrix_diagnostics = _matrix_diagnostics(matrices_by_source_session)
+    finite_target_rois = sorted(
+        {
+            int(target_roi)
+            for matrices in matrices_by_source_session.values()
+            for target_roi in np.asarray(matrices.target_indices, dtype=int)
+            if _cell_probability(sessions, next_session, int(target_roi))
+            >= float(feature_cache.cell_probability_threshold)
+        }
     )
-    source_lookup = {int(roi): idx for idx, roi in enumerate(matrices.source_indices)}
-    target_indices = np.asarray(matrices.target_indices, dtype=int)
-    finite_targets = [
-        int(col)
-        for col, target_roi in enumerate(target_indices)
-        if _cell_probability(sessions, next_session, int(target_roi))
-        >= float(feature_cache.cell_probability_threshold)
-    ]
-    if not finite_targets:
+    active_rows = [int(active_source.row_index) for active_source in active_sources]
+    gap_active_tracks = sum(1 for active in active_sources if int(active.gap_length) > 0)
+    max_gap_length = max((int(active.gap_length) for active in active_sources), default=0)
+    if not finite_target_rois:
         carried = tracks.copy()
         carried[active_rows, next_session] = -1
         return [
             _MHTHypothesis(
                 carried,
-                hypothesis.score - float(config.miss_cost) * float(len(active_rows)),
+                hypothesis.score - float(config.miss_cost) * float(len(active_sources)),
                 hypothesis.history
                 + (
                     {
                         "session_index": int(session_index),
-                        "scan_cost": float(config.miss_cost) * float(len(active_rows)),
+                        "scan_cost": float(config.miss_cost) * float(len(active_sources)),
                         "assigned_edges": 0,
-                        "missed_tracks": int(len(active_rows)),
+                        "missed_tracks": int(len(active_sources)),
+                        "gap_active_tracks": int(gap_active_tracks),
+                        "gap_reactivated_tracks": 0,
+                        "max_gap_length": int(max_gap_length),
                         "scan_candidates": 0,
-                        "growth_anchor_count": int(matrices.growth_anchor_count),
-                        "growth_model_type": str(matrices.growth_model_type),
+                        **matrix_diagnostics,
                     },
                 ),
             )
         ]
 
-    cost_matrix = np.full((len(active_rows), len(finite_targets)), np.inf, dtype=float)
+    source_lookup_by_session = {
+        int(source_session): {
+            int(roi): idx for idx, roi in enumerate(matrices.source_indices)
+        }
+        for source_session, matrices in matrices_by_source_session.items()
+    }
+    target_lookup_by_session = {
+        int(source_session): {
+            int(roi): idx for idx, roi in enumerate(matrices.target_indices)
+        }
+        for source_session, matrices in matrices_by_source_session.items()
+    }
+    cost_matrix = np.full(
+        (len(active_sources), len(finite_target_rois)), np.inf, dtype=float
+    )
     candidate_count = 0
-    for row_pos, row_index in enumerate(active_rows):
-        source_roi = int(tracks[int(row_index), int(session_index)])
-        source_local = source_lookup.get(source_roi)
+    for row_pos, active_source in enumerate(active_sources):
+        source_session = int(active_source.source_session)
+        matrices = matrices_by_source_session[source_session]
+        source_lookup = source_lookup_by_session[source_session]
+        target_lookup = target_lookup_by_session[source_session]
+        source_local = source_lookup.get(int(active_source.source_roi))
         if source_local is None:
             continue
         row_scores: list[tuple[float, int]] = []
-        for compact_col, target_local in enumerate(finite_targets):
+        for compact_col, target_roi in enumerate(finite_target_rois):
+            target_local = target_lookup.get(int(target_roi))
+            if target_local is None:
+                continue
             score = _edge_score(
                 sessions,
                 matrices,
-                session_index=int(session_index),
+                target_session=next_session,
                 source_local=int(source_local),
                 target_local=int(target_local),
                 config=config,
             )
+            if int(active_source.gap_length) > 0:
+                score -= float(config.gap_reactivation_cost) * float(
+                    active_source.gap_length
+                )
             if score >= float(config.min_edge_score):
                 row_scores.append((float(score), int(compact_col)))
         row_scores.sort(reverse=True)
@@ -857,17 +974,19 @@ def _expand_hypothesis_scan(
         return [
             _MHTHypothesis(
                 carried,
-                hypothesis.score - float(config.miss_cost) * float(len(active_rows)),
+                hypothesis.score - float(config.miss_cost) * float(len(active_sources)),
                 hypothesis.history
                 + (
                     {
                         "session_index": int(session_index),
-                        "scan_cost": float(config.miss_cost) * float(len(active_rows)),
+                        "scan_cost": float(config.miss_cost) * float(len(active_sources)),
                         "assigned_edges": 0,
-                        "missed_tracks": int(len(active_rows)),
+                        "missed_tracks": int(len(active_sources)),
+                        "gap_active_tracks": int(gap_active_tracks),
+                        "gap_reactivated_tracks": 0,
+                        "max_gap_length": int(max_gap_length),
                         "scan_candidates": int(candidate_count),
-                        "growth_anchor_count": int(matrices.growth_anchor_count),
-                        "growth_model_type": str(matrices.growth_model_type),
+                        **matrix_diagnostics,
                     },
                 ),
             )
@@ -876,8 +995,10 @@ def _expand_hypothesis_scan(
     solutions = murty_k_best_assignments(
         cost_matrix,
         k=max(1, int(config.scan_hypotheses)),
-        row_non_assignment_costs=np.full((len(active_rows),), float(config.miss_cost)),
-        col_non_assignment_costs=np.zeros((len(finite_targets),), dtype=float),
+        row_non_assignment_costs=np.full(
+            (len(active_sources),), float(config.miss_cost)
+        ),
+        col_non_assignment_costs=np.zeros((len(finite_target_rois),), dtype=float),
     )
     output: list[_MHTHypothesis] = []
     for solution in solutions:
@@ -885,14 +1006,17 @@ def _expand_hypothesis_scan(
         updated = tracks.copy()
         assigned_edges = 0
         missed_tracks = 0
-        for row_pos, row_index in enumerate(active_rows):
+        gap_reactivated_tracks = 0
+        for row_pos, active_source in enumerate(active_sources):
             compact_col = int(assignment[int(row_pos)])
+            row_index = int(active_source.row_index)
             if compact_col >= 0:
-                target_local = finite_targets[compact_col]
-                updated[int(row_index), next_session] = int(target_indices[target_local])
+                updated[row_index, next_session] = int(finite_target_rois[compact_col])
                 assigned_edges += 1
+                if int(active_source.gap_length) > 0:
+                    gap_reactivated_tracks += 1
             else:
-                updated[int(row_index), next_session] = -1
+                updated[row_index, next_session] = -1
                 missed_tracks += 1
         scan_cost = float(solution["cost"])
         output.append(
@@ -906,9 +1030,11 @@ def _expand_hypothesis_scan(
                         "scan_cost": scan_cost,
                         "assigned_edges": int(assigned_edges),
                         "missed_tracks": int(missed_tracks),
+                        "gap_active_tracks": int(gap_active_tracks),
+                        "gap_reactivated_tracks": int(gap_reactivated_tracks),
+                        "max_gap_length": int(max_gap_length),
                         "scan_candidates": int(candidate_count),
-                        "growth_anchor_count": int(matrices.growth_anchor_count),
-                        "growth_model_type": str(matrices.growth_model_type),
+                        **matrix_diagnostics,
                     },
                 ),
             )
@@ -920,7 +1046,7 @@ def _edge_score(
     sessions: Sequence[Any],
     matrices: _FullMHTPairMatrices,
     *,
-    session_index: int,
+    target_session: int,
     source_local: int,
     target_local: int,
     config: FullMHTConfig,
@@ -936,7 +1062,7 @@ def _edge_score(
         matrices.growth_mahalanobis[source_local, target_local], 0.0
     )
     target_roi = int(matrices.target_indices[int(target_local)])
-    cell_b = _cell_probability(sessions, int(session_index) + 1, target_roi)
+    cell_b = _cell_probability(sessions, int(target_session), target_roi)
     threshold_margin = registered - float(matrices.threshold)
     score = 0.0
     score += float(config.registered_iou_weight) * registered
@@ -1024,6 +1150,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scan-hypotheses", type=int, default=8)
     parser.add_argument("--edge-top-k", type=int, default=4)
     parser.add_argument("--miss-cost", type=float, default=2.0)
+    parser.add_argument("--max-gap", type=int, default=1)
+    parser.add_argument("--gap-reactivation-cost", type=float, default=1.0)
     parser.add_argument("--min-edge-score", type=float, default=0.25)
     parser.add_argument("--seed-source", choices=("reference", "all-cells"), default="reference")
     parser.add_argument("--max-seed-tracks", type=int, default=None)
@@ -1082,6 +1210,8 @@ def main(argv: list[str] | None = None) -> int:
             scan_hypotheses=max(1, int(args.scan_hypotheses)),
             edge_top_k=max(1, int(args.edge_top_k)),
             miss_cost=float(args.miss_cost),
+            max_gap=max(0, int(args.max_gap)),
+            gap_reactivation_cost=float(args.gap_reactivation_cost),
             min_edge_score=float(args.min_edge_score),
             seed_source=cast(SeedSource, args.seed_source),
             max_seed_tracks=args.max_seed_tracks,
