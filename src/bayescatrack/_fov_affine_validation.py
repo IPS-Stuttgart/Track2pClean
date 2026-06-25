@@ -23,6 +23,7 @@ _MATRIX_ERROR = "matrix_xy must be a finite 2-by-3 affine matrix"
 _OUTPUT_SHAPE_ERROR = (
     "output_shape must contain exactly two non-negative integer values"
 )
+_SUBTRACT_MEAN_ERROR = "subtract_mean must be a boolean"
 _GRID_SHAPE_ERROR = "grid_shape must contain exactly two positive integer dimensions"
 _MIN_TILE_SIZE_ERROR = "min_tile_size must be a positive integer"
 _MAX_SHIFT_FRACTION_ERROR = "max_shift_fraction must be a finite non-negative value"
@@ -125,6 +126,11 @@ def _normalize_output_shape_kwarg(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_estimate_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     normalized_kwargs = dict(kwargs)
+    if "subtract_mean" in normalized_kwargs:
+        normalized_kwargs["subtract_mean"] = _normalize_bool(
+            normalized_kwargs["subtract_mean"],
+            _SUBTRACT_MEAN_ERROR,
+        )
     if "grid_shape" in normalized_kwargs:
         normalized_kwargs["grid_shape"] = _normalize_grid_shape(
             normalized_kwargs["grid_shape"]
@@ -180,6 +186,12 @@ def _normalize_output_shape_component(value: Any) -> int:
     if integer_value < 0:
         raise ValueError(_OUTPUT_SHAPE_ERROR)
     return integer_value
+
+
+def _normalize_bool(value: Any, error_message: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(error_message)
+    return value
 
 
 def _normalize_grid_shape(grid_shape: Any) -> tuple[int, int]:
