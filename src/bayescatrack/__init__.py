@@ -66,6 +66,9 @@ from ._registration_selection_validation import (
 from ._registration_warp_validation import (
     install_registration_warp_validation as _install_registration_warp_validation,
 )
+from ._roi_cue_length_validation import (
+    install_roi_cue_length_validation as _install_roi_cue_length_validation,
+)
 from ._session_gap_validation import (
     install_session_gap_validation as _install_session_gap_validation,
 )
@@ -105,6 +108,7 @@ from ._tracking_start_roi_validation import (
 from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
+from .association import absence_model as _absence_model
 from .core import bridge as _bridge
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
@@ -152,6 +156,7 @@ _install_matching_bundle_roi_index_validation()
 _install_multisession_solver_track_validation()
 _install_session_gap_validation()
 _install_session_match_result_validation()
+_install_roi_cue_length_validation(_absence_model)
 _install_tracking_start_roi_validation()
 _install_track_row_export_option_validation()
 _install_track_row_fill_value_validation()
