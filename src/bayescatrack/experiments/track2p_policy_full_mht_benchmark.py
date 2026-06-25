@@ -113,6 +113,7 @@ class FullMHTConfig:
     track2p_prior_weight: float = 0.0
     track2p_non_prior_penalty: float = 0.0
     track2p_prior_switch_penalty: float = 0.0
+    track2p_no_prior_successor_penalty: float = 0.0
     track2p_prior_miss_penalty: float = 0.0
     track2p_prior_risk_mahalanobis_weight: float = 0.0
     track2p_prior_risk_mahalanobis_offset: float = 1.5
@@ -336,6 +337,9 @@ def _run_subject_full_mht(
                     "scan_switched_prior_successors": int(
                         last.get("switched_prior_successors", 0)
                     ),
+                    "scan_no_prior_successor_continuations": int(
+                        last.get("no_prior_successor_continuations", 0)
+                    ),
                     "scan_selected_prior_risk": float(
                         last.get("selected_prior_risk", 0.0)
                     ),
@@ -404,6 +408,9 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_track2p_prior_switch_penalty": float(
             mht_config.track2p_prior_switch_penalty
+        ),
+        "track2p_full_mht_track2p_no_prior_successor_penalty": float(
+            mht_config.track2p_no_prior_successor_penalty
         ),
         "track2p_full_mht_track2p_prior_miss_penalty": float(
             mht_config.track2p_prior_miss_penalty
@@ -1291,6 +1298,7 @@ def _expand_hypothesis_scan(
                         "missed_tracks": 0,
                         "missed_prior_successors": 0,
                         "switched_prior_successors": 0,
+                        "no_prior_successor_continuations": 0,
                         "selected_prior_risk": 0.0,
                         "gap_active_tracks": 0,
                         "gap_reactivated_tracks": 0,
@@ -1372,6 +1380,7 @@ def _expand_hypothesis_scan(
                         "missed_tracks": int(len(active_sources)),
                         "missed_prior_successors": int(all_missed_prior_successors),
                         "switched_prior_successors": 0,
+                        "no_prior_successor_continuations": 0,
                         "selected_prior_risk": 0.0,
                         "gap_active_tracks": int(gap_active_tracks),
                         "gap_reactivated_tracks": 0,
@@ -1448,6 +1457,7 @@ def _expand_hypothesis_scan(
                         "missed_tracks": int(len(active_sources)),
                         "missed_prior_successors": int(all_missed_prior_successors),
                         "switched_prior_successors": 0,
+                        "no_prior_successor_continuations": 0,
                         "selected_prior_risk": 0.0,
                         "gap_active_tracks": int(gap_active_tracks),
                         "gap_reactivated_tracks": 0,
@@ -1477,6 +1487,7 @@ def _expand_hypothesis_scan(
         selected_non_prior_edges = 0
         missed_prior_successors = 0
         switched_prior_successors = 0
+        no_prior_successor_continuations = 0
         selected_prior_risk = 0.0
         for row_pos, active_source in enumerate(active_sources):
             compact_col = int(assignment[int(row_pos)])
@@ -1507,6 +1518,8 @@ def _expand_hypothesis_scan(
                         track2p_prior_edges=prior_edges,
                     ):
                         switched_prior_successors += 1
+                    else:
+                        no_prior_successor_continuations += 1
                 if int(active_source.gap_length) > 0:
                     gap_reactivated_tracks += 1
             else:
@@ -1535,6 +1548,9 @@ def _expand_hypothesis_scan(
                         "missed_prior_successors": int(missed_prior_successors),
                         "switched_prior_successors": int(
                             switched_prior_successors
+                        ),
+                        "no_prior_successor_continuations": int(
+                            no_prior_successor_continuations
                         ),
                         "selected_prior_risk": float(selected_prior_risk),
                         "selected_edge_summaries": ";".join(selected_edge_summaries),
@@ -1620,13 +1636,16 @@ def _edge_score(
         )
     elif track2p_prior_edges:
         score -= float(config.track2p_non_prior_penalty)
-        if _has_prior_successor_for_roi(
+        has_prior_successor = _has_prior_successor_for_roi(
             source_session=int(matrices.source_session),
             target_session=int(matrices.target_session),
             source_roi=source_roi,
             track2p_prior_edges=track2p_prior_edges,
-        ):
+        )
+        if has_prior_successor:
             score -= float(config.track2p_prior_switch_penalty)
+        else:
+            score -= float(config.track2p_no_prior_successor_penalty)
     return float(score)
 
 
@@ -2047,6 +2066,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--track2p-prior-weight", type=float, default=0.0)
     parser.add_argument("--track2p-non-prior-penalty", type=float, default=0.0)
     parser.add_argument("--track2p-prior-switch-penalty", type=float, default=0.0)
+    parser.add_argument("--track2p-no-prior-successor-penalty", type=float, default=0.0)
     parser.add_argument("--track2p-prior-miss-penalty", type=float, default=0.0)
     parser.add_argument(
         "--track2p-prior-risk-mahalanobis-weight", type=float, default=0.0
@@ -2132,6 +2152,9 @@ def main(argv: list[str] | None = None) -> int:
             track2p_prior_weight=float(args.track2p_prior_weight),
             track2p_non_prior_penalty=float(args.track2p_non_prior_penalty),
             track2p_prior_switch_penalty=float(args.track2p_prior_switch_penalty),
+            track2p_no_prior_successor_penalty=float(
+                args.track2p_no_prior_successor_penalty
+            ),
             track2p_prior_miss_penalty=float(args.track2p_prior_miss_penalty),
             track2p_prior_risk_mahalanobis_weight=float(
                 args.track2p_prior_risk_mahalanobis_weight
