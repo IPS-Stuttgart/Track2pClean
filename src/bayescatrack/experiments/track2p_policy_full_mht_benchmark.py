@@ -109,6 +109,10 @@ class FullMHTConfig:
     track2p_prior_weight: float = 0.0
     track2p_non_prior_penalty: float = 0.0
     track2p_prior_miss_penalty: float = 0.0
+    track2p_prior_risk_mahalanobis_weight: float = 0.0
+    track2p_prior_risk_mahalanobis_offset: float = 1.5
+    track2p_prior_risk_registered_iou_weight: float = 0.0
+    track2p_prior_risk_registered_iou_floor: float = 0.5
     growth_anchor_min_registered_iou: float = 0.55
     growth_anchor_min_shifted_iou: float = 0.30
     growth_anchor_min_cell_probability: float = 0.80
@@ -380,6 +384,18 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_track2p_prior_miss_penalty": float(
             mht_config.track2p_prior_miss_penalty
+        ),
+        "track2p_full_mht_track2p_prior_risk_mahalanobis_weight": float(
+            mht_config.track2p_prior_risk_mahalanobis_weight
+        ),
+        "track2p_full_mht_track2p_prior_risk_mahalanobis_offset": float(
+            mht_config.track2p_prior_risk_mahalanobis_offset
+        ),
+        "track2p_full_mht_track2p_prior_risk_registered_iou_weight": float(
+            mht_config.track2p_prior_risk_registered_iou_weight
+        ),
+        "track2p_full_mht_track2p_prior_risk_registered_iou_floor": float(
+            mht_config.track2p_prior_risk_registered_iou_floor
         ),
         "track2p_full_mht_growth_anchor_min_registered_iou": float(
             mht_config.growth_anchor_min_registered_iou
@@ -1373,9 +1389,34 @@ def _edge_score(
     score -= float(config.local_deformation_weight) * max(0.0, local_deformation)
     if track2p_prior:
         score += float(config.track2p_prior_weight)
+        score -= _track2p_prior_edge_risk(
+            registered_iou=registered,
+            growth_mahalanobis=growth_mahalanobis,
+            config=config,
+        )
     elif track2p_prior_edges:
         score -= float(config.track2p_non_prior_penalty)
     return float(score)
+
+
+def _track2p_prior_edge_risk(
+    *,
+    registered_iou: float,
+    growth_mahalanobis: float,
+    config: FullMHTConfig,
+) -> float:
+    risk = 0.0
+    risk += float(config.track2p_prior_risk_mahalanobis_weight) * max(
+        0.0,
+        float(growth_mahalanobis)
+        - float(config.track2p_prior_risk_mahalanobis_offset),
+    )
+    risk += float(config.track2p_prior_risk_registered_iou_weight) * max(
+        0.0,
+        float(config.track2p_prior_risk_registered_iou_floor)
+        - float(registered_iou),
+    )
+    return float(risk)
 
 
 def _selected_edge_summary(
@@ -1426,10 +1467,20 @@ def _selected_edge_summary(
         track2p_prior_edges=track2p_prior_edges,
     )
     is_prior = edge in track2p_prior_edges
+    prior_risk = (
+        _track2p_prior_edge_risk(
+            registered_iou=registered,
+            growth_mahalanobis=growth_mahalanobis,
+            config=config,
+        )
+        if is_prior
+        else 0.0
+    )
     summary = (
         f"{int(matrices.source_session)}:{source_roi}->{int(target_session)}:{target}"
         f"|prior={int(is_prior)}"
         f"|score={_diagnostic_float(score)}"
+        f"|risk={_diagnostic_float(prior_risk)}"
         f"|reg={_diagnostic_float(registered)}"
         f"|shift={_diagnostic_float(shifted)}"
         f"|growth={_diagnostic_float(growth_residual)}"
@@ -1576,6 +1627,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--track2p-prior-weight", type=float, default=0.0)
     parser.add_argument("--track2p-non-prior-penalty", type=float, default=0.0)
     parser.add_argument("--track2p-prior-miss-penalty", type=float, default=0.0)
+    parser.add_argument(
+        "--track2p-prior-risk-mahalanobis-weight", type=float, default=0.0
+    )
+    parser.add_argument(
+        "--track2p-prior-risk-mahalanobis-offset", type=float, default=1.5
+    )
+    parser.add_argument(
+        "--track2p-prior-risk-registered-iou-weight", type=float, default=0.0
+    )
+    parser.add_argument(
+        "--track2p-prior-risk-registered-iou-floor", type=float, default=0.5
+    )
     parser.add_argument("--growth-anchor-min-registered-iou", type=float, default=0.55)
     parser.add_argument("--growth-anchor-min-shifted-iou", type=float, default=0.30)
     parser.add_argument(
@@ -1641,6 +1704,18 @@ def main(argv: list[str] | None = None) -> int:
             track2p_prior_weight=float(args.track2p_prior_weight),
             track2p_non_prior_penalty=float(args.track2p_non_prior_penalty),
             track2p_prior_miss_penalty=float(args.track2p_prior_miss_penalty),
+            track2p_prior_risk_mahalanobis_weight=float(
+                args.track2p_prior_risk_mahalanobis_weight
+            ),
+            track2p_prior_risk_mahalanobis_offset=float(
+                args.track2p_prior_risk_mahalanobis_offset
+            ),
+            track2p_prior_risk_registered_iou_weight=float(
+                args.track2p_prior_risk_registered_iou_weight
+            ),
+            track2p_prior_risk_registered_iou_floor=float(
+                args.track2p_prior_risk_registered_iou_floor
+            ),
             growth_anchor_min_registered_iou=float(
                 args.growth_anchor_min_registered_iou
             ),

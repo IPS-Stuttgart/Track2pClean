@@ -285,6 +285,60 @@ def test_full_mht_edge_score_rewards_track2p_prior_edges(monkeypatch):
     assert with_other_prior == without_prior - 3.0
 
 
+def test_full_mht_track2p_prior_edge_risk_penalizes_suspicious_prior_edge(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=0,
+        target_session=1,
+        source_indices=np.asarray([5], dtype=int),
+        target_indices=np.asarray([9], dtype=int),
+        registered_iou=np.asarray([[0.30]], dtype=float),
+        shifted_iou=np.asarray([[0.25]], dtype=float),
+        centroid_distance=np.asarray([[1.0]], dtype=float),
+        area_ratio=np.asarray([[1.0]], dtype=float),
+        threshold=0.0,
+        growth_residual=np.asarray([[0.0]], dtype=float),
+        growth_mahalanobis=np.asarray([[3.0]], dtype=float),
+        local_deformation=np.asarray([[0.0]], dtype=float),
+        growth_anchor_count=0,
+        growth_model_type="identity_no_anchors",
+    )
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *args, **kwargs: 1.0)
+
+    config = full_mht.FullMHTConfig(
+        track2p_prior_weight=2.0,
+        track2p_prior_risk_mahalanobis_weight=4.0,
+        track2p_prior_risk_mahalanobis_offset=1.5,
+        track2p_prior_risk_registered_iou_weight=5.0,
+        track2p_prior_risk_registered_iou_floor=0.5,
+    )
+    risk = full_mht._track2p_prior_edge_risk(
+        registered_iou=0.30,
+        growth_mahalanobis=3.0,
+        config=config,
+    )
+    without_prior = full_mht._edge_score(
+        (object(), object()),
+        matrices,
+        target_session=1,
+        source_local=0,
+        target_local=0,
+        config=config,
+        track2p_prior_edges=frozenset(),
+    )
+    with_prior = full_mht._edge_score(
+        (object(), object()),
+        matrices,
+        target_session=1,
+        source_local=0,
+        target_local=0,
+        config=config,
+        track2p_prior_edges=frozenset({(0, 1, 5, 9)}),
+    )
+
+    assert risk == pytest.approx(7.0)
+    assert with_prior == pytest.approx(without_prior + 2.0 - risk)
+
+
 def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     active = full_mht._ActiveTrackSource(
         row_index=0, source_session=1, source_roi=5, gap_length=0
