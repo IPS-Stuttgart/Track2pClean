@@ -1,5 +1,6 @@
 """Association helpers for BayesCaTrack."""
 
+from .. import _absence_cue_shape_validation as _absence_cue_shape_validation
 from .._exports import ASSOCIATION_PUBLIC_NAMES, reexport
 from ..core import bridge as _bridge
 from . import _activity_similarity_control_validation as _activity_similarity_control_validation
@@ -18,7 +19,9 @@ from . import (
     _track2p_policy_session_gap_validation as _track2p_policy_session_gap_validation,
 )
 from . import _triplet_support_validation as _triplet_support_validation
+from . import absence_model as _absence_model
 
+_absence_cue_shape_validation.install_absence_cue_shape_validation(_absence_model)
 _activity_similarity_control_validation.install_activity_similarity_control_validation()
 _neuropil_ratio_shape_validation.install_neuropil_ratio_shape_validation()
 _session_edge_pair_validation.install_session_edge_pair_validation()
@@ -30,6 +33,7 @@ _dynamic_edge_prior_validation.install_dynamic_edge_prior_bool_validation()
 _track2p_policy_session_gap_validation.install_track2p_policy_session_gap_validation()
 
 _PATCH_MODULES = (
+    _absence_cue_shape_validation,
     _activity_similarity_control_validation,
     _calibrated_mahalanobis_bundle_patch,
     _calibrated_roi_stat_feature_patch,
