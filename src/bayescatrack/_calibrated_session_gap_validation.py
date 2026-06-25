@@ -36,7 +36,11 @@ def install_calibrated_session_gap_validation() -> None:
         "_bayescatrack_original",
         original,
     )
-    calibrated_costs.with_session_gap_component = with_session_gap_component_with_validation
+    setattr(
+        calibrated_costs,
+        "with_session_gap_component",
+        with_session_gap_component_with_validation,
+    )
     setattr(calibrated_costs, _PATCH_ATTR, True)
 
 
