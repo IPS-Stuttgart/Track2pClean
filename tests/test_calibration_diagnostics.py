@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from bayescatrack.evaluation.calibration_diagnostics import (
     calibration_summary,
     expected_calibration_error,
     maximum_calibration_error,
+    precision_recall_threshold_table,
     reliability_bin_table,
 )
 
@@ -75,3 +77,9 @@ def test_calibration_inputs_are_validated():
 def test_calibration_n_bins_rejects_silent_coercions(n_bins):
     with pytest.raises(ValueError, match="positive integer"):
         expected_calibration_error([0.5], [1], n_bins=n_bins)
+
+
+@pytest.mark.parametrize("threshold", [True, False, np.bool_(True)])
+def test_precision_recall_thresholds_reject_boolean_coercions(threshold):
+    with pytest.raises(ValueError, match="thresholds must be finite numeric"):
+        precision_recall_threshold_table([0.2, 0.8], [0, 1], thresholds=[threshold])
