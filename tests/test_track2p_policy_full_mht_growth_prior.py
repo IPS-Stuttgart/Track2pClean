@@ -404,6 +404,36 @@ def test_full_mht_terminal_history_risk_can_rerank_completed_hypotheses(monkeypa
     assert metadata["terminal_adjusted_score"] == pytest.approx(9.0)
 
 
+def test_full_mht_terminal_history_risk_uses_scan_history(monkeypatch):
+    monkeypatch.setattr(
+        full_mht,
+        "_sparse_pair_matrices",
+        lambda *args, **kwargs: pytest.fail("unexpected matrix recomputation"),
+    )
+    risky = full_mht._MHTHypothesis(
+        np.asarray([[5, 9]], dtype=int),
+        score=10.0,
+        history=({"selected_prior_risk": 2.5},),
+    )
+    safer = full_mht._MHTHypothesis(
+        np.asarray([[5, 10]], dtype=int),
+        score=8.0,
+        history=({"selected_prior_risk": 0.0},),
+    )
+
+    selected, metadata = full_mht._select_final_hypothesis(
+        (risky, safer),
+        sessions=(object(), object()),
+        feature_cache=SimpleNamespace(cell_probability_threshold=0.5),
+        config=full_mht.FullMHTConfig(terminal_history_risk_weight=1.0),
+        track2p_prior_edges=frozenset({(0, 1, 5, 9)}),
+    )
+
+    assert selected is safer
+    assert metadata["terminal_selected_rank"] == 2
+    assert metadata["terminal_history_risk"] == pytest.approx(0.0)
+
+
 def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     active = full_mht._ActiveTrackSource(
         row_index=0, source_session=1, source_roi=5, gap_length=0
@@ -459,6 +489,7 @@ def test_full_mht_selected_edge_summary_is_label_free(monkeypatch):
     )
 
     assert edge["is_track2p_prior"] == 1
+    assert edge["track2p_prior_risk"] == pytest.approx(0.0)
     summary = str(edge["summary"])
     assert "1:5->2:9" in summary
     assert "prior=1" in summary

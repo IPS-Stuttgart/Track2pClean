@@ -327,6 +327,9 @@ def _run_subject_full_mht(
                     "scan_missed_prior_successors": int(
                         last.get("missed_prior_successors", 0)
                     ),
+                    "scan_selected_prior_risk": float(
+                        last.get("selected_prior_risk", 0.0)
+                    ),
                     "scan_selected_edge_summaries": str(
                         last.get("selected_edge_summaries", "")
                     ),
@@ -1142,6 +1145,7 @@ def _expand_hypothesis_scan(
                         "scan_cost": 0.0,
                         "assigned_edges": 0,
                         "missed_tracks": 0,
+                        "selected_prior_risk": 0.0,
                         "gap_active_tracks": 0,
                         "gap_reactivated_tracks": 0,
                         "max_gap_length": 0,
@@ -1211,6 +1215,7 @@ def _expand_hypothesis_scan(
                         "scan_cost": all_miss_cost,
                         "assigned_edges": 0,
                         "missed_tracks": int(len(active_sources)),
+                        "selected_prior_risk": 0.0,
                         "gap_active_tracks": int(gap_active_tracks),
                         "gap_reactivated_tracks": 0,
                         "max_gap_length": int(max_gap_length),
@@ -1284,6 +1289,7 @@ def _expand_hypothesis_scan(
                         "scan_cost": all_miss_cost,
                         "assigned_edges": 0,
                         "missed_tracks": int(len(active_sources)),
+                        "selected_prior_risk": 0.0,
                         "gap_active_tracks": int(gap_active_tracks),
                         "gap_reactivated_tracks": 0,
                         "max_gap_length": int(max_gap_length),
@@ -1311,6 +1317,7 @@ def _expand_hypothesis_scan(
         selected_prior_edges = 0
         selected_non_prior_edges = 0
         missed_prior_successors = 0
+        selected_prior_risk = 0.0
         for row_pos, active_source in enumerate(active_sources):
             compact_col = int(assignment[int(row_pos)])
             row_index = int(active_source.row_index)
@@ -1329,6 +1336,9 @@ def _expand_hypothesis_scan(
                 selected_edge_summaries.append(str(edge_summary["summary"]))
                 if int(edge_summary["is_track2p_prior"]):
                     selected_prior_edges += 1
+                    selected_prior_risk += float(
+                        edge_summary.get("track2p_prior_risk", 0.0)
+                    )
                 else:
                     selected_non_prior_edges += 1
                 if int(active_source.gap_length) > 0:
@@ -1357,6 +1367,7 @@ def _expand_hypothesis_scan(
                         "selected_prior_edges": int(selected_prior_edges),
                         "selected_non_prior_edges": int(selected_non_prior_edges),
                         "missed_prior_successors": int(missed_prior_successors),
+                        "selected_prior_risk": float(selected_prior_risk),
                         "selected_edge_summaries": ";".join(selected_edge_summaries),
                         "gap_active_tracks": int(gap_active_tracks),
                         "gap_reactivated_tracks": int(gap_reactivated_tracks),
@@ -1485,6 +1496,9 @@ def _terminal_history_risk(
     config: FullMHTConfig,
     track2p_prior_edges: frozenset[tuple[int, int, int, int]],
 ) -> float:
+    history_risk = _terminal_history_risk_from_scan_history(hypothesis)
+    if history_risk is not None:
+        return float(history_risk)
     if not track2p_prior_edges:
         return 0.0
     selected_prior_edges = sorted(_track_edges(hypothesis.tracks) & track2p_prior_edges)
@@ -1534,6 +1548,19 @@ def _terminal_history_risk(
     return float(risk)
 
 
+def _terminal_history_risk_from_scan_history(
+    hypothesis: _MHTHypothesis,
+) -> float | None:
+    if not hypothesis.history:
+        return None
+    total = 0.0
+    for scan in hypothesis.history:
+        if "selected_prior_risk" not in scan:
+            return None
+        total += _finite_float(scan.get("selected_prior_risk", 0.0), 0.0)
+    return float(total)
+
+
 def _track2p_prior_edge_risk(
     *,
     registered_iou: float,
@@ -1573,6 +1600,7 @@ def _selected_edge_summary(
         is_prior = edge in track2p_prior_edges
         return {
             "is_track2p_prior": int(is_prior),
+            "track2p_prior_risk": 0.0,
             "summary": (
                 f"{int(matrices.source_session)}:{source_roi}->{int(target_session)}:{target}"
                 f"|prior={int(is_prior)}|missing_features=1"
@@ -1623,7 +1651,11 @@ def _selected_edge_summary(
         f"|local={_diagnostic_float(local_deformation)}"
         f"|cell={_diagnostic_float(cell_probability)}"
     )
-    return {"is_track2p_prior": int(is_prior), "summary": summary}
+    return {
+        "is_track2p_prior": int(is_prior),
+        "track2p_prior_risk": float(prior_risk),
+        "summary": summary,
+    }
 
 
 def _diagnostic_float(value: float) -> str:
