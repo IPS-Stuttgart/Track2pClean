@@ -69,3 +69,9 @@ def test_calibration_inputs_are_validated():
         expected_calibration_error([0.5], [2])
     with pytest.raises(ValueError, match="positive integer"):
         expected_calibration_error([0.5], [1], n_bins=0)
+
+
+@pytest.mark.parametrize("n_bins", [True, 1.5, float("inf"), "2"])
+def test_calibration_n_bins_rejects_silent_coercions(n_bins):
+    with pytest.raises(ValueError, match="positive integer"):
+        expected_calibration_error([0.5], [1], n_bins=n_bins)
