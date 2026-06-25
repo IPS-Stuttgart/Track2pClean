@@ -15,6 +15,9 @@ from ._confidence_ordered_strict_gap_cli import (
 from ._empty_candidate_margin import (
     install_empty_candidate_gate_margin_fix as _install_empty_candidate_gate_margin_fix,
 )
+from ._empty_registered_roi_mask_validation import (
+    install_empty_registered_roi_mask_validation as _install_empty_registered_roi_mask_validation,
+)
 from ._fov_affine_validation import (
     install_fov_affine_warp_validation as _install_fov_affine_warp_validation,
 )
@@ -95,6 +98,7 @@ _install_registration_selection_validation()
 _install_registration_warp_validation()
 _install_strict_config_validation()
 _install_empty_candidate_gate_margin_fix()
+_install_empty_registered_roi_mask_validation()
 _install_matching_bundle_roi_index_validation()
 _install_session_gap_validation()
 _install_session_match_result_validation()
