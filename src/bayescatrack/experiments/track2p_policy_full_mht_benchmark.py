@@ -81,6 +81,7 @@ except ImportError as exc:  # pragma: no cover - stale PyRecEst environment
 
 METHOD = "track2p-policy-full-mht"
 SeedSource = Literal["reference", "all-cells", "track2p-output"]
+AssociationScoreMode = Literal["heuristic", "calibrated-likelihood"]
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,8 @@ class FullMHTConfig:
     min_edge_score: float = 0.25
     seed_source: SeedSource = "reference"
     max_seed_tracks: int | None = None
+    association_score_mode: AssociationScoreMode = "heuristic"
+    association_likelihood_weight: float = 1.0
     registered_iou_weight: float = 1.0
     shifted_iou_weight: float = 1.5
     area_ratio_weight: float = 0.25
@@ -162,6 +165,7 @@ class _FullMHTPairMatrices:
     local_deformation: np.ndarray
     growth_anchor_count: int
     growth_model_type: str
+    association_log_likelihood: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -433,6 +437,12 @@ def _run_subject_full_mht(
             mht_config.growth_anchor_min_cell_probability
         ),
         "track2p_full_mht_seed_source": str(mht_config.seed_source),
+        "track2p_full_mht_association_score_mode": str(
+            mht_config.association_score_mode
+        ),
+        "track2p_full_mht_association_likelihood_weight": float(
+            mht_config.association_likelihood_weight
+        ),
         "track2p_full_mht_n_seed_tracks": int(len(seed_rois)),
         "track2p_full_mht_n_output_tracks": int(output_tracks.shape[0]),
     }
@@ -789,6 +799,26 @@ def _sparse_pair_matrices(
         local_deformation=local_deformation,
         growth_anchor_count=int(growth_prior.anchor_count),
         growth_model_type=str(growth_prior.model_type),
+        association_log_likelihood=(
+            _association_log_likelihood_matrix(
+                registered_iou=registered_iou,
+                shifted_iou=shifted,
+                centroid_distance=distances,
+                area_ratio=area_ratios,
+                target_cell_probabilities=target_cell_probabilities,
+                threshold=float(
+                    rank._assignment_threshold(
+                        registered_iou, threshold_method=feature_cache.threshold_method
+                    )
+                ),
+                growth_residual=growth_residual,
+                growth_mahalanobis=growth_mahalanobis,
+                local_deformation=local_deformation,
+                config=config,
+            )
+            if config.association_score_mode == "calibrated-likelihood"
+            else None
+        ),
     )
     sparse_cache[cache_key] = matrices
     return matrices
@@ -860,6 +890,105 @@ def _growth_residual_matrices(
         config=config,
     )
     return residual, mahalanobis, prior
+
+
+def _association_log_likelihood_matrix(
+    *,
+    registered_iou: np.ndarray,
+    shifted_iou: np.ndarray,
+    centroid_distance: np.ndarray,
+    area_ratio: np.ndarray,
+    target_cell_probabilities: np.ndarray,
+    threshold: float,
+    growth_residual: np.ndarray,
+    growth_mahalanobis: np.ndarray,
+    local_deformation: np.ndarray,
+    config: FullMHTConfig,
+) -> np.ndarray:
+    registered = np.asarray(registered_iou, dtype=float)
+    shape = registered.shape
+    if len(shape) != 2:
+        raise ValueError("registered_iou must be a 2-D matrix")
+    output = np.zeros(shape, dtype=float)
+    if registered.size == 0:
+        return output
+
+    shifted = np.asarray(shifted_iou, dtype=float).reshape(shape)
+    target_cell = np.asarray(target_cell_probabilities, dtype=float).reshape(-1)
+    if target_cell.shape[0] != shape[1]:
+        target_cell = np.ones(shape[1], dtype=float)
+    cell_probability = np.tile(target_cell[None, :], (shape[0], 1))
+    candidate = np.isfinite(registered) & np.isfinite(shifted)
+    if not np.any(candidate):
+        return output
+
+    anchor_pairs = _mutual_growth_anchor_pairs(
+        registered_iou=registered,
+        shifted_iou=shifted,
+        target_cell_probabilities=target_cell,
+        config=config,
+    )
+    if len(anchor_pairs) < 2:
+        return output
+    anchor_mask = np.zeros(shape, dtype=bool)
+    for row, col in anchor_pairs:
+        anchor_mask[int(row), int(col)] = True
+    background = candidate & ~anchor_mask
+    if int(np.sum(background)) < 3:
+        return output
+
+    feature_specs = (
+        (registered, 0.05),
+        (shifted, 0.05),
+        (np.asarray(area_ratio, dtype=float).reshape(shape), 0.05),
+        (cell_probability, 0.05),
+        (registered - float(threshold), 0.05),
+        (-np.asarray(centroid_distance, dtype=float).reshape(shape), 1.0),
+        (-np.asarray(growth_residual, dtype=float).reshape(shape), 1.0),
+        (-np.asarray(growth_mahalanobis, dtype=float).reshape(shape), 0.5),
+        (-np.asarray(local_deformation, dtype=float).reshape(shape), 0.05),
+    )
+    used = np.zeros(shape, dtype=float)
+    for values, min_scale in feature_specs:
+        finite = candidate & np.isfinite(values)
+        positive_values = np.asarray(values[anchor_mask & finite], dtype=float)
+        background_values = np.asarray(values[background & finite], dtype=float)
+        if positive_values.size < 2 or background_values.size < 3:
+            continue
+        pos_location, pos_scale = _robust_location_scale(
+            positive_values, min_scale=float(min_scale)
+        )
+        bg_location, bg_scale = _robust_location_scale(
+            background_values, min_scale=float(min_scale)
+        )
+        if pos_location <= bg_location:
+            continue
+        feature_llr = _gaussian_log_density(
+            values, location=pos_location, scale=pos_scale
+        ) - _gaussian_log_density(values, location=bg_location, scale=bg_scale)
+        feature_llr = np.where(finite, np.clip(feature_llr, -4.0, 4.0), 0.0)
+        output += feature_llr
+        used += finite.astype(float)
+    return np.where(used > 0.0, output / np.maximum(1.0, np.sqrt(used)), 0.0)
+
+
+def _robust_location_scale(values: np.ndarray, *, min_scale: float) -> tuple[float, float]:
+    finite = np.asarray(values, dtype=float).reshape(-1)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return 0.0, max(float(min_scale), 1.0)
+    location = float(np.median(finite))
+    mad = float(np.median(np.abs(finite - location)))
+    scale = max(float(min_scale), 1.4826 * mad)
+    return location, scale
+
+
+def _gaussian_log_density(
+    values: np.ndarray, *, location: float, scale: float
+) -> np.ndarray:
+    safe_scale = max(float(scale), 1.0e-6)
+    standardized = (np.asarray(values, dtype=float) - float(location)) / safe_scale
+    return -0.5 * standardized**2 - np.log(safe_scale)
 
 
 def _fit_growth_prior_from_candidate_matrices(
@@ -1414,16 +1543,32 @@ def _edge_score(
         source_roi,
         target_roi,
     ) in track2p_prior_edges
-    score = 0.0
-    score += float(config.registered_iou_weight) * registered
-    score += float(config.shifted_iou_weight) * shifted
-    score += float(config.area_ratio_weight) * max(0.0, min(1.0, area_ratio))
-    score += float(config.cell_probability_weight) * max(0.0, min(1.0, cell_b))
-    score += float(config.threshold_margin_weight) * max(0.0, threshold_margin)
-    score -= float(config.centroid_distance_weight) * max(0.0, centroid)
-    score -= float(config.growth_residual_weight) * max(0.0, growth_residual)
-    score -= float(config.growth_mahalanobis_weight) * max(0.0, growth_mahalanobis)
-    score -= float(config.local_deformation_weight) * max(0.0, local_deformation)
+    if config.association_score_mode == "heuristic":
+        score = 0.0
+        score += float(config.registered_iou_weight) * registered
+        score += float(config.shifted_iou_weight) * shifted
+        score += float(config.area_ratio_weight) * max(0.0, min(1.0, area_ratio))
+        score += float(config.cell_probability_weight) * max(0.0, min(1.0, cell_b))
+        score += float(config.threshold_margin_weight) * max(0.0, threshold_margin)
+        score -= float(config.centroid_distance_weight) * max(0.0, centroid)
+        score -= float(config.growth_residual_weight) * max(0.0, growth_residual)
+        score -= float(config.growth_mahalanobis_weight) * max(0.0, growth_mahalanobis)
+        score -= float(config.local_deformation_weight) * max(0.0, local_deformation)
+    elif config.association_score_mode == "calibrated-likelihood":
+        score = float(config.association_likelihood_weight) * (
+            _association_log_likelihood_score(
+                sessions,
+                matrices,
+                target_session=int(target_session),
+                source_local=int(source_local),
+                target_local=int(target_local),
+                config=config,
+            )
+        )
+    else:
+        raise ValueError(
+            f"Unsupported association_score_mode: {config.association_score_mode!r}"
+        )
     if track2p_prior:
         score += float(config.track2p_prior_weight)
         score -= float(config.track2p_prior_risk_scan_weight) * (
@@ -1436,6 +1581,39 @@ def _edge_score(
     elif track2p_prior_edges:
         score -= float(config.track2p_non_prior_penalty)
     return float(score)
+
+
+def _association_log_likelihood_score(
+    sessions: Sequence[Any],
+    matrices: _FullMHTPairMatrices,
+    *,
+    target_session: int,
+    source_local: int,
+    target_local: int,
+    config: FullMHTConfig,
+) -> float:
+    likelihood = matrices.association_log_likelihood
+    if likelihood is None:
+        target_cell_probabilities = np.asarray(
+            [
+                _cell_probability(sessions, int(target_session), int(roi))
+                for roi in np.asarray(matrices.target_indices, dtype=int)
+            ],
+            dtype=float,
+        )
+        likelihood = _association_log_likelihood_matrix(
+            registered_iou=matrices.registered_iou,
+            shifted_iou=matrices.shifted_iou,
+            centroid_distance=matrices.centroid_distance,
+            area_ratio=matrices.area_ratio,
+            target_cell_probabilities=target_cell_probabilities,
+            threshold=float(matrices.threshold),
+            growth_residual=matrices.growth_residual,
+            growth_mahalanobis=matrices.growth_mahalanobis,
+            local_deformation=matrices.local_deformation,
+            config=config,
+        )
+    return _finite_float(likelihood[int(source_local), int(target_local)], 0.0)
 
 
 def _select_final_hypothesis(
@@ -1788,6 +1966,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="reference",
     )
     parser.add_argument("--max-seed-tracks", type=int, default=None)
+    parser.add_argument(
+        "--association-score-mode",
+        choices=("heuristic", "calibrated-likelihood"),
+        default="heuristic",
+    )
+    parser.add_argument("--association-likelihood-weight", type=float, default=1.0)
     parser.add_argument("--registered-iou-weight", type=float, default=1.0)
     parser.add_argument("--shifted-iou-weight", type=float, default=1.5)
     parser.add_argument("--area-ratio-weight", type=float, default=0.25)
@@ -1867,6 +2051,10 @@ def main(argv: list[str] | None = None) -> int:
             min_edge_score=float(args.min_edge_score),
             seed_source=cast(SeedSource, args.seed_source),
             max_seed_tracks=args.max_seed_tracks,
+            association_score_mode=cast(
+                AssociationScoreMode, args.association_score_mode
+            ),
+            association_likelihood_weight=float(args.association_likelihood_weight),
             registered_iou_weight=float(args.registered_iou_weight),
             shifted_iou_weight=float(args.shifted_iou_weight),
             area_ratio_weight=float(args.area_ratio_weight),

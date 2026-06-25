@@ -357,6 +357,91 @@ def test_full_mht_track2p_prior_edge_risk_penalizes_suspicious_prior_edge(monkey
     assert scan_disabled == pytest.approx(without_prior + 2.0)
 
 
+def test_full_mht_calibrated_likelihood_rewards_anchor_like_edges():
+    registered = np.asarray(
+        [[0.92, 0.12, 0.10], [0.11, 0.89, 0.13], [0.14, 0.10, 0.87]],
+        dtype=float,
+    )
+    shifted = np.asarray(
+        [[0.82, 0.05, 0.05], [0.05, 0.79, 0.06], [0.05, 0.04, 0.77]],
+        dtype=float,
+    )
+    area = np.asarray(
+        [[0.95, 0.40, 0.35], [0.42, 0.93, 0.38], [0.36, 0.41, 0.91]],
+        dtype=float,
+    )
+    distance = np.asarray(
+        [[1.0, 11.0, 12.0], [10.0, 1.2, 11.0], [12.0, 10.0, 0.8]],
+        dtype=float,
+    )
+    residual = np.asarray(
+        [[0.1, 5.0, 6.0], [5.5, 0.2, 5.0], [6.0, 5.2, 0.2]],
+        dtype=float,
+    )
+    mahal = np.asarray(
+        [[0.1, 4.0, 4.5], [4.3, 0.2, 4.0], [4.5, 4.2, 0.2]],
+        dtype=float,
+    )
+    local = np.asarray(
+        [[0.01, 0.50, 0.60], [0.40, 0.02, 0.50], [0.50, 0.45, 0.01]],
+        dtype=float,
+    )
+
+    likelihood = full_mht._association_log_likelihood_matrix(
+        registered_iou=registered,
+        shifted_iou=shifted,
+        centroid_distance=distance,
+        area_ratio=area,
+        target_cell_probabilities=np.asarray([0.9, 0.9, 0.9], dtype=float),
+        threshold=0.0,
+        growth_residual=residual,
+        growth_mahalanobis=mahal,
+        local_deformation=local,
+        config=full_mht.FullMHTConfig(),
+    )
+
+    diagonal = np.diag(likelihood)
+    off_diagonal = likelihood[~np.eye(3, dtype=bool)]
+    assert float(np.min(diagonal)) > float(np.max(off_diagonal))
+    assert float(np.min(diagonal)) > 0.0
+
+
+def test_full_mht_edge_score_can_use_calibrated_likelihood_matrix(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=0,
+        target_session=1,
+        source_indices=np.asarray([5], dtype=int),
+        target_indices=np.asarray([9], dtype=int),
+        registered_iou=np.asarray([[0.10]], dtype=float),
+        shifted_iou=np.asarray([[0.05]], dtype=float),
+        centroid_distance=np.asarray([[50.0]], dtype=float),
+        area_ratio=np.asarray([[0.1]], dtype=float),
+        threshold=0.0,
+        growth_residual=np.asarray([[10.0]], dtype=float),
+        growth_mahalanobis=np.asarray([[10.0]], dtype=float),
+        local_deformation=np.asarray([[1.0]], dtype=float),
+        growth_anchor_count=0,
+        growth_model_type="identity_no_anchors",
+        association_log_likelihood=np.asarray([[2.0]], dtype=float),
+    )
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *args, **kwargs: 0.0)
+
+    score = full_mht._edge_score(
+        (object(), object()),
+        matrices,
+        target_session=1,
+        source_local=0,
+        target_local=0,
+        config=full_mht.FullMHTConfig(
+            association_score_mode="calibrated-likelihood",
+            association_likelihood_weight=2.5,
+        ),
+        track2p_prior_edges=frozenset(),
+    )
+
+    assert score == pytest.approx(5.0)
+
+
 def test_full_mht_terminal_history_risk_can_rerank_completed_hypotheses(monkeypatch):
     matrices = full_mht._FullMHTPairMatrices(
         source_session=0,
