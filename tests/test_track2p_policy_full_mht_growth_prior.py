@@ -670,6 +670,31 @@ def test_full_mht_terminal_identity_history_risk_can_rerank_hypotheses():
     assert metadata["terminal_adjusted_score"] == pytest.approx(8.5)
 
 
+def test_full_mht_beam_pruning_score_uses_terminal_identity_risk():
+    risky = full_mht._MHTHypothesis(
+        np.asarray([[5, 9]], dtype=int),
+        score=10.0,
+        history=({"no_prior_successor_continuations": 3},),
+    )
+    safer = full_mht._MHTHypothesis(
+        np.asarray([[5, 10]], dtype=int),
+        score=8.0,
+        history=({"no_prior_successor_continuations": 0},),
+    )
+
+    default = full_mht.FullMHTConfig()
+    risk_aware = full_mht.FullMHTConfig(
+        terminal_no_prior_successor_history_weight=1.0
+    )
+
+    assert full_mht._beam_pruning_score(risky, config=default) > (
+        full_mht._beam_pruning_score(safer, config=default)
+    )
+    assert full_mht._beam_pruning_score(risky, config=risk_aware) < (
+        full_mht._beam_pruning_score(safer, config=risk_aware)
+    )
+
+
 def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     active = full_mht._ActiveTrackSource(
         row_index=0, source_session=1, source_roi=5, gap_length=0

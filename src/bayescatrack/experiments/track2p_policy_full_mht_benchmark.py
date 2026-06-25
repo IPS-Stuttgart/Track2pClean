@@ -1278,7 +1278,7 @@ def _advance_scan(
                 track2p_prior_edges=track2p_prior_edges,
             )
         )
-    expanded.sort(key=lambda hyp: -float(hyp.score))
+    expanded.sort(key=lambda hyp: -_beam_pruning_score(hyp, config=config))
     return expanded[: max(1, int(config.beam_width))]
 
 
@@ -1578,6 +1578,12 @@ def _expand_hypothesis_scan(
             )
         )
     return output
+
+
+def _beam_pruning_score(hypothesis: _MHTHypothesis, *, config: FullMHTConfig) -> float:
+    return float(hypothesis.score) - _terminal_identity_history_risk(
+        hypothesis, config=config
+    )
 
 
 def _edge_score(
