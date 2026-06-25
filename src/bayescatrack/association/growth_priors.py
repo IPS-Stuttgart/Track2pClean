@@ -38,12 +38,12 @@ def fit_affine_growth_transform(
 ) -> np.ndarray:
     """Fit an affine transform mapping source points to target points."""
 
-    source = np.asarray(source_points_xy, dtype=float)
-    target = np.asarray(target_points_xy, dtype=float)
+    source = _as_xy_point_matrix(source_points_xy, name="source_points_xy")
+    target = _as_xy_point_matrix(target_points_xy, name="target_points_xy")
     regularization = _nonnegative_float(regularization, name="regularization")
-    if source.shape != target.shape or source.ndim != 2 or source.shape[1] != 2:
+    if source.shape != target.shape:
         raise ValueError(
-            "source_points_xy and target_points_xy must both have shape (n, 2)"
+            "source_points_xy and target_points_xy must describe the same number of xy points"
         )
     if source.shape[0] < 3:
         raise ValueError("At least three point pairs are required for affine growth")
@@ -69,12 +69,12 @@ def affine_growth_residuals(
 ) -> np.ndarray:
     """Return per-pair residual distances under an affine growth field."""
 
-    source = np.asarray(source_points_xy, dtype=float)
-    target = np.asarray(target_points_xy, dtype=float)
+    source = _as_xy_point_matrix(source_points_xy, name="source_points_xy")
+    target = _as_xy_point_matrix(target_points_xy, name="target_points_xy")
     matrix = np.asarray(affine, dtype=float)
-    if source.shape != target.shape or source.ndim != 2 or source.shape[1] != 2:
+    if source.shape != target.shape:
         raise ValueError(
-            "source_points_xy and target_points_xy must both have shape (n, 2)"
+            "source_points_xy and target_points_xy must describe the same number of xy points"
         )
     if matrix.shape != (2, 3):
         raise ValueError("affine must have shape (2, 3)")
@@ -91,8 +91,8 @@ def affine_growth_penalty_matrix(
 ) -> np.ndarray:
     """Return normalized displacement residuals under an affine growth field."""
 
-    ref = np.asarray(reference_centroids_xy, dtype=float)
-    meas = np.asarray(measurement_centroids_xy, dtype=float)
+    ref = _as_xy_point_matrix(reference_centroids_xy, name="reference_centroids_xy")
+    meas = _as_xy_point_matrix(measurement_centroids_xy, name="measurement_centroids_xy")
     matrix = np.asarray(affine_xy, dtype=float)
     scale = _positive_float(scale, name="scale")
     if matrix.shape != (2, 3):
@@ -133,8 +133,8 @@ def radial_growth_penalty_matrix(
 ) -> np.ndarray:
     """Return penalty for radial displacement inconsistency."""
 
-    ref = np.asarray(reference_centroids_xy, dtype=float)
-    meas = np.asarray(measurement_centroids_xy, dtype=float)
+    ref = _as_xy_point_matrix(reference_centroids_xy, name="reference_centroids_xy")
+    meas = _as_xy_point_matrix(measurement_centroids_xy, name="measurement_centroids_xy")
     scale = _positive_float(scale, name="scale")
     if center_xy is None:
         center = np.nanmean(ref, axis=0) if ref.size else np.zeros((2,), dtype=float)
@@ -223,6 +223,19 @@ def estimate_growth_from_track_rows(
         np.vstack(target_points),
         regularization=cfg.regularization,
     )
+
+
+def _as_xy_point_matrix(values: Any, *, name: str) -> np.ndarray:
+    """Normalize xy point arrays from either (n, 2) or coordinate-row (2, n)."""
+
+    points = np.asarray(values, dtype=float)
+    if points.ndim != 2:
+        raise ValueError(f"{name} must have shape (n, 2) or (2, n)")
+    if points.shape[1] == 2:
+        return np.ascontiguousarray(points, dtype=float)
+    if points.shape[0] == 2:
+        return np.ascontiguousarray(points.T, dtype=float)
+    raise ValueError(f"{name} must have shape (n, 2) or (2, n)")
 
 
 def _integer_track_row_matrix(track_rows: Any) -> np.ndarray:
