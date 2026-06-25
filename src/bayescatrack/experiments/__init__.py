@@ -6,6 +6,9 @@ from . import _diag_defaults as _diag_defaults
 from . import (
     _triplet_support_benchmark_integration as _triplet_support_benchmark_integration,
 )
+from ._benchmark_roi_index_validation import (
+    install_benchmark_roi_index_validation,
+)
 from ._calibration_feature_registry_integration import (
     install_calibration_feature_registry_integration,
 )
@@ -23,6 +26,7 @@ from ._teacher_rescue_repair_preset_manifest_integration import (
 )
 
 _triplet_support_benchmark_integration.install_track2p_benchmark_triplet_support_integration()
+install_benchmark_roi_index_validation()
 install_calibration_feature_registry_integration()
 install_teacher_rescue_manifest_integration()
 install_teacher_rescue_edit_cap_manifest_integration()
