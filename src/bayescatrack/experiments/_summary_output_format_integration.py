@@ -50,7 +50,11 @@ def _patch_cleanup_parser_factory(module: Any) -> None:
         return parser
 
     setattr(_build_arg_parser_with_summary_context, _MARKER, True)
-    setattr(_build_arg_parser_with_summary_context, "_bayescatrack_original", original_build_arg_parser)
+    setattr(
+        _build_arg_parser_with_summary_context,
+        "_bayescatrack_original",
+        original_build_arg_parser,
+    )
     module.build_arg_parser = _build_arg_parser_with_summary_context
 
 
@@ -68,7 +72,11 @@ def _patch_parser_parse_args(parser: argparse.ArgumentParser) -> None:
         return parsed
 
     setattr(_parse_args_with_summary_context, _MARKER, True)
-    setattr(_parse_args_with_summary_context, "_bayescatrack_original", original_parse_args)
+    setattr(
+        _parse_args_with_summary_context,
+        "_bayescatrack_original",
+        original_parse_args,
+    )
     parser.parse_args = _parse_args_with_summary_context
 
 
@@ -95,16 +103,26 @@ def _patched_write_rows(original_write_rows: Any) -> Any:
     ) -> None:
         selected_format: str = str(output_format)
         context = _SUMMARY_OUTPUT_CONTEXT.get()
+        is_summary_output = False
         if context is not None:
             summary_output, summary_format = context
-            if Path(output_path) == summary_output:
+            if Path(output_path) == Path(summary_output):
                 selected_format = summary_format
-        original_write_rows(
-            rows,
-            output_path,
-            output_format=cast(RowOutputFormat, selected_format),
-        )
+                is_summary_output = True
+        try:
+            original_write_rows(
+                rows,
+                output_path,
+                output_format=cast(RowOutputFormat, selected_format),
+            )
+        finally:
+            if is_summary_output:
+                _SUMMARY_OUTPUT_CONTEXT.set(None)
 
     setattr(_write_rows_with_summary_context, _MARKER, True)
-    setattr(_write_rows_with_summary_context, "_bayescatrack_original", original_write_rows)
+    setattr(
+        _write_rows_with_summary_context,
+        "_bayescatrack_original",
+        original_write_rows,
+    )
     return _write_rows_with_summary_context
