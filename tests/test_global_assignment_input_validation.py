@@ -67,11 +67,11 @@ def test_global_assignment_validates_and_normalizes_edge_metadata(
 
     run = assignment.solve_global_assignment_from_pairwise_costs(
         {
-            (0.0, "1"): np.zeros((2, 3)),
+            (0.0, np.int64(1)): np.zeros((2, 3)),
             (1, 2): np.ones((3, 1)),
         },
-        session_sizes=[2.0, "3", 1],
-        session_edges=[(0, 1), (1.0, "2")],
+        session_sizes=[2.0, np.int64(3), 1],
+        session_edges=[(0, 1), (1.0, np.int64(2))],
         start_cost=2.5,
         end_cost=3.5,
         gap_penalty=0.25,
@@ -120,6 +120,28 @@ def test_global_assignment_rejects_invalid_solver_scalars(
             {(0, 1): np.zeros((1, 1))},
             session_sizes=(1, 1),
             **kwargs,
+        )
+
+
+@pytest.mark.parametrize(
+    ("pairwise_costs", "session_sizes", "session_edges", "match"),
+    [
+        ({(0, "1"): np.zeros((2, 3))}, (2, 3), None, "pairwise_costs target"),
+        ({(0, 1): np.zeros((2, 3))}, (2, "3"), None, "session_sizes"),
+        ({(0, 1): np.zeros((2, 3))}, (2, 3), ((0, "1"),), "session_edges target"),
+    ],
+)
+def test_global_assignment_rejects_string_integer_metadata(
+    pairwise_costs: dict[Any, np.ndarray],
+    session_sizes: tuple[Any, ...],
+    session_edges: tuple[Any, ...] | None,
+    match: str,
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        assignment.solve_global_assignment_from_pairwise_costs(
+            pairwise_costs,
+            session_sizes=session_sizes,
+            session_edges=session_edges,
         )
 
 
