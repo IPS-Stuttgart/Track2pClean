@@ -26,6 +26,7 @@ _OUTPUT_SHAPE_ERROR = (
 _GRID_SHAPE_ERROR = "grid_shape must contain exactly two positive integer dimensions"
 _MIN_TILE_SIZE_ERROR = "min_tile_size must be a positive integer"
 _MAX_SHIFT_FRACTION_ERROR = "max_shift_fraction must be a finite non-negative value"
+_SUBTRACT_MEAN_ERROR = "subtract_mean must be a boolean"
 
 
 def install_fov_affine_warp_validation() -> None:
@@ -125,6 +126,11 @@ def _normalize_output_shape_kwarg(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_estimate_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     normalized_kwargs = dict(kwargs)
+    if "subtract_mean" in normalized_kwargs:
+        normalized_kwargs["subtract_mean"] = _normalize_bool(
+            normalized_kwargs["subtract_mean"],
+            _SUBTRACT_MEAN_ERROR,
+        )
     if "grid_shape" in normalized_kwargs:
         normalized_kwargs["grid_shape"] = _normalize_grid_shape(
             normalized_kwargs["grid_shape"]
@@ -180,6 +186,12 @@ def _normalize_output_shape_component(value: Any) -> int:
     if integer_value < 0:
         raise ValueError(_OUTPUT_SHAPE_ERROR)
     return integer_value
+
+
+def _normalize_bool(value: Any, error_message: str) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError(error_message)
 
 
 def _normalize_grid_shape(grid_shape: Any) -> tuple[int, int]:
