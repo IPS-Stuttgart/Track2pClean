@@ -1017,6 +1017,12 @@ def _coverage_audit_rows(
         for path in selected_paths
         for source_id, target_id in path.edge_ids
     }
+    selected_successor_by_source = {
+        int(source_id): int(target_id) for source_id, target_id in selected_edges
+    }
+    selected_predecessor_by_target = {
+        int(target_id): int(source_id) for source_id, target_id in selected_edges
+    }
 
     rows: list[dict[str, Any]] = []
     summary = {
@@ -1031,6 +1037,11 @@ def _coverage_audit_rows(
         "tracklet_graph_audit_break_solver_rejected": 0,
         "tracklet_graph_audit_break_candidate_missing": 0,
         "tracklet_graph_audit_break_join_ineligible": 0,
+        "tracklet_graph_audit_failure_tracklet_builder_too_strict": 0,
+        "tracklet_graph_audit_failure_graph_candidate_missing": 0,
+        "tracklet_graph_audit_failure_solver_too_conservative": 0,
+        "tracklet_graph_audit_failure_conflict_issue": 0,
+        "tracklet_graph_audit_recovered_correct_joins": 0,
         "tracklet_graph_audit_tracks_split_0": 0,
         "tracklet_graph_audit_tracks_split_1": 0,
         "tracklet_graph_audit_tracks_split_2": 0,
@@ -1046,6 +1057,8 @@ def _coverage_audit_rows(
             tracklets_by_id=tracklets_by_id,
             candidate_edges=candidate_edges,
             selected_edges=selected_edges,
+            selected_successor_by_source=selected_successor_by_source,
+            selected_predecessor_by_target=selected_predecessor_by_target,
             seed_session=int(seed_session),
         )
         rows.append(track_row)
@@ -1075,6 +1088,8 @@ def _reference_track_coverage_rows(
     tracklets_by_id: Mapping[int, Tracklet],
     candidate_edges: set[tuple[int, int]],
     selected_edges: set[tuple[int, int]],
+    selected_successor_by_source: Mapping[int, int],
+    selected_predecessor_by_target: Mapping[int, int],
     seed_session: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     observations = [
@@ -1123,6 +1138,8 @@ def _reference_track_coverage_rows(
                 tracklets_by_id=tracklets_by_id,
                 candidate_edges=candidate_edges,
                 selected_edges=selected_edges,
+                selected_successor_by_source=selected_successor_by_source,
+                selected_predecessor_by_target=selected_predecessor_by_target,
             )
         )
     covered_tracklet_ids = [
@@ -1166,6 +1183,8 @@ def _reference_break_row(
     tracklets_by_id: Mapping[int, Tracklet],
     candidate_edges: set[tuple[int, int]],
     selected_edges: set[tuple[int, int]],
+    selected_successor_by_source: Mapping[int, int],
+    selected_predecessor_by_target: Mapping[int, int],
 ) -> dict[str, Any]:
     source_tracklet = (
         tracklets_by_id.get(int(source_tracklet_id))
@@ -1201,6 +1220,12 @@ def _reference_break_row(
         reason = "correct_join_present_solver_rejected"
     else:
         reason = "correct_join_selected"
+    failure_class = _reference_break_failure_class(
+        reason,
+        edge_key=edge_key,
+        selected_successor_by_source=selected_successor_by_source,
+        selected_predecessor_by_target=selected_predecessor_by_target,
+    )
     return {
         "row_type": "reference_break",
         "subject": subject,
@@ -1232,7 +1257,41 @@ def _reference_break_row(
         "correct_join_selected": int(join_selected),
         "solver_rejected_correct_join": int(join_present and not join_selected),
         "break_reason": reason,
+        "failure_class": failure_class,
     }
+
+
+def _reference_break_failure_class(
+    reason: str,
+    *,
+    edge_key: tuple[int, int],
+    selected_successor_by_source: Mapping[int, int],
+    selected_predecessor_by_target: Mapping[int, int],
+) -> str:
+    if reason == "correct_join_selected":
+        return "recovered_correct_join"
+    if reason in {
+        "source_observation_uncovered",
+        "target_observation_uncovered",
+        "join_ineligible_requires_split_or_overlap",
+    }:
+        return "tracklet_builder_too_strict"
+    if reason == "correct_join_candidate_missing":
+        return "graph_candidate_missing"
+    if reason == "correct_join_present_solver_rejected":
+        source_id, target_id = edge_key
+        selected_target = selected_successor_by_source.get(int(source_id))
+        selected_source = selected_predecessor_by_target.get(int(target_id))
+        if (
+            selected_target is not None
+            and int(selected_target) != int(target_id)
+        ) or (
+            selected_source is not None
+            and int(selected_source) != int(source_id)
+        ):
+            return "conflict_issue"
+        return "solver_too_conservative"
+    return "unclassified"
 
 
 def _tracklet_fragment_count(tracklet_ids: Sequence[int | None]) -> int:
@@ -1295,6 +1354,17 @@ def _accumulate_coverage_summary(
             summary["tracklet_graph_audit_break_candidate_missing"] += 1
         elif reason == "join_ineligible_requires_split_or_overlap":
             summary["tracklet_graph_audit_break_join_ineligible"] += 1
+        failure_class = str(row.get("failure_class", ""))
+        if failure_class == "tracklet_builder_too_strict":
+            summary["tracklet_graph_audit_failure_tracklet_builder_too_strict"] += 1
+        elif failure_class == "graph_candidate_missing":
+            summary["tracklet_graph_audit_failure_graph_candidate_missing"] += 1
+        elif failure_class == "solver_too_conservative":
+            summary["tracklet_graph_audit_failure_solver_too_conservative"] += 1
+        elif failure_class == "conflict_issue":
+            summary["tracklet_graph_audit_failure_conflict_issue"] += 1
+        elif failure_class == "recovered_correct_join":
+            summary["tracklet_graph_audit_recovered_correct_joins"] += 1
 
 
 def _edge_feature_row(

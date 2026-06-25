@@ -152,6 +152,9 @@ def test_coverage_audit_splits_candidate_presence_from_solver_rejection():
     assert summary["tracklet_graph_audit_break_correct_join_present"] == 2
     assert summary["tracklet_graph_audit_break_correct_join_selected"] == 1
     assert summary["tracklet_graph_audit_break_solver_rejected"] == 1
+    assert summary["tracklet_graph_audit_failure_solver_too_conservative"] == 1
+    assert summary["tracklet_graph_audit_failure_conflict_issue"] == 0
+    assert summary["tracklet_graph_audit_recovered_correct_joins"] == 1
     assert summary["tracklet_graph_audit_tracks_split_3"] == 1
     break_reasons = [
         row["break_reason"] for row in rows if row.get("row_type") == "reference_break"
@@ -159,6 +162,15 @@ def test_coverage_audit_splits_candidate_presence_from_solver_rejection():
     assert break_reasons == [
         "correct_join_present_solver_rejected",
         "correct_join_selected",
+    ]
+    failure_classes = [
+        row["failure_class"]
+        for row in rows
+        if row.get("row_type") == "reference_break"
+    ]
+    assert failure_classes == [
+        "solver_too_conservative",
+        "recovered_correct_join",
     ]
 
 
