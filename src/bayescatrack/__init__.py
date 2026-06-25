@@ -45,6 +45,9 @@ from ._suite2p_validation import (
 from ._tracking_start_roi_validation import (
     install_tracking_start_roi_validation as _install_tracking_start_roi_validation,
 )
+from ._track_row_fill_value_validation import (
+    install_track_row_fill_value_validation as _install_track_row_fill_value_validation,
+)
 from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
@@ -85,5 +88,6 @@ _install_empty_candidate_gate_margin_fix()
 _install_session_gap_validation()
 _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
+_install_track_row_fill_value_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
