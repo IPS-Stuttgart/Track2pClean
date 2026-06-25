@@ -121,6 +121,8 @@ class FullMHTConfig:
     track2p_prior_risk_registered_iou_floor: float = 0.5
     track2p_prior_risk_scan_weight: float = 1.0
     terminal_history_risk_weight: float = 0.0
+    terminal_non_prior_history_weight: float = 0.0
+    terminal_no_prior_successor_history_weight: float = 0.0
     growth_anchor_min_registered_iou: float = 0.55
     growth_anchor_min_shifted_iou: float = 0.30
     growth_anchor_min_cell_probability: float = 0.80
@@ -433,8 +435,17 @@ def _run_subject_full_mht(
         "track2p_full_mht_terminal_history_risk_weight": float(
             mht_config.terminal_history_risk_weight
         ),
+        "track2p_full_mht_terminal_non_prior_history_weight": float(
+            mht_config.terminal_non_prior_history_weight
+        ),
+        "track2p_full_mht_terminal_no_prior_successor_history_weight": float(
+            mht_config.terminal_no_prior_successor_history_weight
+        ),
         "track2p_full_mht_terminal_history_risk": float(
             final_selection["terminal_history_risk"]
+        ),
+        "track2p_full_mht_terminal_identity_history_risk": float(
+            final_selection["terminal_identity_history_risk"]
         ),
         "track2p_full_mht_terminal_adjusted_score": float(
             final_selection["terminal_adjusted_score"]
@@ -478,6 +489,9 @@ def _run_subject_full_mht(
         "final_hypotheses": int(len(hypotheses)),
         "best_score": float(best.score),
         "terminal_history_risk": float(final_selection["terminal_history_risk"]),
+        "terminal_identity_history_risk": float(
+            final_selection["terminal_identity_history_risk"]
+        ),
         "terminal_adjusted_score": float(final_selection["terminal_adjusted_score"]),
         "terminal_selected_rank": int(final_selection["terminal_selected_rank"]),
         "pairwise_f1": float(scores.get("pairwise_f1", float("nan"))),
@@ -1692,10 +1706,12 @@ def _select_final_hypothesis(
 ) -> tuple[_MHTHypothesis, dict[str, float | int]]:
     if not hypotheses:
         raise ValueError("Full MHT produced no terminal hypotheses")
-    weight = float(config.terminal_history_risk_weight)
-    if weight <= 0.0:
+    prior_weight = float(config.terminal_history_risk_weight)
+    identity_weight = _terminal_identity_history_weight(config)
+    if prior_weight <= 0.0 and identity_weight <= 0.0:
         return hypotheses[0], {
             "terminal_history_risk": 0.0,
+            "terminal_identity_history_risk": 0.0,
             "terminal_adjusted_score": float(hypotheses[0].score),
             "terminal_selected_rank": 1,
         }
@@ -1709,7 +1725,12 @@ def _select_final_hypothesis(
         config=config,
         track2p_prior_edges=track2p_prior_edges,
     )
-    best_adjusted = float(best.score) - weight * best_risk
+    best_identity_risk = _terminal_identity_history_risk(best, config=config)
+    best_adjusted = (
+        float(best.score)
+        - prior_weight * best_risk
+        - best_identity_risk
+    )
     for rank_index, hypothesis in enumerate(hypotheses[1:], start=2):
         risk = _terminal_history_risk(
             hypothesis,
@@ -1718,15 +1739,18 @@ def _select_final_hypothesis(
             config=config,
             track2p_prior_edges=track2p_prior_edges,
         )
-        adjusted = float(hypothesis.score) - weight * risk
+        identity_risk = _terminal_identity_history_risk(hypothesis, config=config)
+        adjusted = float(hypothesis.score) - prior_weight * risk - identity_risk
         if adjusted > best_adjusted:
             best = hypothesis
             best_rank = int(rank_index)
             best_risk = float(risk)
+            best_identity_risk = float(identity_risk)
             best_adjusted = float(adjusted)
 
     return best, {
         "terminal_history_risk": float(best_risk),
+        "terminal_identity_history_risk": float(best_identity_risk),
         "terminal_adjusted_score": float(best_adjusted),
         "terminal_selected_rank": int(best_rank),
     }
@@ -1803,6 +1827,32 @@ def _terminal_history_risk_from_scan_history(
             return None
         total += _finite_float(scan.get("selected_prior_risk", 0.0), 0.0)
     return float(total)
+
+
+def _terminal_identity_history_weight(config: FullMHTConfig) -> float:
+    return max(
+        0.0,
+        float(config.terminal_non_prior_history_weight),
+        float(config.terminal_no_prior_successor_history_weight),
+    )
+
+
+def _terminal_identity_history_risk(
+    hypothesis: _MHTHypothesis,
+    *,
+    config: FullMHTConfig,
+) -> float:
+    if not hypothesis.history:
+        return 0.0
+    risk = 0.0
+    for scan in hypothesis.history:
+        risk += float(config.terminal_non_prior_history_weight) * _finite_float(
+            scan.get("selected_non_prior_edges", 0.0), 0.0
+        )
+        risk += float(
+            config.terminal_no_prior_successor_history_weight
+        ) * _finite_float(scan.get("no_prior_successor_continuations", 0.0), 0.0)
+    return float(risk)
 
 
 def _track2p_prior_edge_risk(
@@ -1968,6 +2018,12 @@ def _all_summary_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "terminal_history_risk": float(
             sum(float(row.get("terminal_history_risk", 0.0)) for row in rows)
         ),
+        "terminal_identity_history_risk": float(
+            sum(
+                float(row.get("terminal_identity_history_risk", 0.0))
+                for row in rows
+            )
+        ),
         "terminal_adjusted_score": float(
             sum(float(row.get("terminal_adjusted_score", 0.0)) for row in rows)
         ),
@@ -2082,6 +2138,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--track2p-prior-risk-scan-weight", type=float, default=1.0)
     parser.add_argument("--terminal-history-risk-weight", type=float, default=0.0)
+    parser.add_argument("--terminal-non-prior-history-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--terminal-no-prior-successor-history-weight", type=float, default=0.0
+    )
     parser.add_argument("--growth-anchor-min-registered-iou", type=float, default=0.55)
     parser.add_argument("--growth-anchor-min-shifted-iou", type=float, default=0.30)
     parser.add_argument(
@@ -2172,6 +2232,12 @@ def main(argv: list[str] | None = None) -> int:
                 args.track2p_prior_risk_scan_weight
             ),
             terminal_history_risk_weight=float(args.terminal_history_risk_weight),
+            terminal_non_prior_history_weight=float(
+                args.terminal_non_prior_history_weight
+            ),
+            terminal_no_prior_successor_history_weight=float(
+                args.terminal_no_prior_successor_history_weight
+            ),
             growth_anchor_min_registered_iou=float(
                 args.growth_anchor_min_registered_iou
             ),
