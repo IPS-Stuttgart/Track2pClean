@@ -1,8 +1,8 @@
-"""Strict validation for pairwise-cost return-component controls.
+"""Strict validation for pairwise-cost boolean controls.
 
-Pairwise-cost wrappers dispatch on ``return_components`` before the base bridge
-method sees it.  Relying on Python truthiness lets malformed values such as
-``"false"`` or ``1`` silently alter the return type.
+Pairwise-cost wrappers inspect boolean flags before the base bridge method sees
+them.  Rejecting ambiguous values keeps pairwise-cost return and IoU behavior
+explicit.
 """
 
 from __future__ import annotations
@@ -12,12 +12,12 @@ from typing import Any
 
 import numpy as np
 
-_PATCH_MARKER = "_bayescatrack_return_components_validation_patch"
-_ERROR_MESSAGE = "return_components must be a boolean"
+_PATCH_MARKER = "_bayescatrack_pairwise_bool_control_validation_patch"
+_BOOL_CONTROL_NAMES = ("return_components", "soft_iou")
 
 
 def install_return_components_validation(bridge_module: Any) -> None:
-    """Install idempotent validation for pairwise-cost return controls."""
+    """Install idempotent validation for pairwise-cost boolean controls."""
 
     original = bridge_module.CalciumPlaneData.build_pairwise_cost_matrix
     if _method_chain_has_patch(original):
@@ -30,9 +30,16 @@ def install_return_components_validation(bridge_module: Any) -> None:
         *args: Any,
         **kwargs: Any,
     ) -> Any:
-        if "return_components" in kwargs:
-            kwargs = dict(kwargs)
-            kwargs["return_components"] = _strict_bool(kwargs["return_components"])
+        normalized_kwargs: dict[str, Any] | None = None
+        for control_name in _BOOL_CONTROL_NAMES:
+            if control_name in kwargs:
+                if normalized_kwargs is None:
+                    normalized_kwargs = dict(kwargs)
+                normalized_kwargs[control_name] = _strict_bool(
+                    kwargs[control_name], name=control_name
+                )
+        if normalized_kwargs is not None:
+            kwargs = normalized_kwargs
         return original(self, other, *args, **kwargs)
 
     setattr(
@@ -64,10 +71,10 @@ def _method_chain_has_patch(method: Any) -> bool:
     return False
 
 
-def _strict_bool(value: Any) -> bool:
+def _strict_bool(value: Any, *, name: str) -> bool:
     if isinstance(value, (bool, np.bool_)):
         return bool(value)
-    raise ValueError(_ERROR_MESSAGE)
+    raise ValueError(f"{name} must be a boolean")
 
 
 __all__ = ["install_return_components_validation"]
