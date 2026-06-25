@@ -54,6 +54,9 @@ from ._track_row_fill_value_validation import (
 from ._track_table_session_name_validation import (
     install_track_table_session_name_validation as _install_track_table_session_name_validation,
 )
+from ._tracking_global_link_edge_validation import (
+    install_tracking_global_link_edge_validation as _install_tracking_global_link_edge_validation,
+)
 from ._tracking_start_roi_validation import (
     install_tracking_start_roi_validation as _install_tracking_start_roi_validation,
 )
@@ -99,6 +102,7 @@ _install_matching_bundle_roi_index_validation()
 _install_session_gap_validation()
 _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
+_install_tracking_global_link_edge_validation()
 _install_track_row_fill_value_validation()
 _install_track_table_session_name_validation()
 
