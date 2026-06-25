@@ -47,7 +47,7 @@ class TrackSmoothingConfig:
         object.__setattr__(
             self,
             "fill_value",
-            _integer_value(self.fill_value, name="fill_value"),
+            _negative_integer_sentinel(self.fill_value, name="fill_value"),
         )
 
 
@@ -142,6 +142,7 @@ def smoothed_track_positions(
 ) -> dict[int, dict[int, np.ndarray]]:
     """Return fitted per-track positions for present detections."""
 
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
     rows = np.asarray(track_rows, dtype=int)
     output: dict[int, dict[int, np.ndarray]] = {}
     for track_index, row in enumerate(rows):
@@ -173,6 +174,7 @@ def split_tracks_at_issues(
     to determine whether avoiding a false continuation improves F1.
     """
 
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
     rows = np.asarray(track_rows, dtype=int)
     if rows.ndim != 2:
         raise ValueError("track_rows must be two-dimensional")
@@ -228,6 +230,7 @@ def _track_positions(
     *,
     fill_value: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
     session_indices: list[int] = []
     positions: list[np.ndarray] = []
     roi_indices: list[int] = []
@@ -301,6 +304,13 @@ def _integer_at_least(value: Any, *, name: str, minimum: int) -> int:
     integer_value = _integer_value(value, name=name)
     if integer_value < minimum:
         raise ValueError(f"{name} must be at least {minimum}")
+    return integer_value
+
+
+def _negative_integer_sentinel(value: Any, *, name: str) -> int:
+    integer_value = _integer_value(value, name=name)
+    if integer_value >= 0:
+        raise ValueError(f"{name} must be a negative integer sentinel")
     return integer_value
 
 
