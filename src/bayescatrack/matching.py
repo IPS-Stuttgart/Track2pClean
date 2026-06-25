@@ -121,6 +121,18 @@ def solve_bundle_linear_assignment(
     cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
     if cost_matrix.ndim != 2:
         raise ValueError("bundle.pairwise_cost_matrix must be two-dimensional")
+
+    reference_roi_lookup = _normalize_bundle_roi_indices(
+        bundle.reference_roi_indices,
+        "reference_roi_indices",
+        expected_length=cost_matrix.shape[0],
+    )
+    measurement_roi_lookup = _normalize_bundle_roi_indices(
+        bundle.measurement_roi_indices,
+        "measurement_roi_indices",
+        expected_length=cost_matrix.shape[1],
+    )
+
     if max_cost is not None:
         if isinstance(max_cost, (bool, np.bool_)):
             raise ValueError("max_cost must be a finite non-negative value")
@@ -168,12 +180,8 @@ def solve_bundle_linear_assignment(
     reference_positions = np.asarray(reference_positions, dtype=int)
     measurement_positions = np.asarray(measurement_positions, dtype=int)
     assignment_costs = np.asarray(assignment_costs, dtype=float)
-    reference_roi_indices = np.asarray(bundle.reference_roi_indices, dtype=int)[
-        reference_positions
-    ]
-    measurement_roi_indices = np.asarray(bundle.measurement_roi_indices, dtype=int)[
-        measurement_positions
-    ]
+    reference_roi_indices = reference_roi_lookup[reference_positions]
+    measurement_roi_indices = measurement_roi_lookup[measurement_positions]
 
     return SessionMatchResult(
         reference_session_name=str(bundle.reference_session_name),
@@ -395,6 +403,26 @@ def _bundle_roi_indices_for_session(
     if session_index == n_sessions - 1:
         return np.asarray(bundles[-1].measurement_roi_indices, dtype=int)
     return np.asarray(bundles[session_index].reference_roi_indices, dtype=int)
+
+
+def _normalize_bundle_roi_indices(
+    values: Sequence[int] | np.ndarray,
+    field_name: str,
+    *,
+    expected_length: int,
+) -> np.ndarray:
+    raw_values = np.asarray(values, dtype=object)
+    if raw_values.ndim != 1:
+        raise ValueError(f"{field_name} must be one-dimensional")
+    if raw_values.shape[0] != expected_length:
+        raise ValueError(
+            f"{field_name} length {raw_values.shape[0]} does not match "
+            f"pairwise_cost_matrix axis length {expected_length}"
+        )
+    return np.asarray(
+        _normalize_roi_index_sequence(raw_values.tolist(), field_name),
+        dtype=int,
+    )
 
 
 def _invert_match_mapping(mapping: Mapping[int, int]) -> dict[int, int]:

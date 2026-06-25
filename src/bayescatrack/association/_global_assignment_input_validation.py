@@ -182,6 +182,8 @@ def _normalize_session_edge(
     session_count: int,
     context: str,
 ) -> SessionEdge:
+    if isinstance(edge, (str, bytes, bytearray)):
+        raise ValueError(f"{context} entries must be (source, target) pairs")
     try:
         source_raw, target_raw = edge
     except (TypeError, ValueError) as exc:
@@ -211,23 +213,14 @@ def _normalize_session_edge(
 def _coerce_integer_like(value: Any, *, context: str, allow_zero: bool) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{context} must be an integer")
+    if isinstance(value, (str, bytes, bytearray)):
+        raise ValueError(f"{context} must be an integer")
     if isinstance(value, (int, np.integer)):
         integer_value = int(value)
     elif isinstance(value, (float, np.floating)):
         if not np.isfinite(value) or not float(value).is_integer():
             raise ValueError(f"{context} must be an integer")
         integer_value = int(value)
-    elif isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError(f"{context} must be an integer")
-        try:
-            numeric_value = float(stripped)
-        except ValueError as exc:
-            raise ValueError(f"{context} must be an integer") from exc
-        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-            raise ValueError(f"{context} must be an integer")
-        integer_value = int(numeric_value)
     else:
         try:
             integer_value = operator.index(value)

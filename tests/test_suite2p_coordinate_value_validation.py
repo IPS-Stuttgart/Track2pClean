@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from bayescatrack import load_track2p_subject
+
+
+def test_load_track2p_subject_rejects_noninteger_suite2p_coordinates(tmp_path):
+    subject_dir = tmp_path / "subject"
+    plane_dir = subject_dir / "2024-01-01_session" / "suite2p" / "plane0"
+    plane_dir.mkdir(parents=True)
+
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([1.5, 2.0], dtype=float),
+                "xpix": np.asarray([1.0, 2.0], dtype=float),
+                "lam": np.asarray([1.0, 1.0], dtype=float),
+            }
+        ],
+        dtype=object,
+    )
+    np.save(plane_dir / "stat.npy", stat)
+    np.save(plane_dir / "ops.npy", {"Ly": 4, "Lx": 5})
+
+    with pytest.raises(ValueError, match="finite non-negative integer pixel coordinates"):
+        load_track2p_subject(
+            subject_dir,
+            input_format="suite2p",
+            plane_name="plane0",
+            load_traces=False,
+            load_spike_traces=False,
+        )
