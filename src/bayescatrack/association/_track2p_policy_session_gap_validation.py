@@ -43,9 +43,7 @@ def install_track2p_policy_session_gap_validation() -> None:
             raise ValueError("session_gap must be at least 1")
         return original(cost_matrix, pairwise_components, session_gap=gap, config=cfg)
 
-    validated_apply_track2p_policy_edge_prior.__name__ = (
-        original.__name__
-    )
+    validated_apply_track2p_policy_edge_prior.__name__ = original.__name__
     validated_apply_track2p_policy_edge_prior.__qualname__ = original.__qualname__
     setattr(validated_apply_track2p_policy_edge_prior, _ORIGINAL_ATTR, original)
     _track2p_policy_priors.apply_track2p_policy_edge_prior = (

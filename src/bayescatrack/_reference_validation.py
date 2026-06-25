@@ -14,7 +14,9 @@ def install_reference_validation(reference_module: ModuleType | None = None) -> 
     """Install idempotent validation wrappers on ``bayescatrack.reference``."""
 
     if reference_module is None:
-        from . import reference as reference_module  # pylint: disable=import-outside-toplevel,reimported
+        from . import (
+            reference as reference_module,  # pylint: disable=import-outside-toplevel,reimported
+        )
 
     _install_curated_mask_validation(reference_module)
     _install_session_index_validation(reference_module)
@@ -42,12 +44,18 @@ def _install_curated_mask_validation(reference_module: ModuleType) -> None:
         original_post_init(self)
 
     setattr(_post_init_with_reference_validation, _PATCH_ATTR, True)
-    setattr(_post_init_with_reference_validation, "_bayescatrack_original", original_post_init)
+    setattr(
+        _post_init_with_reference_validation,
+        "_bayescatrack_original",
+        original_post_init,
+    )
     reference_cls.__post_init__ = _post_init_with_reference_validation
 
 
 def _install_session_index_validation(reference_module: ModuleType) -> None:
-    original_normalize_session_indices = reference_module._normalize_session_indices  # pylint: disable=protected-access
+    original_normalize_session_indices = (
+        reference_module._normalize_session_indices
+    )  # pylint: disable=protected-access
     if not getattr(original_normalize_session_indices, _PATCH_ATTR, False):
 
         def _normalize_session_indices_with_validation(
@@ -57,7 +65,9 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
             if session_indices is None:
                 return original_normalize_session_indices(session_indices, n_sessions)
             if isinstance(session_indices, (str, bytes)):
-                raise ValueError("session_indices must be an iterable of integer session indices")
+                raise ValueError(
+                    "session_indices must be an iterable of integer session indices"
+                )
             normalized = tuple(
                 _coerce_session_index(
                     session_index,
@@ -76,11 +86,15 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
         )
         reference_module._normalize_session_indices = _normalize_session_indices_with_validation  # pylint: disable=protected-access
 
-    original_validate_session_index = reference_module._validate_session_index  # pylint: disable=protected-access
+    original_validate_session_index = (
+        reference_module._validate_session_index
+    )  # pylint: disable=protected-access
     if getattr(original_validate_session_index, _PATCH_ATTR, False):
         return
 
-    def _validate_session_index_with_validation(session_index: Any, n_sessions: int) -> None:
+    def _validate_session_index_with_validation(
+        session_index: Any, n_sessions: int
+    ) -> None:
         normalized = _coerce_session_index(
             session_index,
             context="session index",
@@ -94,7 +108,9 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
         "_bayescatrack_original",
         original_validate_session_index,
     )
-    reference_module._validate_session_index = _validate_session_index_with_validation  # pylint: disable=protected-access
+    reference_module._validate_session_index = (
+        _validate_session_index_with_validation  # pylint: disable=protected-access
+    )
 
 
 def _normalize_curated_mask(mask: Any, *, n_tracks: int) -> np.ndarray:
@@ -138,7 +154,9 @@ def _coerce_session_index(
     allow_integer_like: bool,
 ) -> int:
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{context} must contain integer session indices, got boolean {value!r}")
+        raise ValueError(
+            f"{context} must contain integer session indices, got boolean {value!r}"
+        )
     if isinstance(value, (int, np.integer)):
         return int(value)
     if allow_integer_like and isinstance(value, (float, np.floating)):

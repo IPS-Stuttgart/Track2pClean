@@ -73,7 +73,9 @@ def test_audit_pair_mode_max_gap_and_seed_filter():
 
 @pytest.mark.parametrize("seed_session", [-1, 2])
 def test_audit_track_matrices_rejects_out_of_bounds_seed_session(seed_session):
-    with pytest.raises(IndexError, match="seed_session .* out of bounds for 2 sessions"):
+    with pytest.raises(
+        IndexError, match="seed_session .* out of bounds for 2 sessions"
+    ):
         audit_track_matrices(
             subject="jm001",
             session_names=("s0", "s1"),

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import pytest
-
 import bayescatrack.evaluation as evaluation
-from bayescatrack.evaluation.track2p_metrics import normalize_track_matrix as track2p_normalize_track_matrix
+import pytest
+from bayescatrack.evaluation.track2p_metrics import (
+    normalize_track_matrix as track2p_normalize_track_matrix,
+)
 
 
 def test_evaluation_facade_exposes_track2p_normalizer():

@@ -27,9 +27,11 @@ def install_summary_output_format_integration() -> None:
     result format.
     """
 
-    from bayescatrack.experiments import track2p_policy_growth_field_residual_audit
-    from bayescatrack.experiments import track2p_policy_growth_veto_cleanup
-    from bayescatrack.experiments import track2p_policy_growth_veto_whatif
+    from bayescatrack.experiments import (
+        track2p_policy_growth_field_residual_audit,
+        track2p_policy_growth_veto_cleanup,
+        track2p_policy_growth_veto_whatif,
+    )
 
     _patch_cleanup_parser_factory(track2p_policy_growth_veto_cleanup)
     patched_write_rows = _patched_write_rows(

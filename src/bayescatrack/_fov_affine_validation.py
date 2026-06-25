@@ -19,13 +19,17 @@ import numpy as np
 _IMAGE_PATCH_MARKER = "_bayescatrack_fov_affine_image_warp_validation_patch"
 _MASK_PATCH_MARKER = "_bayescatrack_fov_affine_roi_mask_warp_validation_patch"
 _MATRIX_ERROR = "matrix_xy must be a finite 2-by-3 affine matrix"
-_OUTPUT_SHAPE_ERROR = "output_shape must contain exactly two non-negative integer values"
+_OUTPUT_SHAPE_ERROR = (
+    "output_shape must contain exactly two non-negative integer values"
+)
 
 
 def install_fov_affine_warp_validation() -> None:
     """Install idempotent validation around FOV-affine image and mask warps."""
 
-    from . import fov_affine_registration as _fov_affine_registration  # pylint: disable=import-outside-toplevel
+    from . import (
+        fov_affine_registration as _fov_affine_registration,  # pylint: disable=import-outside-toplevel
+    )
 
     original_image_warp = _fov_affine_registration.apply_affine_image_warp
     if not getattr(original_image_warp, _IMAGE_PATCH_MARKER, False):
@@ -49,7 +53,9 @@ def install_fov_affine_warp_validation() -> None:
             original_image_warp,
             _IMAGE_PATCH_MARKER,
         )
-        _fov_affine_registration.apply_affine_image_warp = apply_affine_image_warp_with_validation
+        _fov_affine_registration.apply_affine_image_warp = (
+            apply_affine_image_warp_with_validation
+        )
 
     original_mask_warp = _fov_affine_registration.apply_affine_roi_mask_warp
     if not getattr(original_mask_warp, _MASK_PATCH_MARKER, False):
@@ -73,7 +79,9 @@ def install_fov_affine_warp_validation() -> None:
             original_mask_warp,
             _MASK_PATCH_MARKER,
         )
-        _fov_affine_registration.apply_affine_roi_mask_warp = apply_affine_roi_mask_warp_with_validation
+        _fov_affine_registration.apply_affine_roi_mask_warp = (
+            apply_affine_roi_mask_warp_with_validation
+        )
 
 
 def _mark_patch(wrapper: Any, original: Any, marker: str) -> None:
@@ -99,7 +107,9 @@ def _normalize_output_shape(output_shape: Any) -> tuple[int, int]:
     if flat_shape.size != 2:
         raise ValueError(_OUTPUT_SHAPE_ERROR)
 
-    height, width = (_normalize_output_shape_component(value) for value in flat_shape.tolist())
+    height, width = (
+        _normalize_output_shape_component(value) for value in flat_shape.tolist()
+    )
     return height, width
 
 

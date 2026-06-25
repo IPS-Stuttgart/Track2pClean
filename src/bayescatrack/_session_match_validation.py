@@ -38,7 +38,9 @@ def install_session_match_result_validation() -> None:
             _finite_cost_array(getattr(self, "costs"), "costs"),
         )
 
-    setattr(_validated_post_init, "_bayescatrack_original_post_init", original_post_init)
+    setattr(
+        _validated_post_init, "_bayescatrack_original_post_init", original_post_init
+    )
     setattr(
         _validated_post_init,
         "_bayescatrack_session_match_result_validation_patch",
