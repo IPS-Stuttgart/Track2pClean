@@ -4,6 +4,9 @@
 
 from . import cli as _cli
 from . import matching as _matching
+from ._absence_cue_shape_validation import (
+    install_absence_cue_shape_validation as _install_absence_cue_shape_validation,
+)
 from ._advanced_weight_validation import (
     install_advanced_weight_validation as _install_advanced_weight_validation,
 )
@@ -100,6 +103,7 @@ from ._tracking_start_roi_validation import (
 from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
+from .association import absence_model as _absence_model
 from .core import bridge as _bridge
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
@@ -123,6 +127,7 @@ load_track2p_subject = _bridge.load_track2p_subject
 main = _cli.main
 summarize_subject = _bridge.summarize_subject
 
+_install_absence_cue_shape_validation(_absence_model)
 _install_confidence_ordered_strict_gap_cli(_cli)
 _install_matching_layout_validation(_matching)
 _install_matching_max_cost_validation(_matching)
