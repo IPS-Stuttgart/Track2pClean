@@ -53,6 +53,25 @@ def test_absence_model_config_rejects_boolean_scalars(field: str, value: object)
         AbsenceModelConfig(**{field: value})
 
 
+def test_absence_cost_vector_sanitizes_nonfinite_cell_probabilities() -> None:
+    plane = _plane(
+        4,
+        cell_probabilities=np.asarray([1.0, np.nan, np.inf, -np.inf], dtype=float),
+    )
+
+    costs = absence_cost_vector(
+        plane,
+        config=AbsenceModelConfig(
+            base_absence_cost=1.0,
+            low_cell_probability_discount=0.5,
+            trace_missing_discount=0.0,
+        ),
+    )
+
+    assert np.all(np.isfinite(costs))
+    np.testing.assert_allclose(costs, np.asarray([1.0, 0.5, 1.0, 0.5], dtype=float))
+
+
 def test_absence_cost_vector_ignores_nonfinite_local_density_entries() -> None:
     plane = _plane(4)
 
