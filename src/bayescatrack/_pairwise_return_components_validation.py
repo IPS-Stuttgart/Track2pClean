@@ -1,8 +1,8 @@
 """Strict validation for pairwise-cost boolean controls.
 
 Pairwise-cost wrappers inspect boolean flags before the base bridge method sees
-them.  Rejecting ambiguous values keeps pairwise-cost return and IoU behavior
-explicit.
+them.  Rejecting ambiguous values keeps pairwise-cost return, centroid-weighting,
+and IoU behavior explicit.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_pairwise_bool_control_validation_patch"
-_BOOL_CONTROL_NAMES = ("return_components", "soft_iou")
+_BOOL_CONTROL_NAMES = ("return_components", "soft_iou", "weighted_centroids")
 
 
 def install_return_components_validation(bridge_module: Any) -> None:

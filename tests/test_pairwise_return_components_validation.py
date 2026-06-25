@@ -51,6 +51,15 @@ def test_pairwise_cost_rejects_ambiguous_soft_iou(value: object) -> None:
         reference.build_pairwise_cost_matrix(measurement, soft_iou=value)
 
 
+@pytest.mark.parametrize("value", _AMBIGUOUS_BOOL_VALUES)
+def test_pairwise_cost_rejects_ambiguous_weighted_centroids(value: object) -> None:
+    reference = _single_roi_plane(np.array([1.0, 2.0, 0.0]))
+    measurement = _single_roi_plane(np.array([1.0, 0.0, 2.0]))
+
+    with pytest.raises(ValueError, match="weighted_centroids must be a boolean"):
+        reference.build_pairwise_cost_matrix(measurement, weighted_centroids=value)
+
+
 def test_pairwise_cost_accepts_numpy_bool_return_components() -> None:
     reference = _single_roi_plane(np.array([1.0, 0.0, 0.0]))
     measurement = _single_roi_plane(np.array([1.0, 0.0, 0.0]))
@@ -86,3 +95,20 @@ def test_pairwise_cost_accepts_numpy_bool_soft_iou() -> None:
 
     assert soft_cost.shape == (1, 1)
     assert binary_cost.shape == (1, 1)
+
+
+def test_pairwise_cost_accepts_numpy_bool_weighted_centroids() -> None:
+    reference = _single_roi_plane(np.array([1.0, 2.0, 0.0]))
+    measurement = _single_roi_plane(np.array([1.0, 0.0, 2.0]))
+
+    weighted_cost = reference.build_pairwise_cost_matrix(
+        measurement,
+        weighted_centroids=np.bool_(True),
+    )
+    unweighted_cost = reference.build_pairwise_cost_matrix(
+        measurement,
+        weighted_centroids=np.bool_(False),
+    )
+
+    assert weighted_cost.shape == (1, 1)
+    assert unweighted_cost.shape == (1, 1)
