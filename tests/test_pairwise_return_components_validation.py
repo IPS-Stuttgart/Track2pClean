@@ -1,4 +1,4 @@
-"""Regression tests for strict pairwise-cost return-component controls."""
+"""Regression tests for strict pairwise-cost boolean controls."""
 
 from __future__ import annotations
 
@@ -6,6 +6,9 @@ import numpy as np
 import pytest
 
 from bayescatrack.core.bridge import CalciumPlaneData
+
+
+_AMBIGUOUS_BOOL_VALUES = ["false", "true", 0, 1, None, np.array(True), np.array([True])]
 
 
 def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
@@ -26,10 +29,7 @@ def _soft_overlap_kwargs() -> dict[str, float | int]:
     }
 
 
-@pytest.mark.parametrize(
-    "value",
-    ["false", "true", 0, 1, None, np.array(True), np.array([True])],
-)
+@pytest.mark.parametrize("value", _AMBIGUOUS_BOOL_VALUES)
 def test_pairwise_cost_rejects_ambiguous_return_components(value: object) -> None:
     reference = _single_roi_plane(np.array([1.0, 0.0, 0.0]))
     measurement = _single_roi_plane(np.array([1.0, 0.0, 0.0]))
@@ -40,6 +40,15 @@ def test_pairwise_cost_rejects_ambiguous_return_components(value: object) -> Non
             return_components=value,
             **_soft_overlap_kwargs(),
         )
+
+
+@pytest.mark.parametrize("value", _AMBIGUOUS_BOOL_VALUES)
+def test_pairwise_cost_rejects_ambiguous_soft_iou(value: object) -> None:
+    reference = _single_roi_plane(np.array([1.0, 0.0, 0.0]))
+    measurement = _single_roi_plane(np.array([1.0, 0.0, 0.0]))
+
+    with pytest.raises(ValueError, match="soft_iou must be a boolean"):
+        reference.build_pairwise_cost_matrix(measurement, soft_iou=value)
 
 
 def test_pairwise_cost_accepts_numpy_bool_return_components() -> None:
@@ -60,3 +69,20 @@ def test_pairwise_cost_accepts_numpy_bool_return_components() -> None:
     assert cost.shape == (1, 1)
     assert components["pairwise_cost_matrix"].shape == (1, 1)
     assert isinstance(only_cost, np.ndarray)
+
+
+def test_pairwise_cost_accepts_numpy_bool_soft_iou() -> None:
+    reference = _single_roi_plane(np.array([1.0, 0.5, 0.0]))
+    measurement = _single_roi_plane(np.array([1.0, 1.0, 0.0]))
+
+    soft_cost = reference.build_pairwise_cost_matrix(
+        measurement,
+        soft_iou=np.bool_(True),
+    )
+    binary_cost = reference.build_pairwise_cost_matrix(
+        measurement,
+        soft_iou=np.bool_(False),
+    )
+
+    assert soft_cost.shape == (1, 1)
+    assert binary_cost.shape == (1, 1)
