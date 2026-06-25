@@ -47,7 +47,7 @@ class TrackSmoothingConfig:
         object.__setattr__(
             self,
             "fill_value",
-            _integer_value(self.fill_value, name="fill_value"),
+            _negative_integer_sentinel(self.fill_value, name="fill_value"),
         )
 
 
@@ -99,11 +99,7 @@ def track_geometry_issues(
     """Flag detections whose position is inconsistent with the full track."""
 
     cfg = config or TrackSmoothingConfig()
-    rows = np.asarray(track_rows, dtype=int)
-    if rows.ndim != 2:
-        raise ValueError("track_rows must be two-dimensional")
-    if rows.shape[1] != len(position_tables):
-        raise ValueError("position_tables must contain one table per session")
+    rows = _validated_track_rows_and_position_tables(track_rows, position_tables)
 
     issues: list[TrackGeometryIssue] = []
     for track_index, row in enumerate(rows):
@@ -142,7 +138,8 @@ def smoothed_track_positions(
 ) -> dict[int, dict[int, np.ndarray]]:
     """Return fitted per-track positions for present detections."""
 
-    rows = np.asarray(track_rows, dtype=int)
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
+    rows = _validated_track_rows_and_position_tables(track_rows, position_tables)
     output: dict[int, dict[int, np.ndarray]] = {}
     for track_index, row in enumerate(rows):
         session_indices, positions, _roi_indices = _track_positions(
@@ -173,6 +170,7 @@ def split_tracks_at_issues(
     to determine whether avoiding a false continuation improves F1.
     """
 
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
     rows = np.asarray(track_rows, dtype=int)
     if rows.ndim != 2:
         raise ValueError("track_rows must be two-dimensional")
@@ -222,12 +220,25 @@ def geometry_issue_rows(
     ]
 
 
+def _validated_track_rows_and_position_tables(
+    track_rows: Any,
+    position_tables: Sequence[Mapping[int, Any]],
+) -> np.ndarray:
+    rows = np.asarray(track_rows, dtype=int)
+    if rows.ndim != 2:
+        raise ValueError("track_rows must be two-dimensional")
+    if rows.shape[1] != len(position_tables):
+        raise ValueError("position_tables must contain one table per session")
+    return rows
+
+
 def _track_positions(
     row: np.ndarray,
     position_tables: Sequence[Mapping[int, Any]],
     *,
     fill_value: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
     session_indices: list[int] = []
     positions: list[np.ndarray] = []
     roi_indices: list[int] = []
@@ -301,6 +312,13 @@ def _integer_at_least(value: Any, *, name: str, minimum: int) -> int:
     integer_value = _integer_value(value, name=name)
     if integer_value < minimum:
         raise ValueError(f"{name} must be at least {minimum}")
+    return integer_value
+
+
+def _negative_integer_sentinel(value: Any, *, name: str) -> int:
+    integer_value = _integer_value(value, name=name)
+    if integer_value >= 0:
+        raise ValueError(f"{name} must be a negative integer sentinel")
     return integer_value
 
 
