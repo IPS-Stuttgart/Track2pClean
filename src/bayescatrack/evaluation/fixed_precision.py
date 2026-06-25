@@ -86,7 +86,8 @@ def _best_operating_point(
     target_precision: float,
 ) -> tuple[int, int, float, float, float]:
     best_rank = (0, 1.0, 0, 0)
-    best_result = (0, 0, 1.0, 0.0, float("inf"))
+    empty_recall = _safe_ratio(0, len(reference))
+    best_result = (0, 0, 1.0, empty_recall, float("inf"))
     for threshold in sorted({score for _, score in predicted}, reverse=True):
         retained = [track for track, score in predicted if score >= threshold]
         retained_unique = set(retained)
