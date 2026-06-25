@@ -3,6 +3,7 @@
 from .. import _absence_cue_shape_validation as _absence_cue_shape_validation
 from .._exports import ASSOCIATION_PUBLIC_NAMES, reexport
 from ..core import bridge as _bridge
+from . import _absence_cue_shape_validation as _absence_cue_shape_validation
 from . import _activity_similarity_control_validation as _activity_similarity_control_validation
 from . import (
     _calibrated_mahalanobis_bundle_patch as _calibrated_mahalanobis_bundle_patch,
