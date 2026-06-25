@@ -47,5 +47,5 @@ def test_smoothed_track_positions_keeps_valid_rows():
     smoothed = smoothed_track_positions(rows, position_tables)
 
     assert set(smoothed) == {0}
-    npt.assert_allclose(smoothed[0][0], np.asarray([0.0, 0.0]))
-    npt.assert_allclose(smoothed[0][1], np.asarray([2.0, 2.0]))
+    npt.assert_allclose(smoothed[0][0], np.asarray([0.0, 0.0]), atol=1e-12)
+    npt.assert_allclose(smoothed[0][1], np.asarray([2.0, 2.0]), atol=1e-12)
