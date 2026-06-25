@@ -34,6 +34,25 @@ def test_session_match_result_rejects_nonfinite_costs():
         _valid_match_result(costs=np.asarray([np.nan], dtype=float))
 
 
+@pytest.mark.parametrize(
+    "costs",
+    [
+        [True],
+        [np.bool_(False)],
+        np.asarray([True], dtype=bool),
+        np.asarray([np.bool_(False)], dtype=object),
+    ],
+)
+def test_session_match_result_rejects_boolean_costs(costs):
+    with pytest.raises(ValueError, match="finite numeric assignment costs"):
+        _valid_match_result(costs=costs)
+
+
+def test_session_match_result_accepts_numeric_cost_strings():
+    result = _valid_match_result(costs=["1.25"])
+    np.testing.assert_allclose(result.costs, np.asarray([1.25]))
+
+
 def test_session_match_result_normalizes_integer_like_arrays():
     result = _valid_match_result(
         reference_roi_indices=np.asarray([10.0], dtype=float),
