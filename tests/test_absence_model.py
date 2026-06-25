@@ -55,6 +55,24 @@ def test_absence_model_config_rejects_boolean_scalars(
         AbsenceModelConfig(**{field: value})
 
 
+def test_absence_cost_vector_ignores_nonfinite_cell_probability_entries() -> None:
+    plane = _plane(
+        4,
+        cell_probabilities=np.asarray([0.0, np.nan, np.inf, -np.inf], dtype=float),
+    )
+
+    costs = absence_cost_vector(
+        plane,
+        config=AbsenceModelConfig(
+            base_absence_cost=1.0,
+            low_cell_probability_discount=0.5,
+            trace_missing_discount=0.0,
+        ),
+    )
+
+    np.testing.assert_allclose(costs, np.asarray([0.5, 1.0, 1.0, 1.0], dtype=float))
+
+
 def test_absence_cost_vector_ignores_nonfinite_local_density_entries() -> None:
     plane = _plane(4)
 
@@ -81,6 +99,26 @@ def test_gap_penalty_matrix_rejects_invalid_session_gap() -> None:
         gap_penalty_matrix(reference, measurement, session_gap=0)
     with pytest.raises(ValueError, match="session_gap"):
         gap_penalty_matrix(reference, measurement, session_gap=True)
+
+
+def test_gap_penalty_matrix_rejects_invalid_absence_cost_vectors() -> None:
+    reference = _plane(2)
+    measurement = _plane(1)
+
+    with pytest.raises(ValueError, match="reference_absence_costs"):
+        gap_penalty_matrix(
+            reference,
+            measurement,
+            reference_absence_costs=np.asarray([1.0, np.nan], dtype=float),
+            measurement_absence_costs=np.asarray([1.0], dtype=float),
+        )
+    with pytest.raises(ValueError, match="measurement_absence_costs"):
+        gap_penalty_matrix(
+            reference,
+            measurement,
+            reference_absence_costs=np.asarray([1.0, 1.0], dtype=float),
+            measurement_absence_costs=np.asarray([-0.1], dtype=float),
+        )
 
 
 def test_apply_absence_adjustment_rejects_broadcastable_shape_mismatch() -> None:
