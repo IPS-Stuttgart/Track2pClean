@@ -174,6 +174,16 @@ def test_full_mht_is_registered():
     )
 
 
+def test_tracklet_graph_mht_is_registered():
+    canonical = cli._BENCHMARK_ALIASES["track2p-tracklet-graph-mht"]
+
+    assert canonical == "track2p-policy-tracklet-graph-mht"
+    assert cli._BENCHMARK_ALIASES["track2p-component-tracklet-graph-mht"] == canonical
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_tracklet_graph_mht"
+    )
+
+
 def test_pyrecest_frontier_mht_defaults_use_verified_safe_cap(frontier_mht_module):
     args = frontier_mht_module._with_frontier_defaults([])
 

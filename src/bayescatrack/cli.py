@@ -164,6 +164,11 @@ _BENCHMARK_COMMAND_DATA: tuple[tuple[str, str, str], ...] = (
         "Run a PyRecEst Murty scan-assignment full-MHT prototype",
     ),
     (
+        "track2p-policy-tracklet-graph-mht",
+        "bayescatrack.experiments.track2p_policy_tracklet_graph_mht",
+        "Run conservative tracklets plus bounded graph-MHT selection",
+    ),
+    (
         "track2p-policy-coherence-suffix-exposure-audit",
         "bayescatrack.experiments.track2p_policy_coherence_suffix_exposure_audit",
         "Audit coherence suffix gate exposure without manual GT labels",
@@ -495,6 +500,10 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-pyrecest-full-mht": "track2p-policy-full-mht",
     "track2p-component-full-mht": (
         "track2p-policy-full-mht"
+    ),
+    "track2p-tracklet-graph-mht": "track2p-policy-tracklet-graph-mht",
+    "track2p-component-tracklet-graph-mht": (
+        "track2p-policy-tracklet-graph-mht"
     ),
     "track2p-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"
