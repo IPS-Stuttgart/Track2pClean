@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from bayescatrack.core.bridge import CalciumPlaneData
 from bayescatrack.nonrigid_registration import register_measurement_plane_by_nonrigid_fov
+from bayescatrack.track2p_registration import register_plane_pair
 
 
 def _plane() -> CalciumPlaneData:
@@ -97,3 +98,20 @@ def test_nonrigid_registration_accepts_valid_numpy_scalar_controls() -> None:
         ]
         == 0
     )
+
+
+def test_nonrigid_registration_public_pair_route_uses_control_validation() -> None:
+    reference = _plane()
+    measurement = _plane()
+
+    with patch(
+        "bayescatrack.nonrigid_registration.estimate_fov_affine_transform",
+        side_effect=AssertionError("estimator should not run for invalid controls"),
+    ):
+        with pytest.raises(ValueError, match="optical_flow_alpha"):
+            register_plane_pair(
+                reference,
+                measurement,
+                transform_type="bspline",
+                registration_options={"optical_flow_alpha": np.nan},
+            )
