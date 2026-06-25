@@ -338,6 +338,71 @@ def test_full_mht_track2p_prior_edge_risk_penalizes_suspicious_prior_edge(monkey
     assert risk == pytest.approx(7.0)
     assert with_prior == pytest.approx(without_prior + 2.0 - risk)
 
+    scan_disabled = full_mht._edge_score(
+        (object(), object()),
+        matrices,
+        target_session=1,
+        source_local=0,
+        target_local=0,
+        config=full_mht.FullMHTConfig(
+            track2p_prior_weight=2.0,
+            track2p_prior_risk_mahalanobis_weight=4.0,
+            track2p_prior_risk_mahalanobis_offset=1.5,
+            track2p_prior_risk_registered_iou_weight=5.0,
+            track2p_prior_risk_registered_iou_floor=0.5,
+            track2p_prior_risk_scan_weight=0.0,
+        ),
+        track2p_prior_edges=frozenset({(0, 1, 5, 9)}),
+    )
+    assert scan_disabled == pytest.approx(without_prior + 2.0)
+
+
+def test_full_mht_terminal_history_risk_can_rerank_completed_hypotheses(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=0,
+        target_session=1,
+        source_indices=np.asarray([5], dtype=int),
+        target_indices=np.asarray([9], dtype=int),
+        registered_iou=np.asarray([[0.50]], dtype=float),
+        shifted_iou=np.asarray([[0.25]], dtype=float),
+        centroid_distance=np.asarray([[1.0]], dtype=float),
+        area_ratio=np.asarray([[1.0]], dtype=float),
+        threshold=0.0,
+        growth_residual=np.asarray([[0.0]], dtype=float),
+        growth_mahalanobis=np.asarray([[3.0]], dtype=float),
+        local_deformation=np.asarray([[0.0]], dtype=float),
+        growth_anchor_count=0,
+        growth_model_type="identity_no_anchors",
+    )
+    monkeypatch.setattr(
+        full_mht,
+        "_sparse_pair_matrices",
+        lambda *args, **kwargs: matrices,
+    )
+
+    risky = full_mht._MHTHypothesis(
+        np.asarray([[5, 9]], dtype=int), score=10.0, history=tuple()
+    )
+    safer = full_mht._MHTHypothesis(
+        np.asarray([[5, 10]], dtype=int), score=9.0, history=tuple()
+    )
+    selected, metadata = full_mht._select_final_hypothesis(
+        (risky, safer),
+        sessions=(object(), object()),
+        feature_cache=SimpleNamespace(cell_probability_threshold=0.5),
+        config=full_mht.FullMHTConfig(
+            track2p_prior_risk_mahalanobis_weight=2.0,
+            track2p_prior_risk_mahalanobis_offset=1.0,
+            terminal_history_risk_weight=1.0,
+        ),
+        track2p_prior_edges=frozenset({(0, 1, 5, 9)}),
+    )
+
+    assert selected is safer
+    assert metadata["terminal_selected_rank"] == 2
+    assert metadata["terminal_history_risk"] == pytest.approx(0.0)
+    assert metadata["terminal_adjusted_score"] == pytest.approx(9.0)
+
 
 def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     active = full_mht._ActiveTrackSource(
