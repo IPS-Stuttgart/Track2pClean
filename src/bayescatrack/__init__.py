@@ -30,6 +30,9 @@ from ._reference_validation import (
 from ._registration_selection_validation import (
     install_registration_selection_validation as _install_registration_selection_validation,
 )
+from ._registration_warp_validation import (
+    install_registration_warp_validation as _install_registration_warp_validation,
+)
 from ._session_gap_validation import (
     install_session_gap_validation as _install_session_gap_validation,
 )
@@ -80,6 +83,7 @@ _install_reference_validation()
 _install_fov_affine_warp_validation()
 _install_ground_truth_track_validation()
 _install_registration_selection_validation()
+_install_registration_warp_validation()
 _install_strict_config_validation()
 _install_empty_candidate_gate_margin_fix()
 _install_session_gap_validation()
