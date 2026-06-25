@@ -82,14 +82,17 @@ def _nonnegative_integer(value: Any, field_name: str) -> int:
 
 
 def _finite_cost_array(values: Any, field_name: str) -> np.ndarray:
-    try:
-        array = np.asarray(values, dtype=float)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{field_name} must contain finite assignment costs") from exc
-    if array.ndim != 1:
+    raw_array = np.asarray(values, dtype=object)
+    if raw_array.ndim != 1:
         raise ValueError(f"{field_name} must be one-dimensional")
+    if any(isinstance(value, (bool, np.bool_)) for value in raw_array.flat):
+        raise ValueError(f"{field_name} must contain finite numeric assignment costs")
+    try:
+        array = np.asarray(raw_array, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must contain finite numeric assignment costs") from exc
     if not np.all(np.isfinite(array)):
-        raise ValueError(f"{field_name} must contain finite assignment costs")
+        raise ValueError(f"{field_name} must contain finite numeric assignment costs")
     return array
 
 
