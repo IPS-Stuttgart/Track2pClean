@@ -17,10 +17,12 @@ from . import _shifted_iou_preset_validation as _shifted_iou_preset_validation
 from . import (
     _track2p_policy_session_gap_validation as _track2p_policy_session_gap_validation,
 )
+from . import _triplet_support_validation as _triplet_support_validation
 
 _activity_similarity_control_validation.install_activity_similarity_control_validation()
 _neuropil_ratio_shape_validation.install_neuropil_ratio_shape_validation()
 _session_edge_pair_validation.install_session_edge_pair_validation()
+_triplet_support_validation.install_triplet_support_validation()
 _global_assignment_input_validation.install_global_assignment_input_validation()
 _roi_aware_local_validation.install_roi_aware_local_validation()
 _shifted_iou_preset_validation.install_shifted_iou_preset_validation()
@@ -39,6 +41,7 @@ _PATCH_MODULES = (
     _session_edge_pair_validation,
     _shifted_iou_preset_validation,
     _track2p_policy_session_gap_validation,
+    _triplet_support_validation,
 )
 
 __all__ = reexport(_bridge, globals(), ASSOCIATION_PUBLIC_NAMES)

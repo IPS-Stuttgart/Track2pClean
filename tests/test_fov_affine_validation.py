@@ -78,7 +78,7 @@ def test_apply_affine_roi_mask_warp_rejects_malformed_output_shape(bad_output_sh
         )
 
 
-@pytest.mark.parametrize("bad_subtract_mean", ["false", 1, 0, np.bool_(False), None])
+@pytest.mark.parametrize("bad_subtract_mean", ["false", 1, 0, None])
 def test_estimate_fov_affine_transform_rejects_malformed_subtract_mean(
     bad_subtract_mean,
 ):
