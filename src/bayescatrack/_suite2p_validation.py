@@ -46,6 +46,16 @@ def load_suite2p_plane(plane_dir: str | Path, *args: Any, **kwargs: Any) -> Any:
             kwargs.get("exclude_overlapping_pixels", True),
             name="exclude_overlapping_pixels",
         )
+        weighted_masks = _strict_bool(
+            kwargs.get("weighted_masks", False), name="weighted_masks"
+        )
+        load_traces = _strict_bool(kwargs.get("load_traces", True), name="load_traces")
+        load_spike_traces = _strict_bool(
+            kwargs.get("load_spike_traces", True), name="load_spike_traces"
+        )
+        load_neuropil_traces = _strict_bool(
+            kwargs.get("load_neuropil_traces", False), name="load_neuropil_traces"
+        )
         _validate_suite2p_stat_shapes(
             plane_dir,
             include_non_cells=include_non_cells,
@@ -57,6 +67,10 @@ def load_suite2p_plane(plane_dir: str | Path, *args: Any, **kwargs: Any) -> Any:
             "include_non_cells": include_non_cells,
             "cell_probability_threshold": cell_probability_threshold,
             "exclude_overlapping_pixels": exclude_overlapping_pixels,
+            "weighted_masks": weighted_masks,
+            "load_traces": load_traces,
+            "load_spike_traces": load_spike_traces,
+            "load_neuropil_traces": load_neuropil_traces,
         }
     return original(plane_dir, *args, **kwargs)
 
