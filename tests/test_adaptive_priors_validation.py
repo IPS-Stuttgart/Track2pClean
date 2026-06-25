@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from bayescatrack.association.adaptive_priors import (
     AdaptiveEdgePriorConfig,
+    apply_adaptive_edge_priors,
     fit_gap_costs_from_reference,
 )
 
@@ -121,3 +122,39 @@ def test_fit_gap_costs_from_reference_normalizes_numeric_controls() -> None:
 
     assert set(costs) == {1, 2}
     assert all(np.isfinite(cost) for cost in costs.values())
+
+
+def test_adaptive_edge_priors_reject_fractional_session_edge(make_track2p_session):
+    masks = np.ones((1, 2, 2), dtype=bool)
+    sessions = (
+        make_track2p_session("2024-01-01_a", masks),
+        make_track2p_session("2024-01-02_a", masks),
+    )
+
+    with pytest.raises(ValueError, match="session edge source"):
+        apply_adaptive_edge_priors({(0.25, 1): np.zeros((1, 1))}, sessions)
+
+
+def test_adaptive_edge_priors_reject_boolean_session_edge(make_track2p_session):
+    masks = np.ones((1, 2, 2), dtype=bool)
+    sessions = (
+        make_track2p_session("2024-01-01_a", masks),
+        make_track2p_session("2024-01-02_a", masks),
+    )
+
+    with pytest.raises(ValueError, match="session edge source"):
+        apply_adaptive_edge_priors({(True, 1): np.zeros((1, 1))}, sessions)
+
+
+def test_adaptive_edge_priors_reject_malformed_edge_key_shape(make_track2p_session):
+    masks = np.ones((1, 2, 2), dtype=bool)
+    sessions = (
+        make_track2p_session("2024-01-01_a", masks),
+        make_track2p_session("2024-01-02_a", masks),
+    )
+
+    with pytest.raises(ValueError, match="length-2 session-edge pairs"):
+        apply_adaptive_edge_priors({(0, 1, 2): np.zeros((1, 1))}, sessions)
+
+    with pytest.raises(ValueError, match="length-2 session-edge pairs"):
+        apply_adaptive_edge_priors({"01": np.zeros((1, 1))}, sessions)
