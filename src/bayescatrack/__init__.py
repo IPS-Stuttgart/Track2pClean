@@ -9,6 +9,9 @@ from ._advanced_weight_validation import (
 from ._assignment_bundle_validation import (
     install_assignment_bundle_validation as _install_assignment_bundle_validation,
 )
+from ._calibrated_session_gap_validation import (
+    install_calibrated_session_gap_validation as _install_calibrated_session_gap_validation,
+)
 from ._confidence_ordered_strict_gap_cli import (
     install_confidence_ordered_strict_gap_cli as _install_confidence_ordered_strict_gap_cli,
 )
@@ -78,7 +81,7 @@ _install_soft_overlap_costs()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
 _install_assignment_bundle_validation()
-_install_integer_image_translation_validation()
+_install_integer_translation_validation()
 _install_reference_validation()
 _install_fov_affine_warp_validation()
 _install_ground_truth_track_validation()
@@ -87,6 +90,7 @@ _install_registration_warp_validation()
 _install_strict_config_validation()
 _install_empty_candidate_gate_margin_fix()
 _install_session_gap_validation()
+_install_calibrated_session_gap_validation()
 _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
 
