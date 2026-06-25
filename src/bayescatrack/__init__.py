@@ -58,6 +58,9 @@ from ._strict_config_validation import (
 from ._suite2p_validation import (
     install_suite2p_stat_validation as _install_suite2p_stat_validation,
 )
+from ._track_row_export_option_validation import (
+    install_track_row_export_option_validation as _install_track_row_export_option_validation,
+)
 from ._track_row_fill_value_validation import (
     install_track_row_fill_value_validation as _install_track_row_fill_value_validation,
 )
@@ -115,6 +118,7 @@ _install_matching_bundle_roi_index_validation()
 _install_session_gap_validation()
 _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
+_install_track_row_export_option_validation()
 _install_track_row_fill_value_validation()
 _install_track_table_session_name_validation()
 _install_tracking_fill_value_validation()
