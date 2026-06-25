@@ -12,6 +12,9 @@ from ._assignment_bundle_validation import (
 from ._confidence_ordered_strict_gap_cli import (
     install_confidence_ordered_strict_gap_cli as _install_confidence_ordered_strict_gap_cli,
 )
+from ._empty_candidate_margin import (
+    install_empty_candidate_gate_margin_fix as _install_empty_candidate_gate_margin_fix,
+)
 from ._fov_affine_validation import (
     install_fov_affine_warp_validation as _install_fov_affine_warp_validation,
 )
@@ -78,6 +81,7 @@ _install_fov_affine_warp_validation()
 _install_ground_truth_track_validation()
 _install_registration_selection_validation()
 _install_strict_config_validation()
+_install_empty_candidate_gate_margin_fix()
 _install_session_gap_validation()
 _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
