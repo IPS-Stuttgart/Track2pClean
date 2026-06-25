@@ -1,0 +1,27 @@
+from __future__ import annotations
+
+import pytest
+
+
+pytest.importorskip("pyrecest")
+
+from bayescatrack.experiments import (  # noqa: E402
+    track2p_policy_full_mht_conflict_demo as demo,
+)
+
+
+def test_full_mht_conflict_demo_mht_history_beats_greedy():
+    results = {result.arm: result for result in demo.evaluate_demo()}
+
+    assert results["greedy"].path == (1, 10, -1)
+    assert results["full_mht"].path == (1, 20, 30)
+    assert results["full_mht"].score > results["greedy"].score
+    assert results["full_mht"].complete_track_f1 > results["greedy"].complete_track_f1
+
+
+def test_full_mht_conflict_demo_csv_rows_are_stable():
+    rows = demo._result_rows(demo.evaluate_demo())
+
+    assert [row["arm"] for row in rows] == ["greedy", "full_mht"]
+    assert rows[0]["path"] == "1->10->-1"
+    assert rows[1]["path"] == "1->20->30"

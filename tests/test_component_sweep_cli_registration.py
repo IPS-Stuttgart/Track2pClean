@@ -174,6 +174,19 @@ def test_full_mht_is_registered():
     )
 
 
+def test_full_mht_conflict_demo_is_registered():
+    canonical = cli._BENCHMARK_ALIASES["track2p-full-mht-conflict-demo"]
+
+    assert canonical == "track2p-policy-full-mht-conflict-demo"
+    assert (
+        cli._BENCHMARK_ALIASES["track2p-pyrecest-full-mht-conflict-demo"]
+        == canonical
+    )
+    assert cli._BENCHMARK_COMMANDS[canonical].module == (
+        "bayescatrack.experiments.track2p_policy_full_mht_conflict_demo"
+    )
+
+
 def test_pyrecest_frontier_mht_defaults_use_verified_safe_cap(frontier_mht_module):
     args = frontier_mht_module._with_frontier_defaults([])
 
