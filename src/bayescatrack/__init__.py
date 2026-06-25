@@ -19,6 +19,9 @@ from ._empty_candidate_margin import (
 from ._empty_registered_roi_mask_validation import (
     install_empty_registered_roi_mask_validation as _install_empty_registered_roi_mask_validation,
 )
+from ._fov_affine_estimator_validation import (
+    install_fov_affine_estimator_validation as _install_fov_affine_estimator_validation,
+)
 from ._fov_affine_validation import (
     install_fov_affine_warp_validation as _install_fov_affine_warp_validation,
 )
@@ -112,6 +115,7 @@ _install_advanced_weight_validation()
 _install_assignment_bundle_validation()
 _install_integer_translation_validation()
 _install_reference_validation()
+_install_fov_affine_estimator_validation()
 _install_fov_affine_warp_validation()
 _install_fov_translation_output_shape_validation()
 _install_ground_truth_track_validation()
