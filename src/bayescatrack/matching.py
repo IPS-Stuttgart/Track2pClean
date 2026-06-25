@@ -305,6 +305,11 @@ def build_track_rows_from_bundles(
     bundles = list(bundles)
     if not bundles:
         raise ValueError("bundles must not be empty")
+    start_session_index = _normalize_session_index(
+        start_session_index,
+        "start_session_index",
+        num_sessions=len(bundles) + 1,
+    )
 
     match_results = solve_consecutive_bundle_linear_assignments(
         bundles,
