@@ -42,7 +42,10 @@ def _unexpected_original_method(*_args: Any, **_kwargs: Any) -> np.ndarray:
             {"use_soft_iou_for_iou_cost": "false"},
             "use_soft_iou_for_iou_cost must be a boolean",
         ),
-        ({"similarity_epsilon": np.nan}, "similarity_epsilon must be a finite positive value"),
+        (
+            {"similarity_epsilon": np.nan},
+            "similarity_epsilon must be a finite positive value",
+        ),
         ({"large_cost": np.inf}, "large_cost must be a finite positive value"),
         ({"iou_weight": True}, "iou_weight must be a finite non-negative value"),
         ({"iou_weight": -1.0}, "iou_weight must be a finite non-negative value"),

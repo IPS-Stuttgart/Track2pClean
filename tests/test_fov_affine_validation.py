@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.fov_affine_registration import (
     apply_affine_image_warp,
     apply_affine_roi_mask_warp,

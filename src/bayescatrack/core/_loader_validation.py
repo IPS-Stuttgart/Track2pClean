@@ -236,7 +236,10 @@ def _load_track2p_subject_with_auto_fallback_impl(
     if input_format not in {"auto", "suite2p", "npy"}:
         raise ValueError("input_format must be 'auto', 'suite2p', or 'npy'")
     if input_format in {"auto", "suite2p"}:
-        suite2p_kwargs = {**suite2p_kwargs, **_validate_suite2p_loader_controls(suite2p_kwargs)}
+        suite2p_kwargs = {
+            **suite2p_kwargs,
+            **_validate_suite2p_loader_controls(suite2p_kwargs),
+        }
 
     subject_path = Path(subject_dir)
     sessions: list[Any] = []
@@ -346,7 +349,9 @@ def _load_auto_plane_with_fallback(
     raise FileNotFoundError(message)
 
 
-def _validate_suite2p_loader_controls(values: dict[str, Any]) -> dict[str, bool | float]:
+def _validate_suite2p_loader_controls(
+    values: dict[str, Any],
+) -> dict[str, bool | float]:
     validated: dict[str, bool | float] = {
         name: _strict_bool(values.get(name, default), name=name)
         for name, default in _SUITE2P_BOOL_CONTROL_DEFAULTS.items()

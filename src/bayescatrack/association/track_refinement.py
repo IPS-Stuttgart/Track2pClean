@@ -37,9 +37,7 @@ class TrackSmoothingConfig:
         object.__setattr__(
             self,
             "min_edge_residual",
-            _finite_nonnegative_float(
-                self.min_edge_residual, name="min_edge_residual"
-            ),
+            _finite_nonnegative_float(self.min_edge_residual, name="min_edge_residual"),
         )
         object.__setattr__(
             self,

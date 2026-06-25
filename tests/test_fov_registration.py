@@ -103,12 +103,30 @@ def test_estimate_fov_shift_compat_refines_fractional_translation():
         ({"subtract_mean": 1}, "subtract_mean"),
         ({"subpixel": "false"}, "subpixel"),
         ({"subpixel_refinement": "true"}, "subpixel_refinement"),
-        ({"subpixel": True, "subpixel_refinement_radius": True}, "subpixel_refinement_radius"),
-        ({"subpixel": True, "subpixel_refinement_radius": np.nan}, "subpixel_refinement_radius"),
-        ({"subpixel": True, "subpixel_refinement_radius": -0.1}, "subpixel_refinement_radius"),
-        ({"subpixel": True, "subpixel_interpolation_order": True}, "subpixel interpolation order"),
-        ({"subpixel": True, "subpixel_interpolation_order": 1.5}, "subpixel interpolation order"),
-        ({"subpixel": True, "subpixel_interpolation_order": np.nan}, "subpixel interpolation order"),
+        (
+            {"subpixel": True, "subpixel_refinement_radius": True},
+            "subpixel_refinement_radius",
+        ),
+        (
+            {"subpixel": True, "subpixel_refinement_radius": np.nan},
+            "subpixel_refinement_radius",
+        ),
+        (
+            {"subpixel": True, "subpixel_refinement_radius": -0.1},
+            "subpixel_refinement_radius",
+        ),
+        (
+            {"subpixel": True, "subpixel_interpolation_order": True},
+            "subpixel interpolation order",
+        ),
+        (
+            {"subpixel": True, "subpixel_interpolation_order": 1.5},
+            "subpixel interpolation order",
+        ),
+        (
+            {"subpixel": True, "subpixel_interpolation_order": np.nan},
+            "subpixel interpolation order",
+        ),
         ({"subpixel": True, "mask_interpolation": "cubic"}, "mask_interpolation"),
     ],
 )

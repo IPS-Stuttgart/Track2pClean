@@ -3,8 +3,10 @@ from __future__ import annotations
 import numpy as np
 import numpy.testing as npt
 import pytest
-
-from bayescatrack.reference import Track2pReference, score_complete_tracks_against_reference
+from bayescatrack.reference import (
+    Track2pReference,
+    score_complete_tracks_against_reference,
+)
 
 
 def _reference(*, curated_mask=None) -> Track2pReference:
@@ -20,7 +22,9 @@ def test_track2p_reference_parses_explicit_curated_mask_strings() -> None:
     reference = _reference(curated_mask=np.array(["false", "true"], dtype=object))
 
     npt.assert_array_equal(reference.curated_mask, np.array([False, True]))
-    npt.assert_array_equal(reference.filtered_indices(curated_only=True), np.array([[1, 11]], dtype=object))
+    npt.assert_array_equal(
+        reference.filtered_indices(curated_only=True), np.array([[1, 11]], dtype=object)
+    )
 
 
 @pytest.mark.parametrize(

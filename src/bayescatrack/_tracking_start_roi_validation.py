@@ -26,7 +26,9 @@ def install_tracking_start_roi_validation() -> None:
     from . import tracking as _tracking  # pylint: disable=import-outside-toplevel
 
     original_run = _tracking.run_registered_subject_tracking
-    original_restrict = _tracking._restrict_track_rows_to_start_rois  # pylint: disable=protected-access
+    original_restrict = (
+        _tracking._restrict_track_rows_to_start_rois
+    )  # pylint: disable=protected-access
 
     if getattr(original_run, _PATCH_MARKER, False) and getattr(
         original_restrict,

@@ -294,18 +294,24 @@ def _normalize_consensus_integer_entry(value: Any) -> int:
     try:
         return int(operator.index(value))
     except TypeError as exc:
-        raise ValueError("track matrices or edge sets must contain integer entries") from exc
+        raise ValueError(
+            "track matrices or edge sets must contain integer entries"
+        ) from exc
 
 
 def _validate_explicit_edge_set(matrix: np.ndarray) -> None:
     if np.any(matrix < 0):
-        raise ValueError("explicit edge sets must contain non-negative session and ROI indices")
+        raise ValueError(
+            "explicit edge sets must contain non-negative session and ROI indices"
+        )
 
 
 def _validate_track_matrix_roi_values(matrix: np.ndarray, *, fill_value: int) -> None:
     invalid = (matrix < 0) & (matrix != int(fill_value))
     if np.any(invalid):
-        raise ValueError("track matrices must contain non-negative ROI indices or fill_value")
+        raise ValueError(
+            "track matrices must contain non-negative ROI indices or fill_value"
+        )
 
 
 def _is_edge_set_input(matrix_values: Any, matrix: np.ndarray) -> bool:

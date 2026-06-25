@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association._numeric_validation import (
     finite_positive_float,
     nonnegative_integer,

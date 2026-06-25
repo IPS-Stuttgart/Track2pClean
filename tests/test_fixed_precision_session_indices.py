@@ -65,6 +65,4 @@ def test_fixed_precision_empty_operating_point_uses_vacuous_recall() -> None:
     assert scores["complete_track_precision_at_fixed_precision_0_95"] == pytest.approx(
         1.0
     )
-    assert scores["complete_track_recall_at_fixed_precision_0_95"] == pytest.approx(
-        1.0
-    )
+    assert scores["complete_track_recall_at_fixed_precision_0_95"] == pytest.approx(1.0)

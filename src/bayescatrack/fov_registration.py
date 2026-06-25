@@ -119,9 +119,7 @@ def _fov_association_options_from_kwargs(
     )
     _strict_bool(options.subtract_mean, name="subtract_mean")
     _strict_bool(options.weighted_centroids, name="weighted_centroids")
-    _strict_bool(
-        options.return_pairwise_components, name="return_pairwise_components"
-    )
+    _strict_bool(options.return_pairwise_components, name="return_pairwise_components")
     _strict_bool(options.subpixel, name="subpixel")
     _finite_nonnegative_float(
         options.subpixel_refinement_radius, name="subpixel_refinement_radius"
@@ -264,9 +262,7 @@ def estimate_fov_shift(
 ) -> tuple[np.ndarray, float]:
     """Return the FOV shift, preserving the older subpixel-refinement API."""
 
-    subpixel_refinement = _strict_bool(
-        subpixel_refinement, name="subpixel_refinement"
-    )
+    subpixel_refinement = _strict_bool(subpixel_refinement, name="subpixel_refinement")
     if subpixel_refinement:
         return estimate_subpixel_fov_shift(
             reference_fov,
@@ -422,9 +418,10 @@ def _validate_subpixel_interpolation_order(interpolation_order: int) -> int:
             "subpixel interpolation order must be an integer between 0 and 5"
         )
     if isinstance(interpolation_order, (float, np.floating)):
-        if not np.isfinite(interpolation_order) or not float(
-            interpolation_order
-        ).is_integer():
+        if (
+            not np.isfinite(interpolation_order)
+            or not float(interpolation_order).is_integer()
+        ):
             raise ValueError(
                 "subpixel interpolation order must be an integer between 0 and 5"
             )

@@ -23,7 +23,9 @@ _SHIFT_ERROR = "shift_yx must contain exactly two integer values"
 def install_integer_image_translation_validation() -> None:
     """Install idempotent validation around integer image translations."""
 
-    from . import fov_registration as _fov_registration  # pylint: disable=import-outside-toplevel
+    from . import (
+        fov_registration as _fov_registration,  # pylint: disable=import-outside-toplevel
+    )
 
     original = _fov_registration.apply_integer_image_translation
     if getattr(original, _PATCH_MARKER, False):
@@ -65,8 +67,7 @@ def _normalize_integer_shift_yx(shift_yx: Any) -> tuple[int, int]:
         raise ValueError(_SHIFT_ERROR)
 
     shift_y, shift_x = (
-        _normalize_integer_shift_component(value)
-        for value in flattened_shift.tolist()
+        _normalize_integer_shift_component(value) for value in flattened_shift.tolist()
     )
     return shift_y, shift_x
 

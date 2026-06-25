@@ -48,7 +48,9 @@ def test_absence_model_config_rejects_negative_discounts() -> None:
     ),
 )
 @pytest.mark.parametrize("value", (True, False, np.bool_(True), np.bool_(False)))
-def test_absence_model_config_rejects_boolean_scalars(field: str, value: object) -> None:
+def test_absence_model_config_rejects_boolean_scalars(
+    field: str, value: object
+) -> None:
     with pytest.raises(ValueError, match=field):
         AbsenceModelConfig(**{field: value})
 

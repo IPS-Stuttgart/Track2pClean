@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.growth_priors import (
     GrowthPriorConfig,
     fit_affine_growth_transform,
@@ -25,7 +24,9 @@ def test_growth_prior_config_normalizes_numeric_controls() -> None:
 
 
 @pytest.mark.parametrize("field", ["affine_weight", "radial_weight", "regularization"])
-@pytest.mark.parametrize("bad_value", [True, np.bool_(False), -1.0, float("nan"), float("inf")])
+@pytest.mark.parametrize(
+    "bad_value", [True, np.bool_(False), -1.0, float("nan"), float("inf")]
+)
 def test_growth_prior_config_rejects_invalid_nonnegative_controls(
     field: str,
     bad_value: object,
