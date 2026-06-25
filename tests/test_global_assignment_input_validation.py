@@ -89,6 +89,40 @@ def test_global_assignment_validates_and_normalizes_edge_metadata(
     assert calls["cost_threshold"] is None
 
 
+@pytest.mark.parametrize(
+    ("keyword", "value"),
+    [
+        ("start_cost", True),
+        ("start_cost", -0.1),
+        ("end_cost", "nan"),
+        ("gap_penalty", float("inf")),
+        ("cost_threshold", np.bool_(False)),
+        ("cost_threshold", -1.0),
+    ],
+)
+def test_global_assignment_rejects_invalid_solver_scalars(
+    monkeypatch: pytest.MonkeyPatch,
+    keyword: str,
+    value: object,
+) -> None:
+    def forbidden_solver(*_args: object, **_kwargs: object) -> _DummySolverResult:
+        raise AssertionError("solver should not be called for invalid scalar inputs")
+
+    monkeypatch.setattr(
+        assignment,
+        "_load_pyrecest_multisession_solver",
+        lambda: forbidden_solver,
+    )
+
+    kwargs = {keyword: value}
+    with pytest.raises(ValueError, match=keyword):
+        assignment.solve_global_assignment_from_pairwise_costs(
+            {(0, 1): np.zeros((1, 1))},
+            session_sizes=(1, 1),
+            **kwargs,
+        )
+
+
 def test_global_assignment_rejects_stale_session_edges():
     with pytest.raises(ValueError, match="same edges"):
         assignment.solve_global_assignment_from_pairwise_costs(
