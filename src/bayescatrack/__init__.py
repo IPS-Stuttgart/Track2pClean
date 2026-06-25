@@ -21,6 +21,9 @@ from ._empty_registered_roi_mask_validation import (
 from ._fov_affine_validation import (
     install_fov_affine_warp_validation as _install_fov_affine_warp_validation,
 )
+from ._global_track_row_validation import (
+    install_global_track_row_validation as _install_global_track_row_validation,
+)
 from ._ground_truth_track_validation import (
     install_ground_truth_track_validation as _install_ground_truth_track_validation,
 )
@@ -108,6 +111,7 @@ _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
 _install_track_row_fill_value_validation()
 _install_track_table_session_name_validation()
+_install_global_track_row_validation()
 _install_tracking_fill_value_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
