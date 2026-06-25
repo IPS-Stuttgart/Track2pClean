@@ -277,6 +277,14 @@ def _run_subject_tracklet_graph(
         graph_config=graph_config,
     )
     prediction = _paths_to_prediction_matrix(selected_paths, tracklets, n_sessions)
+    coverage_rows, coverage_summary = _coverage_audit_rows(
+        subject_dir.name,
+        reference_tracks,
+        tracklets=tracklets,
+        edges=edges,
+        selected_paths=selected_paths,
+        seed_session=int(config.seed_session),
+    )
     scores = _score_prediction_against_reference(prediction, reference, config=config)
     scores = {
         **dict(scores),
@@ -289,6 +297,7 @@ def _run_subject_tracklet_graph(
         "tracklet_graph_mht_beam_width": int(graph_config.beam_width),
         "tracklet_graph_mht_path_hypotheses": int(graph_config.path_hypotheses),
         "tracklet_graph_mht_max_join_gap": int(graph_config.max_join_gap),
+        **coverage_summary,
     }
     result = SubjectBenchmarkResult(
         subject=subject_dir.name,
@@ -309,10 +318,11 @@ def _run_subject_tracklet_graph(
         "best_score": float(sum(float(path.score) for path in selected_paths)),
         "pairwise_f1": float(scores.get("pairwise_f1", float("nan"))),
         "complete_track_f1": float(scores.get("complete_track_f1", float("nan"))),
+        **coverage_summary,
     }
     return {
         "result": result,
-        "diagnostic_rows": [*local_rows, *edge_rows, *path_rows],
+        "diagnostic_rows": [*local_rows, *edge_rows, *path_rows, *coverage_rows],
         "summary_row": summary_row,
     }
 
@@ -985,6 +995,306 @@ def _paths_to_prediction_matrix(
                 session_index = int(tracklet.start_session) + int(offset)
                 matrix[int(row_index), session_index] = int(roi)
     return matrix
+
+
+def _coverage_audit_rows(
+    subject: str,
+    reference_tracks: np.ndarray,
+    *,
+    tracklets: Sequence[Tracklet],
+    edges: Sequence[TrackletEdge],
+    selected_paths: Sequence[_PathHypothesis],
+    seed_session: int,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Return GT-only coverage diagnostics after graph selection is fixed."""
+
+    reference = np.asarray(reference_tracks, dtype=int)
+    observation_to_tracklet = _observation_tracklet_map(tracklets)
+    tracklets_by_id = {int(tracklet.tracklet_id): tracklet for tracklet in tracklets}
+    candidate_edges = {(int(edge.source_id), int(edge.target_id)) for edge in edges}
+    selected_edges = {
+        (int(source_id), int(target_id))
+        for path in selected_paths
+        for source_id, target_id in path.edge_ids
+    }
+
+    rows: list[dict[str, Any]] = []
+    summary = {
+        "tracklet_graph_audit_reference_tracks": int(reference.shape[0]),
+        "tracklet_graph_audit_reference_tracks_with_seed_observation": 0,
+        "tracklet_graph_audit_reference_tracks_with_seed_tracklet": 0,
+        "tracklet_graph_audit_reference_links": 0,
+        "tracklet_graph_audit_reference_links_preserved_in_tracklets": 0,
+        "tracklet_graph_audit_reference_breaks": 0,
+        "tracklet_graph_audit_break_correct_join_present": 0,
+        "tracklet_graph_audit_break_correct_join_selected": 0,
+        "tracklet_graph_audit_break_solver_rejected": 0,
+        "tracklet_graph_audit_break_candidate_missing": 0,
+        "tracklet_graph_audit_break_join_ineligible": 0,
+        "tracklet_graph_audit_tracks_split_0": 0,
+        "tracklet_graph_audit_tracks_split_1": 0,
+        "tracklet_graph_audit_tracks_split_2": 0,
+        "tracklet_graph_audit_tracks_split_3": 0,
+        "tracklet_graph_audit_tracks_split_4plus": 0,
+    }
+    for reference_index, reference_row in enumerate(reference):
+        track_row, break_rows = _reference_track_coverage_rows(
+            subject,
+            int(reference_index),
+            np.asarray(reference_row, dtype=int),
+            observation_to_tracklet=observation_to_tracklet,
+            tracklets_by_id=tracklets_by_id,
+            candidate_edges=candidate_edges,
+            selected_edges=selected_edges,
+            seed_session=int(seed_session),
+        )
+        rows.append(track_row)
+        rows.extend(break_rows)
+        _accumulate_coverage_summary(summary, track_row, break_rows)
+    rows.append({"row_type": "coverage_summary", "subject": subject, **summary})
+    return rows, summary
+
+
+def _observation_tracklet_map(
+    tracklets: Sequence[Tracklet],
+) -> dict[tuple[int, int], int]:
+    output: dict[tuple[int, int], int] = {}
+    for tracklet in tracklets:
+        for offset, roi in enumerate(tracklet.rois):
+            session_index = int(tracklet.start_session) + int(offset)
+            output[(session_index, int(roi))] = int(tracklet.tracklet_id)
+    return output
+
+
+def _reference_track_coverage_rows(
+    subject: str,
+    reference_index: int,
+    reference_row: np.ndarray,
+    *,
+    observation_to_tracklet: Mapping[tuple[int, int], int],
+    tracklets_by_id: Mapping[int, Tracklet],
+    candidate_edges: set[tuple[int, int]],
+    selected_edges: set[tuple[int, int]],
+    seed_session: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    observations = [
+        (int(session_index), int(roi))
+        for session_index, roi in enumerate(np.asarray(reference_row, dtype=int))
+        if int(roi) >= 0
+    ]
+    observation_tracklets = [
+        observation_to_tracklet.get((int(session_index), int(roi)))
+        for session_index, roi in observations
+    ]
+    seed_roi = (
+        int(reference_row[int(seed_session)])
+        if 0 <= int(seed_session) < int(reference_row.shape[0])
+        else -1
+    )
+    seed_tracklet_id = (
+        observation_to_tracklet.get((int(seed_session), int(seed_roi)))
+        if seed_roi >= 0
+        else None
+    )
+    reference_links = 0
+    preserved_links = 0
+    break_rows: list[dict[str, Any]] = []
+    for session_index in range(max(0, int(reference_row.shape[0]) - 1)):
+        source_roi = int(reference_row[int(session_index)])
+        target_roi = int(reference_row[int(session_index) + 1])
+        if source_roi < 0 or target_roi < 0:
+            continue
+        reference_links += 1
+        source_tid = observation_to_tracklet.get((int(session_index), source_roi))
+        target_tid = observation_to_tracklet.get((int(session_index) + 1, target_roi))
+        if source_tid is not None and source_tid == target_tid:
+            preserved_links += 1
+            continue
+        break_rows.append(
+            _reference_break_row(
+                subject,
+                reference_index,
+                source_session=int(session_index),
+                source_roi=source_roi,
+                target_session=int(session_index) + 1,
+                target_roi=target_roi,
+                source_tracklet_id=source_tid,
+                target_tracklet_id=target_tid,
+                tracklets_by_id=tracklets_by_id,
+                candidate_edges=candidate_edges,
+                selected_edges=selected_edges,
+            )
+        )
+    covered_tracklet_ids = [
+        int(tracklet_id)
+        for tracklet_id in observation_tracklets
+        if tracklet_id is not None
+    ]
+    covered_tracklet_count = len(set(covered_tracklet_ids))
+    tracklet_fragments = _tracklet_fragment_count(observation_tracklets)
+    track_row = {
+        "row_type": "reference_track_coverage",
+        "subject": subject,
+        "reference_track_index": int(reference_index),
+        "seed_session": int(seed_session),
+        "seed_roi": int(seed_roi),
+        "seed_tracklet_id": "" if seed_tracklet_id is None else int(seed_tracklet_id),
+        "has_seed_observation": int(seed_roi >= 0),
+        "has_seed_tracklet": int(seed_tracklet_id is not None),
+        "reference_observations": int(len(observations)),
+        "covered_reference_observations": int(len(covered_tracklet_ids)),
+        "covered_tracklet_count": int(covered_tracklet_count),
+        "covered_tracklet_fragments": int(tracklet_fragments),
+        "reference_links": int(reference_links),
+        "reference_links_preserved_in_tracklets": int(preserved_links),
+        "reference_breaks": int(reference_links - preserved_links),
+        "tracklet_ids": " ".join(str(item) for item in covered_tracklet_ids),
+    }
+    return track_row, break_rows
+
+
+def _reference_break_row(
+    subject: str,
+    reference_index: int,
+    *,
+    source_session: int,
+    source_roi: int,
+    target_session: int,
+    target_roi: int,
+    source_tracklet_id: int | None,
+    target_tracklet_id: int | None,
+    tracklets_by_id: Mapping[int, Tracklet],
+    candidate_edges: set[tuple[int, int]],
+    selected_edges: set[tuple[int, int]],
+) -> dict[str, Any]:
+    source_tracklet = (
+        tracklets_by_id.get(int(source_tracklet_id))
+        if source_tracklet_id is not None
+        else None
+    )
+    target_tracklet = (
+        tracklets_by_id.get(int(target_tracklet_id))
+        if target_tracklet_id is not None
+        else None
+    )
+    join_eligible = (
+        source_tracklet is not None
+        and target_tracklet is not None
+        and int(source_tracklet.end_session) == int(source_session)
+        and int(target_tracklet.start_session) == int(target_session)
+    )
+    edge_key = (
+        int(source_tracklet_id) if source_tracklet_id is not None else -1,
+        int(target_tracklet_id) if target_tracklet_id is not None else -1,
+    )
+    join_present = bool(join_eligible and edge_key in candidate_edges)
+    join_selected = bool(join_present and edge_key in selected_edges)
+    if source_tracklet_id is None:
+        reason = "source_observation_uncovered"
+    elif target_tracklet_id is None:
+        reason = "target_observation_uncovered"
+    elif not join_eligible:
+        reason = "join_ineligible_requires_split_or_overlap"
+    elif not join_present:
+        reason = "correct_join_candidate_missing"
+    elif not join_selected:
+        reason = "correct_join_present_solver_rejected"
+    else:
+        reason = "correct_join_selected"
+    return {
+        "row_type": "reference_break",
+        "subject": subject,
+        "reference_track_index": int(reference_index),
+        "source_session": int(source_session),
+        "source_roi": int(source_roi),
+        "target_session": int(target_session),
+        "target_roi": int(target_roi),
+        "source_tracklet": (
+            "" if source_tracklet_id is None else int(source_tracklet_id)
+        ),
+        "target_tracklet": (
+            "" if target_tracklet_id is None else int(target_tracklet_id)
+        ),
+        "source_tracklet_start": (
+            "" if source_tracklet is None else int(source_tracklet.start_session)
+        ),
+        "source_tracklet_end": (
+            "" if source_tracklet is None else int(source_tracklet.end_session)
+        ),
+        "target_tracklet_start": (
+            "" if target_tracklet is None else int(target_tracklet.start_session)
+        ),
+        "target_tracklet_end": (
+            "" if target_tracklet is None else int(target_tracklet.end_session)
+        ),
+        "correct_join_eligible": int(join_eligible),
+        "correct_join_present": int(join_present),
+        "correct_join_selected": int(join_selected),
+        "solver_rejected_correct_join": int(join_present and not join_selected),
+        "break_reason": reason,
+    }
+
+
+def _tracklet_fragment_count(tracklet_ids: Sequence[int | None]) -> int:
+    fragments = 0
+    previous: int | None = None
+    for tracklet_id in tracklet_ids:
+        if tracklet_id is None:
+            previous = None
+            continue
+        current = int(tracklet_id)
+        if previous is None or current != previous:
+            fragments += 1
+        previous = current
+    return int(fragments)
+
+
+def _accumulate_coverage_summary(
+    summary: dict[str, int],
+    track_row: Mapping[str, Any],
+    break_rows: Sequence[Mapping[str, Any]],
+) -> None:
+    summary["tracklet_graph_audit_reference_tracks_with_seed_observation"] += int(
+        track_row.get("has_seed_observation", 0)
+    )
+    summary["tracklet_graph_audit_reference_tracks_with_seed_tracklet"] += int(
+        track_row.get("has_seed_tracklet", 0)
+    )
+    summary["tracklet_graph_audit_reference_links"] += int(
+        track_row.get("reference_links", 0)
+    )
+    summary["tracklet_graph_audit_reference_links_preserved_in_tracklets"] += int(
+        track_row.get("reference_links_preserved_in_tracklets", 0)
+    )
+    summary["tracklet_graph_audit_reference_breaks"] += int(
+        track_row.get("reference_breaks", 0)
+    )
+    fragment_count = int(track_row.get("covered_tracklet_count", 0))
+    if fragment_count <= 0:
+        summary["tracklet_graph_audit_tracks_split_0"] += 1
+    elif fragment_count == 1:
+        summary["tracklet_graph_audit_tracks_split_1"] += 1
+    elif fragment_count == 2:
+        summary["tracklet_graph_audit_tracks_split_2"] += 1
+    elif fragment_count == 3:
+        summary["tracklet_graph_audit_tracks_split_3"] += 1
+    else:
+        summary["tracklet_graph_audit_tracks_split_4plus"] += 1
+    for row in break_rows:
+        summary["tracklet_graph_audit_break_correct_join_present"] += int(
+            row.get("correct_join_present", 0)
+        )
+        summary["tracklet_graph_audit_break_correct_join_selected"] += int(
+            row.get("correct_join_selected", 0)
+        )
+        summary["tracklet_graph_audit_break_solver_rejected"] += int(
+            row.get("solver_rejected_correct_join", 0)
+        )
+        reason = str(row.get("break_reason", ""))
+        if reason == "correct_join_candidate_missing":
+            summary["tracklet_graph_audit_break_candidate_missing"] += 1
+        elif reason == "join_ineligible_requires_split_or_overlap":
+            summary["tracklet_graph_audit_break_join_ineligible"] += 1
 
 
 def _edge_feature_row(
