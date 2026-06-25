@@ -23,16 +23,15 @@ def install_track_table_session_name_validation() -> None:
     if getattr(track_table, _PATCH_MARKER, False):
         return
 
-    original_post_init = track_table.__post_init__
+    original_init = track_table.__init__
     original_aligned_to = track_table.aligned_to
 
-    def __post_init__(self: Any) -> None:
+    def __init__(self: Any, session_names: Sequence[str], tracks: Any) -> None:
         normalized_session_names = _normalize_unique_session_names(
-            self.session_names,
+            session_names,
             field_name="session_names",
         )
-        object.__setattr__(self, "session_names", normalized_session_names)
-        original_post_init(self)
+        original_init(self, normalized_session_names, tracks)
 
     def aligned_to(self: Any, session_names: Sequence[str]) -> Any:
         _normalize_unique_session_names(
@@ -45,7 +44,7 @@ def install_track_table_session_name_validation() -> None:
         )
         return original_aligned_to(self, normalized_session_names)
 
-    setattr(track_table, "__post_init__", __post_init__)
+    setattr(track_table, "__init__", __init__)
     setattr(track_table, "aligned_to", aligned_to)
     setattr(track_table, _PATCH_MARKER, True)
 
