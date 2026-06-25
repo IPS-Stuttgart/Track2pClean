@@ -12,6 +12,7 @@ from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative
 from ._numeric_validation import integer as _integer
 from ._numeric_validation import positive_integer as _positive_integer
 from ._numeric_validation import probability as _probability
+from ._numeric_validation import validated_numeric_float as _validated_numeric_float
 
 Edge = tuple[int, int, int, int]
 
@@ -87,6 +88,44 @@ def _validated_session_edge(
     return source_session, target_session
 
 
+def _scalar_value(value: Any, *, name: str) -> Any:
+    array = np.asarray(value)
+    if array.shape != ():
+        raise ValueError(f"{name} must be a scalar value")
+    return array.item()
+
+
+def _validated_roi_index(value: Any, *, name: str) -> int:
+    roi_index = _integer(_scalar_value(value, name=name), name=name)
+    if roi_index < 0:
+        raise ValueError(f"{name} must be a non-negative ROI index")
+    return roi_index
+
+
+def _validated_roi_index_vector(values: Any, *, name: str) -> np.ndarray:
+    raw = np.asarray(values, dtype=object)
+    if raw.ndim != 1:
+        raise ValueError(f"{name} must be a one-dimensional ROI-index sequence")
+    roi_indices = np.empty(raw.shape, dtype=int)
+    for index, value in np.ndenumerate(raw):
+        roi_indices[index] = _validated_roi_index(value, name=f"{name}[{index[0]}]")
+    return roi_indices
+
+
+def _validated_edge_candidate(candidate: Any, *, name: str) -> tuple[int, int, float]:
+    if isinstance(candidate, (str, bytes)):
+        raise ValueError(f"{name} must be a three-item edge candidate")
+    try:
+        source_roi, target_roi, cost = candidate
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a three-item edge candidate") from exc
+    return (
+        _validated_roi_index(source_roi, name=f"{name} source_roi"),
+        _validated_roi_index(target_roi, name=f"{name} target_roi"),
+        _validated_numeric_float(_scalar_value(cost, name=f"{name} cost"), name=f"{name} cost"),
+    )
+
+
 def top_k_edge_candidates(
     cost_matrix: Any,
     *,
@@ -137,8 +176,14 @@ def candidate_edge_map(
             n_sessions=n_sessions,
         )
         matrix = np.asarray(matrix_values, dtype=float)
-        source_indices = np.asarray(roi_indices_by_session[source_session], dtype=int)
-        target_indices = np.asarray(roi_indices_by_session[target_session], dtype=int)
+        source_indices = _validated_roi_index_vector(
+            roi_indices_by_session[source_session],
+            name=f"roi_indices_by_session[{source_session}]",
+        )
+        target_indices = _validated_roi_index_vector(
+            roi_indices_by_session[target_session],
+            name=f"roi_indices_by_session[{target_session}]",
+        )
         if matrix.shape != (source_indices.size, target_indices.size):
             raise ValueError(
                 f"Cost matrix shape for edge {edge} does not match ROI indices"
@@ -184,15 +229,19 @@ def enumerate_track_hypotheses(
             n_sessions=n_sessions,
         )
         source_lookup: dict[int, list[tuple[int, float]]] = {}
-        for source_roi, target_roi, cost in candidates:
-            source_lookup.setdefault(int(source_roi), []).append(
-                (int(target_roi), float(cost))
+        for candidate_index, candidate in enumerate(candidates):
+            source_roi, target_roi, cost = _validated_edge_candidate(
+                candidate,
+                name=f"edge_candidates[{edge!r}][{candidate_index}]",
             )
+            source_lookup.setdefault(source_roi, []).append((target_roi, cost))
         by_edge_source[(source_session, target_session)] = source_lookup
 
-    hypotheses = [
-        TrackHypothesis(row=(int(roi),), cost=0.0) for roi in start_roi_indices
-    ]
+    start_indices = _validated_roi_index_vector(
+        start_roi_indices,
+        name="start_roi_indices",
+    )
+    hypotheses = [TrackHypothesis(row=(int(roi),), cost=0.0) for roi in start_indices]
     for session_index in range(n_sessions - 1):
         lookup = by_edge_source.get((session_index, session_index + 1), {})
         expanded: list[TrackHypothesis] = []
