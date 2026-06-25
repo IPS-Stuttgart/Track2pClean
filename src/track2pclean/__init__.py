@@ -7,4 +7,8 @@ installations expose the ``track2pclean`` console script, while historical
 """
 
 from bayescatrack import *  # noqa: F401,F403
-from bayescatrack import __all__ as __all__, main as main
+from bayescatrack import __all__ as _bayescatrack_all
+
+from ._cli import main as main
+
+__all__ = tuple(dict.fromkeys((*_bayescatrack_all, "main")))
