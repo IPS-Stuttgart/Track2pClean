@@ -48,7 +48,9 @@ class HypothesisConfig:
                 _finite_nonnegative_float(self.max_edge_cost, name="max_edge_cost"),
             )
         object.__setattr__(
-            self, "fill_value", _integer(self.fill_value, name="fill_value")
+            self,
+            "fill_value",
+            _negative_integer_sentinel(self.fill_value, name="fill_value"),
         )
 
 
@@ -237,7 +239,7 @@ def consensus_edges(
     """Return edges that appear in enough prediction matrices or edge sets."""
 
     inputs = tuple(track_matrices)
-    fill_value = _integer(fill_value, name="fill_value")
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
     if min_support_fraction is not None:
         support_fraction = _probability(
             min_support_fraction,
@@ -329,6 +331,13 @@ def _is_edge_set_input(matrix_values: Any, matrix: np.ndarray) -> bool:
         # lists as explicit edge sets.
         return False
     return all(isinstance(row, tuple) and len(row) == 4 for row in matrix_values)
+
+
+def _negative_integer_sentinel(value: Any, *, name: str) -> int:
+    integer_value = _integer(value, name=name)
+    if integer_value >= 0:
+        raise ValueError(f"{name} must be a negative integer sentinel")
+    return integer_value
 
 
 def hypotheses_to_matrix(hypotheses: Sequence[TrackHypothesis]) -> np.ndarray:
