@@ -10,6 +10,7 @@ from . import _calibrated_roi_stat_feature_patch as _calibrated_roi_stat_feature
 from . import _calibrated_session_gap_validation as _calibrated_session_gap_validation
 from . import _dynamic_edge_prior_validation as _dynamic_edge_prior_validation
 from . import _global_assignment_input_validation as _global_assignment_input_validation
+from . import _neuropil_ratio_shape_validation as _neuropil_ratio_shape_validation
 from . import _roi_aware_local_validation as _roi_aware_local_validation
 from . import _session_edge_pair_validation as _session_edge_pair_validation
 from . import _shifted_iou_preset_validation as _shifted_iou_preset_validation
@@ -18,6 +19,7 @@ from . import (
 )
 
 _activity_similarity_control_validation.install_activity_similarity_control_validation()
+_neuropil_ratio_shape_validation.install_neuropil_ratio_shape_validation()
 _session_edge_pair_validation.install_session_edge_pair_validation()
 _global_assignment_input_validation.install_global_assignment_input_validation()
 _roi_aware_local_validation.install_roi_aware_local_validation()
@@ -32,6 +34,7 @@ _PATCH_MODULES = (
     _calibrated_session_gap_validation,
     _dynamic_edge_prior_validation,
     _global_assignment_input_validation,
+    _neuropil_ratio_shape_validation,
     _roi_aware_local_validation,
     _session_edge_pair_validation,
     _shifted_iou_preset_validation,
