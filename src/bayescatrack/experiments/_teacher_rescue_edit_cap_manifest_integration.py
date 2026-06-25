@@ -19,9 +19,6 @@ def install_teacher_rescue_edit_cap_manifest_integration() -> None:
     from bayescatrack.experiments import _teacher_rescue_manifest_integration as base
     from bayescatrack.experiments import benchmark_manifest as manifest
 
-    if getattr(manifest, "_bayescatrack_teacher_rescue_edit_cap_integration", False):
-        return
-
     base.TEACHER_ADJACENT_RESCUE_FIELDS.add(EDIT_CAP_FIELD)
     manifest.RUNNER_SPECIFIC_FIELDS.add(EDIT_CAP_FIELD)
     manifest.RUN_SPEC_FIELDS.add(EDIT_CAP_FIELD)
