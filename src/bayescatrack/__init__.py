@@ -22,7 +22,10 @@ from ._ground_truth_track_validation import (
     install_ground_truth_track_validation as _install_ground_truth_track_validation,
 )
 from ._integer_translation_validation import (
-    install_integer_image_translation_validation as _install_integer_image_translation_validation,
+    install_integer_image_translation_validation as _install_integer_translation_validation,
+)
+from ._matching_bundle_roi_index_validation import (
+    install_matching_bundle_roi_index_validation as _install_matching_bundle_roi_index_validation,
 )
 from ._reference_validation import (
     install_reference_validation as _install_reference_validation,
@@ -82,6 +85,7 @@ _install_ground_truth_track_validation()
 _install_registration_selection_validation()
 _install_strict_config_validation()
 _install_empty_candidate_gate_margin_fix()
+_install_matching_bundle_roi_index_validation()
 _install_session_gap_validation()
 _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
