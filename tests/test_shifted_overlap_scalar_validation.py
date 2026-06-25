@@ -91,7 +91,7 @@ def test_shifted_overlap_direct_wrapper_uses_same_scalar_validation() -> None:
     def original_method(
         self: CalciumPlaneData,
         other: CalciumPlaneData,
-        **kwargs: object,
+        **_kwargs: object,
     ) -> np.ndarray:
         assert self is reference_plane
         assert other is measurement_plane
