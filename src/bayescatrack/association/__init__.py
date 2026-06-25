@@ -1,6 +1,5 @@
 """Association helpers for BayesCaTrack."""
 
-from .. import _absence_cue_shape_validation as _absence_cue_shape_validation
 from .._exports import ASSOCIATION_PUBLIC_NAMES, reexport
 from ..core import bridge as _bridge
 from . import _absence_cue_shape_validation as _absence_cue_shape_validation
