@@ -34,14 +34,17 @@ from ._integer_translation_validation import (
 from ._matching_bundle_roi_index_validation import (
     install_matching_bundle_roi_index_validation as _install_matching_bundle_roi_index_validation,
 )
-from ._reference_validation import (
-    install_reference_validation as _install_reference_validation,
-)
 from ._matching_validation import (
     install_matching_layout_validation as _install_matching_layout_validation,
 )
 from ._multisession_solver_track_validation import (
     install_multisession_solver_track_validation as _install_multisession_solver_track_validation,
+)
+from ._pairwise_return_components_validation import (
+    install_return_components_validation as _install_return_components_validation,
+)
+from ._reference_validation import (
+    install_reference_validation as _install_reference_validation,
 )
 from ._registration_selection_validation import (
     install_registration_selection_validation as _install_registration_selection_validation,
@@ -134,5 +137,6 @@ _install_track_row_fill_value_validation()
 _install_track_table_session_name_validation()
 _install_tracking_fill_value_validation()
 _install_tracking_result_matrix_validation()
+_install_return_components_validation(_bridge)
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
