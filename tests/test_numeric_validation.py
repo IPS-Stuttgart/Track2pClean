@@ -27,6 +27,39 @@ def test_validated_numeric_float_rejects_uncoercible_values_as_value_error(value
 
 
 @pytest.mark.parametrize(
+    "value",
+    [
+        [1.0],
+        (1.0,),
+        np.asarray([1.0]),
+        np.asarray([[1.0]]),
+    ],
+)
+def test_validated_numeric_float_rejects_nonscalar_array_like_values(value):
+    with pytest.raises(ValueError, match="control must be finite"):
+        validated_numeric_float(value, name="control")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        np.asarray(True),
+        np.asarray(False),
+        np.asarray([True]),
+        np.asarray([False]),
+    ],
+)
+def test_validated_numeric_float_rejects_boolean_array_values(value):
+    with pytest.raises(ValueError, match="control must be finite"):
+        validated_numeric_float(value, name="control")
+
+
+@pytest.mark.parametrize("value", [np.asarray(1.25), np.asarray(2)])
+def test_validated_numeric_float_accepts_zero_dimensional_numeric_arrays(value):
+    assert validated_numeric_float(value, name="control") == float(value.item())
+
+
+@pytest.mark.parametrize(
     "validator",
     [finite_positive_float, probability, nonnegative_integer],
 )
