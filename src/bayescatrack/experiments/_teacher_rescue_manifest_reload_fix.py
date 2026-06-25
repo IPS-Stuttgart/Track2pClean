@@ -22,6 +22,12 @@ def install_teacher_rescue_manifest_reload_fix() -> Callable[[], None]:
 
         if getattr(manifest, "_bayescatrack_teacher_rescue_manifest_integration", False):
             base._install_advanced_workbench_manifest_row()
+            if getattr(manifest, "_bayescatrack_teacher_rescue_edit_cap_integration", False):
+                from bayescatrack.experiments import (
+                    _teacher_rescue_edit_cap_manifest_integration as edit_cap,
+                )
+
+                edit_cap._install_advanced_workbench_edit_cap_rows()
             return
         original()
 
