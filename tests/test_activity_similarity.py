@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack.association.activity_similarity import (
     activity_similarity_components,
     add_activity_similarity_components,
@@ -15,6 +16,61 @@ def _masks() -> np.ndarray:
     masks[0, 0:2, 0:2] = True
     masks[1, 2:4, 2:4] = True
     return masks
+
+
+def _planes() -> tuple[CalciumPlaneData, CalciumPlaneData]:
+    masks = _masks()
+    traces = np.array([[0.0, 1.0, 0.0, 1.0], [0.0, 0.0, 1.0, 1.0]])
+    reference = CalciumPlaneData(roi_masks=masks, traces=traces, spike_traces=traces)
+    measurement = CalciumPlaneData(roi_masks=masks, traces=traces, spike_traces=traces)
+    return reference, measurement
+
+
+@pytest.mark.parametrize(
+    "similarity_epsilon",
+    [True, np.bool_(True), 0.0, -1.0e-12, np.nan, np.inf, -np.inf],
+)
+def test_activity_similarity_rejects_invalid_similarity_epsilon(
+    similarity_epsilon: object,
+) -> None:
+    reference, measurement = _planes()
+
+    with pytest.raises(ValueError, match="similarity_epsilon"):
+        activity_similarity_components(
+            reference,
+            measurement,
+            similarity_epsilon=similarity_epsilon,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize(
+    "event_threshold",
+    [True, np.bool_(False), np.nan, np.inf, -np.inf],
+)
+def test_activity_similarity_rejects_invalid_event_threshold(
+    event_threshold: object,
+) -> None:
+    reference, measurement = _planes()
+
+    with pytest.raises(ValueError, match="event_threshold"):
+        activity_similarity_components(
+            reference,
+            measurement,
+            event_threshold=event_threshold,  # type: ignore[arg-type]
+        )
+
+
+def test_activity_similarity_add_hook_validates_controls() -> None:
+    reference, measurement = _planes()
+    pairwise_components = {"pairwise_cost_matrix": np.zeros((2, 2), dtype=float)}
+
+    with pytest.raises(ValueError, match="event_threshold"):
+        add_activity_similarity_components(
+            pairwise_components,
+            reference,
+            measurement,
+            event_threshold=np.nan,
+        )
 
 
 def test_activity_similarity_favors_matching_trace_structure() -> None:
