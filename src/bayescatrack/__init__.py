@@ -24,6 +24,9 @@ from ._registration_selection_validation import (
 from ._session_gap_validation import (
     install_session_gap_validation as _install_session_gap_validation,
 )
+from ._session_match_validation import (
+    install_session_match_result_validation as _install_session_match_result_validation,
+)
 from ._strict_config_validation import (
     install_strict_config_validation as _install_strict_config_validation,
 )
@@ -68,6 +71,7 @@ _install_fov_affine_warp_validation()
 _install_registration_selection_validation()
 _install_strict_config_validation()
 _install_session_gap_validation()
+_install_session_match_result_validation()
 _install_tracking_start_roi_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
