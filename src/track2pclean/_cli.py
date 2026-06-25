@@ -56,10 +56,18 @@ def _handle_benchmark(args: list[str]) -> int:
         return 2
 
     module = importlib.import_module(command.module)
+    command_args = args[1:]
+    if command_args and command_args[0] in {"-h", "--help"} and hasattr(
+        module, "build_arg_parser"
+    ):
+        parser = module.build_arg_parser()
+        parser.prog = f"track2pclean benchmark {command_name}"
+        parser.parse_args(command_args)
+        return 0
     return _run_with_program_name(
         f"track2pclean benchmark {command_name}",
         module.main,
-        args[1:],
+        command_args,
     )
 
 
