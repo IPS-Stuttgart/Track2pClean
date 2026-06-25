@@ -35,6 +35,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args[0] == "benchmark":
         return _handle_benchmark(args[1:])
+    if args[0] == "growth":
+        return _handle_module_command(
+            args[1:],
+            module_name="bayescatrack.analysis.growth",
+            program_name="track2pclean growth",
+            legacy_program_name="bayescatrack growth",
+        )
+    if args[0] == "advanced":
+        return _handle_module_command(
+            args[1:],
+            module_name="bayescatrack.experiments.advanced_improvement_workbench",
+            program_name="track2pclean advanced",
+            legacy_program_name="python -m bayescatrack.experiments.advanced_improvement_workbench",
+        )
 
     return _run_with_program_name("track2pclean", _legacy_cli.main, args)
 
@@ -69,6 +83,102 @@ def _handle_benchmark(args: list[str]) -> int:
         module.main,
         command_args,
     )
+
+
+def _handle_module_command(
+    args: list[str],
+    *,
+    module_name: str,
+    program_name: str,
+    legacy_program_name: str,
+) -> int:
+    module = importlib.import_module(module_name)
+    original_build_arg_parser = getattr(module, "build_arg_parser", None)
+
+    if not callable(original_build_arg_parser):
+        return _run_with_program_name(program_name, module.main, args)
+
+    def _build_native_arg_parser(*parser_args: Any, **parser_kwargs: Any) -> argparse.ArgumentParser:
+        parser = original_build_arg_parser(*parser_args, **parser_kwargs)
+        _retitle_arg_parser(
+            parser,
+            legacy_program_name=legacy_program_name,
+            program_name=program_name,
+        )
+        return parser
+
+    try:
+        setattr(module, "build_arg_parser", _build_native_arg_parser)
+        return _run_with_program_name(program_name, module.main, args)
+    finally:
+        setattr(module, "build_arg_parser", original_build_arg_parser)
+
+
+def _retitle_arg_parser(
+    parser: argparse.ArgumentParser,
+    *,
+    legacy_program_name: str,
+    program_name: str,
+) -> None:
+    _replace_parser_program_prefix(
+        parser,
+        legacy_program_name=legacy_program_name,
+        program_name=program_name,
+    )
+    _replace_parser_text(parser, "BayesCaTrack", "Track2pClean")
+    _replace_parser_text(parser, "bayescatrack", "track2pclean")
+
+
+def _replace_parser_program_prefix(
+    parser: argparse.ArgumentParser,
+    *,
+    legacy_program_name: str,
+    program_name: str,
+) -> None:
+    if parser.prog == legacy_program_name or parser.prog.startswith(
+        f"{legacy_program_name} "
+    ):
+        parser.prog = f"{program_name}{parser.prog[len(legacy_program_name):]}"
+
+    for child_parser in _iter_child_arg_parsers(parser):
+        _replace_parser_program_prefix(
+            child_parser,
+            legacy_program_name=legacy_program_name,
+            program_name=program_name,
+        )
+
+
+def _replace_parser_text(
+    parser: argparse.ArgumentParser,
+    old_text: str,
+    new_text: str,
+) -> None:
+    for attribute_name in ("description", "epilog"):
+        value = getattr(parser, attribute_name, None)
+        if isinstance(value, str):
+            setattr(parser, attribute_name, value.replace(old_text, new_text))
+
+    for action in parser._actions:  # pylint: disable=protected-access
+        help_text = getattr(action, "help", None)
+        if isinstance(help_text, str):
+            action.help = help_text.replace(old_text, new_text)
+
+    for child_parser in _iter_child_arg_parsers(parser):
+        _replace_parser_text(child_parser, old_text, new_text)
+
+
+def _iter_child_arg_parsers(
+    parser: argparse.ArgumentParser,
+) -> list[argparse.ArgumentParser]:
+    child_parsers: list[argparse.ArgumentParser] = []
+    for action in parser._actions:  # pylint: disable=protected-access
+        choices = getattr(action, "choices", None)
+        if not isinstance(choices, dict):
+            continue
+        child_parsers.extend(
+            choice for choice in choices.values() if isinstance(choice, argparse.ArgumentParser)
+        )
+    return child_parsers
 
 
 def _build_benchmark_help_parser() -> argparse.ArgumentParser:
