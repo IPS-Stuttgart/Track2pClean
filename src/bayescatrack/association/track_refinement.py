@@ -99,11 +99,7 @@ def track_geometry_issues(
     """Flag detections whose position is inconsistent with the full track."""
 
     cfg = config or TrackSmoothingConfig()
-    rows = np.asarray(track_rows, dtype=int)
-    if rows.ndim != 2:
-        raise ValueError("track_rows must be two-dimensional")
-    if rows.shape[1] != len(position_tables):
-        raise ValueError("position_tables must contain one table per session")
+    rows = _validated_track_rows_and_position_tables(track_rows, position_tables)
 
     issues: list[TrackGeometryIssue] = []
     for track_index, row in enumerate(rows):
@@ -143,7 +139,7 @@ def smoothed_track_positions(
     """Return fitted per-track positions for present detections."""
 
     fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
-    rows = np.asarray(track_rows, dtype=int)
+    rows = _validated_track_rows_and_position_tables(track_rows, position_tables)
     output: dict[int, dict[int, np.ndarray]] = {}
     for track_index, row in enumerate(rows):
         session_indices, positions, _roi_indices = _track_positions(
@@ -222,6 +218,18 @@ def geometry_issue_rows(
         }
         for issue in issues
     ]
+
+
+def _validated_track_rows_and_position_tables(
+    track_rows: Any,
+    position_tables: Sequence[Mapping[int, Any]],
+) -> np.ndarray:
+    rows = np.asarray(track_rows, dtype=int)
+    if rows.ndim != 2:
+        raise ValueError("track_rows must be two-dimensional")
+    if rows.shape[1] != len(position_tables):
+        raise ValueError("position_tables must contain one table per session")
+    return rows
 
 
 def _track_positions(
