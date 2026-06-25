@@ -18,8 +18,37 @@ def install_reference_validation(reference_module: ModuleType | None = None) -> 
             reference as reference_module,  # pylint: disable=import-outside-toplevel,reimported
         )
 
+    _install_optional_int_parser_validation(reference_module)
     _install_curated_mask_validation(reference_module)
     _install_session_index_validation(reference_module)
+
+
+def _install_optional_int_parser_validation(reference_module: ModuleType) -> None:
+    original_parse_optional_int = reference_module._parse_optional_int  # pylint: disable=protected-access
+    if getattr(original_parse_optional_int, _PATCH_ATTR, False):
+        return
+
+    missing_strings = frozenset(reference_module._MISSING_STRINGS)  # pylint: disable=protected-access
+
+    def _parse_optional_int_with_validation(value: Any) -> int | None:
+        parsed_value = original_parse_optional_int(value)
+        if parsed_value is not None or _is_explicit_missing_roi_index(
+            value,
+            missing_strings=missing_strings,
+        ):
+            return parsed_value
+        raise ValueError(
+            "ROI index must be integer-like or an explicit missing value; "
+            f"got {value!r}"
+        )
+
+    setattr(_parse_optional_int_with_validation, _PATCH_ATTR, True)
+    setattr(
+        _parse_optional_int_with_validation,
+        "_bayescatrack_original",
+        original_parse_optional_int,
+    )
+    reference_module._parse_optional_int = _parse_optional_int_with_validation  # pylint: disable=protected-access
 
 
 def _install_curated_mask_validation(reference_module: ModuleType) -> None:
@@ -110,6 +139,46 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
     )
     reference_module._validate_session_index = (
         _validate_session_index_with_validation  # pylint: disable=protected-access
+    )
+
+
+def _is_explicit_missing_roi_index(
+    value: Any,
+    *,
+    missing_strings: frozenset[str],
+) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, (bool, np.bool_)):
+        return False
+    if isinstance(value, bytes):
+        try:
+            value = value.decode("utf-8")
+        except UnicodeDecodeError:
+            return False
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.lower() in missing_strings:
+            return True
+        try:
+            numeric_value = float(stripped)
+        except ValueError:
+            return False
+        return _is_numeric_missing_roi_index(numeric_value)
+    if isinstance(value, (int, np.integer)):
+        return int(value) < 0
+    if isinstance(value, (float, np.floating)):
+        return _is_numeric_missing_roi_index(float(value))
+    return False
+
+
+def _is_numeric_missing_roi_index(numeric_value: float) -> bool:
+    if np.isnan(numeric_value):
+        return True
+    return bool(
+        np.isfinite(numeric_value)
+        and numeric_value.is_integer()
+        and numeric_value < 0.0
     )
 
 

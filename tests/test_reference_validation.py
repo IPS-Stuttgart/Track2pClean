@@ -40,6 +40,42 @@ def test_track2p_reference_rejects_ambiguous_curated_mask_values(curated_mask) -
         _reference(curated_mask=curated_mask)
 
 
+def test_track2p_reference_preserves_explicit_missing_roi_values() -> None:
+    reference = Track2pReference(
+        session_names=("day0", "day1"),
+        suite2p_indices=np.array(
+            [
+                [0, ""],
+                ["-1", None],
+                [np.nan, "null"],
+            ],
+            dtype=object,
+        ),
+        source="unit_test",
+    )
+
+    npt.assert_array_equal(
+        reference.present_mask(),
+        np.array(
+            [
+                [True, False],
+                [False, False],
+                [False, False],
+            ]
+        ),
+    )
+
+
+@pytest.mark.parametrize("bad_value", ["typo", b"typo", object()])
+def test_track2p_reference_rejects_unrecognized_missing_roi_tokens(bad_value) -> None:
+    with pytest.raises(ValueError, match="integer-like or an explicit missing value"):
+        Track2pReference(
+            session_names=("day0",),
+            suite2p_indices=np.array([[bad_value]], dtype=object),
+            source="unit_test",
+        )
+
+
 @pytest.mark.parametrize("session_indices", [(0, True), (0, 1.5), "01"])
 def test_track2p_reference_rejects_malformed_session_indices(session_indices) -> None:
     reference = _reference(curated_mask=np.array([True, True]))
