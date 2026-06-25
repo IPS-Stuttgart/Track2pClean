@@ -249,6 +249,29 @@ def test_full_mht_edge_score_rewards_track2p_prior_edges(monkeypatch):
     assert with_prior == without_prior + 2.0
 
 
+def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
+    active = full_mht._ActiveTrackSource(
+        row_index=0, source_session=1, source_roi=5, gap_length=0
+    )
+    config = full_mht.FullMHTConfig(
+        miss_cost=2.0,
+        track2p_prior_miss_penalty=3.0,
+    )
+
+    assert full_mht._miss_cost(
+        active,
+        target_session=2,
+        track2p_prior_edges=frozenset({(1, 2, 5, 9)}),
+        config=config,
+    ) == 5.0
+    assert full_mht._miss_cost(
+        active,
+        target_session=3,
+        track2p_prior_edges=frozenset({(1, 2, 5, 9)}),
+        config=config,
+    ) == 2.0
+
+
 def test_full_mht_proposal_targets_are_scoped_to_source_and_scan():
     edges = frozenset(
         {

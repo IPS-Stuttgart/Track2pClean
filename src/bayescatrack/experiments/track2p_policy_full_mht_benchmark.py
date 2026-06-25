@@ -106,6 +106,7 @@ class FullMHTConfig:
     growth_mahalanobis_weight: float = 0.25
     local_deformation_weight: float = 0.50
     track2p_prior_weight: float = 0.0
+    track2p_prior_miss_penalty: float = 0.0
     growth_anchor_min_registered_iou: float = 0.55
     growth_anchor_min_shifted_iou: float = 0.30
     growth_anchor_min_cell_probability: float = 0.80
@@ -353,6 +354,9 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_track2p_prior_weight": float(
             mht_config.track2p_prior_weight
+        ),
+        "track2p_full_mht_track2p_prior_miss_penalty": float(
+            mht_config.track2p_prior_miss_penalty
         ),
         "track2p_full_mht_growth_anchor_min_registered_iou": float(
             mht_config.growth_anchor_min_registered_iou
@@ -1044,6 +1048,7 @@ def _expand_hypothesis_scan(
 ) -> list[_MHTHypothesis]:
     tracks = np.asarray(hypothesis.tracks, dtype=int)
     next_session = int(session_index) + 1
+    prior_edges = track2p_prior_edges or frozenset()
     active_sources = _active_track_sources(
         tracks, session_index=int(session_index), max_gap=int(config.max_gap)
     )
@@ -1085,7 +1090,7 @@ def _expand_hypothesis_scan(
             source_rois=source_rois,
             edge_top_k=int(config.edge_top_k),
             config=config,
-            track2p_prior_edges=track2p_prior_edges or frozenset(),
+            track2p_prior_edges=prior_edges,
         )
         for source_session, source_rois in source_rois_by_session.items()
     }
@@ -1102,18 +1107,31 @@ def _expand_hypothesis_scan(
     active_rows = [int(active_source.row_index) for active_source in active_sources]
     gap_active_tracks = sum(1 for active in active_sources if int(active.gap_length) > 0)
     max_gap_length = max((int(active.gap_length) for active in active_sources), default=0)
+    row_non_assignment_costs = np.asarray(
+        [
+            _miss_cost(
+                active_source,
+                target_session=next_session,
+                track2p_prior_edges=prior_edges,
+                config=config,
+            )
+            for active_source in active_sources
+        ],
+        dtype=float,
+    )
+    all_miss_cost = float(np.sum(row_non_assignment_costs))
     if not finite_target_rois:
         carried = tracks.copy()
         carried[active_rows, next_session] = -1
         return [
             _MHTHypothesis(
                 carried,
-                hypothesis.score - float(config.miss_cost) * float(len(active_sources)),
+                hypothesis.score - all_miss_cost,
                 hypothesis.history
                 + (
                     {
                         "session_index": int(session_index),
-                        "scan_cost": float(config.miss_cost) * float(len(active_sources)),
+                        "scan_cost": all_miss_cost,
                         "assigned_edges": 0,
                         "missed_tracks": int(len(active_sources)),
                         "gap_active_tracks": int(gap_active_tracks),
@@ -1162,7 +1180,7 @@ def _expand_hypothesis_scan(
                 source_local=int(source_local),
                 target_local=int(target_local),
                 config=config,
-                track2p_prior_edges=track2p_prior_edges or frozenset(),
+                track2p_prior_edges=prior_edges,
             )
             if int(active_source.gap_length) > 0:
                 score -= float(config.gap_reactivation_cost) * float(
@@ -1181,12 +1199,12 @@ def _expand_hypothesis_scan(
         return [
             _MHTHypothesis(
                 carried,
-                hypothesis.score - float(config.miss_cost) * float(len(active_sources)),
+                hypothesis.score - all_miss_cost,
                 hypothesis.history
                 + (
                     {
                         "session_index": int(session_index),
-                        "scan_cost": float(config.miss_cost) * float(len(active_sources)),
+                        "scan_cost": all_miss_cost,
                         "assigned_edges": 0,
                         "missed_tracks": int(len(active_sources)),
                         "gap_active_tracks": int(gap_active_tracks),
@@ -1202,9 +1220,7 @@ def _expand_hypothesis_scan(
     solutions = murty_k_best_assignments(
         cost_matrix,
         k=max(1, int(config.scan_hypotheses)),
-        row_non_assignment_costs=np.full(
-            (len(active_sources),), float(config.miss_cost)
-        ),
+        row_non_assignment_costs=row_non_assignment_costs,
         col_non_assignment_costs=np.zeros((len(finite_target_rois),), dtype=float),
     )
     output: list[_MHTHypothesis] = []
@@ -1295,6 +1311,27 @@ def _edge_score(
     if track2p_prior:
         score += float(config.track2p_prior_weight)
     return float(score)
+
+
+def _miss_cost(
+    active_source: _ActiveTrackSource,
+    *,
+    target_session: int,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+    config: FullMHTConfig,
+) -> float:
+    cost = float(config.miss_cost)
+    if not track2p_prior_edges or float(config.track2p_prior_miss_penalty) <= 0.0:
+        return cost
+    has_prior_successor = any(
+        int(session_a) == int(active_source.source_session)
+        and int(session_b) == int(target_session)
+        and int(roi_a) == int(active_source.source_roi)
+        for session_a, session_b, roi_a, _roi_b in track2p_prior_edges
+    )
+    if has_prior_successor:
+        cost += float(config.track2p_prior_miss_penalty)
+    return cost
 
 
 def _all_summary_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -1390,6 +1427,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--growth-mahalanobis-weight", type=float, default=0.25)
     parser.add_argument("--local-deformation-weight", type=float, default=0.50)
     parser.add_argument("--track2p-prior-weight", type=float, default=0.0)
+    parser.add_argument("--track2p-prior-miss-penalty", type=float, default=0.0)
     parser.add_argument("--growth-anchor-min-registered-iou", type=float, default=0.55)
     parser.add_argument("--growth-anchor-min-shifted-iou", type=float, default=0.30)
     parser.add_argument(
@@ -1452,6 +1490,7 @@ def main(argv: list[str] | None = None) -> int:
             growth_mahalanobis_weight=float(args.growth_mahalanobis_weight),
             local_deformation_weight=float(args.local_deformation_weight),
             track2p_prior_weight=float(args.track2p_prior_weight),
+            track2p_prior_miss_penalty=float(args.track2p_prior_miss_penalty),
             growth_anchor_min_registered_iou=float(
                 args.growth_anchor_min_registered_iou
             ),
