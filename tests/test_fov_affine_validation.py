@@ -5,6 +5,7 @@ import pytest
 from bayescatrack.fov_affine_registration import (
     apply_affine_image_warp,
     apply_affine_roi_mask_warp,
+    estimate_fov_affine_transform,
 )
 
 _AFFINE_IDENTITY_XY = np.asarray(
@@ -74,4 +75,63 @@ def test_apply_affine_roi_mask_warp_rejects_malformed_output_shape(bad_output_sh
             masks,
             _AFFINE_IDENTITY_XY,
             output_shape=bad_output_shape,
+        )
+
+
+@pytest.mark.parametrize(
+    "bad_grid_shape",
+    [
+        (True, 3),
+        (0, 3),
+        (2.5, 3),
+        (3,),
+        "3,3",
+    ],
+)
+def test_estimate_fov_affine_transform_rejects_malformed_grid_shape(bad_grid_shape):
+    image = np.eye(8, dtype=float)
+
+    with pytest.raises(ValueError, match="grid_shape"):
+        estimate_fov_affine_transform(
+            image,
+            image,
+            grid_shape=bad_grid_shape,
+        )
+
+
+@pytest.mark.parametrize("bad_min_tile_size", [True, 0, -1, 2.5, "2"])
+def test_estimate_fov_affine_transform_rejects_malformed_min_tile_size(
+    bad_min_tile_size,
+):
+    image = np.eye(8, dtype=float)
+
+    with pytest.raises(ValueError, match="min_tile_size"):
+        estimate_fov_affine_transform(
+            image,
+            image,
+            min_tile_size=bad_min_tile_size,
+        )
+
+
+@pytest.mark.parametrize(
+    "bad_max_shift_fraction",
+    [
+        True,
+        -0.1,
+        np.nan,
+        np.inf,
+        "0.5",
+        [0.5],
+    ],
+)
+def test_estimate_fov_affine_transform_rejects_malformed_max_shift_fraction(
+    bad_max_shift_fraction,
+):
+    image = np.eye(8, dtype=float)
+
+    with pytest.raises(ValueError, match="max_shift_fraction"):
+        estimate_fov_affine_transform(
+            image,
+            image,
+            max_shift_fraction=bad_max_shift_fraction,
         )
