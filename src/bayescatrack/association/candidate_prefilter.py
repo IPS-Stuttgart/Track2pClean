@@ -103,7 +103,7 @@ def apply_candidate_mask(
     """Return ``cost_matrix`` with non-candidates replaced by ``large_cost``."""
 
     costs = np.asarray(cost_matrix, dtype=float)
-    mask = np.asarray(candidate_mask, dtype=bool)
+    mask = _as_candidate_mask(candidate_mask)
     if costs.shape != mask.shape:
         raise ValueError(
             f"candidate_mask shape {mask.shape} does not match cost matrix shape {costs.shape}"
@@ -117,7 +117,7 @@ def candidate_edges_from_mask(
 ) -> tuple[tuple[int, int], ...]:
     """Return sparse candidate edge coordinates from a pairwise mask."""
 
-    rows, columns = np.nonzero(np.asarray(candidate_mask, dtype=bool))
+    rows, columns = np.nonzero(_as_candidate_mask(candidate_mask))
     return tuple(
         (int(row), int(column)) for row, column in zip(rows, columns, strict=True)
     )
@@ -192,6 +192,48 @@ def _row_top_k_mask(distances: np.ndarray, *, top_k: int) -> np.ndarray:
             selected = finite_columns[np.argpartition(finite_costs, k - 1)[:k]]
         mask[row_index, selected] = True
     return mask
+
+
+def _as_candidate_mask(candidate_mask: Any) -> np.ndarray:
+    mask = np.asarray(candidate_mask)
+    if mask.ndim != 2:
+        raise ValueError("candidate_mask must be a two-dimensional boolean or binary mask")
+    if mask.dtype == np.dtype(bool):
+        return np.ascontiguousarray(mask, dtype=bool)
+    if mask.dtype.kind in {"i", "u", "f"}:
+        numeric_mask = np.asarray(mask, dtype=float)
+        if not _is_binary_numeric_mask(numeric_mask):
+            raise ValueError("candidate_mask must contain only boolean or binary values")
+        return np.ascontiguousarray(numeric_mask == 1.0, dtype=bool)
+    if mask.dtype.kind == "O":
+        normalized = np.empty(mask.shape, dtype=bool)
+        for index, value in np.ndenumerate(mask):
+            normalized[index] = _candidate_mask_scalar_to_bool(value)
+        return np.ascontiguousarray(normalized, dtype=bool)
+    raise ValueError("candidate_mask must contain only boolean or binary values")
+
+
+def _is_binary_numeric_mask(mask: np.ndarray) -> bool:
+    return bool(
+        np.all(np.isfinite(mask))
+        and np.all((mask == 0.0) | (mask == 1.0))
+    )
+
+
+def _candidate_mask_scalar_to_bool(value: Any) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (int, np.integer)):
+        integer_value = int(value)
+        if integer_value in {0, 1}:
+            return bool(integer_value)
+        raise ValueError("candidate_mask must contain only boolean or binary values")
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if np.isfinite(numeric_value) and numeric_value in {0.0, 1.0}:
+            return bool(numeric_value)
+        raise ValueError("candidate_mask must contain only boolean or binary values")
+    raise ValueError("candidate_mask must contain only boolean or binary values")
 
 
 def _positive_int(value: Any, *, name: str) -> int:
