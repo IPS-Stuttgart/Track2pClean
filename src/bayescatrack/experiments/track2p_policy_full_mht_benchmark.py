@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
+from bayescatrack.association.growth_priors import fit_affine_growth_transform
 from bayescatrack.experiments import track2p_policy_suffix_stitch_ranking_audit as rank
 from bayescatrack.experiments.track2p_benchmark import (
     GROUND_TRUTH_REFERENCE_SOURCE,
@@ -98,6 +99,11 @@ class FullMHTConfig:
     cell_probability_weight: float = 0.25
     centroid_distance_weight: float = 0.05
     threshold_margin_weight: float = 0.50
+    growth_residual_weight: float = 0.10
+    growth_mahalanobis_weight: float = 0.25
+    growth_anchor_min_registered_iou: float = 0.55
+    growth_anchor_min_shifted_iou: float = 0.30
+    growth_anchor_min_cell_probability: float = 0.80
 
 
 @dataclass(frozen=True)
@@ -116,6 +122,29 @@ class FullMHTResult:
     results: tuple[SubjectBenchmarkResult, ...]
     diagnostic_rows: tuple[dict[str, Any], ...]
     summary_rows: tuple[dict[str, Any], ...]
+
+
+@dataclass(frozen=True)
+class _FullMHTPairMatrices:
+    source_indices: np.ndarray
+    target_indices: np.ndarray
+    registered_iou: np.ndarray
+    shifted_iou: np.ndarray
+    centroid_distance: np.ndarray
+    area_ratio: np.ndarray
+    threshold: float
+    growth_residual: np.ndarray
+    growth_mahalanobis: np.ndarray
+    growth_anchor_count: int
+    growth_model_type: str
+
+
+@dataclass(frozen=True)
+class _GrowthPrior:
+    affine_xy: np.ndarray
+    covariance_inverse: np.ndarray
+    anchor_count: int
+    model_type: str
 
 
 def run_track2p_policy_full_mht(
@@ -249,6 +278,12 @@ def _run_subject_full_mht(
                     "scan_assigned_edges": int(last.get("assigned_edges", 0)),
                     "scan_missed_tracks": int(last.get("missed_tracks", 0)),
                     "scan_candidates": int(last.get("scan_candidates", 0)),
+                    "scan_growth_anchor_count": int(
+                        last.get("growth_anchor_count", 0)
+                    ),
+                    "scan_growth_model_type": str(
+                        last.get("growth_model_type", "")
+                    ),
                     "beam_width": int(mht_config.beam_width),
                     "scan_hypotheses": int(mht_config.scan_hypotheses),
                     "edge_top_k": int(mht_config.edge_top_k),
@@ -266,6 +301,21 @@ def _run_subject_full_mht(
         "track2p_full_mht_scan_hypotheses": int(mht_config.scan_hypotheses),
         "track2p_full_mht_edge_top_k": int(mht_config.edge_top_k),
         "track2p_full_mht_miss_cost": float(mht_config.miss_cost),
+        "track2p_full_mht_growth_residual_weight": float(
+            mht_config.growth_residual_weight
+        ),
+        "track2p_full_mht_growth_mahalanobis_weight": float(
+            mht_config.growth_mahalanobis_weight
+        ),
+        "track2p_full_mht_growth_anchor_min_registered_iou": float(
+            mht_config.growth_anchor_min_registered_iou
+        ),
+        "track2p_full_mht_growth_anchor_min_shifted_iou": float(
+            mht_config.growth_anchor_min_shifted_iou
+        ),
+        "track2p_full_mht_growth_anchor_min_cell_probability": float(
+            mht_config.growth_anchor_min_cell_probability
+        ),
         "track2p_full_mht_seed_source": str(mht_config.seed_source),
         "track2p_full_mht_n_seed_tracks": int(len(seed_rois)),
     }
@@ -373,13 +423,21 @@ def _sparse_pair_matrices(
     session_index: int,
     source_rois: Sequence[int],
     edge_top_k: int,
-) -> rank._PairMatrices:
+    config: FullMHTConfig,
+) -> _FullMHTPairMatrices:
     source_rois_tuple = tuple(int(roi) for roi in source_rois)
     sparse_cache = getattr(feature_cache, "_full_mht_sparse_matrices", None)
     if sparse_cache is None:
         sparse_cache = {}
         setattr(feature_cache, "_full_mht_sparse_matrices", sparse_cache)
-    cache_key = (int(session_index), source_rois_tuple, int(edge_top_k))
+    cache_key = (
+        int(session_index),
+        source_rois_tuple,
+        int(edge_top_k),
+        float(config.growth_anchor_min_registered_iou),
+        float(config.growth_anchor_min_shifted_iou),
+        float(config.growth_anchor_min_cell_probability),
+    )
     cached = sparse_cache.get(cache_key)
     if cached is not None:
         return cached
@@ -408,6 +466,13 @@ def _sparse_pair_matrices(
         [int(all_target_indices[int(idx)]) for idx in selected_target_positions],
         dtype=int,
     )
+    target_cell_probabilities = np.asarray(
+        [
+            _cell_probability(sessions, int(session_index) + 1, int(roi))
+            for roi in target_indices
+        ],
+        dtype=float,
+    )
     moving_masks = (np.asarray(registered.roi_masks) > 0)[
         np.asarray(selected_target_positions, dtype=int)
     ]
@@ -426,6 +491,7 @@ def _sparse_pair_matrices(
     else:
         nearby_columns = np.asarray([], dtype=int)
     target_indices = target_indices[nearby_columns]
+    target_cell_probabilities = target_cell_probabilities[nearby_columns]
     moving_masks = moving_masks[nearby_columns]
     registered_iou = registered_iou_all[:, nearby_columns]
     distances = distances_all[:, nearby_columns]
@@ -450,22 +516,218 @@ def _sparse_pair_matrices(
             moving_masks[selected_columns],
             radius=2,
         )["shifted_iou"][0]
-    matrices = rank._PairMatrices(
+    source_centroids = _mask_centroids(reference_masks)
+    target_centroids = _mask_centroids(moving_masks)
+    growth_residual, growth_mahalanobis, growth_prior = _growth_residual_matrices(
+        source_centroids,
+        target_centroids,
+        registered_iou=registered_iou,
+        shifted_iou=shifted,
+        target_cell_probabilities=target_cell_probabilities,
+        config=config,
+    )
+    matrices = _FullMHTPairMatrices(
         source_indices=np.asarray(source_rois_tuple, dtype=int),
         target_indices=target_indices,
         registered_iou=registered_iou,
         shifted_iou=shifted,
         centroid_distance=distances,
         area_ratio=area_ratios,
-        activity_similarity=np.full_like(registered_iou, float("nan"), dtype=float),
         threshold=float(
             rank._assignment_threshold(
                 registered_iou, threshold_method=feature_cache.threshold_method
             )
         ),
+        growth_residual=growth_residual,
+        growth_mahalanobis=growth_mahalanobis,
+        growth_anchor_count=int(growth_prior.anchor_count),
+        growth_model_type=str(growth_prior.model_type),
     )
     sparse_cache[cache_key] = matrices
     return matrices
+
+
+def _growth_residual_matrices(
+    source_centroids: np.ndarray,
+    target_centroids: np.ndarray,
+    *,
+    registered_iou: np.ndarray,
+    shifted_iou: np.ndarray,
+    target_cell_probabilities: np.ndarray,
+    config: FullMHTConfig,
+) -> tuple[np.ndarray, np.ndarray, _GrowthPrior]:
+    shape = np.asarray(registered_iou, dtype=float).shape
+    if len(shape) != 2:
+        raise ValueError("registered_iou must be a 2-D matrix")
+    prior = _fit_growth_prior_from_candidate_matrices(
+        np.asarray(source_centroids, dtype=float).reshape(shape[0], 2),
+        np.asarray(target_centroids, dtype=float).reshape(shape[1], 2),
+        registered_iou=np.asarray(registered_iou, dtype=float),
+        shifted_iou=np.asarray(shifted_iou, dtype=float),
+        target_cell_probabilities=np.asarray(target_cell_probabilities, dtype=float),
+        config=config,
+    )
+    if shape[0] == 0 or shape[1] == 0:
+        empty = np.zeros(shape, dtype=float)
+        return empty, empty, prior
+    predicted = _apply_affine_points(
+        np.asarray(source_centroids, dtype=float).reshape(shape[0], 2),
+        prior.affine_xy,
+    )
+    residual_vectors = (
+        np.asarray(target_centroids, dtype=float).reshape(shape[1], 2)[None, :, :]
+        - predicted[:, None, :]
+    )
+    residual = np.linalg.norm(residual_vectors, axis=2)
+    mahalanobis_squared = np.einsum(
+        "...i,ij,...j->...",
+        residual_vectors,
+        prior.covariance_inverse,
+        residual_vectors,
+    )
+    mahalanobis = np.sqrt(np.maximum(0.0, mahalanobis_squared))
+    return residual.astype(float), mahalanobis.astype(float), prior
+
+
+def _fit_growth_prior_from_candidate_matrices(
+    source_centroids: np.ndarray,
+    target_centroids: np.ndarray,
+    *,
+    registered_iou: np.ndarray,
+    shifted_iou: np.ndarray,
+    target_cell_probabilities: np.ndarray,
+    config: FullMHTConfig,
+) -> _GrowthPrior:
+    anchor_pairs = _mutual_growth_anchor_pairs(
+        registered_iou=registered_iou,
+        shifted_iou=shifted_iou,
+        target_cell_probabilities=target_cell_probabilities,
+        config=config,
+    )
+    if not anchor_pairs:
+        return _identity_growth_prior()
+    anchor_rows = np.asarray([row for row, _col in anchor_pairs], dtype=int)
+    anchor_cols = np.asarray([col for _row, col in anchor_pairs], dtype=int)
+    return _fit_growth_prior_from_points(
+        np.asarray(source_centroids, dtype=float)[anchor_rows],
+        np.asarray(target_centroids, dtype=float)[anchor_cols],
+    )
+
+
+def _mutual_growth_anchor_pairs(
+    *,
+    registered_iou: np.ndarray,
+    shifted_iou: np.ndarray,
+    target_cell_probabilities: np.ndarray,
+    config: FullMHTConfig,
+) -> tuple[tuple[int, int], ...]:
+    registered = np.asarray(registered_iou, dtype=float)
+    shifted = np.asarray(shifted_iou, dtype=float)
+    if registered.size == 0 or registered.shape != shifted.shape:
+        return tuple()
+    cell_prob = np.asarray(target_cell_probabilities, dtype=float).reshape(-1)
+    if cell_prob.shape[0] != registered.shape[1]:
+        return tuple()
+    valid = (
+        np.isfinite(registered)
+        & np.isfinite(shifted)
+        & (registered >= float(config.growth_anchor_min_registered_iou))
+        & (shifted >= float(config.growth_anchor_min_shifted_iou))
+        & (cell_prob[None, :] >= float(config.growth_anchor_min_cell_probability))
+    )
+    scores = np.where(valid, registered + shifted, -np.inf)
+    if not np.isfinite(scores).any():
+        return tuple()
+    row_best = np.argmax(scores, axis=1)
+    col_best = np.argmax(scores, axis=0)
+    pairs: list[tuple[int, int]] = []
+    for row, col in enumerate(row_best):
+        if not np.isfinite(scores[int(row), int(col)]):
+            continue
+        if int(col_best[int(col)]) == int(row):
+            pairs.append((int(row), int(col)))
+    return tuple(pairs)
+
+
+def _fit_growth_prior_from_points(
+    source_xy: np.ndarray, target_xy: np.ndarray
+) -> _GrowthPrior:
+    source_xy = np.asarray(source_xy, dtype=float).reshape(-1, 2)
+    target_xy = np.asarray(target_xy, dtype=float).reshape(-1, 2)
+    if source_xy.shape[0] == 0 or target_xy.shape[0] == 0:
+        return _identity_growth_prior()
+    if source_xy.shape[0] >= 3:
+        affine = fit_affine_growth_transform(source_xy, target_xy)
+        residual_vectors = target_xy - _apply_affine_points(source_xy, affine)
+        residual_norms = np.linalg.norm(residual_vectors, axis=1)
+        median = float(np.median(residual_norms))
+        mad = float(np.median(np.abs(residual_norms - median)))
+        keep = residual_norms <= median + max(3.0 * 1.4826 * mad, 2.0)
+        if int(np.sum(keep)) >= 3 and not bool(np.all(keep)):
+            affine = fit_affine_growth_transform(source_xy[keep], target_xy[keep])
+            residual_vectors = target_xy[keep] - _apply_affine_points(
+                source_xy[keep], affine
+            )
+            model_type = "robust_affine"
+        else:
+            model_type = "affine"
+    else:
+        displacement = np.median(target_xy - source_xy, axis=0)
+        affine = np.asarray(
+            [[1.0, 0.0, float(displacement[0])], [0.0, 1.0, float(displacement[1])]],
+            dtype=float,
+        )
+        residual_vectors = target_xy - _apply_affine_points(source_xy, affine)
+        model_type = "translation_fallback"
+    return _GrowthPrior(
+        affine_xy=np.asarray(affine, dtype=float).reshape(2, 3),
+        covariance_inverse=_growth_covariance_inverse(residual_vectors),
+        anchor_count=int(source_xy.shape[0]),
+        model_type=model_type,
+    )
+
+
+def _identity_growth_prior() -> _GrowthPrior:
+    return _GrowthPrior(
+        affine_xy=np.asarray([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=float),
+        covariance_inverse=np.eye(2, dtype=float),
+        anchor_count=0,
+        model_type="identity_no_anchors",
+    )
+
+
+def _apply_affine_points(points_xy: np.ndarray, affine_xy: np.ndarray) -> np.ndarray:
+    points = np.asarray(points_xy, dtype=float).reshape(-1, 2)
+    affine = np.asarray(affine_xy, dtype=float).reshape(2, 3)
+    homogeneous = np.column_stack([points, np.ones(points.shape[0], dtype=float)])
+    return homogeneous @ affine.T
+
+
+def _growth_covariance_inverse(residual_vectors: np.ndarray) -> np.ndarray:
+    residuals = np.asarray(residual_vectors, dtype=float).reshape(-1, 2)
+    finite = np.all(np.isfinite(residuals), axis=1)
+    residuals = residuals[finite]
+    residual_scale = _growth_residual_scale(residuals)
+    if residuals.shape[0] >= 2:
+        covariance = np.cov(residuals.T)
+    else:
+        covariance = np.eye(2, dtype=float) * residual_scale**2
+    covariance = np.asarray(covariance, dtype=float).reshape(2, 2)
+    covariance += np.eye(2, dtype=float) * max(1.0e-6, residual_scale**2)
+    return np.linalg.pinv(covariance)
+
+
+def _growth_residual_scale(residual_vectors: np.ndarray) -> float:
+    residuals = np.asarray(residual_vectors, dtype=float).reshape(-1, 2)
+    if residuals.size == 0:
+        return 1.0
+    norms = np.linalg.norm(residuals, axis=1)
+    norms = norms[np.isfinite(norms)]
+    if norms.size == 0:
+        return 1.0
+    median = float(np.median(norms))
+    mad = float(np.median(np.abs(norms - median)))
+    return max(1.0, median + 1.4826 * mad)
 
 
 def _advance_scan(
@@ -520,6 +782,8 @@ def _expand_hypothesis_scan(
                         "assigned_edges": 0,
                         "missed_tracks": 0,
                         "scan_candidates": 0,
+                        "growth_anchor_count": 0,
+                        "growth_model_type": "no_active_tracks",
                     },
                 ),
             )
@@ -531,6 +795,7 @@ def _expand_hypothesis_scan(
         session_index=int(session_index),
         source_rois=[int(tracks[int(row_index), int(session_index)]) for row_index in active_rows],
         edge_top_k=int(config.edge_top_k),
+        config=config,
     )
     source_lookup = {int(roi): idx for idx, roi in enumerate(matrices.source_indices)}
     target_indices = np.asarray(matrices.target_indices, dtype=int)
@@ -555,6 +820,8 @@ def _expand_hypothesis_scan(
                         "assigned_edges": 0,
                         "missed_tracks": int(len(active_rows)),
                         "scan_candidates": 0,
+                        "growth_anchor_count": int(matrices.growth_anchor_count),
+                        "growth_model_type": str(matrices.growth_model_type),
                     },
                 ),
             )
@@ -599,6 +866,8 @@ def _expand_hypothesis_scan(
                         "assigned_edges": 0,
                         "missed_tracks": int(len(active_rows)),
                         "scan_candidates": int(candidate_count),
+                        "growth_anchor_count": int(matrices.growth_anchor_count),
+                        "growth_model_type": str(matrices.growth_model_type),
                     },
                 ),
             )
@@ -638,6 +907,8 @@ def _expand_hypothesis_scan(
                         "assigned_edges": int(assigned_edges),
                         "missed_tracks": int(missed_tracks),
                         "scan_candidates": int(candidate_count),
+                        "growth_anchor_count": int(matrices.growth_anchor_count),
+                        "growth_model_type": str(matrices.growth_model_type),
                     },
                 ),
             )
@@ -647,7 +918,7 @@ def _expand_hypothesis_scan(
 
 def _edge_score(
     sessions: Sequence[Any],
-    matrices: rank._PairMatrices,
+    matrices: _FullMHTPairMatrices,
     *,
     session_index: int,
     source_local: int,
@@ -658,6 +929,12 @@ def _edge_score(
     shifted = _finite_float(matrices.shifted_iou[source_local, target_local], 0.0)
     centroid = _finite_float(matrices.centroid_distance[source_local, target_local], 1e3)
     area_ratio = _finite_float(matrices.area_ratio[source_local, target_local], 0.0)
+    growth_residual = _finite_float(
+        matrices.growth_residual[source_local, target_local], 0.0
+    )
+    growth_mahalanobis = _finite_float(
+        matrices.growth_mahalanobis[source_local, target_local], 0.0
+    )
     target_roi = int(matrices.target_indices[int(target_local)])
     cell_b = _cell_probability(sessions, int(session_index) + 1, target_roi)
     threshold_margin = registered - float(matrices.threshold)
@@ -668,6 +945,8 @@ def _edge_score(
     score += float(config.cell_probability_weight) * max(0.0, min(1.0, cell_b))
     score += float(config.threshold_margin_weight) * max(0.0, threshold_margin)
     score -= float(config.centroid_distance_weight) * max(0.0, centroid)
+    score -= float(config.growth_residual_weight) * max(0.0, growth_residual)
+    score -= float(config.growth_mahalanobis_weight) * max(0.0, growth_mahalanobis)
     return float(score)
 
 
@@ -754,6 +1033,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cell-probability-weight", type=float, default=0.25)
     parser.add_argument("--centroid-distance-weight", type=float, default=0.05)
     parser.add_argument("--threshold-margin-weight", type=float, default=0.50)
+    parser.add_argument("--growth-residual-weight", type=float, default=0.10)
+    parser.add_argument("--growth-mahalanobis-weight", type=float, default=0.25)
+    parser.add_argument("--growth-anchor-min-registered-iou", type=float, default=0.55)
+    parser.add_argument("--growth-anchor-min-shifted-iou", type=float, default=0.30)
+    parser.add_argument(
+        "--growth-anchor-min-cell-probability", type=float, default=0.80
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="csv")
     parser.add_argument("--diagnostics-output", type=Path, default=None)
@@ -805,6 +1091,15 @@ def main(argv: list[str] | None = None) -> int:
             cell_probability_weight=float(args.cell_probability_weight),
             centroid_distance_weight=float(args.centroid_distance_weight),
             threshold_margin_weight=float(args.threshold_margin_weight),
+            growth_residual_weight=float(args.growth_residual_weight),
+            growth_mahalanobis_weight=float(args.growth_mahalanobis_weight),
+            growth_anchor_min_registered_iou=float(
+                args.growth_anchor_min_registered_iou
+            ),
+            growth_anchor_min_shifted_iou=float(args.growth_anchor_min_shifted_iou),
+            growth_anchor_min_cell_probability=float(
+                args.growth_anchor_min_cell_probability
+            ),
         ),
         progress=bool(args.progress),
     )
