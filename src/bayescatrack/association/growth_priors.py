@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import math
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 import numpy as np
+
+_ROI_INDEX_ERROR = "track_rows entries must be non-negative integers or -1 missing sentinels"
+_MISSING_VALUE_STRINGS = {"", "na", "nan", "none", "null", "-"}
 
 
 @dataclass(frozen=True)
@@ -186,18 +190,33 @@ def estimate_growth_from_track_rows(
     """Estimate an affine growth transform from complete links in a track matrix."""
 
     cfg = config or GrowthPriorConfig()
-    rows = np.asarray(track_rows, dtype=int)
-    if target_session < 0:
-        target_session = rows.shape[1] + int(target_session)
+    rows = _normalize_track_rows(track_rows)
+    if rows.ndim != 2:
+        raise ValueError("track_rows must have shape (n_tracks, n_sessions)")
+    if rows.shape[1] == 0:
+        raise ValueError("track_rows must contain at least one session")
+    n_sessions = int(rows.shape[1])
+    source_index = _normalize_session_index(
+        source_session,
+        name="source_session",
+        n_sessions=n_sessions,
+    )
+    target_index = _normalize_session_index(
+        target_session,
+        name="target_session",
+        n_sessions=n_sessions,
+    )
+    if len(position_tables) <= max(source_index, target_index):
+        raise ValueError("position_tables must contain entries for the selected sessions")
     source_points: list[np.ndarray] = []
     target_points: list[np.ndarray] = []
     for row in rows:
-        source_roi = int(row[source_session])
-        target_roi = int(row[target_session])
+        source_roi = int(row[source_index])
+        target_roi = int(row[target_index])
         if source_roi < 0 or target_roi < 0:
             continue
-        source_pos = position_tables[source_session].get(source_roi)
-        target_pos = position_tables[target_session].get(target_roi)
+        source_pos = position_tables[source_index].get(source_roi)
+        target_pos = position_tables[target_index].get(target_roi)
         if source_pos is None or target_pos is None:
             continue
         source_points.append(np.asarray(source_pos, dtype=float).reshape(2))
@@ -209,6 +228,90 @@ def estimate_growth_from_track_rows(
         np.vstack(target_points),
         regularization=cfg.regularization,
     )
+
+
+def _normalize_track_rows(track_rows: Any) -> np.ndarray:
+    raw_rows = np.asarray(track_rows, dtype=object)
+    if raw_rows.ndim != 2:
+        return raw_rows
+    normalized = np.empty(raw_rows.shape, dtype=int)
+    for index, value in np.ndenumerate(raw_rows):
+        normalized[index] = _normalize_roi_index(value)
+    return normalized
+
+
+def _normalize_roi_index(value: Any) -> int:
+    if value is None:
+        return -1
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(_ROI_INDEX_ERROR)
+    try:
+        return _validate_roi_index(operator.index(value))
+    except TypeError:
+        pass
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if math.isnan(numeric):
+            return -1
+        if math.isfinite(numeric) and numeric.is_integer():
+            return _validate_roi_index(int(numeric))
+        raise ValueError(_ROI_INDEX_ERROR)
+    if isinstance(value, str):
+        return _normalize_roi_index_string(value)
+    raise ValueError(_ROI_INDEX_ERROR)
+
+
+def _normalize_roi_index_string(value: str) -> int:
+    text = value.strip()
+    if text.lower().replace(" ", "_") in _MISSING_VALUE_STRINGS:
+        return -1
+    try:
+        numeric = float(text)
+    except ValueError as exc:
+        raise ValueError(_ROI_INDEX_ERROR) from exc
+    if math.isnan(numeric):
+        return -1
+    if math.isfinite(numeric) and numeric.is_integer():
+        return _validate_roi_index(int(numeric))
+    raise ValueError(_ROI_INDEX_ERROR)
+
+
+def _validate_roi_index(value: int) -> int:
+    normalized = int(value)
+    if normalized == -1 or normalized >= 0:
+        return normalized
+    raise ValueError(_ROI_INDEX_ERROR)
+
+
+def _normalize_session_index(value: Any, *, name: str, n_sessions: int) -> int:
+    raw_index = _integer_value(value, name=name)
+    index = raw_index + n_sessions if raw_index < 0 else raw_index
+    if index < 0 or index >= n_sessions:
+        raise ValueError(f"{name} must select an existing session")
+    return index
+
+
+def _integer_value(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer session index")
+    try:
+        return int(operator.index(value))
+    except TypeError:
+        pass
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if math.isfinite(numeric) and numeric.is_integer():
+            return int(numeric)
+        raise ValueError(f"{name} must be an integer session index")
+    if isinstance(value, str):
+        text = value.strip()
+        try:
+            numeric = float(text)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer session index") from exc
+        if math.isfinite(numeric) and numeric.is_integer():
+            return int(numeric)
+    raise ValueError(f"{name} must be an integer session index")
 
 
 def _nonnegative_float(value: Any, *, name: str) -> float:
