@@ -308,6 +308,49 @@ def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     ) == 2.0
 
 
+def test_full_mht_selected_edge_summary_is_label_free(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=1,
+        target_session=2,
+        source_indices=np.asarray([5], dtype=int),
+        target_indices=np.asarray([9], dtype=int),
+        registered_iou=np.asarray([[0.50]], dtype=float),
+        shifted_iou=np.asarray([[0.25]], dtype=float),
+        centroid_distance=np.asarray([[1.0]], dtype=float),
+        area_ratio=np.asarray([[1.0]], dtype=float),
+        threshold=0.0,
+        growth_residual=np.asarray([[2.5]], dtype=float),
+        growth_mahalanobis=np.asarray([[20.0]], dtype=float),
+        local_deformation=np.asarray([[0.2]], dtype=float),
+        growth_anchor_count=0,
+        growth_model_type="identity_no_anchors",
+    )
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *args, **kwargs: 0.8)
+
+    edge = full_mht._selected_edge_summary(
+        (object(), object(), object()),
+        matrices,
+        active_source=full_mht._ActiveTrackSource(
+            row_index=0, source_session=1, source_roi=5, gap_length=0
+        ),
+        target_session=2,
+        target_roi=9,
+        config=full_mht.FullMHTConfig(track2p_prior_weight=2.0),
+        track2p_prior_edges=frozenset({(1, 2, 5, 9)}),
+    )
+
+    assert edge["is_track2p_prior"] == 1
+    summary = str(edge["summary"])
+    assert "1:5->2:9" in summary
+    assert "prior=1" in summary
+    assert "reg=0.5" in summary
+    assert "shift=0.25" in summary
+    assert "growth=2.5" in summary
+    assert "mahal=20" in summary
+    assert "cell=0.8" in summary
+    assert "gt" not in summary.lower()
+
+
 def test_full_mht_proposal_targets_are_scoped_to_source_and_scan():
     edges = frozenset(
         {

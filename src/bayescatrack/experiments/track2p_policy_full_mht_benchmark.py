@@ -312,6 +312,18 @@ def _run_subject_full_mht(
                     "scan_assignment_cost": float(last.get("scan_cost", 0.0)),
                     "scan_assigned_edges": int(last.get("assigned_edges", 0)),
                     "scan_missed_tracks": int(last.get("missed_tracks", 0)),
+                    "scan_selected_prior_edges": int(
+                        last.get("selected_prior_edges", 0)
+                    ),
+                    "scan_selected_non_prior_edges": int(
+                        last.get("selected_non_prior_edges", 0)
+                    ),
+                    "scan_missed_prior_successors": int(
+                        last.get("missed_prior_successors", 0)
+                    ),
+                    "scan_selected_edge_summaries": str(
+                        last.get("selected_edge_summaries", "")
+                    ),
                     "scan_gap_active_tracks": int(last.get("gap_active_tracks", 0)),
                     "scan_gap_reactivated_tracks": int(
                         last.get("gap_reactivated_tracks", 0)
@@ -1253,17 +1265,41 @@ def _expand_hypothesis_scan(
         assigned_edges = 0
         missed_tracks = 0
         gap_reactivated_tracks = 0
+        selected_edge_summaries: list[str] = []
+        selected_prior_edges = 0
+        selected_non_prior_edges = 0
+        missed_prior_successors = 0
         for row_pos, active_source in enumerate(active_sources):
             compact_col = int(assignment[int(row_pos)])
             row_index = int(active_source.row_index)
             if compact_col >= 0:
                 updated[row_index, next_session] = int(finite_target_rois[compact_col])
                 assigned_edges += 1
+                edge_summary = _selected_edge_summary(
+                    sessions,
+                    matrices_by_source_session[int(active_source.source_session)],
+                    active_source=active_source,
+                    target_session=next_session,
+                    target_roi=int(finite_target_rois[compact_col]),
+                    config=config,
+                    track2p_prior_edges=prior_edges,
+                )
+                selected_edge_summaries.append(str(edge_summary["summary"]))
+                if int(edge_summary["is_track2p_prior"]):
+                    selected_prior_edges += 1
+                else:
+                    selected_non_prior_edges += 1
                 if int(active_source.gap_length) > 0:
                     gap_reactivated_tracks += 1
             else:
                 updated[row_index, next_session] = -1
                 missed_tracks += 1
+                if _has_prior_successor(
+                    active_source,
+                    target_session=next_session,
+                    track2p_prior_edges=prior_edges,
+                ):
+                    missed_prior_successors += 1
         scan_cost = float(solution["cost"])
         output.append(
             _MHTHypothesis(
@@ -1276,6 +1312,10 @@ def _expand_hypothesis_scan(
                         "scan_cost": scan_cost,
                         "assigned_edges": int(assigned_edges),
                         "missed_tracks": int(missed_tracks),
+                        "selected_prior_edges": int(selected_prior_edges),
+                        "selected_non_prior_edges": int(selected_non_prior_edges),
+                        "missed_prior_successors": int(missed_prior_successors),
+                        "selected_edge_summaries": ";".join(selected_edge_summaries),
                         "gap_active_tracks": int(gap_active_tracks),
                         "gap_reactivated_tracks": int(gap_reactivated_tracks),
                         "max_gap_length": int(max_gap_length),
@@ -1338,6 +1378,75 @@ def _edge_score(
     return float(score)
 
 
+def _selected_edge_summary(
+    sessions: Sequence[Any],
+    matrices: _FullMHTPairMatrices,
+    *,
+    active_source: _ActiveTrackSource,
+    target_session: int,
+    target_roi: int,
+    config: FullMHTConfig,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+) -> dict[str, Any]:
+    source_roi = int(active_source.source_roi)
+    target = int(target_roi)
+    source_matches = np.flatnonzero(np.asarray(matrices.source_indices) == source_roi)
+    target_matches = np.flatnonzero(np.asarray(matrices.target_indices) == target)
+    edge = (int(matrices.source_session), int(target_session), source_roi, target)
+    if source_matches.size == 0 or target_matches.size == 0:
+        is_prior = edge in track2p_prior_edges
+        return {
+            "is_track2p_prior": int(is_prior),
+            "summary": (
+                f"{int(matrices.source_session)}:{source_roi}->{int(target_session)}:{target}"
+                f"|prior={int(is_prior)}|missing_features=1"
+            ),
+        }
+    source_local = int(source_matches[0])
+    target_local = int(target_matches[0])
+    registered = _finite_float(matrices.registered_iou[source_local, target_local], 0.0)
+    shifted = _finite_float(matrices.shifted_iou[source_local, target_local], 0.0)
+    growth_residual = _finite_float(
+        matrices.growth_residual[source_local, target_local], 0.0
+    )
+    growth_mahalanobis = _finite_float(
+        matrices.growth_mahalanobis[source_local, target_local], 0.0
+    )
+    local_deformation = _finite_float(
+        matrices.local_deformation[source_local, target_local], 0.0
+    )
+    cell_probability = _cell_probability(sessions, int(target_session), target)
+    score = _edge_score(
+        sessions,
+        matrices,
+        target_session=int(target_session),
+        source_local=source_local,
+        target_local=target_local,
+        config=config,
+        track2p_prior_edges=track2p_prior_edges,
+    )
+    is_prior = edge in track2p_prior_edges
+    summary = (
+        f"{int(matrices.source_session)}:{source_roi}->{int(target_session)}:{target}"
+        f"|prior={int(is_prior)}"
+        f"|score={_diagnostic_float(score)}"
+        f"|reg={_diagnostic_float(registered)}"
+        f"|shift={_diagnostic_float(shifted)}"
+        f"|growth={_diagnostic_float(growth_residual)}"
+        f"|mahal={_diagnostic_float(growth_mahalanobis)}"
+        f"|local={_diagnostic_float(local_deformation)}"
+        f"|cell={_diagnostic_float(cell_probability)}"
+    )
+    return {"is_track2p_prior": int(is_prior), "summary": summary}
+
+
+def _diagnostic_float(value: float) -> str:
+    number = float(value)
+    if not np.isfinite(number):
+        return "nan"
+    return f"{number:.4g}"
+
+
 def _miss_cost(
     active_source: _ActiveTrackSource,
     *,
@@ -1348,15 +1457,27 @@ def _miss_cost(
     cost = float(config.miss_cost)
     if not track2p_prior_edges or float(config.track2p_prior_miss_penalty) <= 0.0:
         return cost
-    has_prior_successor = any(
+    if _has_prior_successor(
+        active_source,
+        target_session=target_session,
+        track2p_prior_edges=track2p_prior_edges,
+    ):
+        cost += float(config.track2p_prior_miss_penalty)
+    return cost
+
+
+def _has_prior_successor(
+    active_source: _ActiveTrackSource,
+    *,
+    target_session: int,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+) -> bool:
+    return any(
         int(session_a) == int(active_source.source_session)
         and int(session_b) == int(target_session)
         and int(roi_a) == int(active_source.source_roi)
         for session_a, session_b, roi_a, _roi_b in track2p_prior_edges
     )
-    if has_prior_successor:
-        cost += float(config.track2p_prior_miss_penalty)
-    return cost
 
 
 def _all_summary_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
