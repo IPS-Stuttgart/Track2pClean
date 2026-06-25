@@ -157,7 +157,7 @@ def apply_absence_adjustment(
 
     costs = np.asarray(cost_matrix, dtype=float)
     cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
-    return costs + gap_penalty_matrix(
+    gap_penalties = gap_penalty_matrix(
         reference_plane,
         measurement_plane,
         session_gap=session_gap,
@@ -166,6 +166,12 @@ def apply_absence_adjustment(
         measurement_local_density=measurement_local_density,
         config=cfg,
     )
+    if costs.shape != gap_penalties.shape:
+        raise ValueError(
+            "cost_matrix shape must match plane ROI counts: "
+            f"expected {gap_penalties.shape}, got {costs.shape}"
+        )
+    return costs + gap_penalties
 
 
 def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float | int]:
