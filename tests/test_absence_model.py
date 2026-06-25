@@ -81,6 +81,18 @@ def test_gap_penalty_matrix_rejects_invalid_session_gap() -> None:
         gap_penalty_matrix(reference, measurement, session_gap=True)
 
 
+def test_apply_absence_adjustment_rejects_broadcastable_shape_mismatch() -> None:
+    reference = _plane(2)
+    measurement = _plane(3)
+
+    with pytest.raises(ValueError, match="cost_matrix shape must match"):
+        apply_absence_adjustment(
+            np.zeros((2, 1), dtype=float),
+            reference,
+            measurement,
+        )
+
+
 def test_apply_absence_adjustment_uses_validated_gap_offset() -> None:
     reference = _plane(2, cell_probabilities=np.asarray([1.0, 0.0]))
     measurement = _plane(1, cell_probabilities=np.asarray([1.0]))
