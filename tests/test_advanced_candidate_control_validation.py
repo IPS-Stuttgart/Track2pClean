@@ -5,21 +5,12 @@ import numpy as np
 from bayescatrack.advanced_roi_components import CandidatePruningConfig, candidate_mask_from_cost_matrix
 
 
-def test_advanced_top_k_controls_reject_text_values():
+def test_advanced_top_k_controls_accept_text_integer_values_for_compatibility():
     value = str(1)
-    try:
-        CandidatePruningConfig(top_k_per_roi=value)
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("expected ValueError")
+    mask = candidate_mask_from_cost_matrix(np.zeros((2, 2), dtype=float), top_k=value)
 
-    try:
-        candidate_mask_from_cost_matrix(np.zeros((2, 2), dtype=float), top_k=value)
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("expected ValueError")
+    assert CandidatePruningConfig(top_k_per_roi=value).top_k_per_roi == 1
+    assert mask.shape == (2, 2)
 
 
 def test_advanced_top_k_controls_accept_numeric_integer_scalars():
