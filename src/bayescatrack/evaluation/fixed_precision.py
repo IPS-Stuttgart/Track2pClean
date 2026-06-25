@@ -246,11 +246,19 @@ def _coerce_session_index(value: object) -> int:
 def _validate_target_precisions(
     target_precisions: Sequence[float],
 ) -> tuple[float, ...]:
-    targets = tuple(float(target_precision) for target_precision in target_precisions)
-    for target_precision in targets:
-        if not 0.0 <= target_precision <= 1.0:
-            raise ValueError("target precisions must be between 0 and 1")
-    return targets
+    targets: list[float] = []
+    for target_precision in target_precisions:
+        if isinstance(target_precision, (bool, np.bool_)):
+            raise ValueError(
+                "target precisions must be finite numeric values between 0 and 1"
+            )
+        target = float(target_precision)
+        if not np.isfinite(target) or not 0.0 <= target <= 1.0:
+            raise ValueError(
+                "target precisions must be finite numeric values between 0 and 1"
+            )
+        targets.append(target)
+    return tuple(targets)
 
 
 def _fixed_precision_metric_suffix(target_precision: float) -> str:
