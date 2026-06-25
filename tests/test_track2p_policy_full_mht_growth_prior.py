@@ -213,3 +213,21 @@ def test_full_mht_edge_score_rewards_track2p_prior_edges(monkeypatch):
     )
 
     assert with_prior == without_prior + 2.0
+
+
+def test_full_mht_proposal_targets_are_scoped_to_source_and_scan():
+    edges = frozenset(
+        {
+            (0, 1, 5, 9),
+            (0, 1, 6, 10),
+            (1, 2, 5, 11),
+            (0, 2, 5, 12),
+        }
+    )
+
+    assert full_mht._proposal_target_rois(
+        edges, source_session=0, target_session=1, source_rois=(5,)
+    ) == (9,)
+    assert full_mht._proposal_target_rois(
+        edges, source_session=0, target_session=1, source_rois=(5, 6)
+    ) == (9, 10)

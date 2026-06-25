@@ -432,6 +432,29 @@ def _track_edges(matrix: np.ndarray) -> frozenset[tuple[int, int, int, int]]:
     return frozenset(edges)
 
 
+def _proposal_target_rois(
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+    *,
+    source_session: int,
+    target_session: int,
+    source_rois: Sequence[int],
+) -> tuple[int, ...]:
+    if not track2p_prior_edges:
+        return tuple()
+    source_roi_set = {int(roi) for roi in source_rois}
+    return tuple(
+        sorted(
+            {
+                int(roi_b)
+                for session_a, session_b, roi_a, roi_b in track2p_prior_edges
+                if int(session_a) == int(source_session)
+                and int(session_b) == int(target_session)
+                and int(roi_a) in source_roi_set
+            }
+        )
+    )
+
+
 def _registered_pair(
     sessions: Sequence[Any],
     feature_cache: rank._FeatureCache,
@@ -491,8 +514,15 @@ def _sparse_pair_matrices(
     source_rois: Sequence[int],
     edge_top_k: int,
     config: FullMHTConfig,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]] = frozenset(),
 ) -> _FullMHTPairMatrices:
     source_rois_tuple = tuple(int(roi) for roi in source_rois)
+    proposal_target_rois = _proposal_target_rois(
+        track2p_prior_edges,
+        source_session=int(source_session),
+        target_session=int(target_session),
+        source_rois=source_rois_tuple,
+    )
     sparse_cache = getattr(feature_cache, "_full_mht_sparse_matrices", None)
     if sparse_cache is None:
         sparse_cache = {}
@@ -501,6 +531,7 @@ def _sparse_pair_matrices(
         int(source_session),
         int(target_session),
         source_rois_tuple,
+        proposal_target_rois,
         int(edge_top_k),
         float(config.growth_anchor_min_registered_iou),
         float(config.growth_anchor_min_shifted_iou),
@@ -532,8 +563,11 @@ def _sparse_pair_matrices(
     selected_target_positions = [
         idx
         for idx, roi in enumerate(all_target_indices)
-        if _cell_probability(sessions, int(target_session), int(roi))
-        >= float(feature_cache.cell_probability_threshold)
+        if (
+            _cell_probability(sessions, int(target_session), int(roi))
+            >= float(feature_cache.cell_probability_threshold)
+            or int(roi) in proposal_target_rois
+        )
     ]
     target_indices = np.asarray(
         [int(all_target_indices[int(idx)]) for idx in selected_target_positions],
@@ -561,6 +595,11 @@ def _sparse_pair_matrices(
                 axis=0,
             )
         )
+        if proposal_target_rois:
+            proposal_columns = np.flatnonzero(
+                np.isin(target_indices, np.asarray(proposal_target_rois, dtype=int))
+            )
+            nearby_columns = np.union1d(nearby_columns, proposal_columns)
     else:
         nearby_columns = np.asarray([], dtype=int)
     target_indices = target_indices[nearby_columns]
@@ -1007,6 +1046,7 @@ def _expand_hypothesis_scan(
             source_rois=source_rois,
             edge_top_k=int(config.edge_top_k),
             config=config,
+            track2p_prior_edges=track2p_prior_edges or frozenset(),
         )
         for source_session, source_rois in source_rois_by_session.items()
     }
