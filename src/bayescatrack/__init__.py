@@ -34,6 +34,9 @@ from ._integer_translation_validation import (
 from ._matching_bundle_roi_index_validation import (
     install_matching_bundle_roi_index_validation as _install_matching_bundle_roi_index_validation,
 )
+from ._matching_max_cost_validation import (
+    install_matching_max_cost_validation as _install_matching_max_cost_validation,
+)
 from ._matching_validation import (
     install_matching_layout_validation as _install_matching_layout_validation,
 )
@@ -113,6 +116,7 @@ summarize_subject = _bridge.summarize_subject
 
 _install_confidence_ordered_strict_gap_cli(_cli)
 _install_matching_layout_validation(_matching)
+_install_matching_max_cost_validation(_matching)
 _install_soft_overlap_costs()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
