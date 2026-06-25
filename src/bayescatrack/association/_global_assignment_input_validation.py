@@ -1,4 +1,4 @@
-"""Strict input validation for global assignment edge metadata.
+"""Strict input validation for global assignment solver inputs.
 
 PyRecEst's global assignment solver consumes a mapping of pairwise cost matrices.
 BayesCaTrack additionally stores ``session_edges`` metadata in ``GlobalAssignmentRun``
@@ -6,7 +6,8 @@ for diagnostics, exports, and downstream benchmark analysis. If that metadata
 advertises edges not present in the actual cost mapping, later diagnostics can
 report empty or shifted link-cost columns for edges that were never solved. This
 module installs an idempotent wrapper that keeps the solver inputs and returned
-metadata synchronized.
+metadata synchronized and rejects malformed scalar penalties before they reach
+the backend solver.
 """
 
 from __future__ import annotations
@@ -53,14 +54,26 @@ def install_global_assignment_input_validation() -> None:
             session_edges=session_edges,
             session_count=len(sizes),
         )
+        normalized_start_cost = _finite_nonnegative_float(
+            start_cost, context="start_cost"
+        )
+        normalized_end_cost = _finite_nonnegative_float(end_cost, context="end_cost")
+        normalized_gap_penalty = _finite_nonnegative_float(
+            gap_penalty, context="gap_penalty"
+        )
+        normalized_cost_threshold = (
+            None
+            if cost_threshold is None
+            else _finite_nonnegative_float(cost_threshold, context="cost_threshold")
+        )
         return original(
             normalized_costs,
             session_sizes=sizes,
             session_edges=normalized_edges,
-            start_cost=start_cost,
-            end_cost=end_cost,
-            gap_penalty=gap_penalty,
-            cost_threshold=cost_threshold,
+            start_cost=normalized_start_cost,
+            end_cost=normalized_end_cost,
+            gap_penalty=normalized_gap_penalty,
+            cost_threshold=normalized_cost_threshold,
         )
 
     setattr(solve_global_assignment_from_pairwise_costs, _PATCH_ATTR, True)
@@ -149,6 +162,18 @@ def _normalize_session_sizes(session_sizes: Sequence[Any]) -> tuple[int, ...]:
         _coerce_integer_like(value, context="session_sizes", allow_zero=True)
         for value in session_sizes
     )
+
+
+def _finite_nonnegative_float(value: Any, *, context: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{context} must be a finite non-negative value")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{context} must be a finite non-negative value") from exc
+    if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(f"{context} must be a finite non-negative value")
+    return float(numeric_value)
 
 
 def _normalize_session_edge(
