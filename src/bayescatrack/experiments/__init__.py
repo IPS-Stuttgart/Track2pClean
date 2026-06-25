@@ -3,6 +3,7 @@
 from . import _activity_sweep_defaults as _activity_sweep_defaults
 from . import _cost_sweep_defaults as _cost_sweep_defaults
 from . import _diag_defaults as _diag_defaults
+from . import _seed_session_validation as _seed_session_validation
 from . import (
     _triplet_support_benchmark_integration as _triplet_support_benchmark_integration,
 )
@@ -23,6 +24,7 @@ from ._teacher_rescue_repair_preset_manifest_integration import (
 )
 
 _triplet_support_benchmark_integration.install_track2p_benchmark_triplet_support_integration()
+_seed_session_validation.install_seed_session_validation()
 install_calibration_feature_registry_integration()
 install_teacher_rescue_manifest_integration()
 install_teacher_rescue_edit_cap_manifest_integration()
