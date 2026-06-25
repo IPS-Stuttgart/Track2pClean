@@ -147,3 +147,60 @@ architecture. Do not promote this as a benchmark row yet, because the calibrated
 likelihood plus scalar death prior does not produce a stable improvement plateau.
 The next method layer needs a richer birth/death likelihood or a terminal
 complete-track objective for opening no-prior continuations.
+
+## Terminal Identity Objective Follow-up
+
+The next implementation added terminal identity-history penalties and reused them
+for beam pruning when active:
+
+```text
+--terminal-non-prior-history-weight
+--terminal-no-prior-successor-history-weight
+```
+
+The motivation was that scan-time calibrated scores could prune cleaner complete
+histories before terminal selection. The terminal objective therefore penalizes
+completed histories by their accumulated non-prior/no-prior continuation counts,
+and the beam can rank hypotheses by that adjusted score.
+
+Fresh server clone at commit `1047785a455f9f81b62541438e8cf112feac90a8`:
+
+```text
+39 passed in 0.51s
+```
+
+Output directories:
+
+`/home/florianpfaff/codex-runs/BayesCaTrack/results/full_mht_terminal_identity_probe_20260626_005435`
+
+`/home/florianpfaff/codex-runs/BayesCaTrack/results/full_mht_terminal_identity2_probe_20260626_010200`
+
+`/home/florianpfaff/codex-runs/BayesCaTrack/results/full_mht_riskbeam_terminal_identity_probe_20260626_011042`
+
+| row | terminal no-prior weight | pairwise F1 micro | complete-track F1 micro |
+| --- | ---: | ---: | ---: |
+| Track2p | n/a | 0.965116 | 0.924370 |
+| FullMHTPrior2 | n/a | 0.965116 | 0.924370 |
+| TerminalIdentity | 1 | 0.951004 | 0.903226 |
+| TerminalIdentity2 | 2 | 0.951004 | 0.903226 |
+| RiskBeamTerminalIdentity | 1 | 0.951004 | 0.903226 |
+
+Diagnostics for the terminal identity rows remained essentially unchanged:
+
+```text
+scan_selected_non_prior_edges=28
+scan_no_prior_successor_continuations=28
+```
+
+The terminal objective did exercise hypothesis selection for `jm039`, but it did
+not rescue `jm038`, which retained 21 no-prior continuations. Risk-aware beam
+pruning also did not change the selected histories. This suggests the clean
+alternatives are either absent from the tiny beam by the time they matter, or the
+current calibrated association score separates them too weakly from no-prior
+continuation chains.
+
+Decision: keep the terminal identity objective and risk-aware beam pruning as
+architecture. Do not promote the row. The next useful method step is not another
+scalar terminal weight; it is either a richer birth/death likelihood or a beam
+diversity strategy that explicitly retains low-no-prior histories alongside the
+highest score histories.
