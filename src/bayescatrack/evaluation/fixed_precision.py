@@ -204,12 +204,16 @@ def _resolve_session_indices(
     if session_indices is None:
         return list(range(num_sessions))
     selected: list[int] = []
+    seen: set[int] = set()
     for candidate in session_indices:
         session_idx = _coerce_session_index(candidate)
         if session_idx < 0 or session_idx >= num_sessions:
             raise IndexError(
                 f"session index {session_idx} out of bounds for {num_sessions} sessions"
             )
+        if session_idx in seen:
+            raise ValueError("session_indices must not contain duplicate entries")
+        seen.add(session_idx)
         selected.append(session_idx)
     return selected
 
