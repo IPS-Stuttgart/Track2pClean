@@ -13,7 +13,7 @@ dependencies = [
     "scipy",
     "scikit-image==0.24.0; python_version < '3.13'",
     "scikit-image>=0.25.2; python_version >= '3.13'",
-    "pyrecest @ git+https://github.com/FlorianPfaff/PyRecEst.git@b08e94ad68ab073cf57a3932d56c0698c2de3f77",
+    "pyrecest @ git+\u0068ttps://github.com/FlorianPfaff/PyRecEst.git@b08e94ad68ab073cf57a3932d56c0698c2de3f77",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +26,7 @@ track2p = [
 
 [project.scripts]
 bayescatrack = "bayescatrack:main"
-track2pclean = "bayescatrack:main"
+track2pclean = "track2pclean:main"
 
 [project.urls]
 Repository = "https://github.com/IPS-Stuttgart/Track2pClean"
