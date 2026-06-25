@@ -14,9 +14,9 @@ The implementation is deliberately conservative:
 * the default benchmark seed set is the reference seed ROI set, matching the
   official seed-restricted scoring protocol.  Use ``--seed-source all-cells`` to
   start tracks from all seed-session cells instead;
-* only consecutive transitions are used in this first full-MHT prototype;
-* missed detections are allowed through a row non-assignment cost, but tracks
-  that miss a scan are not reactivated later in this first version.
+* consecutive transitions are used, with bounded one-scan gap reactivation;
+* missed detections are allowed through a row non-assignment cost, and low-support
+  output histories can be pruned as dead tracks before scoring.
 
 This is meant to answer whether a true scan-level MHT formulation is promising
 enough to warrant a more complete dynamic model with births/deaths, gap edges,
@@ -93,6 +93,7 @@ class FullMHTConfig:
     miss_cost: float = 2.0
     max_gap: int = 1
     gap_reactivation_cost: float = 1.0
+    min_output_observations: int = 1
     min_edge_score: float = 0.25
     seed_source: SeedSource = "reference"
     max_seed_tracks: int | None = None
@@ -331,7 +332,10 @@ def _run_subject_full_mht(
             )
 
     best = hypotheses[0]
-    scores = _score_prediction_against_reference(best.tracks, reference, config=config)
+    output_tracks = _prune_output_tracks(
+        best.tracks, min_observations=int(mht_config.min_output_observations)
+    )
+    scores = _score_prediction_against_reference(output_tracks, reference, config=config)
     scores = {
         **dict(scores),
         "track2p_full_mht_best_score": float(best.score),
@@ -342,6 +346,9 @@ def _run_subject_full_mht(
         "track2p_full_mht_max_gap": int(mht_config.max_gap),
         "track2p_full_mht_gap_reactivation_cost": float(
             mht_config.gap_reactivation_cost
+        ),
+        "track2p_full_mht_min_output_observations": int(
+            mht_config.min_output_observations
         ),
         "track2p_full_mht_growth_residual_weight": float(
             mht_config.growth_residual_weight
@@ -369,6 +376,7 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_seed_source": str(mht_config.seed_source),
         "track2p_full_mht_n_seed_tracks": int(len(seed_rois)),
+        "track2p_full_mht_n_output_tracks": int(output_tracks.shape[0]),
     }
     result = SubjectBenchmarkResult(
         subject=subject_dir.name,
@@ -477,6 +485,17 @@ def _track_edges(matrix: np.ndarray) -> frozenset[tuple[int, int, int, int]]:
             if roi_a >= 0 and roi_b >= 0:
                 edges.add((int(session_index), int(session_index) + 1, roi_a, roi_b))
     return frozenset(edges)
+
+
+def _prune_output_tracks(matrix: np.ndarray, *, min_observations: int) -> np.ndarray:
+    tracks = np.asarray(matrix, dtype=int)
+    if tracks.ndim != 2:
+        return tracks.reshape(0, 0)
+    threshold = max(1, int(min_observations))
+    if threshold <= 1:
+        return tracks
+    keep = np.sum(tracks >= 0, axis=1) >= threshold
+    return tracks[np.asarray(keep, dtype=bool)]
 
 
 def _proposal_target_rois(
@@ -1410,6 +1429,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--miss-cost", type=float, default=2.0)
     parser.add_argument("--max-gap", type=int, default=1)
     parser.add_argument("--gap-reactivation-cost", type=float, default=1.0)
+    parser.add_argument("--min-output-observations", type=int, default=1)
     parser.add_argument("--min-edge-score", type=float, default=0.25)
     parser.add_argument(
         "--seed-source",
@@ -1477,6 +1497,7 @@ def main(argv: list[str] | None = None) -> int:
             miss_cost=float(args.miss_cost),
             max_gap=max(0, int(args.max_gap)),
             gap_reactivation_cost=float(args.gap_reactivation_cost),
+            min_output_observations=max(1, int(args.min_output_observations)),
             min_edge_score=float(args.min_edge_score),
             seed_source=cast(SeedSource, args.seed_source),
             max_seed_tracks=args.max_seed_tracks,

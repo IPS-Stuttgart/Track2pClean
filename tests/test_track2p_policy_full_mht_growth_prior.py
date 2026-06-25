@@ -161,6 +161,23 @@ def test_full_mht_track2p_prior_edges_can_reuse_prediction_table():
     )
 
 
+def test_full_mht_prunes_low_support_output_tracks():
+    tracks = np.asarray(
+        [[5, -1, -1], [6, 7, -1], [8, 9, 10]],
+        dtype=int,
+    )
+
+    assert full_mht._prune_output_tracks(
+        tracks, min_observations=1
+    ).tolist() == tracks.tolist()
+    assert full_mht._prune_output_tracks(
+        tracks, min_observations=2
+    ).tolist() == [[6, 7, -1], [8, 9, 10]]
+    assert full_mht._prune_output_tracks(
+        tracks, min_observations=3
+    ).tolist() == [[8, 9, 10]]
+
+
 def test_full_mht_scan_can_reactivate_a_recently_missed_track(monkeypatch):
     hypothesis = full_mht._MHTHypothesis(
         tracks=np.asarray([[5, -1, -1]], dtype=int), score=0.0, history=tuple()
