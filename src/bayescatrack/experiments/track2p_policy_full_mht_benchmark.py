@@ -100,6 +100,7 @@ class FullMHTConfig:
     max_seed_tracks: int | None = None
     association_score_mode: AssociationScoreMode = "heuristic"
     association_likelihood_weight: float = 1.0
+    association_likelihood_clip: float = 4.0
     registered_iou_weight: float = 1.0
     shifted_iou_weight: float = 1.5
     area_ratio_weight: float = 0.25
@@ -442,6 +443,9 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_association_likelihood_weight": float(
             mht_config.association_likelihood_weight
+        ),
+        "track2p_full_mht_association_likelihood_clip": float(
+            mht_config.association_likelihood_clip
         ),
         "track2p_full_mht_n_seed_tracks": int(len(seed_rois)),
         "track2p_full_mht_n_output_tracks": int(output_tracks.shape[0]),
@@ -969,7 +973,11 @@ def _association_log_likelihood_matrix(
         feature_llr = np.where(finite, np.clip(feature_llr, -4.0, 4.0), 0.0)
         output += feature_llr
         used += finite.astype(float)
-    return np.where(used > 0.0, output / np.maximum(1.0, np.sqrt(used)), 0.0)
+    calibrated = np.where(used > 0.0, output / np.maximum(1.0, np.sqrt(used)), 0.0)
+    clip = max(0.0, float(config.association_likelihood_clip))
+    if clip > 0.0:
+        calibrated = np.clip(calibrated, -clip, clip)
+    return calibrated
 
 
 def _robust_location_scale(values: np.ndarray, *, min_scale: float) -> tuple[float, float]:
@@ -1972,6 +1980,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="heuristic",
     )
     parser.add_argument("--association-likelihood-weight", type=float, default=1.0)
+    parser.add_argument("--association-likelihood-clip", type=float, default=4.0)
     parser.add_argument("--registered-iou-weight", type=float, default=1.0)
     parser.add_argument("--shifted-iou-weight", type=float, default=1.5)
     parser.add_argument("--area-ratio-weight", type=float, default=0.25)
@@ -2055,6 +2064,7 @@ def main(argv: list[str] | None = None) -> int:
                 AssociationScoreMode, args.association_score_mode
             ),
             association_likelihood_weight=float(args.association_likelihood_weight),
+            association_likelihood_clip=float(args.association_likelihood_clip),
             registered_iou_weight=float(args.registered_iou_weight),
             shifted_iou_weight=float(args.shifted_iou_weight),
             area_ratio_weight=float(args.area_ratio_weight),
