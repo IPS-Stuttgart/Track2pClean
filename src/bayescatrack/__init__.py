@@ -34,6 +34,9 @@ from ._fov_affine_validation import (
 from ._fov_translation_output_shape_validation import (
     install_fov_translation_output_shape_validation as _install_fov_translation_output_shape_validation,
 )
+from ._global_cost_preset_validation import (
+    install_global_cost_preset_validation as _install_global_cost_preset_validation,
+)
 from ._ground_truth_track_validation import (
     install_ground_truth_track_validation as _install_ground_truth_track_validation,
 )
@@ -139,6 +142,7 @@ _install_matching_layout_validation(_matching)
 _install_matching_max_cost_validation(_matching)
 _install_soft_overlap_costs()
 _install_shifted_overlap_scalar_validation()
+_install_global_cost_preset_validation()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
 _install_assignment_bundle_validation()
