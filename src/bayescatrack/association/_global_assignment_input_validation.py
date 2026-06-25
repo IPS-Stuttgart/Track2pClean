@@ -53,14 +53,30 @@ def install_global_assignment_input_validation() -> None:
             session_edges=session_edges,
             session_count=len(sizes),
         )
+        normalized_start_cost = _coerce_nonnegative_float(
+            start_cost,
+            context="start_cost",
+        )
+        normalized_end_cost = _coerce_nonnegative_float(
+            end_cost,
+            context="end_cost",
+        )
+        normalized_gap_penalty = _coerce_nonnegative_float(
+            gap_penalty,
+            context="gap_penalty",
+        )
+        normalized_cost_threshold = _coerce_optional_nonnegative_float(
+            cost_threshold,
+            context="cost_threshold",
+        )
         return original(
             normalized_costs,
             session_sizes=sizes,
             session_edges=normalized_edges,
-            start_cost=start_cost,
-            end_cost=end_cost,
-            gap_penalty=gap_penalty,
-            cost_threshold=cost_threshold,
+            start_cost=normalized_start_cost,
+            end_cost=normalized_end_cost,
+            gap_penalty=normalized_gap_penalty,
+            cost_threshold=normalized_cost_threshold,
         )
 
     setattr(solve_global_assignment_from_pairwise_costs, _PATCH_ATTR, True)
@@ -213,6 +229,28 @@ def _coerce_integer_like(value: Any, *, context: str, allow_zero: bool) -> int:
     if integer_value < minimum:
         raise ValueError(f"{context} must be at least {minimum}")
     return int(integer_value)
+
+
+def _coerce_optional_nonnegative_float(
+    value: Any,
+    *,
+    context: str,
+) -> float | None:
+    if value is None:
+        return None
+    return _coerce_nonnegative_float(value, context=context)
+
+
+def _coerce_nonnegative_float(value: Any, *, context: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{context} must be numeric, not boolean")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{context} must be numeric") from exc
+    if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(f"{context} must be a non-negative finite number")
+    return numeric_value
 
 
 __all__ = ["install_global_assignment_input_validation"]
