@@ -7,6 +7,7 @@ console entry point use the Track2pClean name.
 
 # pylint: disable=duplicate-code
 
+from . import _strict_config_validation as _strict_config_validation
 from . import cli as _cli
 from . import matching as _matching
 from ._advanced_weight_validation import (
@@ -109,6 +110,7 @@ from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
 from .association import absence_model as _absence_model
+from .association import candidate_prefilter as _candidate_prefilter
 from .core import bridge as _bridge
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
@@ -150,6 +152,7 @@ _install_ground_truth_track_validation()
 _install_registration_selection_validation()
 _install_registration_warp_validation()
 _install_strict_config_validation()
+_strict_config_validation._positive_int = _candidate_prefilter._positive_int
 _install_empty_candidate_gate_margin_fix()
 _install_empty_registered_roi_mask_validation()
 _install_matching_bundle_roi_index_validation()

@@ -14,6 +14,9 @@ from ._benchmark_roi_index_validation import (
 from ._calibration_feature_registry_integration import (
     install_calibration_feature_registry_integration,
 )
+from ._seed_sensitivity_validation import (
+    install_seed_sensitivity_audit_validation,
+)
 from ._summary_output_format_integration import (
     install_summary_output_format_integration,
 )
@@ -27,6 +30,7 @@ from ._teacher_rescue_repair_preset_manifest_integration import (
 _triplet_support_benchmark_integration.install_track2p_benchmark_triplet_support_integration()
 _seed_session_validation.install_seed_session_validation()
 install_benchmark_roi_index_validation()
+install_seed_sensitivity_audit_validation()
 install_calibration_feature_registry_integration()
 _teacher_rescue_manifest_integration.install_teacher_rescue_manifest_integration()
 install_teacher_rescue_edit_cap_manifest_integration()
