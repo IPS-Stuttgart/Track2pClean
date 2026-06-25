@@ -142,8 +142,8 @@ def _validate_one_suite2p_roi_stat(
     *,
     exclude_overlapping_pixels: bool,
 ) -> None:
-    ypix = np.asarray(roi_stat["ypix"])
-    xpix = np.asarray(roi_stat["xpix"])
+    ypix = _validate_integer_pixel_coordinate_array(roi_stat["ypix"], name="ypix")
+    xpix = _validate_integer_pixel_coordinate_array(roi_stat["xpix"], name="xpix")
     if ypix.shape != xpix.shape:
         raise ValueError("Suite2p ROI ypix/xpix arrays must have matching shapes")
 
@@ -156,6 +156,37 @@ def _validate_one_suite2p_roi_stat(
         overlap = np.asarray(roi_stat["overlap"])
         if overlap.shape != ypix.shape:
             raise ValueError("Suite2p ROI overlap shape must match ypix/xpix shape")
+
+
+def _validate_integer_pixel_coordinate_array(value: Any, *, name: str) -> np.ndarray:
+    array = np.asarray(value)
+    if _contains_ambiguous_pixel_coordinate_tokens(array):
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        )
+    if np.issubdtype(array.dtype, np.integer):
+        return array
+
+    try:
+        numeric = np.asarray(array, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        ) from exc
+
+    if not np.all(np.isfinite(numeric)) or not np.all(numeric == np.floor(numeric)):
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        )
+    return numeric.astype(int, copy=False)
+
+
+def _contains_ambiguous_pixel_coordinate_tokens(array: np.ndarray) -> bool:
+    if np.issubdtype(array.dtype, np.bool_) or array.dtype.kind in {"S", "U"}:
+        return True
+    if array.dtype != object:
+        return False
+    return any(isinstance(item, (bool, np.bool_, str, bytes)) for item in array.ravel())
 
 
 def _original_load_suite2p_plane() -> Callable[..., Any]:
