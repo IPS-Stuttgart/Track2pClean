@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from numbers import Integral
+import sys
 from typing import Any
 
 import numpy as np
@@ -79,6 +80,13 @@ def install_nonrigid_registration_control_validation() -> None:
     validated_register_measurement_plane_by_nonrigid_fov.__qualname__ = original.__qualname__
     setattr(validated_register_measurement_plane_by_nonrigid_fov, _ORIGINAL_ATTR, original)
     _nonrigid_registration.register_measurement_plane_by_nonrigid_fov = validated_register_measurement_plane_by_nonrigid_fov
+    track2p_registration = sys.modules.get(f"{__package__}.track2p_registration")
+    if track2p_registration is not None:
+        setattr(
+            track2p_registration,
+            "register_measurement_plane_by_nonrigid_fov",
+            validated_register_measurement_plane_by_nonrigid_fov,
+        )
     setattr(_nonrigid_registration, _PATCH_MARKER, True)
 
 
