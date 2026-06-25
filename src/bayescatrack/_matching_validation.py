@@ -1,4 +1,4 @@
-"""Strict validation for linear-assignment bundle layouts."""
+"""Strict validation for linear-assignment bundle layouts and options."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ _PATCH_MARKER = "_bayescatrack_assignment_layout_validation_patch"
 
 
 def install_matching_layout_validation(matching_module: Any) -> None:
-    """Install an idempotent layout validator on matching assignment solves."""
+    """Install an idempotent validator on matching assignment solves."""
 
     original: Callable[..., Any] = matching_module.solve_bundle_linear_assignment
     if getattr(original, _PATCH_MARKER, False):
@@ -21,6 +21,9 @@ def install_matching_layout_validation(matching_module: Any) -> None:
     @wraps(original)
     def solve_bundle_linear_assignment(bundle: Any, *args: Any, **kwargs: Any) -> Any:
         _validate_bundle_assignment_layout(bundle)
+        if "max_cost" in kwargs:
+            kwargs = dict(kwargs)
+            kwargs["max_cost"] = _normalize_max_cost(kwargs["max_cost"])
         return original(bundle, *args, **kwargs)
 
     setattr(solve_bundle_linear_assignment, _PATCH_MARKER, True)
@@ -67,6 +70,20 @@ def _validate_roi_index_axis(
             f"bundle.{field_name} length ({actual_len}) must match "
             f"pairwise_cost_matrix {axis_name} dimension ({expected_len})"
         )
+
+
+def _normalize_max_cost(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("max_cost must be a finite non-negative value")
+    try:
+        max_cost = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("max_cost must be a finite non-negative value") from exc
+    if not np.isfinite(max_cost) or max_cost < 0.0:
+        raise ValueError("max_cost must be a finite non-negative value")
+    return float(max_cost)
 
 
 __all__ = ["install_matching_layout_validation"]
