@@ -49,11 +49,13 @@ def load_suite2p_plane(plane_dir: str | Path, *args: Any, **kwargs: Any) -> Any:
         weighted_masks = _strict_bool(
             kwargs.get("weighted_masks", False), name="weighted_masks"
         )
-        load_traces = _strict_bool(kwargs.get("load_traces", True), name="load_traces")
-        load_spike_traces = _strict_bool(
+        load_traces = _strict_python_bool(
+            kwargs.get("load_traces", True), name="load_traces"
+        )
+        load_spike_traces = _strict_python_bool(
             kwargs.get("load_spike_traces", True), name="load_spike_traces"
         )
-        load_neuropil_traces = _strict_bool(
+        load_neuropil_traces = _strict_python_bool(
             kwargs.get("load_neuropil_traces", False), name="load_neuropil_traces"
         )
         _validate_suite2p_stat_shapes(
@@ -204,6 +206,12 @@ def _strict_bool(value: Any, *, name: str) -> bool:
     if not isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a boolean")
     return bool(value)
+
+
+def _strict_python_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
 
 
 def _finite_probability(value: Any, *, name: str) -> float:
