@@ -33,18 +33,15 @@ def install_seed_session_validation() -> None:
                 raise ValueError("seed_sessions string value must be 'all'")
             return tuple(range(session_count))
 
-        seed_values = _seed_session_values(
+        seed_values, uses_seed_session_fallback = _seed_session_values(
             configured_seed_sessions,
             fallback=config.seed_session,
         )
+        field_name = "seed_session" if uses_seed_session_fallback else "seed_sessions"
         return tuple(
             _seed_session_index(
                 seed_session,
-                field_name=(
-                    "seed_session"
-                    if configured_seed_sessions in (None, ())
-                    else "seed_sessions"
-                ),
+                field_name=field_name,
                 n_sessions=session_count,
             )
             for seed_session in seed_values
@@ -59,16 +56,22 @@ def install_seed_session_validation() -> None:
     _benchmark._resolved_seed_sessions = _validated_resolved_seed_sessions
 
 
-def _seed_session_values(configured_seed_sessions: Any, *, fallback: Any) -> tuple[Any, ...]:
+def _seed_session_values(
+    configured_seed_sessions: Any,
+    *,
+    fallback: Any,
+) -> tuple[tuple[Any, ...], bool]:
     if configured_seed_sessions is None:
-        return (fallback,)
+        return (fallback,), True
     try:
         seed_values = tuple(configured_seed_sessions)
     except TypeError as exc:
         raise ValueError(
             "seed_sessions must be 'all' or an iterable of integer session indices"
         ) from exc
-    return seed_values or (fallback,)
+    if not seed_values:
+        return (fallback,), True
+    return seed_values, False
 
 
 def _positive_session_count(value: Any) -> int:
