@@ -201,9 +201,9 @@ def _original_load_suite2p_plane() -> Callable[..., Any]:
 
 
 def _strict_bool(value: Any, *, name: str) -> bool:
-    if type(value) is not bool:
+    if not isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a boolean")
-    return value
+    return bool(value)
 
 
 def _finite_probability(value: Any, *, name: str) -> float:
