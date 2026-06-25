@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from bayescatrack.association.absence_model import (
     AbsenceModelConfig,
+    absence_cost_vector,
     apply_absence_adjustment,
     gap_penalty_matrix,
 )
@@ -50,6 +51,22 @@ def test_absence_model_config_rejects_negative_discounts() -> None:
 def test_absence_model_config_rejects_boolean_scalars(field: str, value: object) -> None:
     with pytest.raises(ValueError, match=field):
         AbsenceModelConfig(**{field: value})
+
+
+def test_absence_cost_vector_ignores_nonfinite_local_density_entries() -> None:
+    plane = _plane(4)
+
+    costs = absence_cost_vector(
+        plane,
+        local_density=np.asarray([0.0, np.nan, np.inf, -np.inf], dtype=float),
+        config=AbsenceModelConfig(
+            base_absence_cost=1.0,
+            high_local_density_discount=0.25,
+            trace_missing_discount=0.0,
+        ),
+    )
+
+    np.testing.assert_allclose(costs, np.asarray([1.0, 1.0, 0.75, 1.0], dtype=float))
 
 
 def test_gap_penalty_matrix_rejects_invalid_session_gap() -> None:
