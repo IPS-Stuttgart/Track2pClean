@@ -695,6 +695,37 @@ def test_full_mht_beam_pruning_score_uses_terminal_identity_risk():
     )
 
 
+def test_full_mht_identity_diverse_beam_keeps_lower_risk_bucket():
+    high_score_risky = full_mht._MHTHypothesis(
+        np.asarray([[5, 9]], dtype=int),
+        score=10.0,
+        history=({"no_prior_successor_continuations": 3},),
+    )
+    next_score_risky = full_mht._MHTHypothesis(
+        np.asarray([[5, 10]], dtype=int),
+        score=9.0,
+        history=({"no_prior_successor_continuations": 3},),
+    )
+    lower_score_clean = full_mht._MHTHypothesis(
+        np.asarray([[5, 11]], dtype=int),
+        score=8.0,
+        history=({"no_prior_successor_continuations": 0},),
+    )
+    hypotheses = (high_score_risky, next_score_risky, lower_score_clean)
+
+    default = full_mht._prune_beam(
+        hypotheses,
+        config=full_mht.FullMHTConfig(beam_width=2),
+    )
+    diverse = full_mht._prune_beam(
+        hypotheses,
+        config=full_mht.FullMHTConfig(beam_width=2, identity_diverse_beam=True),
+    )
+
+    assert default == [high_score_risky, next_score_risky]
+    assert diverse == [high_score_risky, lower_score_clean]
+
+
 def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     active = full_mht._ActiveTrackSource(
         row_index=0, source_session=1, source_roi=5, gap_length=0

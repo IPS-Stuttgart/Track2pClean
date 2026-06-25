@@ -91,6 +91,7 @@ class FullMHTConfig:
     beam_width: int = 8
     scan_hypotheses: int = 8
     edge_top_k: int = 4
+    identity_diverse_beam: bool = False
     miss_cost: float = 2.0
     max_gap: int = 1
     gap_reactivation_cost: float = 1.0
@@ -363,6 +364,7 @@ def _run_subject_full_mht(
                     "beam_width": int(mht_config.beam_width),
                     "scan_hypotheses": int(mht_config.scan_hypotheses),
                     "edge_top_k": int(mht_config.edge_top_k),
+                    "identity_diverse_beam": int(mht_config.identity_diverse_beam),
                     "seed_source": str(mht_config.seed_source),
                     "n_seed_tracks": int(len(seed_rois)),
                 }
@@ -385,6 +387,9 @@ def _run_subject_full_mht(
         "track2p_full_mht_beam_width": int(mht_config.beam_width),
         "track2p_full_mht_scan_hypotheses": int(mht_config.scan_hypotheses),
         "track2p_full_mht_edge_top_k": int(mht_config.edge_top_k),
+        "track2p_full_mht_identity_diverse_beam": int(
+            mht_config.identity_diverse_beam
+        ),
         "track2p_full_mht_miss_cost": float(mht_config.miss_cost),
         "track2p_full_mht_max_gap": int(mht_config.max_gap),
         "track2p_full_mht_gap_reactivation_cost": float(
@@ -1278,8 +1283,7 @@ def _advance_scan(
                 track2p_prior_edges=track2p_prior_edges,
             )
         )
-    expanded.sort(key=lambda hyp: -_beam_pruning_score(hyp, config=config))
-    return expanded[: max(1, int(config.beam_width))]
+    return _prune_beam(expanded, config=config)
 
 
 def _expand_hypothesis_scan(
@@ -1583,6 +1587,46 @@ def _expand_hypothesis_scan(
 def _beam_pruning_score(hypothesis: _MHTHypothesis, *, config: FullMHTConfig) -> float:
     return float(hypothesis.score) - _terminal_identity_history_risk(
         hypothesis, config=config
+    )
+
+
+def _prune_beam(
+    hypotheses: Sequence[_MHTHypothesis], *, config: FullMHTConfig
+) -> list[_MHTHypothesis]:
+    limit = max(1, int(config.beam_width))
+    ranked = sorted(
+        hypotheses, key=lambda hyp: -_beam_pruning_score(hyp, config=config)
+    )
+    if not bool(config.identity_diverse_beam) or len(ranked) <= limit:
+        return ranked[:limit]
+
+    selected: list[_MHTHypothesis] = []
+    selected_ids: set[int] = set()
+
+    def add(hypothesis: _MHTHypothesis) -> None:
+        if len(selected) >= limit or id(hypothesis) in selected_ids:
+            return
+        selected.append(hypothesis)
+        selected_ids.add(id(hypothesis))
+
+    add(ranked[0])
+    best_by_bucket: dict[int, _MHTHypothesis] = {}
+    for hypothesis in ranked:
+        bucket = _identity_diversity_bucket(hypothesis)
+        best_by_bucket.setdefault(bucket, hypothesis)
+    for bucket in sorted(best_by_bucket):
+        add(best_by_bucket[bucket])
+    for hypothesis in ranked:
+        add(hypothesis)
+    return selected
+
+
+def _identity_diversity_bucket(hypothesis: _MHTHypothesis) -> int:
+    return int(
+        sum(
+            int(_finite_float(scan.get("no_prior_successor_continuations", 0), 0.0))
+            for scan in hypothesis.history
+        )
     )
 
 
@@ -2098,6 +2142,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--beam-width", type=int, default=8)
     parser.add_argument("--scan-hypotheses", type=int, default=8)
     parser.add_argument("--edge-top-k", type=int, default=4)
+    parser.add_argument(
+        "--identity-diverse-beam",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
     parser.add_argument("--miss-cost", type=float, default=2.0)
     parser.add_argument("--max-gap", type=int, default=1)
     parser.add_argument("--gap-reactivation-cost", type=float, default=1.0)
@@ -2194,6 +2243,7 @@ def main(argv: list[str] | None = None) -> int:
             beam_width=max(1, int(args.beam_width)),
             scan_hypotheses=max(1, int(args.scan_hypotheses)),
             edge_top_k=max(1, int(args.edge_top_k)),
+            identity_diverse_beam=bool(args.identity_diverse_beam),
             miss_cost=float(args.miss_cost),
             max_gap=max(0, int(args.max_gap)),
             gap_reactivation_cost=float(args.gap_reactivation_cost),
