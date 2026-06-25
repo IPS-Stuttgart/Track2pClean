@@ -36,6 +36,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
 bayescatrack = ["configs/*.yaml", "py.typed"]
+track2pclean = ["py.typed"]
 
 [tool.poetry]
 requires-poetry = ">=2.1"
