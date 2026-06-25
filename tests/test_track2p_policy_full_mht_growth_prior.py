@@ -121,10 +121,16 @@ def test_full_mht_active_track_sources_keep_recent_misses_only():
     ] == [(0, 0, 5, 1), (1, 1, 8, 0), (2, 0, 9, 1)]
 
 
-def test_full_mht_track2p_output_seed_source_uses_prediction_rows():
+def test_full_mht_track2p_output_seed_source_uses_cell_gated_prediction_rows(monkeypatch):
     reference_tracks = np.asarray([[1, 2], [3, 4]], dtype=int)
     track2p_tracks = np.asarray(
-        [[9, 10], [5, -1], [-1, 6], [9, 11]], dtype=int
+        [[9, 10], [5, -1], [-1, 6], [9, 11], [7, 12]], dtype=int
+    )
+    cell_probability = {5: 0.8, 7: 0.2, 9: 0.9}
+    monkeypatch.setattr(
+        full_mht,
+        "_cell_probability",
+        lambda _sessions, _session, roi: cell_probability[int(roi)],
     )
 
     assert full_mht._seed_rois(

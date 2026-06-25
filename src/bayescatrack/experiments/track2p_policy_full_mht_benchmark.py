@@ -422,6 +422,10 @@ def _seed_rois(
                 int(row[int(seed_session)])
                 for row in tracks
                 if int(row[int(seed_session)]) >= 0
+                and _cell_probability(
+                    sessions, int(seed_session), int(row[int(seed_session)])
+                )
+                >= float(cell_probability_threshold)
             }
         )
     if seed_source != "all-cells":
