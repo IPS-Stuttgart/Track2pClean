@@ -21,6 +21,7 @@ def install_reference_validation(reference_module: ModuleType | None = None) -> 
     _install_optional_int_parser_validation(reference_module)
     _install_curated_mask_validation(reference_module)
     _install_session_index_validation(reference_module)
+    _install_complete_track_vector_normalization(reference_module)
 
 
 def _install_optional_int_parser_validation(reference_module: ModuleType) -> None:
@@ -140,6 +141,38 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
     reference_module._validate_session_index = (
         _validate_session_index_with_validation  # pylint: disable=protected-access
     )
+
+
+def _install_complete_track_vector_normalization(reference_module: ModuleType) -> None:
+    original_score_complete_tracks = reference_module.score_complete_tracks
+    if getattr(original_score_complete_tracks, _PATCH_ATTR, False):
+        return
+
+    def _score_complete_tracks_with_vector_normalization(
+        predicted_tracks: Any,
+        reference_tracks: Any,
+    ) -> dict[str, float | int]:
+        return original_score_complete_tracks(
+            _normalize_complete_track_matrix(predicted_tracks),
+            _normalize_complete_track_matrix(reference_tracks),
+        )
+
+    setattr(_score_complete_tracks_with_vector_normalization, _PATCH_ATTR, True)
+    setattr(
+        _score_complete_tracks_with_vector_normalization,
+        "_bayescatrack_original",
+        original_score_complete_tracks,
+    )
+    reference_module.score_complete_tracks = _score_complete_tracks_with_vector_normalization
+
+
+def _normalize_complete_track_matrix(track_matrix: Any) -> Any:
+    array = np.asarray(track_matrix, dtype=object)
+    if array.ndim != 1:
+        return track_matrix
+    if array.size == 0:
+        return np.empty((0, 0), dtype=object)
+    return array.reshape(1, -1)
 
 
 def _is_explicit_missing_roi_index(
