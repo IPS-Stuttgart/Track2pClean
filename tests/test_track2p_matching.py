@@ -9,12 +9,16 @@ from bayescatrack.matching import (
 
 
 class _Bundle:
-    def __init__(self, costs):
+    def __init__(self, costs, *, reference_roi_indices=None, measurement_roi_indices=None):
         self.pairwise_cost_matrix = np.asarray(costs, dtype=float)
         self.reference_session_name = "s1"
         self.measurement_session_name = "s2"
-        self.reference_roi_indices = np.array([10, 20], dtype=int)
-        self.measurement_roi_indices = np.array([100, 200], dtype=int)
+        self.reference_roi_indices = np.asarray(
+            [10, 20] if reference_roi_indices is None else reference_roi_indices
+        )
+        self.measurement_roi_indices = np.asarray(
+            [100, 200] if measurement_roi_indices is None else measurement_roi_indices
+        )
 
 
 def test_build_track_rows_from_consecutive_matches():
@@ -131,6 +135,36 @@ def test_solve_bundle_linear_assignment_with_disabled_gate_filters_invalid_costs
     npt.assert_array_equal(result.reference_roi_indices, np.array([10, 20]))
     npt.assert_array_equal(result.measurement_roi_indices, np.array([100, 200]))
     npt.assert_array_equal(result.costs, np.array([0.0, 1.0]))
+
+
+def test_solve_bundle_linear_assignment_rejects_short_reference_roi_indices():
+    with pytest.raises(ValueError, match="reference_roi_indices length"):
+        solve_bundle_linear_assignment(
+            _Bundle(
+                [[0.0, 1.0], [1.0, 0.0]],
+                reference_roi_indices=[10],
+            )
+        )
+
+
+def test_solve_bundle_linear_assignment_rejects_extra_measurement_roi_indices():
+    with pytest.raises(ValueError, match="measurement_roi_indices length"):
+        solve_bundle_linear_assignment(
+            _Bundle(
+                [[0.0, 1.0], [1.0, 0.0]],
+                measurement_roi_indices=[100, 200, 300],
+            )
+        )
+
+
+def test_solve_bundle_linear_assignment_rejects_fractional_bundle_roi_indices():
+    with pytest.raises(ValueError, match="reference_roi_indices"):
+        solve_bundle_linear_assignment(
+            _Bundle(
+                [[0.0, 1.0], [1.0, 0.0]],
+                reference_roi_indices=[10.5, 20],
+            )
+        )
 
 
 def test_solve_bundle_linear_assignment_gates_before_hungarian():
