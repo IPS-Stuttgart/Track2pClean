@@ -234,7 +234,7 @@ def segmentation_event_rows(
 def event_soft_penalty_matrix(
     pairwise_components: Mapping[str, Any],
     *,
-    config: SegmentationEventConfig | None = None,
+    config: SegmentationEventConfig | Mapping[str, Any] | None = None,
 ) -> np.ndarray:
     """Return a penalty relief matrix for plausible split/merge edges.
 
@@ -244,7 +244,7 @@ def event_soft_penalty_matrix(
     one-to-many events, but this can prevent premature pruning of useful edges.
     """
 
-    cfg = config or SegmentationEventConfig()
+    cfg = _segmentation_event_config_from_mapping(config)
     matrices = _event_matrices(pairwise_components)
     score = matrices["score"]
     relief = np.zeros_like(score, dtype=float)
@@ -254,6 +254,16 @@ def event_soft_penalty_matrix(
     ) & (matrices["area"] <= cfg.max_area_ratio_cost)
     relief[plausible] = -0.25 * np.clip(score[plausible], 0.0, 1.0)
     return relief
+
+
+def _segmentation_event_config_from_mapping(
+    config: SegmentationEventConfig | Mapping[str, Any] | None,
+) -> SegmentationEventConfig:
+    if config is None:
+        return SegmentationEventConfig()
+    if isinstance(config, SegmentationEventConfig):
+        return config
+    return SegmentationEventConfig(**dict(config))
 
 
 def _event_matrices(pairwise_components: Mapping[str, Any]) -> dict[str, np.ndarray]:
