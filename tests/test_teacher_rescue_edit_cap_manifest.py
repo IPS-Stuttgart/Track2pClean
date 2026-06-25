@@ -74,5 +74,6 @@ def test_result_improvement_manifest_reinstalls_edit_caps_after_workbench_reload
     )
 
     run_names = [run["name"] for run in manifest["runs"]]
+    assert "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source" in run_names
     assert "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max1" in run_names
     assert "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max2" in run_names
