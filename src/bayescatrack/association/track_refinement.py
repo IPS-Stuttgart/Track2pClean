@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -19,12 +20,37 @@ class TrackSmoothingConfig:
     fill_value: int = -1
 
     def __post_init__(self) -> None:
-        if self.residual_z_threshold <= 0.0:
-            raise ValueError("residual_z_threshold must be positive")
-        if self.min_track_detections < 2:
-            raise ValueError("min_track_detections must be at least two")
-        if self.min_edge_residual < 0.0:
-            raise ValueError("min_edge_residual must be non-negative")
+        object.__setattr__(
+            self,
+            "residual_z_threshold",
+            _finite_positive_float(
+                self.residual_z_threshold, name="residual_z_threshold"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_track_detections",
+            _integer_at_least(
+                self.min_track_detections, name="min_track_detections", minimum=2
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_edge_residual",
+            _finite_nonnegative_float(
+                self.min_edge_residual, name="min_edge_residual"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "split_bad_edges",
+            _strict_bool(self.split_bad_edges, name="split_bad_edges"),
+        )
+        object.__setattr__(
+            self,
+            "fill_value",
+            _integer_value(self.fill_value, name="fill_value"),
+        )
 
 
 @dataclass(frozen=True)
@@ -253,3 +279,58 @@ def _robust_z_scores(values: np.ndarray) -> np.ndarray:
     z_scores[non_median] = np.inf
     z_scores[~np.isfinite(deviations)] = np.inf
     return z_scores
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite positive value")
+    numeric_value = float(value)
+    if not np.isfinite(numeric_value) or numeric_value <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return numeric_value
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite non-negative value")
+    numeric_value = float(value)
+    if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return numeric_value
+
+
+def _integer_at_least(value: Any, *, name: str, minimum: int) -> int:
+    integer_value = _integer_value(value, name=name)
+    if integer_value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return integer_value
+
+
+def _integer_value(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{name} must be an integer")
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric_value = float(stripped)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        return int(numeric_value)
+    try:
+        return int(operator.index(value))
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
