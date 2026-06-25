@@ -46,6 +46,9 @@ from ._matching_validation import (
 from ._multisession_solver_track_validation import (
     install_multisession_solver_track_validation as _install_multisession_solver_track_validation,
 )
+from ._nonrigid_registration_control_validation import (
+    install_nonrigid_registration_control_validation as _install_nonrigid_registration_control_validation,
+)
 from ._pairwise_return_components_validation import (
     install_return_components_validation as _install_return_components_validation,
 )
@@ -133,6 +136,7 @@ _install_reference_validation()
 _install_fov_affine_estimator_validation()
 _install_fov_affine_warp_validation()
 _install_fov_translation_output_shape_validation()
+_install_nonrigid_registration_control_validation()
 _install_ground_truth_track_validation()
 _install_registration_selection_validation()
 _install_registration_warp_validation()
