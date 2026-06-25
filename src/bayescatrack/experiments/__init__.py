@@ -17,9 +17,6 @@ from ._summary_output_format_integration import (
 from ._teacher_rescue_edit_cap_manifest_integration import (
     install_teacher_rescue_edit_cap_manifest_integration,
 )
-from ._teacher_rescue_manifest_integration import (
-    install_teacher_rescue_manifest_integration,
-)
 from ._teacher_rescue_repair_preset_manifest_integration import (
     install_teacher_rescue_repair_preset_manifest_integration,
 )
@@ -27,7 +24,9 @@ from ._teacher_rescue_repair_preset_manifest_integration import (
 _triplet_support_benchmark_integration.install_track2p_benchmark_triplet_support_integration()
 _seed_session_validation.install_seed_session_validation()
 install_calibration_feature_registry_integration()
-install_teacher_rescue_manifest_integration = _teacher_rescue_manifest_reload_fix.install_teacher_rescue_manifest_reload_fix()
+install_teacher_rescue_manifest_integration = (
+    _teacher_rescue_manifest_reload_fix.install_teacher_rescue_manifest_reload_fix()
+)
 install_teacher_rescue_manifest_integration()
 install_teacher_rescue_edit_cap_manifest_integration()
 install_teacher_rescue_repair_preset_manifest_integration()
