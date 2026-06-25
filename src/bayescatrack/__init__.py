@@ -54,6 +54,9 @@ from ._track_row_fill_value_validation import (
 from ._track_table_session_name_validation import (
     install_track_table_session_name_validation as _install_track_table_session_name_validation,
 )
+from ._tracking_fill_value_validation import (
+    install_tracking_fill_value_validation as _install_tracking_fill_value_validation,
+)
 from ._tracking_start_roi_validation import (
     install_tracking_start_roi_validation as _install_tracking_start_roi_validation,
 )
@@ -101,5 +104,6 @@ _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
 _install_track_row_fill_value_validation()
 _install_track_table_session_name_validation()
+_install_tracking_fill_value_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
