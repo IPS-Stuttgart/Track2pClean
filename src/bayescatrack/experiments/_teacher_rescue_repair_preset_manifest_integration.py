@@ -10,10 +10,12 @@ existing options before the teacher-adjacent rescue runner is invoked.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from functools import wraps
 from typing import Any
 
 TEACHER_REPAIR_PRESET_FIELD = "teacher_repair_preset"
 TEACHER_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
+_RUNNER_PATCH_MARKER = "_bayescatrack_teacher_repair_preset_runner_patch"
 
 
 def install_teacher_rescue_repair_preset_manifest_integration() -> None:
@@ -21,9 +23,6 @@ def install_teacher_rescue_repair_preset_manifest_integration() -> None:
 
     from bayescatrack.experiments import _teacher_rescue_manifest_integration as base
     from bayescatrack.experiments import benchmark_manifest as manifest
-
-    if getattr(manifest, "_bayescatrack_teacher_repair_preset_integration", False):
-        return
 
     base.TEACHER_ADJACENT_RESCUE_FIELDS.add(TEACHER_REPAIR_PRESET_FIELD)
     manifest.RUNNER_SPECIFIC_FIELDS.add(TEACHER_REPAIR_PRESET_FIELD)
@@ -33,12 +32,18 @@ def install_teacher_rescue_repair_preset_manifest_integration() -> None:
     ).add(TEACHER_REPAIR_PRESET_FIELD)
 
     original_runner = base._run_track2p_policy_teacher_adjacent_rows
+    if getattr(original_runner, _RUNNER_PATCH_MARKER, False):
+        manifest._bayescatrack_teacher_repair_preset_integration = True
+        return
 
+    @wraps(original_runner)
     def _run_teacher_rows_with_repair_preset(
         config: Any, options: Mapping[str, Any]
     ) -> list[dict[str, Any]]:
         return original_runner(config, _expand_teacher_repair_preset(options))
 
+    setattr(_run_teacher_rows_with_repair_preset, _RUNNER_PATCH_MARKER, True)
+    setattr(_run_teacher_rows_with_repair_preset, "_bayescatrack_original", original_runner)
     base._run_track2p_policy_teacher_adjacent_rows = (
         _run_teacher_rows_with_repair_preset
     )
