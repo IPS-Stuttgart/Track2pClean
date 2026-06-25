@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -186,9 +187,22 @@ def estimate_growth_from_track_rows(
     """Estimate an affine growth transform from complete links in a track matrix."""
 
     cfg = config or GrowthPriorConfig()
-    rows = np.asarray(track_rows, dtype=int)
-    if target_session < 0:
-        target_session = rows.shape[1] + int(target_session)
+    rows = _integer_track_row_matrix(track_rows)
+    source_session = _normalize_session_column(
+        source_session,
+        name="source_session",
+        num_sessions=rows.shape[1],
+    )
+    target_session = _normalize_session_column(
+        target_session,
+        name="target_session",
+        num_sessions=rows.shape[1],
+    )
+    required_position_tables = max(source_session, target_session) + 1
+    if len(position_tables) < required_position_tables:
+        raise ValueError(
+            "position_tables must contain mappings for source_session and target_session"
+        )
     source_points: list[np.ndarray] = []
     target_points: list[np.ndarray] = []
     for row in rows:
@@ -209,6 +223,54 @@ def estimate_growth_from_track_rows(
         np.vstack(target_points),
         regularization=cfg.regularization,
     )
+
+
+def _integer_track_row_matrix(track_rows: Any) -> np.ndarray:
+    raw_rows = np.asarray(track_rows, dtype=object)
+    if raw_rows.ndim != 2:
+        raise ValueError("track_rows must be a two-dimensional integer matrix")
+    normalized = np.empty(raw_rows.shape, dtype=int)
+    for index, value in np.ndenumerate(raw_rows):
+        normalized[index] = _integer_track_row_entry(value)
+    return normalized
+
+
+def _integer_track_row_entry(value: Any) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("track_rows must contain integer ROI indices or negative missing sentinels")
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(
+                "track_rows must contain integer ROI indices or negative missing sentinels"
+            )
+        return int(numeric_value)
+    try:
+        return int(operator.index(value))
+    except TypeError as exc:
+        raise ValueError(
+            "track_rows must contain integer ROI indices or negative missing sentinels"
+        ) from exc
+
+
+def _normalize_session_column(value: Any, *, name: str, num_sessions: int) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer session column")
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer session column")
+        normalized = int(numeric_value)
+    else:
+        try:
+            normalized = int(operator.index(value))
+        except TypeError as exc:
+            raise ValueError(f"{name} must be an integer session column") from exc
+    if normalized < 0:
+        normalized += num_sessions
+    if normalized < 0 or normalized >= num_sessions:
+        raise IndexError(f"{name} {normalized} out of bounds for {num_sessions} sessions")
+    return normalized
 
 
 def _nonnegative_float(value: Any, *, name: str) -> float:
