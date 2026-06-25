@@ -62,10 +62,9 @@ def absence_cost_vector(
 
     cell_probabilities = getattr(plane, "cell_probabilities", None)
     if cell_probabilities is not None:
-        probs = np.clip(
-            np.asarray(cell_probabilities, dtype=float).reshape(-1), 0.0, 1.0
-        )
+        probs = np.asarray(cell_probabilities, dtype=float).reshape(-1)
         if probs.shape == (n_rois,):
+            probs = _sanitize_cell_probability_vector(probs)
             costs -= cfg.low_cell_probability_discount * (1.0 - probs)
 
     if registered_empty_mask is not None:
@@ -126,7 +125,9 @@ def gap_penalty_matrix(
             config=cfg,
         )
     else:
-        ref_cost = np.asarray(reference_absence_costs, dtype=float).reshape(-1)
+        ref_cost = _validated_absence_cost_vector(
+            "reference_absence_costs", reference_absence_costs, n_ref
+        )
     if measurement_absence_costs is None:
         meas_cost = absence_cost_vector(
             measurement_plane,
@@ -135,9 +136,9 @@ def gap_penalty_matrix(
             config=cfg,
         )
     else:
-        meas_cost = np.asarray(measurement_absence_costs, dtype=float).reshape(-1)
-    if ref_cost.shape != (n_ref,) or meas_cost.shape != (n_meas,):
-        raise ValueError("absence cost vectors must match plane ROI counts")
+        meas_cost = _validated_absence_cost_vector(
+            "measurement_absence_costs", measurement_absence_costs, n_meas
+        )
     gap = _validated_session_gap_offset(session_gap)
     return gap * 0.5 * (ref_cost[:, None] + meas_cost[None, :])
 
@@ -205,6 +206,20 @@ def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
     if not np.isfinite(value) or value < 0.0:
         raise ValueError(f"{name} must be finite and non-negative")
     return value
+
+
+def _sanitize_cell_probability_vector(probabilities: np.ndarray) -> np.ndarray:
+    finite_probabilities = np.where(np.isfinite(probabilities), probabilities, 1.0)
+    return np.clip(finite_probabilities, 0.0, 1.0)
+
+
+def _validated_absence_cost_vector(name: str, raw_values: Any, n_rois: int) -> np.ndarray:
+    values = np.asarray(raw_values, dtype=float).reshape(-1)
+    if values.shape != (n_rois,):
+        raise ValueError("absence cost vectors must match plane ROI counts")
+    if not np.all(np.isfinite(values)) or np.any(values < 0.0):
+        raise ValueError(f"{name} must contain finite non-negative values")
+    return values
 
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:
