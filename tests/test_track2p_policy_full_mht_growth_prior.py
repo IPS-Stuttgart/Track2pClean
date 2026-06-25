@@ -126,6 +126,8 @@ def test_full_mht_scan_can_reactivate_a_recently_missed_track(monkeypatch):
         tracks=np.asarray([[5, -1, -1]], dtype=int), score=0.0, history=tuple()
     )
     matrices = full_mht._FullMHTPairMatrices(
+        source_session=1,
+        target_session=2,
         source_indices=np.asarray([5], dtype=int),
         target_indices=np.asarray([9], dtype=int),
         registered_iou=np.asarray([[0.90]], dtype=float),
@@ -169,3 +171,45 @@ def test_full_mht_scan_can_reactivate_a_recently_missed_track(monkeypatch):
     assert output[0].tracks.tolist() == [[5, -1, 9]]
     assert output[0].history[-1]["gap_active_tracks"] == 1
     assert output[0].history[-1]["gap_reactivated_tracks"] == 1
+
+
+def test_full_mht_edge_score_rewards_track2p_prior_edges(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=0,
+        target_session=1,
+        source_indices=np.asarray([5], dtype=int),
+        target_indices=np.asarray([9], dtype=int),
+        registered_iou=np.asarray([[0.50]], dtype=float),
+        shifted_iou=np.asarray([[0.25]], dtype=float),
+        centroid_distance=np.asarray([[1.0]], dtype=float),
+        area_ratio=np.asarray([[1.0]], dtype=float),
+        threshold=0.0,
+        growth_residual=np.asarray([[0.0]], dtype=float),
+        growth_mahalanobis=np.asarray([[0.0]], dtype=float),
+        local_deformation=np.asarray([[0.0]], dtype=float),
+        growth_anchor_count=0,
+        growth_model_type="identity_no_anchors",
+    )
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *args, **kwargs: 1.0)
+
+    config = full_mht.FullMHTConfig(track2p_prior_weight=2.0)
+    without_prior = full_mht._edge_score(
+        (object(), object()),
+        matrices,
+        target_session=1,
+        source_local=0,
+        target_local=0,
+        config=config,
+        track2p_prior_edges=frozenset(),
+    )
+    with_prior = full_mht._edge_score(
+        (object(), object()),
+        matrices,
+        target_session=1,
+        source_local=0,
+        target_local=0,
+        config=config,
+        track2p_prior_edges=frozenset({(0, 1, 5, 9)}),
+    )
+
+    assert with_prior == without_prior + 2.0

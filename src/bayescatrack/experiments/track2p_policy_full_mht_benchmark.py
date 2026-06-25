@@ -28,7 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -42,6 +42,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     _load_reference_for_subject,
     _load_subject_sessions,
+    _predict_subject_tracks,
     _reference_matrix,
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
@@ -104,6 +105,7 @@ class FullMHTConfig:
     growth_residual_weight: float = 0.10
     growth_mahalanobis_weight: float = 0.25
     local_deformation_weight: float = 0.50
+    track2p_prior_weight: float = 0.0
     growth_anchor_min_registered_iou: float = 0.55
     growth_anchor_min_shifted_iou: float = 0.30
     growth_anchor_min_cell_probability: float = 0.80
@@ -137,6 +139,8 @@ class FullMHTResult:
 
 @dataclass(frozen=True)
 class _FullMHTPairMatrices:
+    source_session: int
+    target_session: int
     source_indices: np.ndarray
     target_indices: np.ndarray
     registered_iou: np.ndarray
@@ -246,6 +250,11 @@ def _run_subject_full_mht(
     hypotheses: list[_MHTHypothesis] = [
         _MHTHypothesis(initial, 0.0, tuple())
     ]
+    track2p_prior_edges = _track2p_prior_edges(
+        subject_dir,
+        config=config,
+        enabled=float(mht_config.track2p_prior_weight) != 0.0,
+    )
 
     feature_cache = rank._FeatureCache(
         sessions=sessions,
@@ -271,6 +280,7 @@ def _run_subject_full_mht(
             feature_cache=feature_cache,
             session_index=session_index,
             config=mht_config,
+            track2p_prior_edges=track2p_prior_edges,
         )
         if progress:
             print(
@@ -330,6 +340,9 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_local_deformation_weight": float(
             mht_config.local_deformation_weight
+        ),
+        "track2p_full_mht_track2p_prior_weight": float(
+            mht_config.track2p_prior_weight
         ),
         "track2p_full_mht_growth_anchor_min_registered_iou": float(
             mht_config.growth_anchor_min_registered_iou
@@ -393,6 +406,30 @@ def _seed_rois(
         ):
             output.append(int(roi))
     return sorted(output)
+
+
+def _track2p_prior_edges(
+    subject_dir: Path, *, config: Track2pBenchmarkConfig, enabled: bool
+) -> frozenset[tuple[int, int, int, int]]:
+    if not enabled:
+        return frozenset()
+    baseline_config = replace(config, method="track2p-baseline")
+    predicted, _variant = _predict_subject_tracks(subject_dir, baseline_config)
+    return _track_edges(np.asarray(predicted, dtype=int))
+
+
+def _track_edges(matrix: np.ndarray) -> frozenset[tuple[int, int, int, int]]:
+    tracks = np.asarray(matrix, dtype=int)
+    edges: set[tuple[int, int, int, int]] = set()
+    if tracks.ndim != 2 or tracks.shape[1] < 2:
+        return frozenset()
+    for row in tracks:
+        for session_index in range(tracks.shape[1] - 1):
+            roi_a = int(row[int(session_index)])
+            roi_b = int(row[int(session_index) + 1])
+            if roi_a >= 0 and roi_b >= 0:
+                edges.add((int(session_index), int(session_index) + 1, roi_a, roi_b))
+    return frozenset(edges)
 
 
 def _registered_pair(
@@ -568,6 +605,8 @@ def _sparse_pair_matrices(
         config=config,
     )
     matrices = _FullMHTPairMatrices(
+        source_session=int(source_session),
+        target_session=int(target_session),
         source_indices=np.asarray(source_rois_tuple, dtype=int),
         target_indices=target_indices,
         registered_iou=registered_iou,
@@ -898,6 +937,7 @@ def _advance_scan(
     feature_cache: rank._FeatureCache,
     session_index: int,
     config: FullMHTConfig,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
 ) -> list[_MHTHypothesis]:
     expanded: list[_MHTHypothesis] = []
     for hypothesis in hypotheses:
@@ -908,6 +948,7 @@ def _advance_scan(
                 feature_cache=feature_cache,
                 session_index=int(session_index),
                 config=config,
+                track2p_prior_edges=track2p_prior_edges,
             )
         )
     expanded.sort(key=lambda hyp: -float(hyp.score))
@@ -921,6 +962,7 @@ def _expand_hypothesis_scan(
     feature_cache: rank._FeatureCache,
     session_index: int,
     config: FullMHTConfig,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]] | None = None,
 ) -> list[_MHTHypothesis]:
     tracks = np.asarray(hypothesis.tracks, dtype=int)
     next_session = int(session_index) + 1
@@ -1041,6 +1083,7 @@ def _expand_hypothesis_scan(
                 source_local=int(source_local),
                 target_local=int(target_local),
                 config=config,
+                track2p_prior_edges=track2p_prior_edges or frozenset(),
             )
             if int(active_source.gap_length) > 0:
                 score -= float(config.gap_reactivation_cost) * float(
@@ -1135,6 +1178,7 @@ def _edge_score(
     source_local: int,
     target_local: int,
     config: FullMHTConfig,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
 ) -> float:
     registered = _finite_float(matrices.registered_iou[source_local, target_local], 0.0)
     shifted = _finite_float(matrices.shifted_iou[source_local, target_local], 0.0)
@@ -1149,9 +1193,16 @@ def _edge_score(
     local_deformation = _finite_float(
         matrices.local_deformation[source_local, target_local], 0.0
     )
+    source_roi = int(matrices.source_indices[int(source_local)])
     target_roi = int(matrices.target_indices[int(target_local)])
     cell_b = _cell_probability(sessions, int(target_session), target_roi)
     threshold_margin = registered - float(matrices.threshold)
+    track2p_prior = (
+        int(matrices.source_session),
+        int(matrices.target_session),
+        source_roi,
+        target_roi,
+    ) in track2p_prior_edges
     score = 0.0
     score += float(config.registered_iou_weight) * registered
     score += float(config.shifted_iou_weight) * shifted
@@ -1162,6 +1213,8 @@ def _edge_score(
     score -= float(config.growth_residual_weight) * max(0.0, growth_residual)
     score -= float(config.growth_mahalanobis_weight) * max(0.0, growth_mahalanobis)
     score -= float(config.local_deformation_weight) * max(0.0, local_deformation)
+    if track2p_prior:
+        score += float(config.track2p_prior_weight)
     return float(score)
 
 
@@ -1253,6 +1306,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--growth-residual-weight", type=float, default=0.10)
     parser.add_argument("--growth-mahalanobis-weight", type=float, default=0.25)
     parser.add_argument("--local-deformation-weight", type=float, default=0.50)
+    parser.add_argument("--track2p-prior-weight", type=float, default=0.0)
     parser.add_argument("--growth-anchor-min-registered-iou", type=float, default=0.55)
     parser.add_argument("--growth-anchor-min-shifted-iou", type=float, default=0.30)
     parser.add_argument(
@@ -1314,6 +1368,7 @@ def main(argv: list[str] | None = None) -> int:
             growth_residual_weight=float(args.growth_residual_weight),
             growth_mahalanobis_weight=float(args.growth_mahalanobis_weight),
             local_deformation_weight=float(args.local_deformation_weight),
+            track2p_prior_weight=float(args.track2p_prior_weight),
             growth_anchor_min_registered_iou=float(
                 args.growth_anchor_min_registered_iou
             ),
