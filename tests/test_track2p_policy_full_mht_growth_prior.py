@@ -249,7 +249,10 @@ def test_full_mht_edge_score_rewards_track2p_prior_edges(monkeypatch):
     )
     monkeypatch.setattr(full_mht, "_cell_probability", lambda *args, **kwargs: 1.0)
 
-    config = full_mht.FullMHTConfig(track2p_prior_weight=2.0)
+    config = full_mht.FullMHTConfig(
+        track2p_prior_weight=2.0,
+        track2p_non_prior_penalty=3.0,
+    )
     without_prior = full_mht._edge_score(
         (object(), object()),
         matrices,
@@ -258,6 +261,15 @@ def test_full_mht_edge_score_rewards_track2p_prior_edges(monkeypatch):
         target_local=0,
         config=config,
         track2p_prior_edges=frozenset(),
+    )
+    with_other_prior = full_mht._edge_score(
+        (object(), object()),
+        matrices,
+        target_session=1,
+        source_local=0,
+        target_local=0,
+        config=config,
+        track2p_prior_edges=frozenset({(0, 1, 5, 10)}),
     )
     with_prior = full_mht._edge_score(
         (object(), object()),
@@ -270,6 +282,7 @@ def test_full_mht_edge_score_rewards_track2p_prior_edges(monkeypatch):
     )
 
     assert with_prior == without_prior + 2.0
+    assert with_other_prior == without_prior - 3.0
 
 
 def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():

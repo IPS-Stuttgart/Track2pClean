@@ -107,6 +107,7 @@ class FullMHTConfig:
     growth_mahalanobis_weight: float = 0.25
     local_deformation_weight: float = 0.50
     track2p_prior_weight: float = 0.0
+    track2p_non_prior_penalty: float = 0.0
     track2p_prior_miss_penalty: float = 0.0
     growth_anchor_min_registered_iou: float = 0.55
     growth_anchor_min_shifted_iou: float = 0.30
@@ -361,6 +362,9 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_track2p_prior_weight": float(
             mht_config.track2p_prior_weight
+        ),
+        "track2p_full_mht_track2p_non_prior_penalty": float(
+            mht_config.track2p_non_prior_penalty
         ),
         "track2p_full_mht_track2p_prior_miss_penalty": float(
             mht_config.track2p_prior_miss_penalty
@@ -1329,6 +1333,8 @@ def _edge_score(
     score -= float(config.local_deformation_weight) * max(0.0, local_deformation)
     if track2p_prior:
         score += float(config.track2p_prior_weight)
+    elif track2p_prior_edges:
+        score -= float(config.track2p_non_prior_penalty)
     return float(score)
 
 
@@ -1447,6 +1453,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--growth-mahalanobis-weight", type=float, default=0.25)
     parser.add_argument("--local-deformation-weight", type=float, default=0.50)
     parser.add_argument("--track2p-prior-weight", type=float, default=0.0)
+    parser.add_argument("--track2p-non-prior-penalty", type=float, default=0.0)
     parser.add_argument("--track2p-prior-miss-penalty", type=float, default=0.0)
     parser.add_argument("--growth-anchor-min-registered-iou", type=float, default=0.55)
     parser.add_argument("--growth-anchor-min-shifted-iou", type=float, default=0.30)
@@ -1511,6 +1518,7 @@ def main(argv: list[str] | None = None) -> int:
             growth_mahalanobis_weight=float(args.growth_mahalanobis_weight),
             local_deformation_weight=float(args.local_deformation_weight),
             track2p_prior_weight=float(args.track2p_prior_weight),
+            track2p_non_prior_penalty=float(args.track2p_non_prior_penalty),
             track2p_prior_miss_penalty=float(args.track2p_prior_miss_penalty),
             growth_anchor_min_registered_iou=float(
                 args.growth_anchor_min_registered_iou
