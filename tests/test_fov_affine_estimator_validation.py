@@ -5,6 +5,14 @@ import pytest
 from bayescatrack.fov_affine_registration import estimate_fov_affine_transform
 
 
+@pytest.mark.parametrize("subtract_mean", ["false", 1, 0, np.bool_(True), None])
+def test_estimator_rejects_invalid_subtract_mean(subtract_mean):
+    image = np.eye(8, dtype=float)
+
+    with pytest.raises(ValueError, match="subtract_mean"):
+        estimate_fov_affine_transform(image, image, subtract_mean=subtract_mean)
+
+
 @pytest.mark.parametrize(
     "grid_shape",
     [
