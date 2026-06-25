@@ -4,7 +4,7 @@ This module centralizes integer-like and finite-float validation for optional
 configuration paths that are often exercised from YAML/CLI sweeps. The
 validation is installed from :mod:`bayescatrack.__init__` so existing imports keep
 using the public advanced-component module while rejecting ambiguous values such
-as booleans, fractional top-k counts, NaN and infinity.
+as booleans, strings, fractional top-k counts, NaN and infinity.
 """
 
 from __future__ import annotations
@@ -135,23 +135,12 @@ def _original_function(wrapper: Callable[..., Any], name: str) -> Callable[..., 
 
 
 def _positive_int(value: Any, *, name: str) -> int:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, str, bytes)):
         raise ValueError(f"{name} must be an integer")
     if isinstance(value, (float, np.floating)):
         if not np.isfinite(value) or not float(value).is_integer():
             raise ValueError(f"{name} must be an integer")
         integer_value = int(value)
-    elif isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError(f"{name} must be an integer")
-        try:
-            numeric_value = float(stripped)
-        except ValueError as exc:
-            raise ValueError(f"{name} must be an integer") from exc
-        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-            raise ValueError(f"{name} must be an integer")
-        integer_value = int(numeric_value)
     else:
         try:
             integer_value = operator.index(value)
