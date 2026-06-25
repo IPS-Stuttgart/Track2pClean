@@ -3,6 +3,7 @@
 from . import _activity_sweep_defaults as _activity_sweep_defaults
 from . import _cost_sweep_defaults as _cost_sweep_defaults
 from . import _diag_defaults as _diag_defaults
+from . import _mask_input_sweep_bool_validation as _mask_input_sweep_bool_validation
 from . import _seed_session_validation as _seed_session_validation
 from . import _teacher_rescue_manifest_integration as _teacher_rescue_manifest_integration
 from . import (
@@ -39,5 +40,6 @@ install_summary_output_format_integration()
 _cost_sweep_defaults.install_cost_sweep_suite2p_defaults()
 _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
 _diag_defaults.install_diagnostic_suite2p_defaults()
+_mask_input_sweep_bool_validation.install_mask_input_sweep_bool_validation()
 
 __all__: list[str] = []
