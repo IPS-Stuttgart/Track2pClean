@@ -1,3 +1,4 @@
+from tests import _support  # noqa: F401
 from track2pclean import _cli as track2pclean_cli
 
 
