@@ -169,9 +169,7 @@ def precision_recall_threshold_table(
         thresholds = tuple(np.linspace(0.0, 1.0, 101))
     rows: list[dict[str, float | int]] = []
     for threshold in thresholds:
-        threshold = float(threshold)
-        if not 0.0 <= threshold <= 1.0:
-            raise ValueError("thresholds must lie in [0, 1]")
+        threshold = _validate_probability_threshold(threshold)
         predicted_positive = probabilities >= threshold
         positive = labels.astype(bool)
         tp = int(np.count_nonzero(predicted_positive & positive))
@@ -283,6 +281,18 @@ def _validate_probability_label_inputs(
     if not np.all(np.isin(unique_labels, [0, 1, False, True])):
         raise ValueError("labels must be binary values 0/1 or False/True")
     return probability_array, label_array.astype(float)
+
+
+def _validate_probability_threshold(threshold: Any) -> float:
+    if isinstance(threshold, (bool, np.bool_)):
+        raise ValueError("thresholds must be finite numeric values in [0, 1]")
+    try:
+        parsed = float(threshold)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("thresholds must be finite numeric values in [0, 1]") from exc
+    if not np.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
+        raise ValueError("thresholds must be finite numeric values in [0, 1]")
+    return float(parsed)
 
 
 def _validate_n_bins(n_bins: int) -> int:
