@@ -1,9 +1,11 @@
-"""Strict ROI-identifier validation for edge-ranking diagnostics.
+"""Strict ROI and label validation for edge-ranking diagnostics.
 
 The edge-ranking helpers report ranks for original Suite2p ROI identifiers.  The
 implementation used NumPy/Python integer coercion at the reporting boundary, so
 malformed identifiers such as booleans, numeric strings, or fractional floats
-could be silently converted into fabricated ROI IDs.
+could be silently converted into fabricated ROI IDs.  Label matrices likewise
+must be validated before boolean casting so malformed GT entries cannot become
+positive edges.
 """
 
 from __future__ import annotations
@@ -16,10 +18,11 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_edge_ranking_roi_validation_patch"
 _ROI_ERROR_SUFFIX = "must contain non-negative integer ROI identifiers"
+_LABEL_ERROR = "labels must be a binary matrix containing only 0/1 or boolean values"
 
 
 def install_edge_ranking_roi_validation() -> None:
-    """Install idempotent strict ROI validation on edge-ranking helpers."""
+    """Install idempotent strict ROI and label validation on edge-ranking helpers."""
 
     from . import edge_ranking as _edge_ranking  # pylint: disable=import-outside-toplevel
 
@@ -37,7 +40,7 @@ def install_edge_ranking_roi_validation() -> None:
             metadata: Any = None,
         ) -> Any:
             return original_rank(
-                labels,
+                _normalize_label_matrix(labels),
                 score_matrices,
                 reference_roi_indices=_normalize_roi_index_array(
                     reference_roi_indices,
@@ -90,6 +93,36 @@ def install_edge_ranking_roi_validation() -> None:
         setattr(missing_reference_edge_rows_with_roi_validation, _PATCH_MARKER, True)
         setattr(missing_reference_edge_rows_with_roi_validation, "_bayescatrack_original", original_missing)
         _edge_ranking.missing_reference_edge_rows = missing_reference_edge_rows_with_roi_validation
+
+
+def _normalize_label_matrix(labels: Any) -> np.ndarray:
+    label_array = np.asarray(labels, dtype=object)
+    if label_array.ndim != 2:
+        raise ValueError("labels must be a two-dimensional matrix")
+    normalized = np.zeros(label_array.shape, dtype=bool)
+    for index, value in np.ndenumerate(label_array):
+        normalized[index] = _normalize_label_value(value)
+    return normalized
+
+
+def _normalize_label_value(value: Any) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (str, bytes, np.str_, np.bytes_)):
+        raise ValueError(_LABEL_ERROR)
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or numeric_value not in {0.0, 1.0}:
+            raise ValueError(_LABEL_ERROR)
+        return bool(int(numeric_value))
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(_LABEL_ERROR) from exc
+    integer_value = int(integer_value)
+    if integer_value not in {0, 1}:
+        raise ValueError(_LABEL_ERROR)
+    return bool(integer_value)
 
 
 def _normalize_reference_matches(reference_matches: Any) -> tuple[tuple[int, int], ...]:
