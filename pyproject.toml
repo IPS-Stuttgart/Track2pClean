@@ -3,9 +3,9 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "BayesCaTrack"
+name = "Track2pClean"
 version = "0.0.1"
-description = "Recursive Bayesian cell tracking toolkit for Track2p-style calcium-imaging data"
+description = "Tracking cleanup toolkit for Track2p-style calcium-imaging data"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 dependencies = [
@@ -26,9 +26,10 @@ track2p = [
 
 [project.scripts]
 bayescatrack = "bayescatrack:main"
+track2pclean = "bayescatrack:main"
 
 [project.urls]
-Repository = "https://github.com/IPS-Stuttgart/BayesCaTrack"
+Repository = "https://github.com/IPS-Stuttgart/Track2pClean"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
