@@ -46,3 +46,10 @@ def test_apply_integer_roi_mask_translation_rejects_fractional_shift():
 
     with pytest.raises(ValueError, match="shift_yx"):
         apply_integer_roi_mask_translation(roi_masks, np.array([0.5, 0.0]))
+
+
+def test_apply_integer_roi_mask_translation_rejects_bad_shift_for_empty_stack():
+    roi_masks = np.zeros((0, 3, 3), dtype=bool)
+
+    with pytest.raises(ValueError, match="shift_yx"):
+        apply_integer_roi_mask_translation(roi_masks, np.array([0.5, 0.0]))
