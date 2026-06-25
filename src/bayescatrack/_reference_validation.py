@@ -20,6 +20,7 @@ def install_reference_validation(reference_module: ModuleType | None = None) -> 
 
     _install_optional_int_parser_validation(reference_module)
     _install_curated_mask_validation(reference_module)
+    _install_curated_only_validation(reference_module)
     _install_session_index_validation(reference_module)
     _install_complete_track_vector_normalization(reference_module)
 
@@ -80,6 +81,31 @@ def _install_curated_mask_validation(reference_module: ModuleType) -> None:
         original_post_init,
     )
     reference_cls.__post_init__ = _post_init_with_reference_validation
+
+
+def _install_curated_only_validation(reference_module: ModuleType) -> None:
+    reference_cls = reference_module.Track2pReference
+    original_filtered_indices = reference_cls._filtered_indices
+    if getattr(original_filtered_indices, _PATCH_ATTR, False):
+        return
+
+    def _filtered_indices_with_curated_only_validation(
+        self: Any,
+        *,
+        curated_only: Any = False,
+    ) -> np.ndarray:
+        return original_filtered_indices(
+            self,
+            curated_only=_coerce_curated_only_flag(curated_only),
+        )
+
+    setattr(_filtered_indices_with_curated_only_validation, _PATCH_ATTR, True)
+    setattr(
+        _filtered_indices_with_curated_only_validation,
+        "_bayescatrack_original",
+        original_filtered_indices,
+    )
+    reference_cls._filtered_indices = _filtered_indices_with_curated_only_validation
 
 
 def _install_session_index_validation(reference_module: ModuleType) -> None:
@@ -247,6 +273,12 @@ def _coerce_curated_mask_value(value: Any, *, location: int) -> bool:
         "curated_mask contains a non-boolean value "
         f"at index {location}: {value!r}; expected booleans or explicit 0/1 values"
     )
+
+
+def _coerce_curated_only_flag(value: Any) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError("curated_only must be a boolean")
 
 
 def _coerce_session_index(
