@@ -103,6 +103,7 @@ class FullMHTConfig:
     threshold_margin_weight: float = 0.50
     growth_residual_weight: float = 0.10
     growth_mahalanobis_weight: float = 0.25
+    local_deformation_weight: float = 0.50
     growth_anchor_min_registered_iou: float = 0.55
     growth_anchor_min_shifted_iou: float = 0.30
     growth_anchor_min_cell_probability: float = 0.80
@@ -145,6 +146,7 @@ class _FullMHTPairMatrices:
     threshold: float
     growth_residual: np.ndarray
     growth_mahalanobis: np.ndarray
+    local_deformation: np.ndarray
     growth_anchor_count: int
     growth_model_type: str
 
@@ -325,6 +327,9 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_growth_mahalanobis_weight": float(
             mht_config.growth_mahalanobis_weight
+        ),
+        "track2p_full_mht_local_deformation_weight": float(
+            mht_config.local_deformation_weight
         ),
         "track2p_full_mht_growth_anchor_min_registered_iou": float(
             mht_config.growth_anchor_min_registered_iou
@@ -549,7 +554,12 @@ def _sparse_pair_matrices(
         )["shifted_iou"][0]
     source_centroids = _mask_centroids(reference_masks)
     target_centroids = _mask_centroids(moving_masks)
-    growth_residual, growth_mahalanobis, growth_prior = _growth_residual_matrices(
+    (
+        growth_residual,
+        growth_mahalanobis,
+        local_deformation,
+        growth_prior,
+    ) = _growth_context_matrices(
         source_centroids,
         target_centroids,
         registered_iou=registered_iou,
@@ -571,11 +581,60 @@ def _sparse_pair_matrices(
         ),
         growth_residual=growth_residual,
         growth_mahalanobis=growth_mahalanobis,
+        local_deformation=local_deformation,
         growth_anchor_count=int(growth_prior.anchor_count),
         growth_model_type=str(growth_prior.model_type),
     )
     sparse_cache[cache_key] = matrices
     return matrices
+
+
+def _growth_context_matrices(
+    source_centroids: np.ndarray,
+    target_centroids: np.ndarray,
+    *,
+    registered_iou: np.ndarray,
+    shifted_iou: np.ndarray,
+    target_cell_probabilities: np.ndarray,
+    config: FullMHTConfig,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, _GrowthPrior]:
+    shape = np.asarray(registered_iou, dtype=float).shape
+    if len(shape) != 2:
+        raise ValueError("registered_iou must be a 2-D matrix")
+    source_xy = np.asarray(source_centroids, dtype=float).reshape(shape[0], 2)
+    target_xy = np.asarray(target_centroids, dtype=float).reshape(shape[1], 2)
+    anchor_pairs = _mutual_growth_anchor_pairs(
+        registered_iou=np.asarray(registered_iou, dtype=float),
+        shifted_iou=np.asarray(shifted_iou, dtype=float),
+        target_cell_probabilities=np.asarray(target_cell_probabilities, dtype=float),
+        config=config,
+    )
+    prior = _fit_growth_prior_from_anchor_pairs(source_xy, target_xy, anchor_pairs)
+    if shape[0] == 0 or shape[1] == 0:
+        empty = np.zeros(shape, dtype=float)
+        return empty, empty, empty, prior
+    predicted = _apply_affine_points(source_xy, prior.affine_xy)
+    residual_vectors = target_xy[None, :, :] - predicted[:, None, :]
+    residual = np.linalg.norm(residual_vectors, axis=2)
+    mahalanobis_squared = np.einsum(
+        "...i,ij,...j->...",
+        residual_vectors,
+        prior.covariance_inverse,
+        residual_vectors,
+    )
+    mahalanobis = np.sqrt(np.maximum(0.0, mahalanobis_squared))
+    local_deformation = _local_deformation_matrix(
+        source_xy,
+        target_xy,
+        anchor_pairs=anchor_pairs,
+        affine_xy=prior.affine_xy,
+    )
+    return (
+        residual.astype(float),
+        mahalanobis.astype(float),
+        local_deformation.astype(float),
+        prior,
+    )
 
 
 def _growth_residual_matrices(
@@ -587,37 +646,15 @@ def _growth_residual_matrices(
     target_cell_probabilities: np.ndarray,
     config: FullMHTConfig,
 ) -> tuple[np.ndarray, np.ndarray, _GrowthPrior]:
-    shape = np.asarray(registered_iou, dtype=float).shape
-    if len(shape) != 2:
-        raise ValueError("registered_iou must be a 2-D matrix")
-    prior = _fit_growth_prior_from_candidate_matrices(
-        np.asarray(source_centroids, dtype=float).reshape(shape[0], 2),
-        np.asarray(target_centroids, dtype=float).reshape(shape[1], 2),
-        registered_iou=np.asarray(registered_iou, dtype=float),
-        shifted_iou=np.asarray(shifted_iou, dtype=float),
-        target_cell_probabilities=np.asarray(target_cell_probabilities, dtype=float),
+    residual, mahalanobis, _local, prior = _growth_context_matrices(
+        source_centroids,
+        target_centroids,
+        registered_iou=registered_iou,
+        shifted_iou=shifted_iou,
+        target_cell_probabilities=target_cell_probabilities,
         config=config,
     )
-    if shape[0] == 0 or shape[1] == 0:
-        empty = np.zeros(shape, dtype=float)
-        return empty, empty, prior
-    predicted = _apply_affine_points(
-        np.asarray(source_centroids, dtype=float).reshape(shape[0], 2),
-        prior.affine_xy,
-    )
-    residual_vectors = (
-        np.asarray(target_centroids, dtype=float).reshape(shape[1], 2)[None, :, :]
-        - predicted[:, None, :]
-    )
-    residual = np.linalg.norm(residual_vectors, axis=2)
-    mahalanobis_squared = np.einsum(
-        "...i,ij,...j->...",
-        residual_vectors,
-        prior.covariance_inverse,
-        residual_vectors,
-    )
-    mahalanobis = np.sqrt(np.maximum(0.0, mahalanobis_squared))
-    return residual.astype(float), mahalanobis.astype(float), prior
+    return residual, mahalanobis, prior
 
 
 def _fit_growth_prior_from_candidate_matrices(
@@ -635,6 +672,18 @@ def _fit_growth_prior_from_candidate_matrices(
         target_cell_probabilities=target_cell_probabilities,
         config=config,
     )
+    return _fit_growth_prior_from_anchor_pairs(
+        np.asarray(source_centroids, dtype=float),
+        np.asarray(target_centroids, dtype=float),
+        anchor_pairs,
+    )
+
+
+def _fit_growth_prior_from_anchor_pairs(
+    source_centroids: np.ndarray,
+    target_centroids: np.ndarray,
+    anchor_pairs: Sequence[tuple[int, int]],
+) -> _GrowthPrior:
     if not anchor_pairs:
         return _identity_growth_prior()
     anchor_rows = np.asarray([row for row, _col in anchor_pairs], dtype=int)
@@ -732,6 +781,42 @@ def _apply_affine_points(points_xy: np.ndarray, affine_xy: np.ndarray) -> np.nda
     affine = np.asarray(affine_xy, dtype=float).reshape(2, 3)
     homogeneous = np.column_stack([points, np.ones(points.shape[0], dtype=float)])
     return homogeneous @ affine.T
+
+
+def _local_deformation_matrix(
+    source_centroids: np.ndarray,
+    target_centroids: np.ndarray,
+    *,
+    anchor_pairs: Sequence[tuple[int, int]],
+    affine_xy: np.ndarray,
+) -> np.ndarray:
+    source_xy = np.asarray(source_centroids, dtype=float).reshape(-1, 2)
+    target_xy = np.asarray(target_centroids, dtype=float).reshape(-1, 2)
+    output = np.zeros((source_xy.shape[0], target_xy.shape[0]), dtype=float)
+    if not anchor_pairs or source_xy.shape[0] == 0 or target_xy.shape[0] == 0:
+        return output
+    linear = np.asarray(affine_xy, dtype=float).reshape(2, 3)[:, :2]
+    anchor_rows = np.asarray([row for row, _col in anchor_pairs], dtype=int)
+    anchor_cols = np.asarray([col for _row, col in anchor_pairs], dtype=int)
+    anchor_source = source_xy[anchor_rows]
+    anchor_target = target_xy[anchor_cols]
+    for source_index, source in enumerate(source_xy):
+        source_deltas = source[None, :] - anchor_source
+        predicted_deltas = source_deltas @ linear.T
+        predicted_norms = np.linalg.norm(predicted_deltas, axis=1)
+        usable = predicted_norms > 1.0e-9
+        if not np.any(usable):
+            continue
+        for target_index, target in enumerate(target_xy):
+            observed_deltas = target[None, :] - anchor_target
+            residuals = np.linalg.norm(
+                observed_deltas[usable] - predicted_deltas[usable], axis=1
+            ) / np.maximum(predicted_norms[usable], 1.0)
+            if residuals.size:
+                output[int(source_index), int(target_index)] = float(
+                    np.median(residuals)
+                )
+    return output
 
 
 def _growth_covariance_inverse(residual_vectors: np.ndarray) -> np.ndarray:
@@ -1061,6 +1146,9 @@ def _edge_score(
     growth_mahalanobis = _finite_float(
         matrices.growth_mahalanobis[source_local, target_local], 0.0
     )
+    local_deformation = _finite_float(
+        matrices.local_deformation[source_local, target_local], 0.0
+    )
     target_roi = int(matrices.target_indices[int(target_local)])
     cell_b = _cell_probability(sessions, int(target_session), target_roi)
     threshold_margin = registered - float(matrices.threshold)
@@ -1073,6 +1161,7 @@ def _edge_score(
     score -= float(config.centroid_distance_weight) * max(0.0, centroid)
     score -= float(config.growth_residual_weight) * max(0.0, growth_residual)
     score -= float(config.growth_mahalanobis_weight) * max(0.0, growth_mahalanobis)
+    score -= float(config.local_deformation_weight) * max(0.0, local_deformation)
     return float(score)
 
 
@@ -1163,6 +1252,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--threshold-margin-weight", type=float, default=0.50)
     parser.add_argument("--growth-residual-weight", type=float, default=0.10)
     parser.add_argument("--growth-mahalanobis-weight", type=float, default=0.25)
+    parser.add_argument("--local-deformation-weight", type=float, default=0.50)
     parser.add_argument("--growth-anchor-min-registered-iou", type=float, default=0.55)
     parser.add_argument("--growth-anchor-min-shifted-iou", type=float, default=0.30)
     parser.add_argument(
@@ -1223,6 +1313,7 @@ def main(argv: list[str] | None = None) -> int:
             threshold_margin_weight=float(args.threshold_margin_weight),
             growth_residual_weight=float(args.growth_residual_weight),
             growth_mahalanobis_weight=float(args.growth_mahalanobis_weight),
+            local_deformation_weight=float(args.local_deformation_weight),
             growth_anchor_min_registered_iou=float(
                 args.growth_anchor_min_registered_iou
             ),

@@ -43,6 +43,48 @@ def test_full_mht_growth_prior_is_fit_from_mutual_label_free_anchors():
     assert residual[0, 1] > 9.0
 
 
+def test_full_mht_local_deformation_penalizes_neighbor_inconsistent_edges():
+    source_centroids = np.asarray(
+        [[0.0, 0.0], [10.0, 0.0], [0.0, 10.0]], dtype=float
+    )
+    target_centroids = source_centroids + np.asarray([2.0, 3.0], dtype=float)
+    deformation = full_mht._local_deformation_matrix(
+        source_centroids,
+        target_centroids,
+        anchor_pairs=((0, 0), (1, 1), (2, 2)),
+        affine_xy=np.asarray([[1.0, 0.0, 2.0], [0.0, 1.0, 3.0]], dtype=float),
+    )
+
+    assert np.max(np.diag(deformation)) < 1.0e-9
+    assert deformation[1, 2] > 1.0
+
+
+def test_full_mht_growth_context_returns_local_deformation_matrix():
+    source_centroids = np.asarray(
+        [[0.0, 0.0], [10.0, 0.0], [0.0, 10.0]], dtype=float
+    )
+    target_centroids = source_centroids + np.asarray([2.0, 3.0], dtype=float)
+    registered_iou = np.eye(3, dtype=float)
+    shifted_iou = np.eye(3, dtype=float)
+    target_cell_probabilities = np.ones(3, dtype=float)
+
+    _residual, _mahalanobis, deformation, prior = full_mht._growth_context_matrices(
+        source_centroids,
+        target_centroids,
+        registered_iou=registered_iou,
+        shifted_iou=shifted_iou,
+        target_cell_probabilities=target_cell_probabilities,
+        config=full_mht.FullMHTConfig(
+            growth_anchor_min_registered_iou=0.5,
+            growth_anchor_min_shifted_iou=0.5,
+        ),
+    )
+
+    assert prior.anchor_count == 3
+    assert deformation.shape == (3, 3)
+    assert np.max(np.diag(deformation)) < 1.0e-5
+
+
 def test_full_mht_growth_prior_ignores_nonmutual_candidate_spikes():
     config = full_mht.FullMHTConfig(
         growth_anchor_min_registered_iou=0.50,
@@ -93,6 +135,7 @@ def test_full_mht_scan_can_reactivate_a_recently_missed_track(monkeypatch):
         threshold=0.0,
         growth_residual=np.asarray([[0.0]], dtype=float),
         growth_mahalanobis=np.asarray([[0.0]], dtype=float),
+        local_deformation=np.asarray([[0.0]], dtype=float),
         growth_anchor_count=1,
         growth_model_type="translation_fallback",
     )
