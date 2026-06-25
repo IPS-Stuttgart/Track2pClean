@@ -48,11 +48,14 @@ from ._strict_config_validation import (
 from ._suite2p_validation import (
     install_suite2p_stat_validation as _install_suite2p_stat_validation,
 )
-from ._tracking_start_roi_validation import (
-    install_tracking_start_roi_validation as _install_tracking_start_roi_validation,
-)
 from ._track_row_fill_value_validation import (
     install_track_row_fill_value_validation as _install_track_row_fill_value_validation,
+)
+from ._track_table_session_name_validation import (
+    install_track_table_session_name_validation as _install_track_table_session_name_validation,
+)
+from ._tracking_start_roi_validation import (
+    install_tracking_start_roi_validation as _install_tracking_start_roi_validation,
 )
 from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
@@ -97,5 +100,6 @@ _install_session_gap_validation()
 _install_session_match_result_validation()
 _install_tracking_start_roi_validation()
 _install_track_row_fill_value_validation()
+_install_track_table_session_name_validation()
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
