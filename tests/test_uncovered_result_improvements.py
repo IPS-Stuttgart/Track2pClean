@@ -223,7 +223,7 @@ def test_multi_hypothesis_rejects_malformed_consensus_edges(
         ),
         (
             lambda: consensus_edges((((0, 1, 0, 1),),), min_support_fraction=0.0),
-            r"min_support_fraction must be a finite value in \(0, 1\]",
+            r"min_support_fraction must be a finite value in \(0, 1\)",
         ),
         (
             lambda: edge_union_costs(({(0, 1, 0, 1): 0},)),
@@ -262,6 +262,21 @@ def test_growth_priors_prefer_affine_consistent_matches() -> None:
     penalties = growth_penalty_matrix(source, target, affine=affine)
 
     assert np.max(residuals) < 1.0e-10
+    assert np.argmin(penalties, axis=1).tolist() == [0, 1, 2]
+
+
+def test_growth_priors_accept_coordinate_row_centroid_matrices() -> None:
+    source = np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+    target = source + np.asarray([2.0, 3.0])
+    source_centroids = source.T
+    target_centroids = target.T
+
+    affine = estimate_affine_growth_field(source_centroids, target_centroids)
+    residuals = affine_growth_residuals(source_centroids, target_centroids, affine=affine)
+    penalties = growth_penalty_matrix(source_centroids, target_centroids, affine=affine)
+
+    np.testing.assert_allclose(residuals, np.zeros(3), atol=1.0e-10)
+    assert penalties.shape == (3, 3)
     assert np.argmin(penalties, axis=1).tolist() == [0, 1, 2]
 
 
