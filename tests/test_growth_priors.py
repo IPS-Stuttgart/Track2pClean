@@ -5,6 +5,7 @@ import pytest
 
 from bayescatrack.association.growth_priors import (
     GrowthPriorConfig,
+    estimate_growth_from_track_rows,
     fit_affine_growth_transform,
     radial_growth_penalty_matrix,
 )
@@ -60,3 +61,56 @@ def test_radial_growth_penalty_rejects_invalid_scale() -> None:
             np.asarray([[1.0, 1.0]]),
             scale=float("inf"),
         )
+
+
+def _position_tables() -> list[dict[int, np.ndarray]]:
+    return [
+        {
+            0: np.asarray([0.0, 0.0]),
+            1: np.asarray([1.0, 0.0]),
+            2: np.asarray([0.0, 1.0]),
+        },
+        {
+            0: np.asarray([1.0, 1.0]),
+            1: np.asarray([2.0, 1.0]),
+            2: np.asarray([1.0, 2.0]),
+        },
+    ]
+
+
+def test_estimate_growth_from_track_rows_accepts_integer_like_rows() -> None:
+    rows = np.asarray([[0.0, 0.0], [1, 1], ["2", "2"]], dtype=object)
+
+    transform = estimate_growth_from_track_rows(
+        rows,
+        _position_tables(),
+        target_session=-1,
+        config=GrowthPriorConfig(regularization=0.0),
+    )
+
+    np.testing.assert_allclose(
+        transform,
+        np.asarray([[1.0, 0.0, 1.0], [0.0, 1.0, 1.0]]),
+        atol=1.0e-12,
+    )
+
+
+def test_estimate_growth_from_track_rows_rejects_fractional_roi_ids() -> None:
+    rows = np.asarray([[0, 0], [1, 1.5], [2, 2]], dtype=object)
+
+    with pytest.raises(ValueError, match="track_rows"):
+        estimate_growth_from_track_rows(rows, _position_tables())
+
+
+def test_estimate_growth_from_track_rows_rejects_boolean_roi_ids() -> None:
+    rows = np.asarray([[0, 0], [1, True], [2, 2]], dtype=object)
+
+    with pytest.raises(ValueError, match="track_rows"):
+        estimate_growth_from_track_rows(rows, _position_tables())
+
+
+def test_estimate_growth_from_track_rows_rejects_out_of_range_session_indices() -> None:
+    rows = np.asarray([[0, 0], [1, 1], [2, 2]])
+
+    with pytest.raises(ValueError, match="target_session"):
+        estimate_growth_from_track_rows(rows, _position_tables(), target_session=-3)
