@@ -53,6 +53,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     return _run_with_program_name("track2pclean", _legacy_cli.main, args)
 
 
+def _run_with_program_name(
+    program_name: str,
+    command: Callable[[list[str]], Any],
+    args: list[str],
+) -> int:
+    """Run a legacy CLI while letting argparse see the native program name."""
+
+    original_argv = sys.argv[:]
+    try:
+        sys.argv = [program_name, *args]
+        result = command(list(args))
+    finally:
+        sys.argv = original_argv
+    return 0 if result is None else int(result)
+
+
 def _handle_benchmark(args: list[str]) -> int:
     if not args or args[0] in {"-h", "--help"}:
         _build_benchmark_help_parser().parse_args(args)
@@ -197,27 +213,3 @@ def _build_benchmark_help_parser() -> argparse.ArgumentParser:
     for alias, canonical in _legacy_cli._BENCHMARK_ALIASES.items():  # pylint: disable=protected-access
         subparsers.add_parser(alias, help=f"Alias for {canonical}")
     return parser
-
-
-def _run_with_program_name(
-    program_name: str,
-    main_func: Callable[[list[str]], Any],
-    args: list[str],
-) -> int:
-    previous_argv = sys.argv
-    try:
-        sys.argv = [program_name, *args]
-        return _coerce_exit_code(main_func(args))
-    finally:
-        sys.argv = previous_argv
-
-
-def _coerce_exit_code(result: Any) -> int:
-    """Normalize delegated CLI return values to process exit codes."""
-
-    if result is None:
-        return 0
-    return int(result)
-
-
-__all__ = ["main"]
