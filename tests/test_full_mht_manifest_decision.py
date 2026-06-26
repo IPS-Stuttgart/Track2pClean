@@ -64,15 +64,27 @@ def test_full_mht_manifest_decision_reports_missing_rows() -> None:
     assert "FullMHTGreedyPrior2" in decision["missing_approaches"]
 
 
-def test_full_mht_manifest_decision_detects_history_advantage() -> None:
+def test_full_mht_manifest_decision_detects_complete_history_advantage() -> None:
     decision = evaluate_full_mht_manifest_decision(_canonical_rows())
 
     assert decision["status"] == "complete"
-    assert decision["history_search_result"] == "beam_history_advantage"
+    assert decision["history_search_result"] == "beam_complete_history_advantage"
     assert decision["prior_survival_result"] == "survival_improves_fixed_veto"
     assert decision["beam_minus_greedy_complete_track_f1_micro"] > 0.0
     assert decision["survival_minus_veto_complete_track_f1_micro"] > 0.0
     assert "promote candidate only after" in decision["recommendation"]
+
+
+def test_full_mht_manifest_decision_requires_complete_history_advantage() -> None:
+    decision = evaluate_full_mht_manifest_decision(
+        _canonical_rows(
+            beam_pairwise=0.966,
+            beam_complete=0.924,
+        )
+    )
+
+    assert decision["history_search_result"] == "beam_pairwise_only_advantage"
+    assert "not a complete-history advantage" in decision["recommendation"]
 
 
 def test_full_mht_manifest_decision_requires_real_history_advantage() -> None:
@@ -84,12 +96,21 @@ def test_full_mht_manifest_decision_requires_real_history_advantage() -> None:
     assert decision["recommendation"].startswith("keep FullMHT exploratory")
 
 
+def test_full_mht_manifest_decision_rejects_beam_regression() -> None:
+    decision = evaluate_full_mht_manifest_decision(
+        _canonical_rows(beam_pairwise=0.964, beam_complete=0.930)
+    )
+
+    assert decision["history_search_result"] == "beam_regression_vs_greedy"
+    assert decision["recommendation"].startswith("do not promote FullMHT")
+
+
 def test_full_mht_manifest_decision_marks_survival_below_veto() -> None:
     decision = evaluate_full_mht_manifest_decision(
         _canonical_rows(survival_pairwise=0.9655, survival_complete=0.930)
     )
 
-    assert decision["history_search_result"] == "beam_history_advantage"
+    assert decision["history_search_result"] == "beam_complete_history_advantage"
     assert decision["prior_survival_result"] == "survival_above_track2p_but_below_fixed_veto"
     assert decision["recommendation"].startswith("keep prior-survival exploratory")
 
@@ -102,3 +123,4 @@ def test_full_mht_manifest_decision_markdown_is_compact() -> None:
     assert "# FullMHT Manifest Decision" in markdown
     assert "beam minus greedy" in markdown
     assert "survival minus veto" in markdown
+    assert "beam_complete_history_advantage" in markdown
