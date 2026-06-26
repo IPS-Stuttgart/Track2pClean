@@ -19,6 +19,7 @@ from . import pyrecest_global_assignment as _global_assignment
 
 _PATCH_MARKER = "_bayescatrack_global_solver_track_validation_patch"
 _ERROR_SUFFIX = "must be a non-negative integer"
+_SESSION_SIZE_ERROR = "sessions must expose a non-negative integer plane_data.n_rois"
 
 
 def install_global_solver_track_validation() -> None:
@@ -97,12 +98,13 @@ def _normalize_solver_tracks(
 
 def _session_size(session: Any) -> int:
     try:
-        size = int(session.plane_data.n_rois)
-    except (AttributeError, TypeError, ValueError) as exc:
+        raw_size = session.plane_data.n_rois
+    except AttributeError as exc:
         raise ValueError("sessions must expose plane_data.n_rois") from exc
-    if size < 0:
-        raise ValueError("sessions must expose a non-negative plane_data.n_rois")
-    return size
+    try:
+        return _normalize_nonnegative_integer(raw_size, label="plane_data.n_rois")
+    except ValueError as exc:
+        raise ValueError(_SESSION_SIZE_ERROR) from exc
 
 
 def _normalize_nonnegative_integer(value: Any, *, label: str) -> int:
