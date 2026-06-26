@@ -96,6 +96,10 @@ class TrackletGraphConfig:
     track2p_proposal_only: bool = False
     track2p_proposal_bonus: float = 1.0
     track2p_proposal_feature_weight: float = 0.0
+    complete_path_risk_veto: bool = False
+    complete_path_risk_min_area_ratio: float = 0.50
+    complete_path_risk_large_jump_distance: float = 25.0
+    complete_path_risk_large_jump_min_cell_probability: float = 0.80
 
 
 @dataclass(frozen=True)
@@ -334,6 +338,15 @@ def _run_subject_tracklet_graph(
         seed_session=int(config.seed_session),
         graph_config=graph_config,
     )
+    complete_path_risk_vetoes = 0
+    if graph_config.complete_path_risk_veto:
+        selected_paths, complete_path_risk_vetoes = _veto_risky_complete_paths(
+            selected_paths,
+            tracklets,
+            edges,
+            graph_config=graph_config,
+            n_sessions=n_sessions,
+        )
     prediction = _paths_to_prediction_matrix(selected_paths, tracklets, n_sessions)
     coverage_rows, coverage_summary = _coverage_audit_rows(
         subject_dir.name,
@@ -362,6 +375,9 @@ def _run_subject_tracklet_graph(
         "tracklet_graph_mht_track2p_proposal_only": int(
             bool(graph_config.track2p_proposal_only)
         ),
+        "tracklet_graph_mht_complete_path_risk_vetoes": int(
+            complete_path_risk_vetoes
+        ),
         "tracklet_graph_mht_beam_width": int(graph_config.beam_width),
         "tracklet_graph_mht_path_hypotheses": int(graph_config.path_hypotheses),
         "tracklet_graph_mht_max_join_gap": int(graph_config.max_join_gap),
@@ -385,6 +401,7 @@ def _run_subject_tracklet_graph(
         "n_selected_joins": int(sum(len(path.edge_ids) for path in selected_paths)),
         "n_track2p_proposal_edges": int(track2p_proposal_count),
         "track2p_proposal_only": int(bool(graph_config.track2p_proposal_only)),
+        "complete_path_risk_vetoes": int(complete_path_risk_vetoes),
         "best_score": float(sum(float(path.score) for path in selected_paths)),
         "pairwise_f1": float(scores.get("pairwise_f1", float("nan"))),
         "complete_track_f1": float(scores.get("complete_track_f1", float("nan"))),
@@ -1375,6 +1392,95 @@ def _select_seed_paths(
                 tracklets_by_id[int(path.tracklet_ids[0])].rois[0],
             ),
         )
+    )
+
+
+def _veto_risky_complete_paths(
+    paths: Sequence[_PathHypothesis],
+    tracklets: Sequence[Tracklet],
+    edges: Sequence[TrackletEdge],
+    *,
+    graph_config: TrackletGraphConfig,
+    n_sessions: int,
+) -> tuple[tuple[_PathHypothesis, ...], int]:
+    edges_by_key = {
+        (int(edge.source_id), int(edge.target_id)): edge for edge in edges
+    }
+    output: list[_PathHypothesis] = []
+    vetoes = 0
+    for path in paths:
+        risky_index = _first_complete_path_risk_edge_index(
+            path,
+            tracklets,
+            edges_by_key,
+            graph_config=graph_config,
+            n_sessions=int(n_sessions),
+        )
+        if risky_index is None:
+            output.append(path)
+            continue
+        vetoes += 1
+        keep_tracklets = path.tracklet_ids[: int(risky_index) + 1]
+        keep_edges = path.edge_ids[: int(risky_index)]
+        keep_score = 0.0
+        for edge_key in keep_edges:
+            edge = edges_by_key.get((int(edge_key[0]), int(edge_key[1])))
+            if edge is not None:
+                keep_score += float(edge.score)
+        output.append(
+            _PathHypothesis(
+                tracklet_ids=tuple(int(item) for item in keep_tracklets),
+                edge_ids=tuple((int(a), int(b)) for a, b in keep_edges),
+                score=float(keep_score),
+            )
+        )
+    return tuple(output), int(vetoes)
+
+
+def _first_complete_path_risk_edge_index(
+    path: _PathHypothesis,
+    tracklets: Sequence[Tracklet],
+    edges_by_key: Mapping[tuple[int, int], TrackletEdge],
+    *,
+    graph_config: TrackletGraphConfig,
+    n_sessions: int,
+) -> int | None:
+    if not _path_covers_all_sessions(path, tracklets, n_sessions=int(n_sessions)):
+        return None
+    for edge_index, edge_key in enumerate(path.edge_ids):
+        edge = edges_by_key.get((int(edge_key[0]), int(edge_key[1])))
+        if edge is None:
+            continue
+        if _complete_path_edge_is_risky(edge, graph_config):
+            return int(edge_index)
+    return None
+
+
+def _path_covers_all_sessions(
+    path: _PathHypothesis, tracklets: Sequence[Tracklet], *, n_sessions: int
+) -> bool:
+    tracklets_by_id = {int(tracklet.tracklet_id): tracklet for tracklet in tracklets}
+    covered: set[int] = set()
+    for tracklet_id in path.tracklet_ids:
+        tracklet = tracklets_by_id.get(int(tracklet_id))
+        if tracklet is None:
+            continue
+        for offset, roi in enumerate(tracklet.rois):
+            if int(roi) >= 0:
+                covered.add(int(tracklet.start_session) + int(offset))
+    return all(session_index in covered for session_index in range(int(n_sessions)))
+
+
+def _complete_path_edge_is_risky(
+    edge: TrackletEdge, graph_config: TrackletGraphConfig
+) -> bool:
+    if float(edge.area_ratio) < float(graph_config.complete_path_risk_min_area_ratio):
+        return True
+    return (
+        float(edge.centroid_distance)
+        > float(graph_config.complete_path_risk_large_jump_distance)
+        and float(edge.endpoint_cell_probability_min)
+        >= float(graph_config.complete_path_risk_large_jump_min_cell_probability)
     )
 
 
@@ -2404,6 +2510,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--track2p-proposal-bonus", type=float, default=1.0)
     parser.add_argument("--track2p-proposal-feature-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--complete-path-risk-veto",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    parser.add_argument("--complete-path-risk-min-area-ratio", type=float, default=0.50)
+    parser.add_argument(
+        "--complete-path-risk-large-jump-distance", type=float, default=25.0
+    )
+    parser.add_argument(
+        "--complete-path-risk-large-jump-min-cell-probability",
+        type=float,
+        default=0.80,
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="csv")
     parser.add_argument("--diagnostics-output", type=Path, default=None)
@@ -2506,6 +2626,16 @@ def main(argv: list[str] | None = None) -> int:
             track2p_proposal_bonus=float(args.track2p_proposal_bonus),
             track2p_proposal_feature_weight=float(
                 args.track2p_proposal_feature_weight
+            ),
+            complete_path_risk_veto=bool(args.complete_path_risk_veto),
+            complete_path_risk_min_area_ratio=float(
+                args.complete_path_risk_min_area_ratio
+            ),
+            complete_path_risk_large_jump_distance=float(
+                args.complete_path_risk_large_jump_distance
+            ),
+            complete_path_risk_large_jump_min_cell_probability=float(
+                args.complete_path_risk_large_jump_min_cell_probability
             ),
         ),
         progress=bool(args.progress),

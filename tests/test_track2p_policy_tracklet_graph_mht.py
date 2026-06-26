@@ -165,6 +165,39 @@ def test_singleton_proposal_tracklets_include_proposals_and_seed_rois():
     assert len(rows) == len(tracklets)
 
 
+def test_complete_path_risk_veto_truncates_suspicious_complete_path():
+    tracklets = (
+        graph_mht.Tracklet(0, (10,), 0),
+        graph_mht.Tracklet(1, (11,), 1),
+        graph_mht.Tracklet(2, (12,), 2),
+        graph_mht.Tracklet(3, (20,), 0),
+        graph_mht.Tracklet(4, (21,), 1),
+        graph_mht.Tracklet(5, (22,), 2),
+    )
+    paths = (
+        graph_mht._PathHypothesis((0, 1, 2), ((0, 1), (1, 2)), 2.0),
+        graph_mht._PathHypothesis((3, 4, 5), ((3, 4), (4, 5)), 2.0),
+    )
+    edges = (
+        _edge(0, 1),
+        _edge(1, 2, area_ratio=0.40),
+        _edge(3, 4),
+        _edge(4, 5),
+    )
+
+    vetoed, veto_count = graph_mht._veto_risky_complete_paths(
+        paths,
+        tracklets,
+        edges,
+        graph_config=graph_mht.TrackletGraphConfig(complete_path_risk_veto=True),
+        n_sessions=3,
+    )
+
+    assert veto_count == 1
+    assert vetoed[0] == graph_mht._PathHypothesis((0, 1), ((0, 1),), 1.0)
+    assert vetoed[1] == paths[1]
+
+
 def test_coverage_audit_splits_candidate_presence_from_solver_rejection():
     reference_tracks = np.asarray([[10, 11, 12, 13]], dtype=int)
     tracklets = (
@@ -218,7 +251,9 @@ def test_coverage_audit_splits_candidate_presence_from_solver_rejection():
     ]
 
 
-def _edge(source_id: int, target_id: int) -> graph_mht.TrackletEdge:
+def _edge(
+    source_id: int, target_id: int, *, area_ratio: float = 1.0
+) -> graph_mht.TrackletEdge:
     return graph_mht.TrackletEdge(
         source_id=source_id,
         target_id=target_id,
@@ -228,7 +263,7 @@ def _edge(source_id: int, target_id: int) -> graph_mht.TrackletEdge:
         registered_iou=0.5,
         shifted_iou=0.5,
         centroid_distance=1.0,
-        area_ratio=1.0,
+        area_ratio=float(area_ratio),
         growth_residual=0.5,
         growth_mahalanobis=0.5,
         endpoint_cell_probability_min=0.9,
