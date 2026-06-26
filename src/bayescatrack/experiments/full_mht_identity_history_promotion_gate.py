@@ -119,6 +119,7 @@ def evaluate_identity_history_promotion(
     mht_vs_local_result = str(manifest.get("mht_vs_local_result", history_result))
     prior_result = str(manifest.get("prior_control_result", "incomplete"))
     track2p_result = str(manifest.get("track2p_control_result", "incomplete"))
+    no_local_result = str(manifest.get("no_local_context_control_result", "incomplete"))
     layer_result = str(manifest.get("layer_combination_result", "incomplete"))
     sensitivity_result = str(sensitivity.get("sensitivity_result", "incomplete"))
     exposure_result = str(exposure.get("exposure_result", "incomplete"))
@@ -127,6 +128,7 @@ def evaluate_identity_history_promotion(
         and mht_vs_local_result == "identity_complete_history_advantage"
         and prior_result != "identity_below_prior"
         and track2p_result != "identity_below_track2p"
+        and no_local_result != "identity_below_no_local_context"
         and layer_result != "combined_layer_regression"
     )
 
@@ -162,6 +164,7 @@ def evaluate_identity_history_promotion(
         "history_search_result": history_result,
         "prior_control_result": prior_result,
         "track2p_control_result": track2p_result,
+        "no_local_context_control_result": no_local_result,
         "layer_combination_result": layer_result,
         "sensitivity_result": sensitivity_result,
         "exposure_result": exposure_result,
@@ -372,6 +375,7 @@ def format_identity_history_promotion_markdown(decision: Mapping[str, Any]) -> s
         f"History-search result: `{decision.get('history_search_result', '')}`",
         f"Prior-control result: `{decision.get('prior_control_result', '')}`",
         f"Track2p-control result: `{decision.get('track2p_control_result', '')}`",
+        f"No-local-context result: `{decision.get('no_local_context_control_result', '')}`",
         f"Layer-combination result: `{decision.get('layer_combination_result', '')}`",
         f"Sensitivity result: `{decision.get('sensitivity_result', '')}`",
         f"Exposure result: `{decision.get('exposure_result', '')}`",
