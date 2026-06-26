@@ -35,7 +35,8 @@ export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
   tests/test_full_mht_no_gt_leakage.py \
-  tests/test_full_mht_exposure_audit.py
+  tests/test_full_mht_exposure_audit.py \
+  tests/test_full_mht_history_dynamics_promotion_gate.py
 
 OUT="$REPO/results/full_mht_label_free_exposure_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUT"
@@ -67,6 +68,29 @@ mkdir -p "$OUT"
   --format csv \
   --progress
 ```
+
+## Combined Gate
+
+After running `benchmarks/full_mht_history_dynamics_probe_manifest.json`, combine
+that benchmark sensitivity table with the exposure audit:
+
+```bash
+PROBE="$REPO/results/full_mht_history_dynamics_probe_YYYYMMDD_HHMMSS"
+
+"$PY" -m bayescatrack.experiments.full_mht_history_dynamics_promotion_gate \
+  "$PROBE/full_mht_history_dynamics/full_mht_history_dynamics_comparison.csv" \
+  "$OUT/full_mht_history_dynamics_exposure.csv" \
+  --output "$OUT/full_mht_history_dynamics_promotion_gate.md"
+```
+
+Promotion requires:
+
+```text
+benchmark_result = history_dynamics_stable_gain
+exposure_result  = bounded_exposure
+```
+
+If the benchmark improves but exposure is broad, keep the row exploratory.
 
 ## Readout
 
