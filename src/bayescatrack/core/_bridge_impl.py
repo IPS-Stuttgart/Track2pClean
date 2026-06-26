@@ -47,6 +47,24 @@ import numpy as np
 _SESSION_NAME_PATTERN = re.compile(r"^(?P<session_date>\d{4}-\d{2}-\d{2})(?:_.+)?$")
 
 
+def _strict_bool_control(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _finite_probability_control(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be between 0 and 1")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be between 0 and 1") from exc
+    if not np.isfinite(numeric) or not 0.0 <= numeric <= 1.0:
+        raise ValueError(f"{name} must be between 0 and 1")
+    return numeric
+
+
 @dataclass(frozen=True)
 # pylint: disable=too-many-instance-attributes
 class CalciumPlaneData:
@@ -693,8 +711,23 @@ def load_suite2p_plane(
 ) -> CalciumPlaneData:
     """Load one Suite2p plane folder into a :class:`CalciumPlaneData` instance."""
 
-    if not 0.0 <= cell_probability_threshold <= 1.0:
-        raise ValueError("cell_probability_threshold must be between 0 and 1")
+    include_non_cells = _strict_bool_control(
+        include_non_cells, name="include_non_cells"
+    )
+    weighted_masks = _strict_bool_control(weighted_masks, name="weighted_masks")
+    exclude_overlapping_pixels = _strict_bool_control(
+        exclude_overlapping_pixels, name="exclude_overlapping_pixels"
+    )
+    load_traces = _strict_bool_control(load_traces, name="load_traces")
+    load_spike_traces = _strict_bool_control(
+        load_spike_traces, name="load_spike_traces"
+    )
+    load_neuropil_traces = _strict_bool_control(
+        load_neuropil_traces, name="load_neuropil_traces"
+    )
+    cell_probability_threshold = _finite_probability_control(
+        cell_probability_threshold, name="cell_probability_threshold"
+    )
 
     plane_dir = Path(plane_dir)
     stat = np.load(plane_dir / "stat.npy", allow_pickle=True)

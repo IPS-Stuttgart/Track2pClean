@@ -21,6 +21,8 @@ from .core.bridge import load_track2p_subject
 _SESSION_NAME_PATTERN = re.compile(r"^(?P<session_date>\d{4}-\d{2}-\d{2})(?:_.+)?$")
 _PLANE_NAME_PATTERN = re.compile(r"^plane(?P<index>\d+)$")
 _MISSING_STRINGS = {"", "none", "nan", "null"}
+_TRUE_STRINGS = {"true", "1"}
+_FALSE_STRINGS = {"false", "0"}
 
 
 @dataclass(frozen=True)
@@ -56,9 +58,11 @@ class Track2pReference:
         object.__setattr__(self, "session_dates", session_dates)
 
         if self.curated_mask is not None:
-            curated_mask = np.asarray(self.curated_mask, dtype=bool).reshape(-1)
-            if curated_mask.shape != (indices.shape[0],):
-                raise ValueError("curated_mask must have shape (n_tracks,)")
+            curated_mask = _as_curated_mask(
+                self.curated_mask,
+                indices.shape[0],
+                name="curated_mask",
+            )
             object.__setattr__(self, "curated_mask", curated_mask)
 
     @property
@@ -139,8 +143,8 @@ class Track2pReference:
     ) -> np.ndarray:
         """Return ground-truth pairs ``(roi_in_a, roi_in_b)`` for two sessions."""
 
-        _validate_session_index(session_a, self.n_sessions)
-        _validate_session_index(session_b, self.n_sessions)
+        session_a = _validate_session_index(session_a, self.n_sessions)
+        session_b = _validate_session_index(session_b, self.n_sessions)
         indices = self._filtered_indices(curated_only=curated_only)
 
         pairs: list[tuple[int, int]] = []
@@ -179,13 +183,23 @@ class Track2pReference:
         else:
             if len(n_rois_per_session) != self.n_sessions:
                 raise ValueError("n_rois_per_session must have one entry per session")
-            n_rois = [int(count) for count in n_rois_per_session]
-            if any(count < 0 for count in n_rois):
-                raise ValueError(
-                    "n_rois_per_session must contain non-negative integers"
+            n_rois = [
+                _parse_integer_scalar(
+                    count,
+                    name="n_rois_per_session",
+                    allow_negative=False,
+                    allow_string=False,
                 )
+                for count in n_rois_per_session
+            ]
 
-        labels = [np.full((count,), int(fill_value), dtype=int) for count in n_rois]
+        fill_value_int = _parse_integer_scalar(
+            fill_value,
+            name="fill_value",
+            allow_negative=True,
+            allow_string=False,
+        )
+        labels = [np.full((count,), fill_value_int, dtype=int) for count in n_rois]
         for track_idx in range(indices.shape[0]):
             for session_idx in range(self.n_sessions):
                 roi_idx = indices[track_idx, session_idx]
@@ -196,7 +210,7 @@ class Track2pReference:
                     raise ValueError(
                         f"ROI index {roi_idx} is out of bounds for session {session_idx}"
                     )
-                if labels[session_idx][roi_idx] != fill_value:
+                if labels[session_idx][roi_idx] != fill_value_int:
                     raise ValueError(
                         "Multiple tracks map to the same ROI index in session "
                         f"{session_idx}: ROI {roi_idx}"
@@ -299,16 +313,23 @@ def load_aligned_subject_reference(
 def _suite2p_roi_indices_for_plane(plane_data: Any) -> np.ndarray:
     """Return original Suite2p ROI indices for the loaded plane rows."""
 
-    n_rois = int(plane_data.n_rois)
+    n_rois = _parse_integer_scalar(
+        plane_data.n_rois,
+        name="plane_data.n_rois",
+        allow_negative=False,
+        allow_string=False,
+    )
     roi_indices = getattr(plane_data, "roi_indices", None)
     if roi_indices is None:
         return np.arange(n_rois, dtype=int)
 
-    roi_indices_array = np.asarray(roi_indices, dtype=int).reshape(-1)
+    roi_indices_array = _as_strict_integer_vector(
+        roi_indices,
+        name="plane_data.roi_indices",
+        allow_negative=False,
+    )
     if roi_indices_array.shape != (n_rois,):
         raise ValueError("plane_data.roi_indices must have one entry per loaded ROI")
-    if np.any(roi_indices_array < 0):
-        raise ValueError("plane_data.roi_indices must contain non-negative indices")
     if len(set(roi_indices_array.tolist())) != n_rois:
         raise ValueError("plane_data.roi_indices must contain unique indices")
     return roi_indices_array
@@ -429,7 +450,7 @@ def score_complete_tracks_against_reference(
     normalized_sessions = _normalize_session_indices(
         session_indices, reference.n_sessions
     )
-    _validate_session_index(seed_session, reference.n_sessions)
+    seed_session = _validate_session_index(seed_session, reference.n_sessions)
 
     predicted_matrix = _as_nullable_int_matrix(predicted_suite2p_indices)
     if predicted_matrix.ndim != 2 or predicted_matrix.shape[1] != reference.n_sessions:
@@ -487,9 +508,12 @@ def _parse_optional_int(value: Any) -> int | None:
     if value is None:
         return None
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"ROI index must be integer-like, got boolean {value!r}")
+        raise ValueError(_optional_int_error_message(value))
     if isinstance(value, bytes):
-        value = value.decode("utf-8")
+        try:
+            value = value.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(_optional_int_error_message(value)) from exc
     if isinstance(value, str):
         value = value.strip()
         if value.lower() in _MISSING_STRINGS:
@@ -499,27 +523,127 @@ def _parse_optional_int(value: Any) -> int | None:
         except ValueError:
             try:
                 numeric_value = float(value)
-            except ValueError:
-                return None
+            except ValueError as exc:
+                raise ValueError(_optional_int_error_message(value)) from exc
             if np.isnan(numeric_value):
                 return None
-            if not numeric_value.is_integer():
-                raise ValueError(f"ROI index must be integer-like, got {value!r}")
+            if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+                raise ValueError(_optional_int_error_message(value))
             integer_value = int(numeric_value)
     elif isinstance(value, (float, np.floating)):
         if np.isnan(value):
             return None
-        if not float(value).is_integer():
-            raise ValueError(f"ROI index must be integer-like, got {value!r}")
-        integer_value = int(value)
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(_optional_int_error_message(value))
+        integer_value = int(numeric_value)
     else:
         try:
-            integer_value = int(value)
-        except (TypeError, ValueError):
-            return None
+            integer_value = _parse_integer_scalar(
+                value,
+                name="ROI index",
+                allow_negative=True,
+                allow_string=False,
+            )
+        except ValueError as exc:
+            raise ValueError(_optional_int_error_message(value)) from exc
     if integer_value < 0:
         return None
     return integer_value
+
+
+def _optional_int_error_message(value: Any) -> str:
+    return f"ROI index must be integer-like or an explicit missing value, got {value!r}"
+
+
+def _as_curated_mask(mask_like: Any, n_tracks: int, *, name: str) -> np.ndarray:
+    mask_array = np.asarray(mask_like, dtype=object).reshape(-1)
+    if mask_array.shape != (n_tracks,):
+        raise ValueError(f"{name} must have shape (n_tracks,)")
+    return np.asarray(
+        [_parse_curated_mask_value(value, name=name) for value in mask_array],
+        dtype=bool,
+    )
+
+
+def _parse_curated_mask_value(value: Any, *, name: str) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, bytes):
+        try:
+            value = value.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"{name} must contain only boolean or 0/1 values") from exc
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token in _TRUE_STRINGS:
+            return True
+        if token in _FALSE_STRINGS:
+            return False
+        raise ValueError(f"{name} must contain only boolean or 0/1 values")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain only boolean or 0/1 values") from exc
+    if not np.isfinite(numeric_value) or numeric_value not in (0.0, 1.0):
+        raise ValueError(f"{name} must contain only boolean or 0/1 values")
+    return bool(numeric_value)
+
+
+def _parse_integer_scalar(
+    value: Any,
+    *,
+    name: str,
+    allow_negative: bool,
+    allow_string: bool,
+) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer scalar")
+    if isinstance(value, bytes):
+        if not allow_string:
+            raise ValueError(f"{name} must be an integer scalar")
+        try:
+            value = value.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"{name} must be an integer scalar") from exc
+    if isinstance(value, str):
+        if not allow_string:
+            raise ValueError(f"{name} must be an integer scalar")
+        value = value.strip()
+    array = np.asarray(value)
+    if array.shape != ():
+        raise ValueError(f"{name} must be an integer scalar")
+    scalar = array.item()
+    if isinstance(scalar, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer scalar")
+    try:
+        numeric_value = float(scalar)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer scalar") from exc
+    if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+        raise ValueError(f"{name} must be an integer scalar")
+    integer_value = int(numeric_value)
+    if not allow_negative and integer_value < 0:
+        raise ValueError(f"{name} must contain non-negative integers")
+    return integer_value
+
+
+def _as_strict_integer_vector(
+    values: Any,
+    *,
+    name: str,
+    allow_negative: bool,
+) -> np.ndarray:
+    value_array = np.asarray(values, dtype=object).reshape(-1)
+    normalized = np.empty(value_array.shape, dtype=int)
+    for index, value in np.ndenumerate(value_array):
+        normalized[index] = _parse_integer_scalar(
+            value,
+            name=name,
+            allow_negative=allow_negative,
+            allow_string=False,
+        )
+    return normalized
 
 
 def _complete_track_tuples(track_matrix: np.ndarray) -> list[tuple[int, ...]]:
@@ -552,7 +676,20 @@ def _normalize_session_indices(
     if session_indices is None:
         normalized = tuple(range(n_sessions))
     else:
-        normalized = tuple(int(session_index) for session_index in session_indices)
+        if isinstance(session_indices, (str, bytes)):
+            raise ValueError("session_indices must be a sequence of integer session indices")
+        try:
+            normalized = tuple(
+                _parse_integer_scalar(
+                    session_index,
+                    name="session_indices",
+                    allow_negative=False,
+                    allow_string=False,
+                )
+                for session_index in session_indices
+            )
+        except TypeError as exc:
+            raise ValueError("session_indices must be a sequence of integer session indices") from exc
     if not normalized:
         raise ValueError("At least one session must be selected")
     if len(set(normalized)) != len(normalized):
@@ -605,20 +742,26 @@ def _extract_curated_mask(
     for key in (f"vector_curation_plane_{plane_index}", "vector_curation"):
         if key not in track_ops:
             continue
-        curated = np.asarray(track_ops[key], dtype=float).reshape(-1)
-        if curated.shape != (n_tracks,):
-            raise ValueError(
-                f"Curation vector {key!r} has incompatible shape {curated.shape}"
-            )
-        return curated > 0.5
+        return _as_curated_mask(
+            track_ops[key],
+            n_tracks,
+            name=f"Curation vector {key!r}",
+        )
     return None
 
 
-def _validate_session_index(session_index: int, n_sessions: int) -> None:
-    if session_index < 0 or session_index >= n_sessions:
+def _validate_session_index(session_index: int, n_sessions: int) -> int:
+    normalized = _parse_integer_scalar(
+        session_index,
+        name="session index",
+        allow_negative=True,
+        allow_string=False,
+    )
+    if normalized < 0 or normalized >= n_sessions:
         raise IndexError(
-            f"session index {session_index} out of bounds for {n_sessions} sessions"
+            f"session index {normalized} out of bounds for {n_sessions} sessions"
         )
+    return normalized
 
 
 def _label_vector_to_mapping(labels: Sequence[Any]) -> dict[int, int]:
