@@ -94,6 +94,14 @@ def _finite_float(
     return numeric_value
 
 
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if isinstance(value, np.bool_):
+        return bool(value)
+    if type(value) is bool:
+        return value
+    raise ValueError(f"{name} must be a boolean")
+
+
 @dataclass(frozen=True)
 class Track2pPolicyPriorConfig:
     """Add a Track2p-like edge prior without reading Track2p output tracks."""
@@ -118,6 +126,11 @@ class Track2pPolicyPriorConfig:
             raise ValueError("threshold_method must be 'otsu' or 'min'")
         if not str(self.iou_component).strip():
             raise ValueError("iou_component must be a non-empty string")
+        object.__setattr__(
+            self,
+            "consecutive_only",
+            _strict_bool(self.consecutive_only, name="consecutive_only"),
+        )
         for name in ("relief", "non_policy_penalty", "rescue_margin"):
             object.__setattr__(
                 self,

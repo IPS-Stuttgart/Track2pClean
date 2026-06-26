@@ -23,7 +23,7 @@ def _association_bundle(
     )
 
 
-def test_build_track_rows_from_bundles_rejects_inconsistent_intermediate_roi_layout():
+def test_build_track_rows_from_bundles_rejects_inconsistent_shared_session_roi_layout():
     bundles = [
         _association_bundle((1, 2), [0], [10, 11], "day0", "day1"),
         _association_bundle((1, 1), [10], [20], "day1", "day2"),
@@ -31,6 +31,6 @@ def test_build_track_rows_from_bundles_rejects_inconsistent_intermediate_roi_lay
 
     with pytest.raises(
         ValueError,
-        match="consecutive bundles disagree on ROI indices",
+        match="consecutive bundles disagree on ROI indices for shared session 'day1'",
     ):
         build_track_rows_from_bundles(bundles, start_session_index=1)

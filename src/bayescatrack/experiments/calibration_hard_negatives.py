@@ -50,8 +50,11 @@ class CandidateHardNegativeOptions:
                     name="candidate_top_k_per_anchor",
                 ),
             )
-        if not isinstance(self.include_column_candidates, bool):
+        if not isinstance(self.include_column_candidates, (bool, np.bool_)):
             raise ValueError("include_column_candidates must be a boolean")
+        object.__setattr__(
+            self, "include_column_candidates", bool(self.include_column_candidates)
+        )
         object.__setattr__(
             self,
             "hardness_feature_names",
@@ -64,7 +67,7 @@ class CandidateHardNegativeOptions:
 
 
 def _finite_float(value: Any, *, name: str) -> float:
-    if isinstance(value, bool):
+    if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite")
     numeric = float(value)
     if not np.isfinite(numeric):
@@ -73,7 +76,7 @@ def _finite_float(value: Any, *, name: str) -> float:
 
 
 def _positive_integer_or_none(value: Any, *, name: str) -> int:
-    if isinstance(value, bool):
+    if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be positive or None")
     numeric = _finite_float(value, name=name)
     if not numeric.is_integer() or numeric < 1.0:

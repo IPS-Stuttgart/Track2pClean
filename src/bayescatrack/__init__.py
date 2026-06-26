@@ -148,6 +148,9 @@ from ._track_row_fill_value_validation import (
 from ._track_table_session_name_validation import (
     install_track_table_session_name_validation as _install_track_table_session_name_validation,
 )
+from ._track2p_policy_session_gap_validation import (
+    install_track2p_policy_session_gap_validation as _install_track2p_policy_session_gap_validation,
+)
 from ._tracking_global_link_edge_validation import (
     install_tracking_global_link_edge_validation as _install_tracking_global_link_edge_validation,
 )
@@ -166,6 +169,7 @@ from .advanced_roi_components import (
 from .association import absence_model as _absence_model
 from .association import calibrated_costs as _calibrated_costs
 from .association import candidate_prefilter as _candidate_prefilter
+from .association import track2p_policy_priors as _track2p_policy_priors
 from .core import bridge as _bridge
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
@@ -236,6 +240,7 @@ _install_tracking_global_link_edge_validation()
 _install_track_row_export_option_validation()
 _install_track_row_fill_value_validation()
 _install_track_table_session_name_validation()
+_install_track2p_policy_session_gap_validation(_track2p_policy_priors)
 _install_global_track_row_validation()
 _install_tracking_fill_value_validation()
 _install_tracking_result_matrix_validation()
