@@ -159,9 +159,17 @@ def install_mahalanobis_pairwise_features(calcium_plane_cls: type[Any]) -> None:
 
 
 def _validate_nonnegative_finite_scalar(name: str, raw_value: Any) -> float:
-    if isinstance(raw_value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite non-negative value")
-    value = float(raw_value)
+    message = f"{name} must be a finite non-negative value"
+    array = np.asarray(raw_value)
+    if array.shape != ():
+        raise ValueError(message)
+    scalar = array.item()
+    if isinstance(scalar, (bool, np.bool_)):
+        raise ValueError(message)
+    try:
+        value = float(scalar)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
     if not np.isfinite(value) or value < 0.0:
-        raise ValueError(f"{name} must be a finite non-negative value")
+        raise ValueError(message)
     return value
