@@ -2,8 +2,8 @@
 
 The FullMHT method story depends on two separate questions:
 
-* does the full beam beat the greedy beam-width-1 ablation on the same scan
-  candidates, showing a real history-search advantage?
+* does the full beam beat the greedy beam-width-1 ablation on complete-track F1
+  with no pairwise-F1 loss, showing a real identity-history search advantage?
 * does the calibrated prior-survival row match or improve the fixed prior-veto
   hazard, making the row less hand-gated?
 
@@ -204,14 +204,15 @@ def _metric(row: Mapping[str, Any], metric: MetricName) -> float:
 
 
 def _history_result(deltas: Mapping[str, float], *, tolerance: float) -> str:
-    key_deltas = [float(deltas[f"beam_minus_greedy_{metric}"]) for metric in KEY_METRICS]
-    if all(delta >= -tolerance for delta in key_deltas) and any(
-        delta > tolerance for delta in key_deltas
-    ):
-        return "beam_history_advantage"
-    if all(abs(delta) <= tolerance for delta in key_deltas):
-        return "beam_ties_greedy"
-    return "beam_regression_vs_greedy"
+    pairwise = float(deltas["beam_minus_greedy_pairwise_f1_micro"])
+    complete = float(deltas["beam_minus_greedy_complete_track_f1_micro"])
+    if pairwise < -tolerance or complete < -tolerance:
+        return "beam_regression_vs_greedy"
+    if complete > tolerance:
+        return "beam_complete_history_advantage"
+    if pairwise > tolerance:
+        return "beam_pairwise_only_advantage"
+    return "beam_ties_greedy"
 
 
 def _survival_result(
@@ -244,6 +245,8 @@ def _recommendation(history_result: str, survival_result: str) -> str:
         return "do not promote FullMHT; investigate beam scoring regression"
     if history_result == "beam_ties_greedy":
         return "keep FullMHT exploratory unless another real-data history conflict is found"
+    if history_result == "beam_pairwise_only_advantage":
+        return "keep FullMHT exploratory; beam gain is not a complete-history advantage"
     if survival_result in {
         "survival_improves_fixed_veto",
         "survival_ties_fixed_veto",
