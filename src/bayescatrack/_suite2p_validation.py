@@ -46,6 +46,18 @@ def load_suite2p_plane(plane_dir: str | Path, *args: Any, **kwargs: Any) -> Any:
             kwargs.get("exclude_overlapping_pixels", True),
             name="exclude_overlapping_pixels",
         )
+        weighted_masks = _strict_bool(
+            kwargs.get("weighted_masks", False), name="weighted_masks"
+        )
+        load_traces = _strict_python_bool(
+            kwargs.get("load_traces", True), name="load_traces"
+        )
+        load_spike_traces = _strict_python_bool(
+            kwargs.get("load_spike_traces", True), name="load_spike_traces"
+        )
+        load_neuropil_traces = _strict_python_bool(
+            kwargs.get("load_neuropil_traces", False), name="load_neuropil_traces"
+        )
         _validate_suite2p_stat_shapes(
             plane_dir,
             include_non_cells=include_non_cells,
@@ -57,6 +69,10 @@ def load_suite2p_plane(plane_dir: str | Path, *args: Any, **kwargs: Any) -> Any:
             "include_non_cells": include_non_cells,
             "cell_probability_threshold": cell_probability_threshold,
             "exclude_overlapping_pixels": exclude_overlapping_pixels,
+            "weighted_masks": weighted_masks,
+            "load_traces": load_traces,
+            "load_spike_traces": load_spike_traces,
+            "load_neuropil_traces": load_neuropil_traces,
         }
     return original(plane_dir, *args, **kwargs)
 
@@ -128,8 +144,8 @@ def _validate_one_suite2p_roi_stat(
     *,
     exclude_overlapping_pixels: bool,
 ) -> None:
-    ypix = np.asarray(roi_stat["ypix"])
-    xpix = np.asarray(roi_stat["xpix"])
+    ypix = _validate_integer_pixel_coordinate_array(roi_stat["ypix"], name="ypix")
+    xpix = _validate_integer_pixel_coordinate_array(roi_stat["xpix"], name="xpix")
     if ypix.shape != xpix.shape:
         raise ValueError("Suite2p ROI ypix/xpix arrays must have matching shapes")
 
@@ -144,6 +160,37 @@ def _validate_one_suite2p_roi_stat(
             raise ValueError("Suite2p ROI overlap shape must match ypix/xpix shape")
 
 
+def _validate_integer_pixel_coordinate_array(value: Any, *, name: str) -> np.ndarray:
+    array = np.asarray(value)
+    if _contains_ambiguous_pixel_coordinate_tokens(array):
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        )
+    if np.issubdtype(array.dtype, np.integer):
+        return array
+
+    try:
+        numeric = np.asarray(array, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        ) from exc
+
+    if not np.all(np.isfinite(numeric)) or not np.all(numeric == np.floor(numeric)):
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        )
+    return numeric.astype(int, copy=False)
+
+
+def _contains_ambiguous_pixel_coordinate_tokens(array: np.ndarray) -> bool:
+    if np.issubdtype(array.dtype, np.bool_) or array.dtype.kind in {"S", "U"}:
+        return True
+    if array.dtype != object:
+        return False
+    return any(isinstance(item, (bool, np.bool_, str, bytes)) for item in array.ravel())
+
+
 def _original_load_suite2p_plane() -> Callable[..., Any]:
     original = getattr(
         load_suite2p_plane,
@@ -156,6 +203,12 @@ def _original_load_suite2p_plane() -> Callable[..., Any]:
 
 
 def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
+
+
+def _strict_python_bool(value: Any, *, name: str) -> bool:
     if type(value) is not bool:
         raise ValueError(f"{name} must be a boolean")
     return value

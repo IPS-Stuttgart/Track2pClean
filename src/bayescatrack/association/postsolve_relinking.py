@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -23,16 +24,35 @@ class PostSolveRelinkingConfig:
     bidirectional_next_weight: float = 1.0
 
     def __post_init__(self) -> None:
-        if self.max_edge_cost is not None and self.max_edge_cost < 0.0:
-            raise ValueError("max_edge_cost must be non-negative when provided")
-        if self.min_cost_improvement < 0.0:
-            raise ValueError("min_cost_improvement must be non-negative")
-        next_weight = float(self.bidirectional_next_weight)
-        if not np.isfinite(next_weight) or next_weight < 0.0:
-            raise ValueError(
-                "bidirectional_next_weight must be finite and non-negative"
-            )
-        object.__setattr__(self, "bidirectional_next_weight", next_weight)
+        object.__setattr__(
+            self,
+            "max_edge_cost",
+            _finite_nonnegative_float_or_none(self.max_edge_cost, "max_edge_cost"),
+        )
+        object.__setattr__(
+            self,
+            "min_cost_improvement",
+            _finite_nonnegative_float(
+                self.min_cost_improvement, "min_cost_improvement"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "enforce_unique_session_rois",
+            _bool_value(
+                self.enforce_unique_session_rois, "enforce_unique_session_rois"
+            ),
+        )
+        object.__setattr__(
+            self, "fill_value", _integer_value(self.fill_value, "fill_value")
+        )
+        object.__setattr__(
+            self,
+            "bidirectional_next_weight",
+            _finite_nonnegative_float(
+                self.bidirectional_next_weight, "bidirectional_next_weight"
+            ),
+        )
 
 
 def relink_tracks_at_geometry_issues(
@@ -288,6 +308,37 @@ def _joint_current_cost(
     if not np.isfinite(current_next_cost):
         return float("inf")
     return float(current_cost) + next_weight * float(current_next_cost)
+
+
+def _integer_value(value: Any, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    return int(integer_value)
+
+
+def _finite_nonnegative_float_or_none(value: Any, name: str) -> float | None:
+    if value is None:
+        return None
+    return _finite_nonnegative_float(value, name)
+
+
+def _finite_nonnegative_float(value: Any, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and non-negative")
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric < 0.0:
+        raise ValueError(f"{name} must be finite and non-negative")
+    return numeric
+
+
+def _bool_value(value: Any, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
 
 
 __all__ = ("PostSolveRelinkingConfig", "relink_tracks_at_geometry_issues")

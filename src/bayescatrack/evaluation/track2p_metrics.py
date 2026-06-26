@@ -53,6 +53,7 @@ def score_track_matrix_against_reference(
 ) -> dict[str, float | int]:
     """Score a predicted Suite2p-index track matrix against a Track2p reference."""
 
+    curated_only = _normalize_curated_only_flag(curated_only)
     reference_matrix = normalize_track_matrix(reference.suite2p_indices)
     if curated_only:
         if reference.curated_mask is None:
@@ -63,3 +64,9 @@ def score_track_matrix_against_reference(
             np.asarray(reference.curated_mask, dtype=bool)
         ]
     return score_track_matrices(predicted_track_matrix, reference_matrix)
+
+
+def _normalize_curated_only_flag(value: Any) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError("curated_only must be a boolean")

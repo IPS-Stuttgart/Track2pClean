@@ -7,6 +7,7 @@ from bayescatrack import CalciumPlaneData, Track2pSession
 from bayescatrack.multisession_tracking import (
     MultisessionTrackingConfig,
     _call_multisession_solver,
+    _coerce_solver_tracks,
     track_sessions_multisession,
 )
 
@@ -162,3 +163,29 @@ def test_call_multisession_solver_does_not_retry_internal_typeerror():
         _call_multisession_solver(solver, {}, [2, 3], MultisessionTrackingConfig())
 
     assert calls == 1
+
+
+def test_coerce_solver_tracks_accepts_integer_like_numpy_indices():
+    tracks, total_cost = _coerce_solver_tracks(
+        {"tracks": [{np.int64(0): np.float64(2.0)}], "total_cost": 1.25}
+    )
+
+    assert tracks == ({0: 2},)
+    assert total_cost == 1.25
+
+
+@pytest.mark.parametrize(
+    ("bad_track", "message"),
+    [
+        ({True: 0}, "session index"),
+        ({0: True}, "detection index"),
+        ({0: -1}, "detection index"),
+        ({0: 1.5}, "detection index"),
+        ({"0": 0}, "session index"),
+        ({0: "1"}, "detection index"),
+        ({0: np.nan}, "detection index"),
+    ],
+)
+def test_coerce_solver_tracks_rejects_malformed_indices(bad_track, message):
+    with pytest.raises(ValueError, match=message):
+        _coerce_solver_tracks([bad_track])

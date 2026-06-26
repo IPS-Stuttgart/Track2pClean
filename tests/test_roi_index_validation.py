@@ -16,6 +16,7 @@ def _masks(n_rois: int = 2) -> np.ndarray:
     ("roi_indices", "match"),
     [
         ([False, True], "boolean"),
+        (["0", "1"], "integer ROI indices"),
         ([0.0, 1.5], "integer ROI indices"),
         ([0, -1], "non-negative"),
         ([1, 1], "unique"),

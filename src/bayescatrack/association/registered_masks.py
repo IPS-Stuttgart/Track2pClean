@@ -116,13 +116,12 @@ def expand_registered_pairwise_cost_columns(
 ) -> np.ndarray:
     """Expand compact pairwise costs and assign ``large_cost`` to empty ROIs."""
 
-    if large_cost <= 0.0:
-        raise ValueError("large_cost must be strictly positive")
+    large_cost = _finite_positive_float(large_cost, name="large_cost")
     return np.asarray(
         expand_registered_roi_columns(
             cost_matrix,
             empty_registered_rois,
-            fill_value=float(large_cost),
+            fill_value=large_cost,
         ),
         dtype=float,
     )
@@ -166,11 +165,12 @@ def expand_registered_roi_columns(
     """Expand a matrix over non-empty target ROIs back to all registered ROIs."""
 
     array = np.asarray(matrix)
-    empty_registered_rois = np.asarray(empty_registered_rois, dtype=bool)
+    empty_registered_rois = _strict_boolean_vector(
+        empty_registered_rois,
+        name="empty_registered_rois",
+    )
     if array.ndim != 2:
         raise ValueError("matrix must be two-dimensional")
-    if empty_registered_rois.ndim != 1:
-        raise ValueError("empty_registered_rois must be one-dimensional")
 
     full_column_count = int(empty_registered_rois.size)
     compact_column_count = int(
@@ -205,15 +205,14 @@ def add_registered_roi_validity_components(
 ) -> None:
     """Add registered-ROI validity planes to pairwise components."""
 
-    if large_cost <= 0.0:
-        raise ValueError("large_cost must be strictly positive")
+    large_cost = _finite_positive_float(large_cost, name="large_cost")
     shape = _infer_pairwise_component_shape(pairwise_components)
     valid = _validated_registered_roi_validity(valid_registered_rois, shape)
     pairwise_components[REGISTERED_ROI_VALID_COMPONENT] = np.broadcast_to(
         valid[None, :], shape
     ).copy()
     pairwise_components[REGISTERED_ROI_INVALID_COST_COMPONENT] = np.broadcast_to(
-        np.where(valid, 0.0, float(large_cost))[None, :], shape
+        np.where(valid, 0.0, large_cost)[None, :], shape
     ).copy()
 
 
@@ -225,8 +224,7 @@ def mask_invalid_registered_roi_columns(
 ) -> dict[str, np.ndarray]:
     """Return components with invalid registered-ROI columns neutralized."""
 
-    if large_cost <= 0.0:
-        raise ValueError("large_cost must be strictly positive")
+    large_cost = _finite_positive_float(large_cost, name="large_cost")
     if (
         valid_registered_rois is None
         and REGISTERED_ROI_VALID_COMPONENT not in pairwise_components
@@ -261,7 +259,7 @@ def mask_invalid_registered_roi_columns(
             elif _is_availability_component(key) or _is_similarity_component(key):
                 values[:, invalid] = 0.0
             elif _is_cost_component(key):
-                values[:, invalid] = float(large_cost)
+                values[:, invalid] = large_cost
             else:
                 values[:, invalid] = 0.0
 
@@ -269,7 +267,7 @@ def mask_invalid_registered_roi_columns(
         valid[None, :], shape
     ).copy()
     components[REGISTERED_ROI_INVALID_COST_COMPONENT] = np.broadcast_to(
-        np.where(valid, 0.0, float(large_cost))[None, :], shape
+        np.where(valid, 0.0, large_cost)[None, :], shape
     ).copy()
     return components
 
@@ -303,9 +301,10 @@ def _infer_pairwise_component_shape(
 def _validated_registered_roi_validity(
     valid_registered_rois: Any, shape: tuple[int, int]
 ) -> np.ndarray:
-    valid = np.asarray(valid_registered_rois, dtype=bool)
-    if valid.ndim != 1:
-        raise ValueError("valid_registered_rois must be one-dimensional")
+    valid = _strict_boolean_vector(
+        valid_registered_rois,
+        name="valid_registered_rois",
+    )
     if valid.shape == (shape[1],):
         return valid
     if int(np.count_nonzero(valid)) == shape[1]:
@@ -313,6 +312,27 @@ def _validated_registered_roi_validity(
     raise ValueError(
         "valid_registered_rois must have one entry for each measurement ROI"
     )
+
+
+def _strict_boolean_vector(value: Any, *, name: str) -> np.ndarray:
+    array = np.asarray(value)
+    if array.ndim != 1:
+        raise ValueError(f"{name} must be one-dimensional")
+    if not np.issubdtype(array.dtype, np.bool_):
+        raise ValueError(f"{name} must be a boolean vector")
+    return array.astype(bool, copy=False)
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite positive value")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite positive value") from exc
+    if not np.isfinite(numeric_value) or numeric_value <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return numeric_value
 
 
 def _is_availability_component(component_name: str) -> bool:
