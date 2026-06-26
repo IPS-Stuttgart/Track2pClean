@@ -28,6 +28,7 @@ METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/full_mht_prior_survival_promotion_gate.py",
     "src/bayescatrack/experiments/full_mht_identity_history_decision.py",
     "src/bayescatrack/experiments/full_mht_identity_history_promotion_gate.py",
+    "src/bayescatrack/experiments/track2p_policy_full_mht_conflict_demo.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_terminal_completion_benchmark.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_exposure_audit.py",
 )
@@ -68,8 +69,11 @@ def test_full_mht_no_gt_leakage_scan_covers_all_method_layers() -> None:
         )
         for path in experiments.glob(pattern)
     }
-    expected.add(
-        "src/bayescatrack/experiments/track2p_policy_full_mht_terminal_completion_benchmark.py"
+    expected.update(
+        {
+            "src/bayescatrack/experiments/track2p_policy_full_mht_conflict_demo.py",
+            "src/bayescatrack/experiments/track2p_policy_full_mht_terminal_completion_benchmark.py",
+        }
     )
 
     assert expected <= set(METHOD_LAYER_MODULES)
