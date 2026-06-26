@@ -19,6 +19,7 @@ from . import (
     _suite2p_coordinate_value_validation as _suite2p_coordinate_value_validation,
 )
 from . import _suite2p_overlap_value_validation as _suite2p_overlap_value_validation
+from . import _with_replaced_masks_fov_validation as _with_replaced_masks_fov_validation
 
 _association_bundle_bool_validation.install_association_bundle_bool_validation(
     _bridge_impl
@@ -41,6 +42,9 @@ _roi_stat_features.install_split_roi_stat_pairwise_features(
 )
 _local_evidence.install_local_evidence_pairwise_features(_bridge_impl.CalciumPlaneData)
 _core_scalar_validation.install_core_scalar_validation_patches(
+    _bridge_impl.CalciumPlaneData
+)
+_with_replaced_masks_fov_validation.install_with_replaced_masks_fov_validation(
     _bridge_impl.CalciumPlaneData
 )
 
