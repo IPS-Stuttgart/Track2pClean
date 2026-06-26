@@ -94,6 +94,18 @@ def test_terminal_completion_decision_rejects_pairwise_regression() -> None:
     assert decision["candidate_decisions"][0]["decision"] == "pairwise_regression"
 
 
+def test_terminal_completion_decision_rejects_macro_pairwise_regression() -> None:
+    rows = _probe_rows(c025=(0.965, 0.933), c050=(0.965, 0.931), c100=(0.965, 0.931))
+    rows[2]["pairwise_f1_macro"] = "0.900"
+
+    decision = evaluate_terminal_completion_decision(rows)
+
+    assert decision["candidate_decisions"][0]["delta_pairwise_f1_micro"] == 0.0
+    assert decision["candidate_decisions"][0]["delta_pairwise_f1_macro"] < 0.0
+    assert decision["candidate_decisions"][0]["decision"] == "pairwise_regression"
+    assert decision["terminal_completion_result"] == "terminal_completion_pairwise_regression"
+
+
 def test_terminal_completion_decision_rejects_regression_even_with_two_gains() -> None:
     decision = evaluate_terminal_completion_decision(
         _probe_rows(c025=(0.965, 0.931), c050=(0.965, 0.932), c100=(0.964, 0.933))
@@ -112,6 +124,18 @@ def test_terminal_completion_decision_rejects_complete_regression_even_with_two_
     assert decision["terminal_completion_result"] == "terminal_completion_complete_regression"
     assert decision["viable_candidate_count"] == 2
     assert decision["complete_regression_count"] == 1
+
+
+def test_terminal_completion_decision_rejects_macro_complete_regression() -> None:
+    rows = _probe_rows(c025=(0.965, 0.933), c050=(0.965, 0.931), c100=(0.965, 0.931))
+    rows[2]["complete_track_f1_macro"] = "0.900"
+
+    decision = evaluate_terminal_completion_decision(rows)
+
+    assert decision["candidate_decisions"][0]["delta_complete_track_f1_micro"] > 0.0
+    assert decision["candidate_decisions"][0]["delta_complete_track_f1_macro"] < 0.0
+    assert decision["candidate_decisions"][0]["decision"] == "complete_regression"
+    assert decision["terminal_completion_result"] == "terminal_completion_complete_regression"
 
 
 def test_terminal_completion_decision_accepts_custom_identity_history_rows() -> None:
@@ -163,7 +187,7 @@ def test_terminal_completion_decision_parser_accepts_row_overrides() -> None:
     ]
 
 
-def test_terminal_completion_decision_markdown_is_compact() -> None:
+def test_terminal_completion_decision_markdown_reports_all_four_metrics() -> None:
     markdown = format_decision_markdown(
         evaluate_terminal_completion_decision(_probe_rows())
     )
@@ -172,3 +196,5 @@ def test_terminal_completion_decision_markdown_is_compact() -> None:
     assert "Baseline: `FullMHTPrior2`" in markdown
     assert "FullMHTTerminalCompletion050" in markdown
     assert "terminal_completion_stable_gain" in markdown
+    assert "pairwise F1 macro delta" in markdown
+    assert "complete-track F1 macro delta" in markdown
