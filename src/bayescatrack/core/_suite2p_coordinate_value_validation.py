@@ -171,7 +171,11 @@ def _validate_coordinate_array(array: np.ndarray, *, roi_index: int, name: str) 
             _invalid_coordinate_message(roi_index, name)
         ) from exc
 
-    if not np.all(np.isfinite(numeric)) or not np.all(numeric == np.floor(numeric)):
+    if (
+        not np.all(np.isfinite(numeric))
+        or not np.all(numeric >= 0.0)
+        or not np.all(numeric == np.floor(numeric))
+    ):
         _raise_invalid_coordinate_values(roi_index, name)
 
 
