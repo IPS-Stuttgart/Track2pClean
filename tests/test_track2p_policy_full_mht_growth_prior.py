@@ -1137,6 +1137,107 @@ def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     ) == 2.0
 
 
+
+def test_full_mht_prior_anomaly_risk_is_anchor_calibrated(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=5,
+        target_session=6,
+        source_indices=np.asarray([1, 2, 3, 4], dtype=int),
+        target_indices=np.asarray([11, 12, 13, 14], dtype=int),
+        registered_iou=np.asarray(
+            [
+                [0.86, 0.0, 0.0, 0.0],
+                [0.0, 0.83, 0.0, 0.0],
+                [0.0, 0.0, 0.80, 0.0],
+                [0.0, 0.0, 0.0, 0.36],
+            ],
+            dtype=float,
+        ),
+        shifted_iou=np.asarray(
+            [
+                [0.84, 0.0, 0.0, 0.0],
+                [0.0, 0.82, 0.0, 0.0],
+                [0.0, 0.0, 0.80, 0.0],
+                [0.0, 0.0, 0.0, 0.76],
+            ],
+            dtype=float,
+        ),
+        centroid_distance=np.ones((4, 4), dtype=float),
+        area_ratio=np.ones((4, 4), dtype=float),
+        threshold=0.0,
+        growth_residual=np.diag(np.asarray([0.2, 0.3, 0.4, 2.9], dtype=float)),
+        growth_mahalanobis=np.diag(np.asarray([0.2, 0.3, 0.4, 2.7], dtype=float)),
+        local_deformation=np.diag(np.asarray([0.001, 0.002, 0.003, 0.02], dtype=float)),
+        growth_anchor_count=3,
+        growth_model_type="test",
+    )
+    prior_edges = frozenset(
+        {
+            (5, 6, 1, 11),
+            (5, 6, 2, 12),
+            (5, 6, 3, 13),
+            (5, 6, 4, 14),
+        }
+    )
+    config = full_mht.FullMHTConfig(
+        track2p_prior_anomaly_weight=1.0,
+        track2p_prior_anomaly_min_anchors=3,
+        track2p_prior_anomaly_min_feature_scale=0.05,
+    )
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *_args, **_kwargs: 0.9)
+
+    anchor_risk = full_mht._track2p_prior_anomaly_risk(
+        (object(),) * 7,
+        matrices,
+        source_local=0,
+        target_local=0,
+        config=config,
+        track2p_prior_edges=prior_edges,
+    )
+    anomalous_risk = full_mht._track2p_prior_anomaly_risk(
+        (object(),) * 7,
+        matrices,
+        source_local=3,
+        target_local=3,
+        config=config,
+        track2p_prior_edges=prior_edges,
+    )
+
+    assert anchor_risk == 0.0
+    assert anomalous_risk > 4.0
+
+
+def test_full_mht_prior_anomaly_risk_is_disabled_without_weight(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=0,
+        target_session=1,
+        source_indices=np.asarray([1], dtype=int),
+        target_indices=np.asarray([2], dtype=int),
+        registered_iou=np.asarray([[0.1]], dtype=float),
+        shifted_iou=np.asarray([[0.1]], dtype=float),
+        centroid_distance=np.ones((1, 1), dtype=float),
+        area_ratio=np.ones((1, 1), dtype=float),
+        threshold=0.0,
+        growth_residual=np.asarray([[9.0]], dtype=float),
+        growth_mahalanobis=np.asarray([[9.0]], dtype=float),
+        local_deformation=np.asarray([[9.0]], dtype=float),
+        growth_anchor_count=0,
+        growth_model_type="test",
+    )
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *_args, **_kwargs: 0.9)
+
+    assert (
+        full_mht._track2p_prior_anomaly_risk(
+            (object(), object()),
+            matrices,
+            source_local=0,
+            target_local=0,
+            config=full_mht.FullMHTConfig(track2p_prior_anomaly_weight=0.0),
+            track2p_prior_edges=frozenset({(0, 1, 1, 2)}),
+        )
+        == 0.0
+    )
+
 def test_full_mht_selected_edge_summary_is_label_free(monkeypatch):
     matrices = full_mht._FullMHTPairMatrices(
         source_session=1,

@@ -136,6 +136,15 @@ class FullMHTConfig:
     track2p_prior_veto_require_terminal_edge: bool = True
     track2p_prior_veto_require_last_session_edge: bool = True
     track2p_prior_veto_require_complete_component: bool = True
+    track2p_prior_anomaly_weight: float = 0.0
+    track2p_prior_anomaly_min_anchors: int = 3
+    track2p_prior_anomaly_min_anchor_registered_iou: float = 0.65
+    track2p_prior_anomaly_min_anchor_shifted_iou: float = 0.65
+    track2p_prior_anomaly_max_anchor_growth_residual: float = 2.0
+    track2p_prior_anomaly_max_anchor_growth_mahalanobis: float = 2.0
+    track2p_prior_anomaly_min_anchor_cell_probability: float = 0.75
+    track2p_prior_anomaly_min_feature_scale: float = 0.05
+    track2p_prior_anomaly_score_clip: float = 8.0
     terminal_history_risk_weight: float = 0.0
     terminal_non_prior_history_weight: float = 0.0
     terminal_no_prior_successor_history_weight: float = 0.0
@@ -514,6 +523,33 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_track2p_prior_veto_require_complete_component": int(
             mht_config.track2p_prior_veto_require_complete_component
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_weight": float(
+            mht_config.track2p_prior_anomaly_weight
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_min_anchors": int(
+            mht_config.track2p_prior_anomaly_min_anchors
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_min_anchor_registered_iou": float(
+            mht_config.track2p_prior_anomaly_min_anchor_registered_iou
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_min_anchor_shifted_iou": float(
+            mht_config.track2p_prior_anomaly_min_anchor_shifted_iou
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_max_anchor_growth_residual": float(
+            mht_config.track2p_prior_anomaly_max_anchor_growth_residual
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_max_anchor_growth_mahalanobis": float(
+            mht_config.track2p_prior_anomaly_max_anchor_growth_mahalanobis
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_min_anchor_cell_probability": float(
+            mht_config.track2p_prior_anomaly_min_anchor_cell_probability
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_min_feature_scale": float(
+            mht_config.track2p_prior_anomaly_min_feature_scale
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_score_clip": float(
+            mht_config.track2p_prior_anomaly_score_clip
         ),
         "track2p_full_mht_terminal_history_risk_weight": float(
             mht_config.terminal_history_risk_weight
@@ -2201,22 +2237,31 @@ def _edge_score(
             target_local=int(target_local),
         )
         score += float(config.track2p_prior_weight)
-        score -= float(config.track2p_prior_risk_scan_weight) * (
-            _track2p_prior_edge_risk(
-                registered_iou=registered,
-                shifted_iou=shifted,
-                growth_residual=growth_residual,
-                growth_mahalanobis=growth_mahalanobis,
-                cell_probability_a=cell_a,
-                cell_probability_b=cell_b,
-                row_rank=row_rank,
-                column_rank=column_rank,
-                edge=edge,
-                n_sessions=len(sessions),
-                track2p_prior_edges=track2p_prior_edges,
+        prior_risk = _track2p_prior_edge_risk(
+            registered_iou=registered,
+            shifted_iou=shifted,
+            growth_residual=growth_residual,
+            growth_mahalanobis=growth_mahalanobis,
+            cell_probability_a=cell_a,
+            cell_probability_b=cell_b,
+            row_rank=row_rank,
+            column_rank=column_rank,
+            edge=edge,
+            n_sessions=len(sessions),
+            track2p_prior_edges=track2p_prior_edges,
+            config=config,
+        )
+        prior_risk += float(config.track2p_prior_anomaly_weight) * (
+            _track2p_prior_anomaly_risk(
+                sessions,
+                matrices,
+                source_local=int(source_local),
+                target_local=int(target_local),
                 config=config,
+                track2p_prior_edges=track2p_prior_edges,
             )
         )
+        score -= float(config.track2p_prior_risk_scan_weight) * prior_risk
     elif track2p_prior_edges:
         score -= float(config.track2p_non_prior_penalty)
         has_prior_successor = _has_prior_successor_for_roi(
@@ -2423,6 +2468,146 @@ def _terminal_identity_history_risk(
         ) * _finite_float(scan.get("no_prior_successor_continuations", 0.0), 0.0)
     return float(risk)
 
+
+
+def _track2p_prior_anomaly_risk(
+    sessions: Sequence[Any],
+    matrices: _FullMHTPairMatrices,
+    *,
+    source_local: int,
+    target_local: int,
+    config: FullMHTConfig,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+) -> float:
+    if float(config.track2p_prior_anomaly_weight) <= 0.0:
+        return 0.0
+    source_roi = int(matrices.source_indices[int(source_local)])
+    target_roi = int(matrices.target_indices[int(target_local)])
+    edge = (
+        int(matrices.source_session),
+        int(matrices.target_session),
+        source_roi,
+        target_roi,
+    )
+    if edge not in track2p_prior_edges:
+        return 0.0
+
+    prior_rows = _track2p_prior_anomaly_rows(
+        sessions, matrices, track2p_prior_edges=track2p_prior_edges
+    )
+    if prior_rows.shape[0] < int(config.track2p_prior_anomaly_min_anchors):
+        return 0.0
+    anchor_mask = _track2p_prior_anomaly_anchor_mask(prior_rows, config=config)
+    if int(np.sum(anchor_mask)) < int(config.track2p_prior_anomaly_min_anchors):
+        return 0.0
+
+    target_row = _track2p_prior_anomaly_row(
+        sessions,
+        matrices,
+        source_local=int(source_local),
+        target_local=int(target_local),
+    )
+    anchor_rows = prior_rows[np.asarray(anchor_mask, dtype=bool)]
+    directions = np.asarray([-1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=float)
+    risk_terms: list[float] = []
+    for index, direction in enumerate(directions):
+        anchor_values = anchor_rows[:, int(index)]
+        anchor_values = anchor_values[np.isfinite(anchor_values)]
+        value = float(target_row[int(index)])
+        if anchor_values.size < int(config.track2p_prior_anomaly_min_anchors):
+            continue
+        if not np.isfinite(value):
+            continue
+        location, scale = _robust_location_scale(
+            anchor_values,
+            min_scale=float(config.track2p_prior_anomaly_min_feature_scale),
+        )
+        signed_deviation = float(direction) * (value - float(location))
+        risk_terms.append(max(0.0, signed_deviation / max(float(scale), 1.0e-9)))
+    if not risk_terms:
+        return 0.0
+    risk = float(np.sum(risk_terms) / max(1.0, np.sqrt(float(len(risk_terms)))))
+    clip = max(0.0, float(config.track2p_prior_anomaly_score_clip))
+    if clip > 0.0:
+        risk = min(float(clip), risk)
+    return float(max(0.0, risk))
+
+
+def _track2p_prior_anomaly_rows(
+    sessions: Sequence[Any],
+    matrices: _FullMHTPairMatrices,
+    *,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+) -> np.ndarray:
+    rows: list[np.ndarray] = []
+    source_indices = np.asarray(matrices.source_indices, dtype=int)
+    target_indices = np.asarray(matrices.target_indices, dtype=int)
+    for source_local, source_roi in enumerate(source_indices):
+        for target_local, target_roi in enumerate(target_indices):
+            edge = (
+                int(matrices.source_session),
+                int(matrices.target_session),
+                int(source_roi),
+                int(target_roi),
+            )
+            if edge not in track2p_prior_edges:
+                continue
+            rows.append(
+                _track2p_prior_anomaly_row(
+                    sessions,
+                    matrices,
+                    source_local=int(source_local),
+                    target_local=int(target_local),
+                )
+            )
+    if not rows:
+        return np.zeros((0, 6), dtype=float)
+    return np.asarray(rows, dtype=float).reshape(len(rows), 6)
+
+
+def _track2p_prior_anomaly_row(
+    sessions: Sequence[Any],
+    matrices: _FullMHTPairMatrices,
+    *,
+    source_local: int,
+    target_local: int,
+) -> np.ndarray:
+    source_roi = int(matrices.source_indices[int(source_local)])
+    target_roi = int(matrices.target_indices[int(target_local)])
+    cell_a = _cell_probability(sessions, int(matrices.source_session), source_roi)
+    cell_b = _cell_probability(sessions, int(matrices.target_session), target_roi)
+    return np.asarray(
+        [
+            _finite_float(matrices.registered_iou[source_local, target_local], 0.0),
+            _finite_float(matrices.shifted_iou[source_local, target_local], 0.0),
+            min(float(cell_a), float(cell_b)),
+            _finite_float(matrices.growth_residual[source_local, target_local], 0.0),
+            _finite_float(
+                matrices.growth_mahalanobis[source_local, target_local], 0.0
+            ),
+            _finite_float(matrices.local_deformation[source_local, target_local], 0.0),
+        ],
+        dtype=float,
+    )
+
+
+def _track2p_prior_anomaly_anchor_mask(
+    rows: np.ndarray, *, config: FullMHTConfig
+) -> np.ndarray:
+    values = np.asarray(rows, dtype=float)
+    if values.size == 0:
+        return np.zeros((0,), dtype=bool)
+    return (
+        (values[:, 0] >= float(config.track2p_prior_anomaly_min_anchor_registered_iou))
+        & (values[:, 1] >= float(config.track2p_prior_anomaly_min_anchor_shifted_iou))
+        & (values[:, 2] >= float(config.track2p_prior_anomaly_min_anchor_cell_probability))
+        & (values[:, 3] <= float(config.track2p_prior_anomaly_max_anchor_growth_residual))
+        & (
+            values[:, 4]
+            <= float(config.track2p_prior_anomaly_max_anchor_growth_mahalanobis)
+        )
+        & np.all(np.isfinite(values), axis=1)
+    )
 
 def _track2p_prior_edge_risk(
     *,
@@ -2650,7 +2835,7 @@ def _selected_edge_summary(
         track2p_prior_edges=track2p_prior_edges,
     )
     is_prior = edge in track2p_prior_edges
-    prior_risk = (
+    prior_gate_risk = (
         _track2p_prior_edge_risk(
             registered_iou=registered,
             shifted_iou=shifted,
@@ -2668,6 +2853,21 @@ def _selected_edge_summary(
         if is_prior
         else 0.0
     )
+    prior_anomaly_risk = (
+        _track2p_prior_anomaly_risk(
+            sessions,
+            matrices,
+            source_local=source_local,
+            target_local=target_local,
+            config=config,
+            track2p_prior_edges=track2p_prior_edges,
+        )
+        if is_prior
+        else 0.0
+    )
+    prior_risk = float(prior_gate_risk) + float(
+        config.track2p_prior_anomaly_weight
+    ) * float(prior_anomaly_risk)
     veto_reason = (
         _track2p_prior_veto_reason(
             registered_iou=registered,
@@ -2691,6 +2891,7 @@ def _selected_edge_summary(
         f"|prior={int(is_prior)}"
         f"|score={_diagnostic_float(score)}"
         f"|risk={_diagnostic_float(prior_risk)}"
+        f"|anomaly={_diagnostic_float(prior_anomaly_risk)}"
         f"|veto={veto_reason}"
         f"|reg={_diagnostic_float(registered)}"
         f"|shift={_diagnostic_float(shifted)}"
@@ -2954,6 +3155,37 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
+    parser.add_argument("--track2p-prior-anomaly-weight", type=float, default=0.0)
+    parser.add_argument("--track2p-prior-anomaly-min-anchors", type=int, default=3)
+    parser.add_argument(
+        "--track2p-prior-anomaly-min-anchor-registered-iou",
+        type=float,
+        default=0.65,
+    )
+    parser.add_argument(
+        "--track2p-prior-anomaly-min-anchor-shifted-iou",
+        type=float,
+        default=0.65,
+    )
+    parser.add_argument(
+        "--track2p-prior-anomaly-max-anchor-growth-residual",
+        type=float,
+        default=2.0,
+    )
+    parser.add_argument(
+        "--track2p-prior-anomaly-max-anchor-growth-mahalanobis",
+        type=float,
+        default=2.0,
+    )
+    parser.add_argument(
+        "--track2p-prior-anomaly-min-anchor-cell-probability",
+        type=float,
+        default=0.75,
+    )
+    parser.add_argument(
+        "--track2p-prior-anomaly-min-feature-scale", type=float, default=0.05
+    )
+    parser.add_argument("--track2p-prior-anomaly-score-clip", type=float, default=8.0)
     parser.add_argument("--terminal-history-risk-weight", type=float, default=0.0)
     parser.add_argument("--terminal-non-prior-history-weight", type=float, default=0.0)
     parser.add_argument(
@@ -3094,6 +3326,31 @@ def main(argv: list[str] | None = None) -> int:
             ),
             track2p_prior_veto_require_complete_component=bool(
                 args.track2p_prior_veto_require_complete_component
+            ),
+            track2p_prior_anomaly_weight=float(args.track2p_prior_anomaly_weight),
+            track2p_prior_anomaly_min_anchors=max(
+                1, int(args.track2p_prior_anomaly_min_anchors)
+            ),
+            track2p_prior_anomaly_min_anchor_registered_iou=float(
+                args.track2p_prior_anomaly_min_anchor_registered_iou
+            ),
+            track2p_prior_anomaly_min_anchor_shifted_iou=float(
+                args.track2p_prior_anomaly_min_anchor_shifted_iou
+            ),
+            track2p_prior_anomaly_max_anchor_growth_residual=float(
+                args.track2p_prior_anomaly_max_anchor_growth_residual
+            ),
+            track2p_prior_anomaly_max_anchor_growth_mahalanobis=float(
+                args.track2p_prior_anomaly_max_anchor_growth_mahalanobis
+            ),
+            track2p_prior_anomaly_min_anchor_cell_probability=float(
+                args.track2p_prior_anomaly_min_anchor_cell_probability
+            ),
+            track2p_prior_anomaly_min_feature_scale=float(
+                args.track2p_prior_anomaly_min_feature_scale
+            ),
+            track2p_prior_anomaly_score_clip=float(
+                args.track2p_prior_anomaly_score_clip
             ),
             terminal_history_risk_weight=float(args.terminal_history_risk_weight),
             terminal_non_prior_history_weight=float(
