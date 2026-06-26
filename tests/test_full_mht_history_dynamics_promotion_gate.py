@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from bayescatrack.experiments.full_mht_history_dynamics_promotion_gate import (
+    HistoryDynamicsPromotionConfig,
     evaluate_exposure_gate,
     evaluate_history_dynamics_promotion,
     format_promotion_markdown,
@@ -65,6 +66,17 @@ def test_exposure_gate_rejects_broad_non_prior_edits() -> None:
     assert "history_selected_non_prior_edges" in decision["failed_limits"]
 
 
+def test_exposure_gate_rejects_gap_reactivations_when_limited() -> None:
+    decision = evaluate_exposure_gate(
+        [_exposure_all_row(history_gap_reactivated_tracks=2)],
+        config=HistoryDynamicsPromotionConfig(max_gap_reactivated_tracks=1),
+    )
+
+    assert decision["exposure_result"] == "broad_exposure"
+    assert "history_gap_reactivated_tracks" in decision["failed_limits"]
+    assert decision["limit_history_gap_reactivated_tracks"] == 1
+
+
 def test_exposure_gate_reports_missing_all_row() -> None:
     decision = evaluate_exposure_gate([{"subject": "jm_fake"}])
 
@@ -115,3 +127,4 @@ def test_promotion_gate_markdown_is_compact() -> None:
     assert "# FullMHT History Dynamics Promotion Gate" in markdown
     assert "promotable_after_review" in markdown
     assert "max_selected_non_prior_edges_per_subject" in markdown
+    assert "history_gap_reactivated_tracks" in markdown
