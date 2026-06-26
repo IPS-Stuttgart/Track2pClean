@@ -95,6 +95,7 @@ def test_identity_history_sensitivity_accepts_stable_plateau() -> None:
         "no_prior": 3,
         "growth": 3,
     }
+    assert "complete_track_f1_macro_delta_vs_base" in sensitivity["deltas"]["IdentityHistoryCentral"]
 
 
 def test_identity_history_sensitivity_reports_missing_rows() -> None:
@@ -119,6 +120,19 @@ def test_identity_history_sensitivity_rejects_pairwise_collapse() -> None:
 
     assert sensitivity["sensitivity_result"] == "pairwise_collapse"
     assert "IdentityHistoryCentral" in sensitivity["pairwise_collapse_variants"]
+
+
+def test_identity_history_sensitivity_rejects_macro_complete_regression() -> None:
+    rows = _sensitivity_rows()
+    for row in rows:
+        if row["approach"] == "IdentityHistoryCentral":
+            row["complete_track_f1_macro"] = "0.920"
+
+    sensitivity = evaluate_identity_history_sensitivity(rows)
+
+    assert sensitivity["sensitivity_result"] == "central_candidate_not_stable"
+    assert "IdentityHistoryCentral" not in sensitivity["passing_variants"]
+    assert sensitivity["deltas"]["IdentityHistoryCentral"]["complete_track_f1_macro_delta_vs_base"] < 0.0
 
 
 def test_identity_history_exposure_requires_identity_columns() -> None:
@@ -182,6 +196,22 @@ def test_identity_history_promotion_rejects_manifest_tie_against_greedy() -> Non
 
     assert decision["status"] == "not_promotable_manifest"
     assert decision["mht_vs_local_result"] != "identity_complete_history_advantage"
+
+
+def test_identity_history_promotion_rejects_manifest_macro_regression() -> None:
+    rows = _canonical_rows(identity_complete=0.934, greedy_complete=0.931)
+    for row in rows:
+        if row["approach"] == "FullMHTIdentityHistory":
+            row["complete_track_f1_macro"] = "0.900"
+
+    decision = evaluate_identity_history_promotion(
+        rows,
+        _sensitivity_rows(),
+        [_exposure_row()],
+    )
+
+    assert decision["status"] == "not_promotable_manifest"
+    assert decision["mht_vs_local_result"] == "identity_regression_vs_greedy"
 
 
 def test_identity_history_promotion_rejects_no_local_context_regression() -> None:
