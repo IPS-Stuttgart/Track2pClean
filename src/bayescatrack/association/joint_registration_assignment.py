@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Sequence
 
@@ -19,14 +20,37 @@ class JointRefinementConfig:
     convergence_tolerance: float = 1.0e-6
 
     def __post_init__(self) -> None:
-        if self.max_iterations <= 0:
-            raise ValueError("max_iterations must be positive")
-        if not 0.0 <= self.high_confidence_quantile <= 1.0:
-            raise ValueError("high_confidence_quantile must lie in [0, 1]")
-        if self.min_anchor_edges < 1:
-            raise ValueError("min_anchor_edges must be positive")
-        if self.cost_relief < 0.0:
-            raise ValueError("cost_relief must be non-negative")
+        object.__setattr__(
+            self,
+            "max_iterations",
+            _validate_positive_int(self.max_iterations, "max_iterations"),
+        )
+        object.__setattr__(
+            self,
+            "high_confidence_quantile",
+            _validate_probability(
+                self.high_confidence_quantile,
+                "high_confidence_quantile",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_anchor_edges",
+            _validate_positive_int(self.min_anchor_edges, "min_anchor_edges"),
+        )
+        object.__setattr__(
+            self,
+            "cost_relief",
+            _validate_finite_nonnegative(self.cost_relief, "cost_relief"),
+        )
+        object.__setattr__(
+            self,
+            "convergence_tolerance",
+            _validate_finite_nonnegative(
+                self.convergence_tolerance,
+                "convergence_tolerance",
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -38,12 +62,27 @@ class JointRegistrationAssignmentConfig:
     min_anchors: int = 8
 
     def __post_init__(self) -> None:
-        if not 0.0 <= self.min_anchor_probability <= 1.0:
-            raise ValueError("min_anchor_probability must lie in [0, 1]")
-        if self.min_anchor_margin < 0.0:
-            raise ValueError("min_anchor_margin must be non-negative")
-        if self.min_anchors < 1:
-            raise ValueError("min_anchors must be positive")
+        object.__setattr__(
+            self,
+            "min_anchor_probability",
+            _validate_probability(
+                self.min_anchor_probability,
+                "min_anchor_probability",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_anchor_margin",
+            _validate_finite_nonnegative(
+                self.min_anchor_margin,
+                "min_anchor_margin",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_anchors",
+            _validate_positive_int(self.min_anchors, "min_anchors"),
+        )
 
 
 @dataclass(frozen=True)
@@ -104,6 +143,8 @@ def high_confidence_anchor_edges(
 ) -> tuple[tuple[int, int], ...]:
     """Return mutual low-cost row/column anchors from a cost matrix."""
 
+    quantile = _validate_probability(quantile, "quantile")
+    min_anchor_edges = _validate_positive_int(min_anchor_edges, "min_anchor_edges")
     costs = np.asarray(cost_matrix, dtype=float)
     if costs.ndim != 2:
         raise ValueError("cost_matrix must be two-dimensional")
@@ -139,6 +180,7 @@ def anchor_relief_cost_matrix(
 ) -> np.ndarray:
     """Return a copy of costs with a small relief around trusted anchors."""
 
+    relief = _validate_finite_nonnegative(relief, "relief")
     costs = np.asarray(cost_matrix, dtype=float).copy()
     if relief <= 0.0 or not anchor_edges:
         return costs
@@ -248,3 +290,40 @@ def state_summary_rows(
         }
         for state in states
     ]
+
+
+def _validate_probability(value: Any, field_name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{field_name} must be a finite probability in [0, 1]")
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be a finite probability in [0, 1]") from exc
+    if not np.isfinite(normalized) or not 0.0 <= normalized <= 1.0:
+        raise ValueError(f"{field_name} must be a finite probability in [0, 1]")
+    return normalized
+
+
+def _validate_finite_nonnegative(value: Any, field_name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{field_name} must be a finite non-negative value")
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be a finite non-negative value") from exc
+    if not np.isfinite(normalized) or normalized < 0.0:
+        raise ValueError(f"{field_name} must be a finite non-negative value")
+    return normalized
+
+
+def _validate_positive_int(value: Any, field_name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{field_name} must be a positive integer")
+    try:
+        normalized = operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"{field_name} must be a positive integer") from exc
+    normalized = int(normalized)
+    if normalized < 1:
+        raise ValueError(f"{field_name} must be a positive integer")
+    return normalized

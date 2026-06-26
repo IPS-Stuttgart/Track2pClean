@@ -41,6 +41,14 @@ class CentroidCandidatePrefilterConfig:
                 object.__setattr__(self, name, _positive_int(value, name=name))
         object.__setattr__(
             self,
+            "include_diagonal_when_square",
+            _strict_bool(
+                self.include_diagonal_when_square,
+                name="include_diagonal_when_square",
+            ),
+        )
+        object.__setattr__(
+            self,
             "large_cost",
             _finite_positive_float(self.large_cost, name="large_cost"),
         )
@@ -58,14 +66,24 @@ def centroid_candidate_mask(
     ----------
     reference_centroids, measurement_centroids
         Arrays with shape ``(2, n_roi)`` or ``(n_roi, 2)``. The function accepts
-        either common convention and normalizes internally.
+        either common convention and normalizes internally. Ambiguous ``(2, 2)``
+        arrays inherit the peer centroid layout when the peer layout is
+        unambiguous; otherwise they keep the historical coordinate-row layout.
     config
         Candidate policy. ``None`` returns a dense all-true mask.
     """
 
     cfg = config or CentroidCandidatePrefilterConfig()
-    reference = _as_point_matrix(reference_centroids, name="reference_centroids")
-    measurement = _as_point_matrix(measurement_centroids, name="measurement_centroids")
+    reference = _as_point_matrix(
+        reference_centroids,
+        name="reference_centroids",
+        peer_values=measurement_centroids,
+    )
+    measurement = _as_point_matrix(
+        measurement_centroids,
+        name="measurement_centroids",
+        peer_values=reference_centroids,
+    )
     distances = _pairwise_distances(reference, measurement)
     mask = np.ones(distances.shape, dtype=bool)
 
@@ -93,7 +111,7 @@ def apply_candidate_mask(
     """Return ``cost_matrix`` with non-candidates replaced by ``large_cost``."""
 
     costs = np.asarray(cost_matrix, dtype=float)
-    mask = np.asarray(candidate_mask, dtype=bool)
+    mask = _as_candidate_mask(candidate_mask)
     if costs.shape != mask.shape:
         raise ValueError(
             f"candidate_mask shape {mask.shape} does not match cost matrix shape {costs.shape}"
@@ -107,21 +125,44 @@ def candidate_edges_from_mask(
 ) -> tuple[tuple[int, int], ...]:
     """Return sparse candidate edge coordinates from a pairwise mask."""
 
-    rows, columns = np.nonzero(np.asarray(candidate_mask, dtype=bool))
+    rows, columns = np.nonzero(_as_candidate_mask(candidate_mask))
     return tuple(
         (int(row), int(column)) for row, column in zip(rows, columns, strict=True)
     )
 
 
-def _as_point_matrix(values: np.ndarray, *, name: str) -> np.ndarray:
+def _as_point_matrix(
+    values: np.ndarray,
+    *,
+    name: str,
+    peer_values: np.ndarray | None = None,
+) -> np.ndarray:
     points = np.asarray(values, dtype=float)
     if points.ndim != 2:
         raise ValueError(f"{name} must be two-dimensional")
+    if points.shape == (2, 2):
+        peer_layout = _unambiguous_centroid_layout(peer_values)
+        if peer_layout == "point_rows":
+            return np.ascontiguousarray(points, dtype=float)
+        return np.ascontiguousarray(points.T, dtype=float)
     if points.shape[0] == 2:
         points = points.T
     elif points.shape[1] != 2:
         raise ValueError(f"{name} must have shape (2, n) or (n, 2)")
     return np.ascontiguousarray(points, dtype=float)
+
+
+def _unambiguous_centroid_layout(values: np.ndarray | None) -> str | None:
+    if values is None:
+        return None
+    points = np.asarray(values)
+    if points.ndim != 2:
+        return None
+    if points.shape[1] == 2 and points.shape[0] != 2:
+        return "point_rows"
+    if points.shape[0] == 2 and points.shape[1] != 2:
+        return "coordinate_rows"
+    return None
 
 
 def _pairwise_distances(reference: np.ndarray, measurement: np.ndarray) -> np.ndarray:
@@ -161,6 +202,48 @@ def _row_top_k_mask(distances: np.ndarray, *, top_k: int) -> np.ndarray:
     return mask
 
 
+def _as_candidate_mask(candidate_mask: Any) -> np.ndarray:
+    mask = np.asarray(candidate_mask)
+    if mask.ndim != 2:
+        raise ValueError("candidate_mask must be a two-dimensional boolean or binary mask")
+    if mask.dtype == np.dtype(bool):
+        return np.ascontiguousarray(mask, dtype=bool)
+    if mask.dtype.kind in {"i", "u", "f"}:
+        numeric_mask = np.asarray(mask, dtype=float)
+        if not _is_binary_numeric_mask(numeric_mask):
+            raise ValueError("candidate_mask must contain only boolean or binary values")
+        return np.ascontiguousarray(numeric_mask == 1.0, dtype=bool)
+    if mask.dtype.kind == "O":
+        normalized = np.empty(mask.shape, dtype=bool)
+        for index, value in np.ndenumerate(mask):
+            normalized[index] = _candidate_mask_scalar_to_bool(value)
+        return np.ascontiguousarray(normalized, dtype=bool)
+    raise ValueError("candidate_mask must contain only boolean or binary values")
+
+
+def _is_binary_numeric_mask(mask: np.ndarray) -> bool:
+    return bool(
+        np.all(np.isfinite(mask))
+        and np.all((mask == 0.0) | (mask == 1.0))
+    )
+
+
+def _candidate_mask_scalar_to_bool(value: Any) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (int, np.integer)):
+        integer_value = int(value)
+        if integer_value in {0, 1}:
+            return bool(integer_value)
+        raise ValueError("candidate_mask must contain only boolean or binary values")
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if np.isfinite(numeric_value) and numeric_value in {0.0, 1.0}:
+            return bool(numeric_value)
+        raise ValueError("candidate_mask must contain only boolean or binary values")
+    raise ValueError("candidate_mask must contain only boolean or binary values")
+
+
 def _positive_int(value: Any, *, name: str) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be an integer")
@@ -187,6 +270,12 @@ def _positive_int(value: Any, *, name: str) -> int:
     if integer_value < 1:
         raise ValueError(f"{name} must be at least 1")
     return int(integer_value)
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:

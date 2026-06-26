@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import Any, TypeAlias, cast
 
 import numpy as np
+import pytest
 from bayescatrack.association.calibrated_costs import (
     DEFAULT_ASSOCIATION_FEATURES,
     pairwise_feature_tensor,
@@ -87,6 +88,24 @@ def test_pairwise_mahalanobis_centroid_distances_use_roi_covariances() -> None:
     np.testing.assert_allclose(distances[0, 0], np.sqrt(2.0))
 
 
+@pytest.mark.parametrize("regularization", [True, np.nan, np.inf, -1.0])
+def test_pairwise_mahalanobis_distances_reject_invalid_regularization(
+    regularization: Any,
+) -> None:
+    reference = _plane_from_rectangles([(1, 1, 3, 3)])
+    measurement = _plane_from_rectangles([(1, 2, 3, 4)])
+
+    with pytest.raises(
+        ValueError,
+        match="regularization must be a finite non-negative value",
+    ):
+        _mahalanobis_distances(
+            reference,
+            measurement,
+            regularization=regularization,
+        )
+
+
 def test_pairwise_cost_components_expose_mahalanobis_feature() -> None:
     reference = _plane_from_rectangles([(1, 1, 3, 3)])
     measurement = _plane_from_rectangles([(1, 2, 3, 4)])
@@ -130,6 +149,46 @@ def test_mahalanobis_weight_contributes_to_pairwise_cost() -> None:
     )
 
     np.testing.assert_allclose(weighted_cost - base_cost, np.array([[1.0]]))
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        (
+            {"mahalanobis_weight": True},
+            "mahalanobis_weight must be a finite non-negative value",
+        ),
+        (
+            {"mahalanobis_weight": np.nan},
+            "mahalanobis_weight must be a finite non-negative value",
+        ),
+        (
+            {"mahalanobis_weight": np.inf},
+            "mahalanobis_weight must be a finite non-negative value",
+        ),
+        (
+            {"mahalanobis_regularization": True},
+            "mahalanobis_regularization must be a finite non-negative value",
+        ),
+        (
+            {"mahalanobis_regularization": np.nan},
+            "mahalanobis_regularization must be a finite non-negative value",
+        ),
+        (
+            {"mahalanobis_regularization": -1.0},
+            "mahalanobis_regularization must be a finite non-negative value",
+        ),
+    ],
+)
+def test_mahalanobis_pairwise_cost_rejects_invalid_controls(
+    kwargs: dict[str, Any],
+    match: str,
+) -> None:
+    reference = _plane_from_rectangles([(1, 1, 3, 3)])
+    measurement = _plane_from_rectangles([(1, 2, 3, 4)])
+
+    with pytest.raises(ValueError, match=match):
+        _build_cost_matrix(reference, measurement, **kwargs)
 
 
 def test_default_association_features_include_mahalanobis_centroid_distance() -> None:

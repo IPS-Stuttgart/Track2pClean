@@ -345,9 +345,15 @@ def _as_cost_matrix(values: Any) -> np.ndarray:
 
 
 def _validated_float(value: Any, *, name: str) -> float:
-    if isinstance(value, bool):
+    value_array = np.asarray(value)
+    if value_array.shape == ():
+        value = value_array.item()
+    if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite")
-    numeric = float(value)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be finite") from exc
     if not np.isfinite(numeric):
         raise ValueError(f"{name} must be finite")
     return numeric

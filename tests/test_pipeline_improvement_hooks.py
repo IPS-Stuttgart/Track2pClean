@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.association.absence_model import apply_absence_adjustment
 from bayescatrack.association.consensus_priors import (
+    ConsensusPriorConfig,
     apply_consensus_edge_priors,
     edge_votes_from_tracks,
 )
@@ -75,6 +77,39 @@ def test_consensus_prior_relieves_edges_with_enough_votes():
 
     assert adjusted[(0, 1)][0, 1] == 1.5
     assert adjusted[(0, 1)][0, 0] == 1.0
+
+
+def test_consensus_prior_config_accepts_numeric_strings_and_csv_variants():
+    config = ConsensusPriorConfig(
+        variant_costs="registered-iou, roi-aware",
+        min_votes="2",
+        relief="0.25",
+        max_relief="0.75",
+        large_cost="100.0",
+    )
+
+    assert config.variant_costs == ("registered-iou", "roi-aware")
+    assert config.min_votes == 2
+    assert config.relief == 0.25
+    assert config.max_relief == 0.75
+    assert config.large_cost == 100.0
+
+
+def test_consensus_prior_config_rejects_ambiguous_scalar_controls():
+    invalid_kwargs = (
+        {"min_votes": True},
+        {"min_votes": 1.5},
+        {"relief": False},
+        {"relief": float("nan")},
+        {"max_relief": True},
+        {"large_cost": False},
+        {"large_cost": 0.0},
+        {"ignore_variant_failures": 1},
+    )
+
+    for kwargs in invalid_kwargs:
+        with pytest.raises(ValueError):
+            ConsensusPriorConfig(**kwargs)
 
 
 def test_consensus_votes_ignore_missing_negative_roi_entries():

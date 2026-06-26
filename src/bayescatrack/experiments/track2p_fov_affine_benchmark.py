@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
+import operator
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -57,10 +59,17 @@ def _enable_fov_affine_choice(parser: Any) -> None:
     raise RuntimeError("Could not find --transform-type action")
 
 
+def _soft_iou_radius_arg(value: str) -> int:
+    try:
+        return _nonnegative_int(value, name="soft_iou_radius")
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 def _add_soft_iou_options(parser: Any) -> None:
     parser.add_argument(
         "--soft-iou-radius",
-        type=int,
+        type=_soft_iou_radius_arg,
         default=0,
         help=(
             "Optional dilation radius in pixels for soft-overlap IoU costs. "
@@ -76,7 +85,10 @@ def _soft_iou_pairwise_cost_matrix(
     other: CalciumPlaneData,
     **kwargs: Any,
 ) -> np.ndarray | tuple[np.ndarray, dict[str, np.ndarray]]:
-    soft_iou_radius = int(kwargs.pop("soft_iou_radius", 0) or 0)
+    soft_iou_radius = _nonnegative_int(
+        kwargs.pop("soft_iou_radius", 0),
+        name="soft_iou_radius",
+    )
     iou_weight = float(kwargs.get("iou_weight", 6.0))
     if iou_weight <= 0.0:
         return original_method(self, other, **kwargs)
@@ -259,6 +271,26 @@ def _dilate_mask_stack(masks: np.ndarray, *, radius: int) -> np.ndarray:
     return result
 
 
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        integer_value = operator.index(value)
+    except TypeError:
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        integer_value = int(numeric_value)
+    if integer_value < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return int(integer_value)
+
+
 def _ensure_finite_cost_matrix(
     cost_matrix: np.ndarray, *, large_cost: float
 ) -> np.ndarray:
@@ -291,9 +323,13 @@ def main(argv: list[str] | None = None) -> int:
     _add_soft_iou_options(parser)
     args = parser.parse_args(argv)
     config = _config_from_args(args)
-    if args.soft_iou_radius > 0:
+    soft_iou_radius = _nonnegative_int(
+        args.soft_iou_radius,
+        name="soft_iou_radius",
+    )
+    if soft_iou_radius > 0:
         pairwise_cost_kwargs = dict(config.pairwise_cost_kwargs or {})
-        pairwise_cost_kwargs["soft_iou_radius"] = int(args.soft_iou_radius)
+        pairwise_cost_kwargs["soft_iou_radius"] = soft_iou_radius
         config = replace(config, pairwise_cost_kwargs=pairwise_cost_kwargs)
 
     import bayescatrack.association.pyrecest_global_assignment as assignment
@@ -324,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
     rows = [result.to_dict() for result in results]
     for row in rows:
         row["registration_wrapper"] = "fov-affine"
-        row["soft_iou_radius"] = int(args.soft_iou_radius)
+        row["soft_iou_radius"] = soft_iou_radius
     if args.output is not None:
         write_results(rows, Path(args.output), args.format)
     else:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 from typing import Any
@@ -41,8 +42,7 @@ def consensus_edge_counter(
 ) -> Counter[TrackEdge]:
     """Return edges supported by at least ``min_votes`` model variants."""
 
-    if min_votes <= 0:
-        raise ValueError("min_votes must be positive")
+    min_votes = _coerce_positive_integer(min_votes, name="min_votes")
     vote_counter: Counter[TrackEdge] = Counter()
     for matrix in track_matrices:
         vote_counter.update(
@@ -65,6 +65,10 @@ def consensus_track_rows(
     """Stitch consensus consecutive edges into a track matrix."""
 
     session_names = tuple(str(name) for name in session_names)
+    start_session_index = _coerce_integer_value(
+        start_session_index,
+        name="start_session_index",
+    )
     consecutive_pairs = tuple((i, i + 1) for i in range(max(0, len(session_names) - 1)))
     edges = consensus_edge_counter(
         track_matrices,
@@ -145,6 +149,10 @@ def _one_to_one_edge_mapping(edges: Sequence[TrackEdge] | Any) -> dict[int, int]
 def _start_indices_from_matrices(
     track_matrices: Sequence[Any], *, start_session_index: int
 ) -> tuple[int, ...]:
+    start_session_index = _coerce_integer_value(
+        start_session_index,
+        name="start_session_index",
+    )
     values: set[int] = set()
     for matrix_like in track_matrices:
         matrix = normalize_track_matrix(matrix_like)
@@ -162,11 +170,44 @@ def _session_pairs(
 ) -> tuple[tuple[int, int], ...]:
     if pairs is None:
         return tuple((i, i + 1) for i in range(max(0, n_sessions - 1)))
-    normalized = tuple((int(a), int(b)) for a, b in pairs)
+    normalized = tuple(
+        (
+            _coerce_integer_value(a, name="session_pairs"),
+            _coerce_integer_value(b, name="session_pairs"),
+        )
+        for a, b in pairs
+    )
     for a, b in normalized:
         if a < 0 or b >= n_sessions or a >= b:
             raise ValueError("session_pairs must be forward pairs within matrix width")
     return normalized
+
+
+def _coerce_positive_integer(value: object, *, name: str) -> int:
+    normalized = _coerce_integer_value(value, name=name)
+    if normalized <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return normalized
+
+
+def _coerce_integer_value(value: object, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer, not a boolean")
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    if isinstance(value, (float, np.floating)):
+        if np.isfinite(value) and float(value).is_integer():
+            return int(value)
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, str):
+        try:
+            return int(value.strip(), 10)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+    try:
+        return int(operator.index(value))
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
 
 
 __all__ = (

@@ -35,16 +35,45 @@ def load_suite2p_plane(plane_dir: str | Path, *args: Any, **kwargs: Any) -> Any:
 
     original = _original_load_suite2p_plane()
     if not args:
+        include_non_cells = _strict_bool(
+            kwargs.get("include_non_cells", False), name="include_non_cells"
+        )
+        cell_probability_threshold = _finite_probability(
+            kwargs.get("cell_probability_threshold", 0.5),
+            name="cell_probability_threshold",
+        )
+        exclude_overlapping_pixels = _strict_bool(
+            kwargs.get("exclude_overlapping_pixels", True),
+            name="exclude_overlapping_pixels",
+        )
+        weighted_masks = _strict_bool(
+            kwargs.get("weighted_masks", False), name="weighted_masks"
+        )
+        load_traces = _strict_python_bool(
+            kwargs.get("load_traces", True), name="load_traces"
+        )
+        load_spike_traces = _strict_python_bool(
+            kwargs.get("load_spike_traces", True), name="load_spike_traces"
+        )
+        load_neuropil_traces = _strict_python_bool(
+            kwargs.get("load_neuropil_traces", False), name="load_neuropil_traces"
+        )
         _validate_suite2p_stat_shapes(
             plane_dir,
-            include_non_cells=bool(kwargs.get("include_non_cells", False)),
-            cell_probability_threshold=float(
-                kwargs.get("cell_probability_threshold", 0.5)
-            ),
-            exclude_overlapping_pixels=bool(
-                kwargs.get("exclude_overlapping_pixels", True)
-            ),
+            include_non_cells=include_non_cells,
+            cell_probability_threshold=cell_probability_threshold,
+            exclude_overlapping_pixels=exclude_overlapping_pixels,
         )
+        kwargs = {
+            **kwargs,
+            "include_non_cells": include_non_cells,
+            "cell_probability_threshold": cell_probability_threshold,
+            "exclude_overlapping_pixels": exclude_overlapping_pixels,
+            "weighted_masks": weighted_masks,
+            "load_traces": load_traces,
+            "load_spike_traces": load_spike_traces,
+            "load_neuropil_traces": load_neuropil_traces,
+        }
     return original(plane_dir, *args, **kwargs)
 
 
@@ -115,8 +144,8 @@ def _validate_one_suite2p_roi_stat(
     *,
     exclude_overlapping_pixels: bool,
 ) -> None:
-    ypix = np.asarray(roi_stat["ypix"])
-    xpix = np.asarray(roi_stat["xpix"])
+    ypix = _validate_integer_pixel_coordinate_array(roi_stat["ypix"], name="ypix")
+    xpix = _validate_integer_pixel_coordinate_array(roi_stat["xpix"], name="xpix")
     if ypix.shape != xpix.shape:
         raise ValueError("Suite2p ROI ypix/xpix arrays must have matching shapes")
 
@@ -131,6 +160,37 @@ def _validate_one_suite2p_roi_stat(
             raise ValueError("Suite2p ROI overlap shape must match ypix/xpix shape")
 
 
+def _validate_integer_pixel_coordinate_array(value: Any, *, name: str) -> np.ndarray:
+    array = np.asarray(value)
+    if _contains_ambiguous_pixel_coordinate_tokens(array):
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        )
+    if np.issubdtype(array.dtype, np.integer):
+        return array
+
+    try:
+        numeric = np.asarray(array, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        ) from exc
+
+    if not np.all(np.isfinite(numeric)) or not np.all(numeric == np.floor(numeric)):
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        )
+    return numeric.astype(int, copy=False)
+
+
+def _contains_ambiguous_pixel_coordinate_tokens(array: np.ndarray) -> bool:
+    if np.issubdtype(array.dtype, np.bool_) or array.dtype.kind in {"S", "U"}:
+        return True
+    if array.dtype != object:
+        return False
+    return any(isinstance(item, (bool, np.bool_, str, bytes)) for item in array.ravel())
+
+
 def _original_load_suite2p_plane() -> Callable[..., Any]:
     original = getattr(
         load_suite2p_plane,
@@ -140,6 +200,30 @@ def _original_load_suite2p_plane() -> Callable[..., Any]:
     if original is None:
         raise RuntimeError("Suite2p stat validation wrapper is not installed")
     return original
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
+
+
+def _strict_python_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _finite_probability(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite probability")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite probability") from exc
+    if not np.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must be a finite probability")
+    return numeric
 
 
 __all__ = ["install_suite2p_stat_validation", "load_suite2p_plane"]
