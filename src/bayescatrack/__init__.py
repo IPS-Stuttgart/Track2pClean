@@ -94,6 +94,9 @@ from ._session_match_validation import (
 from ._shifted_overlap_validation import (
     install_shifted_overlap_scalar_validation as _install_shifted_overlap_scalar_validation,
 )
+from ._soft_overlap_numeric_validation import (
+    install_soft_overlap_numeric_validation as _install_soft_overlap_numeric_validation,
+)
 from ._strict_config_validation import (
     install_strict_config_validation as _install_strict_config_validation,
 )
@@ -160,6 +163,7 @@ _install_confidence_ordered_strict_gap_cli(_cli)
 _install_matching_layout_validation(_matching)
 _install_matching_max_cost_validation(_matching)
 _install_soft_overlap_costs()
+_install_soft_overlap_numeric_validation()
 _install_shifted_overlap_scalar_validation()
 _install_pyrecest_shifted_validation()
 _install_global_cost_preset_validation()
