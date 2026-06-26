@@ -29,6 +29,13 @@ def _session(name, points_xy, roi_indices):
     )
 
 
+def _two_session_subject():
+    return [
+        _session("s0", [(3, 2)], [10]),
+        _session("s1", [(4, 2)], [20]),
+    ]
+
+
 @pytest.mark.parametrize(
     "tracks",
     [
@@ -37,13 +44,27 @@ def _session(name, points_xy, roi_indices):
     ],
 )
 def test_growth_rejects_unknown_positive_roi_ids(tracks):
-    sessions = [
-        _session("s0", [(3, 2)], [10]),
-        _session("s1", [(4, 2)], [20]),
-    ]
+    sessions = _two_session_subject()
 
     with pytest.raises(ValueError, match="not present in the loaded session"):
         radial_displacement_rows(sessions, tracks, center=(2, 2))
 
     with pytest.raises(ValueError, match="not present in the loaded session"):
+        affine_growth_summaries(sessions, tracks)
+
+
+@pytest.mark.parametrize(
+    "tracks",
+    [
+        np.asarray([["not-a-roi", 20]], dtype=object),
+        np.asarray([[10, "not-a-roi"]], dtype=object),
+    ],
+)
+def test_growth_rejects_malformed_roi_ids_in_track_matrix(tracks):
+    sessions = _two_session_subject()
+
+    with pytest.raises(ValueError, match="ROI index must be integer-like"):
+        radial_displacement_rows(sessions, tracks, center=(2, 2))
+
+    with pytest.raises(ValueError, match="ROI index must be integer-like"):
         affine_growth_summaries(sessions, tracks)
