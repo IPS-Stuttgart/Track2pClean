@@ -42,6 +42,10 @@ def test_full_mht_runner_kwargs_keep_mht_gap_separate_from_track2p_config() -> N
             "track2p_prior_veto_penalty": 20.0,
             "track2p_prior_veto_min_growth_residual_mahalanobis": 2.5,
             "track2p_prior_veto_max_registered_iou": 0.40,
+            "track2p_prior_survival_weight": 1.75,
+            "track2p_prior_survival_min_anchor_registered_iou": 0.82,
+            "track2p_prior_survival_min_examples_per_class": 3,
+            "track2p_prior_survival_score_clip": 5.0,
         },
         "track2p-policy-full-mht",
     )
@@ -55,11 +59,17 @@ def test_full_mht_runner_kwargs_keep_mht_gap_separate_from_track2p_config() -> N
     assert kwargs["track2p_prior_veto_penalty"] == 20.0
     assert kwargs["track2p_prior_veto_min_growth_residual_mahalanobis"] == 2.5
     assert kwargs["track2p_prior_veto_max_registered_iou"] == 0.40
+    assert kwargs["track2p_prior_survival_weight"] == 1.75
+    assert kwargs["track2p_prior_survival_min_anchor_registered_iou"] == 0.82
+    assert kwargs["track2p_prior_survival_min_examples_per_class"] == 3
+    assert kwargs["track2p_prior_survival_score_clip"] == 5.0
     assert "cell_probability_threshold" not in kwargs
     assert "max_gap" not in kwargs
 
 
-def test_full_mht_manifest_dispatches_prior_veto_options(tmp_path, monkeypatch) -> None:
+def test_full_mht_manifest_dispatches_prior_veto_and_survival_options(
+    tmp_path, monkeypatch
+) -> None:
     pytest.importorskip("pyrecest")
     from bayescatrack.experiments import track2p_policy_full_mht_benchmark as full_mht
 
@@ -97,7 +107,7 @@ def test_full_mht_manifest_dispatches_prior_veto_options(tmp_path, monkeypatch) 
             },
             "runs": [
                 {
-                    "name": "FullMHTPriorVetoScaled",
+                    "name": "FullMHTPriorSurvival",
                     "runner": "track2p-full-mht",
                     "output": "results/full_mht.csv",
                     "beam_width": 4,
@@ -130,6 +140,22 @@ def test_full_mht_manifest_dispatches_prior_veto_options(tmp_path, monkeypatch) 
                     "track2p_prior_veto_require_terminal_edge": True,
                     "track2p_prior_veto_require_last_session_edge": True,
                     "track2p_prior_veto_require_complete_component": True,
+                    "track2p_prior_survival_weight": 1.75,
+                    "track2p_prior_survival_min_anchor_registered_iou": 0.82,
+                    "track2p_prior_survival_min_anchor_shifted_iou": 0.72,
+                    "track2p_prior_survival_max_anchor_growth_mahalanobis": 1.25,
+                    "track2p_prior_survival_max_anchor_growth_residual": 1.10,
+                    "track2p_prior_survival_min_anchor_cell_probability": 0.84,
+                    "track2p_prior_survival_max_anchor_rank": 1,
+                    "track2p_prior_survival_max_background_registered_iou": 0.45,
+                    "track2p_prior_survival_max_background_shifted_iou": 0.55,
+                    "track2p_prior_survival_min_background_growth_mahalanobis": 2.2,
+                    "track2p_prior_survival_min_background_growth_residual": 2.0,
+                    "track2p_prior_survival_max_background_cell_probability": 0.70,
+                    "track2p_prior_survival_min_examples_per_class": 3,
+                    "track2p_prior_survival_min_feature_scale": 0.07,
+                    "track2p_prior_survival_per_feature_clip": 3.5,
+                    "track2p_prior_survival_score_clip": 5.0,
                 }
             ],
         },
@@ -137,7 +163,7 @@ def test_full_mht_manifest_dispatches_prior_veto_options(tmp_path, monkeypatch) 
 
     result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
-    assert [run.name for run in result.runs] == ["FullMHTPriorVetoScaled"]
+    assert [run.name for run in result.runs] == ["FullMHTPriorSurvival"]
     rows = _read_csv_rows(tmp_path / "results" / "full_mht.csv")
     assert rows[0]["subject"] == "jm_fake"
     assert captured["config"].method == "global-assignment"
@@ -146,6 +172,7 @@ def test_full_mht_manifest_dispatches_prior_veto_options(tmp_path, monkeypatch) 
     assert captured["iou_distance_threshold"] == 12.0
     assert captured["transform_type"] == "affine"
     assert captured["cell_probability_threshold"] == 0.5
+    assert getattr(full_mht, "_bayescatrack_prior_survival_scoring", False)
     mht_config = captured["mht_config"]
     assert mht_config.beam_width == 4
     assert mht_config.scan_hypotheses == 4
@@ -161,3 +188,10 @@ def test_full_mht_manifest_dispatches_prior_veto_options(tmp_path, monkeypatch) 
     assert mht_config.track2p_prior_veto_min_registered_iou == 0.35
     assert mht_config.track2p_prior_veto_max_registered_iou == 0.40
     assert mht_config.track2p_prior_veto_max_min_cell_probability == 0.65
+    assert getattr(mht_config, "track2p_prior_survival_weight") == 1.75
+    assert getattr(
+        mht_config, "track2p_prior_survival_min_anchor_registered_iou"
+    ) == 0.82
+    assert getattr(mht_config, "track2p_prior_survival_max_anchor_rank") == 1
+    assert getattr(mht_config, "track2p_prior_survival_min_examples_per_class") == 3
+    assert getattr(mht_config, "track2p_prior_survival_score_clip") == 5.0
