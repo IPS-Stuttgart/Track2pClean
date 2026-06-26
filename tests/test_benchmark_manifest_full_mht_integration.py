@@ -23,7 +23,7 @@ def _read_csv_rows(path):
         return list(csv.DictReader(handle))
 
 
-def test_full_mht_canonical_manifest_keeps_greedy_beam_ablation() -> None:
+def test_full_mht_canonical_manifest_keeps_candidate_greedy_beam_ablations() -> None:
     manifest_path = (
         Path(__file__).resolve().parents[1]
         / "benchmarks"
@@ -37,7 +37,9 @@ def test_full_mht_canonical_manifest_keeps_greedy_beam_ablation() -> None:
         "FullMHTPrior2",
         "FullMHTGreedyPrior2",
         "FullMHTPriorVetoScaled",
+        "FullMHTGreedyPriorVetoScaled",
         "FullMHTPriorSurvival",
+        "FullMHTGreedyPriorSurvival",
     ]
     greedy = runs["FullMHTGreedyPrior2"]
     beam = runs["FullMHTPrior2"]
@@ -49,8 +51,45 @@ def test_full_mht_canonical_manifest_keeps_greedy_beam_ablation() -> None:
     assert greedy["track2p_non_prior_penalty"] == beam["track2p_non_prior_penalty"]
     assert greedy["track2p_prior_miss_penalty"] == beam["track2p_prior_miss_penalty"]
 
+    greedy_veto = runs["FullMHTGreedyPriorVetoScaled"]
+    veto = runs["FullMHTPriorVetoScaled"]
+    assert greedy_veto["runner"] == "track2p-full-mht"
+    assert greedy_veto["beam_width"] == 1
+    assert greedy_veto["identity_diverse_beam"] is False
+    assert greedy_veto["scan_hypotheses"] == veto["scan_hypotheses"]
+    assert greedy_veto["edge_top_k"] == veto["edge_top_k"]
+    assert greedy_veto["track2p_prior_veto_penalty"] == veto[
+        "track2p_prior_veto_penalty"
+    ]
+    assert greedy_veto["track2p_prior_veto_min_registered_iou"] == veto[
+        "track2p_prior_veto_min_registered_iou"
+    ]
+    assert greedy_veto["track2p_prior_veto_max_registered_iou"] == veto[
+        "track2p_prior_veto_max_registered_iou"
+    ]
+
+    greedy_survival = runs["FullMHTGreedyPriorSurvival"]
+    survival = runs["FullMHTPriorSurvival"]
+    assert greedy_survival["runner"] == "track2p-full-mht"
+    assert greedy_survival["beam_width"] == 1
+    assert greedy_survival["identity_diverse_beam"] is False
+    assert greedy_survival["scan_hypotheses"] == survival["scan_hypotheses"]
+    assert greedy_survival["edge_top_k"] == survival["edge_top_k"]
+    assert greedy_survival["track2p_prior_survival_weight"] == survival[
+        "track2p_prior_survival_weight"
+    ]
+    assert greedy_survival["track2p_prior_survival_score_clip"] == survival[
+        "track2p_prior_survival_score_clip"
+    ]
+
     for comparison in manifest["comparisons"]:
         assert comparison["inputs"]["FullMHTGreedyPrior2"] == "FullMHTGreedyPrior2"
+        assert comparison["inputs"]["FullMHTGreedyPriorVetoScaled"] == (
+            "FullMHTGreedyPriorVetoScaled"
+        )
+        assert comparison["inputs"]["FullMHTGreedyPriorSurvival"] == (
+            "FullMHTGreedyPriorSurvival"
+        )
 
 
 def test_full_mht_terminal_completion_probe_manifest_is_frozen() -> None:
