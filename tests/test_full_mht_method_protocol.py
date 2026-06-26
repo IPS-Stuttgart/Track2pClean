@@ -32,6 +32,8 @@ def test_full_mht_method_protocol_names_required_method_invariants() -> None:
         "scan_pruning_stable_complete_history_gain",
         "full_mht_identity_history_scan_pruning_promotion_gate.py",
         "promotable_core_method",
+        "complete_core_evidence",
+        "inconsistent_core_evidence",
         "terminal_completion_stable_gain",
         "bounded_exposure",
         "stable_plateau",
