@@ -73,3 +73,58 @@ def test_split_tracks_at_issues_preserves_roi_zero_with_negative_fill_value():
     split_rows = split_tracks_at_issues(track_rows, issues, fill_value=-1)
 
     npt.assert_array_equal(split_rows, np.array([[0, -1, -1], [-1, 1, 2]], dtype=int))
+
+
+def _geometry_issue(*, track_index: object = 0, session_index: object = 1) -> TrackGeometryIssue:
+    return TrackGeometryIssue(
+        track_index=track_index,  # type: ignore[arg-type]
+        session_index=session_index,  # type: ignore[arg-type]
+        roi_index=1,
+        residual=10.0,
+        robust_z=4.0,
+        suggested_action="split_or_relink",
+    )
+
+
+@pytest.mark.parametrize("bad_track_index", [True, np.bool_(False), "0", b"0", 0.5, np.nan])
+def test_split_tracks_at_issues_rejects_malformed_issue_track_index(bad_track_index):
+    track_rows = np.array([[0, 1, 2]], dtype=int)
+
+    with pytest.raises(ValueError, match=r"issue\.track_index must be an integer"):
+        split_tracks_at_issues(
+            track_rows,
+            [_geometry_issue(track_index=bad_track_index)],
+        )
+
+
+@pytest.mark.parametrize("bad_session_index", [True, np.bool_(False), "1", b"1", 1.5, np.nan])
+def test_split_tracks_at_issues_rejects_malformed_issue_session_index(bad_session_index):
+    track_rows = np.array([[0, 1, 2]], dtype=int)
+
+    with pytest.raises(ValueError, match=r"issue\.session_index must be an integer"):
+        split_tracks_at_issues(
+            track_rows,
+            [_geometry_issue(session_index=bad_session_index)],
+        )
+
+
+@pytest.mark.parametrize("bad_track_index", [-1, 1])
+def test_split_tracks_at_issues_rejects_out_of_bounds_issue_track_index(bad_track_index):
+    track_rows = np.array([[0, 1, 2]], dtype=int)
+
+    with pytest.raises(IndexError, match=r"issue\.track_index .* out of bounds"):
+        split_tracks_at_issues(
+            track_rows,
+            [_geometry_issue(track_index=bad_track_index)],
+        )
+
+
+@pytest.mark.parametrize("bad_session_index", [-1, 3])
+def test_split_tracks_at_issues_rejects_out_of_bounds_issue_session_index(bad_session_index):
+    track_rows = np.array([[0, 1, 2]], dtype=int)
+
+    with pytest.raises(IndexError, match=r"issue\.session_index .* out of bounds"):
+        split_tracks_at_issues(
+            track_rows,
+            [_geometry_issue(session_index=bad_session_index)],
+        )
