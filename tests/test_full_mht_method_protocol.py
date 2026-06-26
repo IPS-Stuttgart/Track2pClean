@@ -44,3 +44,24 @@ def test_full_mht_method_protocol_keeps_non_promotion_warnings() -> None:
 
     for warning in warnings:
         assert warning in protocol
+
+
+def test_full_mht_method_protocol_supporting_docs_exist() -> None:
+    root = Path(__file__).resolve().parents[1]
+    protocol = (root / "docs" / "full_mht_method_protocol.md").read_text(encoding="utf-8")
+
+    required_docs = (
+        "docs/full_mht_method_invariant_checklist.md",
+        "docs/full_mht_prior_survival_validation.md",
+        "docs/full_mht_no_prior_continuation_likelihood.md",
+        "docs/full_mht_terminal_completion_objective.md",
+        "docs/full_mht_growth_history_prediction.md",
+        "docs/full_mht_label_free_exposure_audit.md",
+        "docs/full_mht_manifest_integration_notes.md",
+    )
+
+    for doc in required_docs:
+        assert doc in protocol
+        assert (root / doc).is_file()
+
+    assert "docs/full_mht_growth_history.md" not in protocol
