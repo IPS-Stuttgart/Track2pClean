@@ -56,26 +56,34 @@ Required rows:
 | --- | --- |
 | `Track2p` | original proposal baseline |
 | `FullMHTPrior2` | FullMHT with strong Track2p proposal prior |
-| `FullMHTGreedyPrior2` | greedy beam-width-1 ablation over the same scan candidates |
+| `FullMHTGreedyPrior2` | greedy beam-width-1 ablation for the proposal-prior control |
 | `FullMHTPriorVetoScaled` | fixed hand-gated prior-survival hazard |
+| `FullMHTGreedyPriorVetoScaled` | greedy beam-width-1 ablation for the fixed hazard |
 | `FullMHTPriorSurvival` | calibrated label-free prior-survival likelihood |
+| `FullMHTGreedyPriorSurvival` | greedy beam-width-1 ablation for the calibrated survival row |
 
 Promotion requires both of these manifest-decision conditions:
 
 ```text
-history_search_result = beam_complete_history_advantage
+history_search_result = prior_survival_complete_history_advantage
 prior_survival_result = survival_improves_fixed_veto or survival_ties_fixed_veto
 ```
 
-`beam_complete_history_advantage` means the full beam improves complete-track F1
-over `FullMHTGreedyPrior2` without pairwise-F1 loss. A pairwise-only beam gain is
-not evidence for the paper's complete-identity claim and must be recorded as
-exploratory.
+`prior_survival_complete_history_advantage` means the full calibrated-survival
+beam improves complete-track F1 over `FullMHTGreedyPriorSurvival` without
+pairwise-F1 loss. `fixed_veto_complete_history_advantage` is useful interim
+evidence for the fixed-hazard row, but it does not by itself promote the
+calibrated prior-survival candidate. A pairwise-only beam gain is not evidence for
+the paper's complete-identity claim and must be recorded as exploratory.
 
 The decision artifact reports:
 
-- whether the beam row gives a complete-track advantage, ties the greedy row,
-  regresses against it, or improves only pairwise F1;
+- whether the base proposal-prior beam gives a complete-track advantage, ties its
+  greedy row, regresses against it, or improves only pairwise F1;
+- whether the fixed prior-veto beam gives a complete-track advantage over its own
+  greedy row;
+- whether the calibrated prior-survival beam gives a complete-track advantage
+  over its own greedy row;
 - whether `FullMHTPriorSurvival` improves, ties, or falls below
   `FullMHTPriorVetoScaled`;
 - the pairwise/complete-track micro deltas used for the decision.
