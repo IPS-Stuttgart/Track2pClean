@@ -26,6 +26,7 @@ and growth-aware prediction.
 from __future__ import annotations
 
 import argparse
+import heapq
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -374,6 +375,21 @@ def _run_subject_full_mht(
                     ),
                     "scan_growth_model_type": str(
                         last.get("growth_model_type", "")
+                    ),
+                    "scan_assignment_components": int(
+                        last.get("scan_assignment_components", 0)
+                    ),
+                    "scan_assignment_decomposed": int(
+                        last.get("scan_assignment_decomposed", 0)
+                    ),
+                    "scan_assignment_solver_calls": int(
+                        last.get("scan_assignment_solver_calls", 0)
+                    ),
+                    "scan_assignment_largest_component_rows": int(
+                        last.get("scan_assignment_largest_component_rows", 0)
+                    ),
+                    "scan_assignment_largest_component_cols": int(
+                        last.get("scan_assignment_largest_component_cols", 0)
                     ),
                     "beam_width": int(mht_config.beam_width),
                     "scan_hypotheses": int(mht_config.scan_hypotheses),
@@ -1445,6 +1461,7 @@ def _expand_hypothesis_scan(
         )
     )
     if not finite_target_rois:
+        assignment_diagnostics = _empty_assignment_diagnostics(len(active_sources))
         carried = tracks.copy()
         carried[active_rows, next_session] = -1
         return [
@@ -1467,6 +1484,7 @@ def _expand_hypothesis_scan(
                         "max_gap_length": int(max_gap_length),
                         "scan_candidates": 0,
                         **matrix_diagnostics,
+                        **assignment_diagnostics,
                     },
                 ),
             )
@@ -1532,6 +1550,7 @@ def _expand_hypothesis_scan(
         cost_matrix[int(row_pos), int(candidate_col_by_roi[int(target_roi)])] = -float(score)
 
     if not np.isfinite(cost_matrix).any():
+        assignment_diagnostics = _empty_assignment_diagnostics(len(active_sources))
         carried = tracks.copy()
         carried[active_rows, next_session] = -1
         return [
@@ -1554,12 +1573,13 @@ def _expand_hypothesis_scan(
                         "max_gap_length": int(max_gap_length),
                         "scan_candidates": int(candidate_count),
                         **matrix_diagnostics,
+                        **assignment_diagnostics,
                     },
                 ),
             )
         ]
 
-    solutions = murty_k_best_assignments(
+    solutions, assignment_diagnostics = _scan_assignment_solutions(
         cost_matrix,
         k=max(1, int(config.scan_hypotheses)),
         row_non_assignment_costs=row_non_assignment_costs,
@@ -1649,10 +1669,220 @@ def _expand_hypothesis_scan(
                         "max_gap_length": int(max_gap_length),
                         "scan_candidates": int(candidate_count),
                         **matrix_diagnostics,
+                        **assignment_diagnostics,
                     },
                 ),
             )
         )
+    return output
+
+
+def _empty_assignment_diagnostics(active_track_count: int) -> dict[str, int]:
+    return {
+        "scan_assignment_components": int(active_track_count),
+        "scan_assignment_decomposed": 0,
+        "scan_assignment_solver_calls": 0,
+        "scan_assignment_largest_component_rows": int(active_track_count > 0),
+        "scan_assignment_largest_component_cols": 0,
+    }
+
+
+def _scan_assignment_solutions(
+    cost_matrix: np.ndarray,
+    *,
+    k: int,
+    row_non_assignment_costs: np.ndarray,
+    col_non_assignment_costs: np.ndarray,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Return scan-level assignment hypotheses, decomposing disconnected graphs."""
+
+    costs = np.asarray(cost_matrix, dtype=float)
+    row_costs = np.asarray(row_non_assignment_costs, dtype=float)
+    col_costs = np.asarray(col_non_assignment_costs, dtype=float)
+    components, isolated_rows = _assignment_components(costs)
+    component_count = int(len(components) + len(isolated_rows))
+    largest_rows = max(
+        [len(rows) for rows, _cols in components] + ([1] if len(isolated_rows) else [0])
+    )
+    largest_cols = max([len(cols) for _rows, cols in components] + [0])
+    if len(components) == 1 and len(isolated_rows) == 0:
+        solutions = murty_k_best_assignments(
+            costs,
+            k=max(1, int(k)),
+            row_non_assignment_costs=row_costs,
+            col_non_assignment_costs=col_costs,
+        )
+        return list(solutions), {
+            "scan_assignment_components": 1,
+            "scan_assignment_decomposed": 0,
+            "scan_assignment_solver_calls": 1,
+            "scan_assignment_largest_component_rows": int(costs.shape[0]),
+            "scan_assignment_largest_component_cols": int(costs.shape[1]),
+        }
+
+    base_cost = float(np.sum(row_costs[np.asarray(isolated_rows, dtype=int)]))
+    component_solution_sets: list[list[dict[str, Any]]] = []
+    solver_calls = 0
+    for rows, cols in components:
+        solver_calls += 1
+        component_solution_sets.append(
+            _component_assignment_solutions(
+                costs,
+                rows=rows,
+                cols=cols,
+                k=max(1, int(k)),
+                row_non_assignment_costs=row_costs,
+                col_non_assignment_costs=col_costs,
+            )
+        )
+    solutions = _combine_component_assignment_solutions(
+        component_solution_sets,
+        base_cost=base_cost,
+        n_rows=int(costs.shape[0]),
+        k=max(1, int(k)),
+    )
+    return solutions, {
+        "scan_assignment_components": int(component_count),
+        "scan_assignment_decomposed": int(component_count > 1),
+        "scan_assignment_solver_calls": int(solver_calls),
+        "scan_assignment_largest_component_rows": int(largest_rows),
+        "scan_assignment_largest_component_cols": int(largest_cols),
+    }
+
+
+def _assignment_components(
+    cost_matrix: np.ndarray,
+) -> tuple[list[tuple[np.ndarray, np.ndarray]], np.ndarray]:
+    finite = np.isfinite(np.asarray(cost_matrix, dtype=float))
+    n_rows, n_cols = finite.shape
+    row_to_cols = [
+        set(int(col) for col in np.flatnonzero(finite[row])) for row in range(n_rows)
+    ]
+    col_to_rows = [
+        set(int(row) for row in np.flatnonzero(finite[:, col])) for col in range(n_cols)
+    ]
+    visited_rows: set[int] = set()
+    components: list[tuple[np.ndarray, np.ndarray]] = []
+    isolated_rows: list[int] = []
+    for start_row in range(n_rows):
+        if int(start_row) in visited_rows:
+            continue
+        if not row_to_cols[int(start_row)]:
+            visited_rows.add(int(start_row))
+            isolated_rows.append(int(start_row))
+            continue
+        rows: set[int] = set()
+        cols: set[int] = set()
+        row_stack = [int(start_row)]
+        while row_stack:
+            row = int(row_stack.pop())
+            if row in rows:
+                continue
+            rows.add(row)
+            visited_rows.add(row)
+            for col in row_to_cols[row]:
+                if col not in cols:
+                    cols.add(col)
+                    row_stack.extend(sorted(col_to_rows[col] - rows))
+        components.append(
+            (
+                np.asarray(sorted(rows), dtype=int),
+                np.asarray(sorted(cols), dtype=int),
+            )
+        )
+    return components, np.asarray(isolated_rows, dtype=int)
+
+
+def _component_assignment_solutions(
+    cost_matrix: np.ndarray,
+    *,
+    rows: np.ndarray,
+    cols: np.ndarray,
+    k: int,
+    row_non_assignment_costs: np.ndarray,
+    col_non_assignment_costs: np.ndarray,
+) -> list[dict[str, Any]]:
+    rows = np.asarray(rows, dtype=int)
+    cols = np.asarray(cols, dtype=int)
+    raw_solutions = murty_k_best_assignments(
+        np.asarray(cost_matrix, dtype=float)[np.ix_(rows, cols)],
+        k=max(1, int(k)),
+        row_non_assignment_costs=np.asarray(row_non_assignment_costs, dtype=float)[rows],
+        col_non_assignment_costs=np.asarray(col_non_assignment_costs, dtype=float)[cols],
+    )
+    translated: list[dict[str, Any]] = []
+    for solution in raw_solutions:
+        local_assignment = np.asarray(solution["assignment"], dtype=int)
+        assignment = np.full((len(rows),), -1, dtype=int)
+        for row_pos, local_col in enumerate(local_assignment):
+            if int(local_col) >= 0:
+                assignment[int(row_pos)] = int(cols[int(local_col)])
+        translated.append(
+            {
+                "rows": rows,
+                "assignment": assignment,
+                "cost": float(solution["cost"]),
+            }
+        )
+    if translated:
+        return sorted(translated, key=lambda item: float(item["cost"]))
+    return [
+        {
+            "rows": rows,
+            "assignment": np.full((len(rows),), -1, dtype=int),
+            "cost": float(np.sum(np.asarray(row_non_assignment_costs, dtype=float)[rows])),
+        }
+    ]
+
+
+def _combine_component_assignment_solutions(
+    component_solution_sets: Sequence[Sequence[Mapping[str, Any]]],
+    *,
+    base_cost: float,
+    n_rows: int,
+    k: int,
+) -> list[dict[str, Any]]:
+    if not component_solution_sets:
+        return [
+            {
+                "assignment": np.full((int(n_rows),), -1, dtype=int),
+                "cost": float(base_cost),
+            }
+        ]
+    ordered_sets = [
+        sorted(component, key=lambda item: float(item["cost"]))
+        for component in component_solution_sets
+    ]
+
+    def total_cost(indices: tuple[int, ...]) -> float:
+        return float(base_cost) + sum(
+            float(ordered_sets[component_index][solution_index]["cost"])
+            for component_index, solution_index in enumerate(indices)
+        )
+
+    start = tuple(0 for _component in ordered_sets)
+    heap: list[tuple[float, tuple[int, ...]]] = [(total_cost(start), start)]
+    seen = {start}
+    output: list[dict[str, Any]] = []
+    while heap and len(output) < max(1, int(k)):
+        cost, indices = heapq.heappop(heap)
+        assignment = np.full((int(n_rows),), -1, dtype=int)
+        for component_index, solution_index in enumerate(indices):
+            solution = ordered_sets[component_index][solution_index]
+            rows = np.asarray(solution["rows"], dtype=int)
+            assignment[rows] = np.asarray(solution["assignment"], dtype=int)
+        output.append({"assignment": assignment, "cost": float(cost)})
+        for component_index, solution_index in enumerate(indices):
+            next_index = int(solution_index) + 1
+            if next_index >= len(ordered_sets[component_index]):
+                continue
+            neighbor = list(indices)
+            neighbor[component_index] = next_index
+            neighbor_tuple = tuple(neighbor)
+            if neighbor_tuple in seen:
+                continue
+            seen.add(neighbor_tuple)
+            heapq.heappush(heap, (total_cost(neighbor_tuple), neighbor_tuple))
     return output
 
 
