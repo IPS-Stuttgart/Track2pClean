@@ -37,6 +37,12 @@ PRIOR_SURVIVAL_EXPOSURE_COLUMNS = (
     "history_prior_survival_weighted_score",
     "max_prior_survival_negative_edges_per_subject",
 )
+SENSITIVITY_METRICS = (
+    "pairwise_f1_micro",
+    "complete_track_f1_micro",
+    "pairwise_f1_macro",
+    "complete_track_f1_macro",
+)
 
 
 @dataclass(frozen=True)
@@ -259,23 +265,26 @@ def evaluate_prior_survival_sensitivity(
             "recommendation": "rerun sensitivity manifest with all frozen prior-survival rows",
         }
 
-    base_pairwise = _metric(by_approach[cfg.base_row], "pairwise_f1_micro")
-    base_complete = _metric(by_approach[cfg.base_row], "complete_track_f1_micro")
+    base_metrics = {metric: _metric(by_approach[cfg.base_row], metric) for metric in SENSITIVITY_METRICS}
     passing: list[str] = []
     weight_passing: list[str] = []
     pairwise_collapse: list[str] = []
     deltas: dict[str, dict[str, float]] = {}
     for name in cfg.variant_rows:
         row = by_approach[name]
-        pairwise_delta = _metric(row, "pairwise_f1_micro") - base_pairwise
-        complete_delta = _metric(row, "complete_track_f1_micro") - base_complete
-        deltas[name] = {
-            "pairwise_f1_micro_delta_vs_base": float(pairwise_delta),
-            "complete_track_f1_micro_delta_vs_base": float(complete_delta),
+        row_deltas = {
+            f"{metric}_delta_vs_base": float(_metric(row, metric) - base_metrics[metric])
+            for metric in SENSITIVITY_METRICS
         }
-        if pairwise_delta < -float(cfg.max_pairwise_drop):
+        pairwise_delta = row_deltas["pairwise_f1_micro_delta_vs_base"]
+        pairwise_macro_delta = row_deltas["pairwise_f1_macro_delta_vs_base"]
+        deltas[name] = row_deltas
+        if (
+            pairwise_delta < -float(cfg.max_pairwise_drop)
+            or pairwise_macro_delta < -float(cfg.max_pairwise_drop)
+        ):
             pairwise_collapse.append(name)
-        if pairwise_delta >= -float(cfg.tolerance) and complete_delta >= -float(cfg.tolerance):
+        if all(delta >= -float(cfg.tolerance) for delta in row_deltas.values()):
             passing.append(name)
             if name in cfg.weight_variant_rows:
                 weight_passing.append(name)
