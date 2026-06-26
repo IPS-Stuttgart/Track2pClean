@@ -43,6 +43,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_full_mht_exposure_audit.py \
   tests/test_full_mht_scan_history_dynamics_integration.py \
+  tests/test_full_mht_identity_history_scan_pruning_promotion_gate.py \
   tests/test_full_mht_history_dynamics_promotion_gate.py \
   tests/test_full_mht_no_prior_continuation_promotion_gate.py
 
@@ -236,9 +237,17 @@ NOPRIOR="$REPO/results/full_mht_no_prior_continuation_probe_YYYYMMDD_HHMMSS"
   --output "$OUT/full_mht_no_prior_continuation_promotion_gate.md"
 ```
 
-For scan-pruning, pair the decision helper output with the exposure CSV. A
-candidate scan-pruning row is not paper-facing unless the decision helper reports
-stable complete-history gain and the exposure `ALL` row remains bounded.
+After running `benchmarks/full_mht_identity_history_scan_pruning_manifest.json`,
+combine the scan-pruning comparison table with the scan-pruning exposure audit:
+
+```bash
+SCAN="$REPO/results/full_mht_identity_history_scan_pruning_YYYYMMDD_HHMMSS"
+
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_scan_pruning_promotion_gate \
+  "$SCAN/full_mht_identity_history_scan_pruning/full_mht_identity_history_scan_pruning_comparison.csv" \
+  "$OUT/full_mht_identity_history_scan_pruning_exposure_050.csv" \
+  --output "$SCAN/full_mht_identity_history_scan_pruning_promotion_gate.md"
+```
 
 Promotion requires:
 
@@ -247,7 +256,7 @@ benchmark_result = history_dynamics_stable_gain or no_prior_continuation_stable_
 exposure_result  = bounded_exposure
 ```
 
-If the benchmark improves but exposure is broad, keep the row exploratory.
+If the benchmark improves but exposure is broad, keep the method layer exploratory.
 
 ## Readout
 
