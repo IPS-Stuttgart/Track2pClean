@@ -134,6 +134,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_history_dynamics_integration.py \
   tests/test_full_mht_scan_history_dynamics_integration.py \
   tests/test_full_mht_history_dynamics_decision.py \
+  tests/test_full_mht_scan_history_dynamics_decision.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_benchmark_manifest_full_mht_integration.py
 
@@ -154,6 +155,10 @@ mkdir -p "$SCAN_OUT"
 "$PY" -m bayescatrack.experiments.full_mht_history_dynamics_decision \
   "$TERMINAL_OUT/full_mht_history_dynamics/full_mht_history_dynamics_comparison.csv" \
   --output "$TERMINAL_OUT/full_mht_history_dynamics_decision.md"
+
+"$PY" -m bayescatrack.experiments.full_mht_scan_history_dynamics_decision \
+  "$SCAN_OUT/full_mht_scan_history_dynamics/full_mht_scan_history_dynamics_comparison.csv" \
+  --output "$SCAN_OUT/full_mht_scan_history_dynamics_decision.md"
 ```
 
 ## No-GT Leakage Guard
@@ -166,8 +171,8 @@ measure final rows; the method layers must not use it for selection.
 
 ## Frozen Decision Rule
 
-The decision helper does not tune the method. It only interprets the frozen
-comparison table:
+The decision helpers do not tune the method. They only interpret frozen
+comparison tables:
 
 | result | meaning |
 | --- | --- |
