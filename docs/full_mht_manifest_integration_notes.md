@@ -38,16 +38,19 @@ attached to the frozen FullMHT config object before the run.
 | --- | --- |
 | `Track2p` | original proposal baseline |
 | `FullMHTPrior2` | full scan-assignment MHT with strong Track2p proposal prior |
-| `FullMHTGreedyPrior2` | greedy beam-width-1 ablation over the same scan candidates and proposal-prior settings |
+| `FullMHTGreedyPrior2` | greedy beam-width-1 ablation for the proposal-prior control |
 | `FullMHTPriorVetoScaled` | FullMHT with the fixed label-free prior-edge survival hazard |
+| `FullMHTGreedyPriorVetoScaled` | greedy beam-width-1 ablation for the fixed hazard |
 | `FullMHTPriorSurvival` | FullMHT with calibrated label-free prior-edge survival likelihood |
+| `FullMHTGreedyPriorSurvival` | greedy beam-width-1 ablation for the calibrated survival row |
 
-The greedy row uses the same local scan candidate generator as `FullMHTPrior2`,
-but sets `beam_width = 1`. It cannot preserve competing identity histories across
-scans. If it ties the beam row on the real benchmark, the current data do not yet
-demonstrate a history-search advantage. If it loses to the beam row, that is
-direct evidence that full-history MHT is doing something local greedy assignment
-cannot.
+Each greedy row uses the same local scan candidate generator and scoring options
+as its beam counterpart, but sets `beam_width = 1` and disables identity-diverse
+beam retention. If a candidate row ties its greedy ablation on the real benchmark,
+the current data do not yet demonstrate a candidate-specific history-search
+advantage. If the candidate beam wins on complete-track F1 without pairwise loss,
+that is direct evidence that full-history MHT is doing something local greedy
+assignment cannot.
 
 The prior-veto row freezes the first positive FullMHT-owned setting:
 
@@ -76,9 +79,10 @@ with:
   --output "$OUT/full_mht_manifest_decision.md"
 ```
 
-This decision artifact reports whether the full beam beats the greedy beam-width-1
-ablation and whether calibrated prior-survival improves, ties, or falls below the
-fixed prior-veto hazard.
+This decision artifact reports whether the base beam, fixed-veto beam, and
+calibrated-survival beam beat their matching greedy beam-width-1 ablations, and
+whether calibrated prior-survival improves, ties, or falls below the fixed
+prior-veto hazard.
 
 ## Sensitivity Manifests
 
