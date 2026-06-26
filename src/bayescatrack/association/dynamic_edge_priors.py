@@ -8,6 +8,7 @@ pairwise cost matrices before global assignment.
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -166,16 +167,41 @@ def _valid_edge_mask(costs: np.ndarray, *, large_cost: float) -> np.ndarray:
 
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:
+    gap = _validated_positive_integer_session_gap(session_gap)
+    return float(gap - 1)
+
+
+def _validated_positive_integer_session_gap(session_gap: Any) -> int:
+    message = (
+        "session_gap must be a finite value representing an integer "
+        "greater than or equal to 1"
+    )
     if isinstance(session_gap, (bool, np.bool_)):
-        raise ValueError(
-            "session_gap must be a finite value greater than or equal to 1"
-        )
-    gap = float(session_gap)
-    if not np.isfinite(gap) or gap < 1.0:
-        raise ValueError(
-            "session_gap must be a finite value greater than or equal to 1"
-        )
-    return gap - 1.0
+        raise ValueError(message)
+
+    try:
+        gap = int(operator.index(session_gap))
+    except TypeError:
+        if isinstance(session_gap, str):
+            text = session_gap.strip()
+            if not text:
+                raise ValueError(message) from None
+            try:
+                numeric_gap = float(text)
+            except ValueError as exc:
+                raise ValueError(message) from exc
+        else:
+            try:
+                numeric_gap = float(session_gap)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(message) from exc
+        if not np.isfinite(numeric_gap) or not numeric_gap.is_integer():
+            raise ValueError(message)
+        gap = int(numeric_gap)
+
+    if gap < 1:
+        raise ValueError(message)
+    return gap
 
 
 def _add_to_valid_edges(

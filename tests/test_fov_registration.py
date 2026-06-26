@@ -3,6 +3,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+from bayescatrack import CalciumPlaneData
 from bayescatrack.fov_registration import (
     apply_image_translation,
     apply_integer_image_translation,
@@ -94,6 +95,84 @@ def test_estimate_fov_shift_compat_refines_fractional_translation():
 
     npt.assert_allclose(shift_yx, -measurement_shift_yx, atol=0.05)
     assert peak_correlation > 0.99
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"subtract_mean": 1}, "subtract_mean"),
+        ({"subpixel": "false"}, "subpixel"),
+        ({"subpixel_refinement": "true"}, "subpixel_refinement"),
+        (
+            {"subpixel": True, "subpixel_refinement_radius": True},
+            "subpixel_refinement_radius",
+        ),
+        (
+            {"subpixel": True, "subpixel_refinement_radius": np.nan},
+            "subpixel_refinement_radius",
+        ),
+        (
+            {"subpixel": True, "subpixel_refinement_radius": -0.1},
+            "subpixel_refinement_radius",
+        ),
+        (
+            {"subpixel": True, "subpixel_interpolation_order": True},
+            "subpixel interpolation order",
+        ),
+        (
+            {"subpixel": True, "subpixel_interpolation_order": 1.5},
+            "subpixel interpolation order",
+        ),
+        (
+            {"subpixel": True, "subpixel_interpolation_order": np.nan},
+            "subpixel interpolation order",
+        ),
+        ({"subpixel": True, "mask_interpolation": "cubic"}, "mask_interpolation"),
+    ],
+)
+def test_register_measurement_plane_by_fov_translation_rejects_invalid_controls(
+    kwargs, message
+):
+    reference_fov = np.zeros((16, 16), dtype=float)
+    reference_fov[4:8, 5:9] = 1.0
+    measurement_fov = apply_integer_image_translation(reference_fov, np.array([1, -1]))
+    reference_masks = reference_fov[None, :, :] > 0.0
+    measurement_masks = apply_integer_image_translation(
+        reference_masks[0], np.array([1, -1])
+    )[None, :, :]
+    reference_plane = CalciumPlaneData(
+        reference_masks,
+        fov=reference_fov,
+        source="reference",
+    )
+    measurement_plane = CalciumPlaneData(
+        measurement_masks,
+        fov=measurement_fov,
+        source="measurement",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        register_measurement_plane_by_fov_translation(
+            reference_plane,
+            measurement_plane,
+            **kwargs,
+        )
+
+
+@pytest.mark.parametrize("subpixel_refinement", [1, "false", np.bool_(True)])
+def test_estimate_fov_shift_rejects_invalid_subpixel_refinement_alias(
+    subpixel_refinement,
+):
+    reference_fov = np.zeros((16, 16), dtype=float)
+    reference_fov[4:8, 5:9] = 1.0
+    measurement_fov = apply_integer_image_translation(reference_fov, np.array([1, -1]))
+
+    with pytest.raises(ValueError, match="subpixel_refinement"):
+        estimate_fov_shift(
+            reference_fov,
+            measurement_fov,
+            subpixel_refinement=subpixel_refinement,
+        )
 
 
 def test_estimate_integer_fov_shift_rejects_degenerate_fovs():

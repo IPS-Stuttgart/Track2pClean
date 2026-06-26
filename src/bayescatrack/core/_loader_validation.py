@@ -23,6 +23,15 @@ _TRANSIENT_LOAD_EXCEPTIONS = (
     ValueError,
 )
 
+_SUITE2P_BOOL_CONTROL_DEFAULTS: dict[str, bool] = {
+    "include_non_cells": False,
+    "weighted_masks": False,
+    "exclude_overlapping_pixels": True,
+    "load_traces": True,
+    "load_spike_traces": True,
+    "load_neuropil_traces": False,
+}
+
 
 def install_loader_validation_patches(bridge_impl: ModuleType) -> None:
     """Install idempotent validation wrappers on the bridge implementation."""
@@ -37,18 +46,25 @@ def install_loader_validation_patches(bridge_impl: ModuleType) -> None:
             *args: Any,
             **kwargs: Any,
         ) -> Any:
+            if args:
+                return original_suite2p_loader(plane_dir, *args, **kwargs)
+            suite2p_controls = _validate_suite2p_loader_controls(kwargs)
             _validate_suite2p_stat_coordinates(
                 Path(plane_dir),
                 bridge_impl,
-                include_non_cells=bool(kwargs.get("include_non_cells", False)),
-                cell_probability_threshold=float(
-                    kwargs.get("cell_probability_threshold", 0.5)
-                ),
-                exclude_overlapping_pixels=bool(
-                    kwargs.get("exclude_overlapping_pixels", True)
-                ),
+                include_non_cells=suite2p_controls["include_non_cells"],
+                cell_probability_threshold=suite2p_controls[
+                    "cell_probability_threshold"
+                ],
+                exclude_overlapping_pixels=suite2p_controls[
+                    "exclude_overlapping_pixels"
+                ],
             )
-            return original_suite2p_loader(plane_dir, *args, **kwargs)
+            return original_suite2p_loader(
+                plane_dir,
+                *args,
+                **{**kwargs, **suite2p_controls},
+            )
 
         setattr(
             _load_suite2p_plane_with_validation,
@@ -215,8 +231,15 @@ def _load_track2p_subject_with_auto_fallback_impl(
     strict: bool,
     **suite2p_kwargs: Any,
 ) -> list[Any]:
+    include_behavior = _strict_bool(include_behavior, name="include_behavior")
+    strict = _strict_bool(strict, name="strict")
     if input_format not in {"auto", "suite2p", "npy"}:
         raise ValueError("input_format must be 'auto', 'suite2p', or 'npy'")
+    if input_format in {"auto", "suite2p"}:
+        suite2p_kwargs = {
+            **suite2p_kwargs,
+            **_validate_suite2p_loader_controls(suite2p_kwargs),
+        }
 
     subject_path = Path(subject_dir)
     sessions: list[Any] = []
@@ -324,3 +347,35 @@ def _load_auto_plane_with_fallback(
         warnings.warn(message, RuntimeWarning, stacklevel=2)
         return None
     raise FileNotFoundError(message)
+
+
+def _validate_suite2p_loader_controls(
+    values: dict[str, Any],
+) -> dict[str, bool | float]:
+    validated: dict[str, bool | float] = {
+        name: _strict_bool(values.get(name, default), name=name)
+        for name, default in _SUITE2P_BOOL_CONTROL_DEFAULTS.items()
+    }
+    validated["cell_probability_threshold"] = _finite_probability(
+        values.get("cell_probability_threshold", 0.5),
+        name="cell_probability_threshold",
+    )
+    return validated
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
+
+
+def _finite_probability(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite probability")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite probability") from exc
+    if not np.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
+        raise ValueError(f"{name} must be a finite probability")
+    return numeric
