@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
@@ -40,6 +42,12 @@ def _example_block() -> ReferencePairwiseExamples:
     )
 
 
+def _labels_with(value: object, dtype: object) -> np.ndarray:
+    labels = np.eye(3, dtype=dtype)
+    labels[0, 1] = value
+    return labels
+
+
 def test_monotone_ranker_learns_nonnegative_weights_and_ranks_gt_edges():
     block = _example_block()
 
@@ -78,6 +86,36 @@ def test_monotone_ranker_cost_is_monotone_in_badness_features():
     costs = model.pairwise_cost_matrix(ordered_features)
 
     assert costs[0] <= costs[1] <= costs[2]
+
+
+@pytest.mark.parametrize(
+    "invalid_labels",
+    [
+        _labels_with(0.5, float),
+        _labels_with(2, int),
+        _labels_with(np.nan, float),
+    ],
+)
+def test_monotone_ranker_rejects_nonbinary_labels(invalid_labels: np.ndarray) -> None:
+    block = replace(_example_block(), labels=invalid_labels)
+
+    with pytest.raises(ValueError, match="Pairwise labels must"):
+        fit_monotone_ranking_association_model_from_blocks(
+            [block],
+            options=MonotoneRankerOptions(max_iter=10),
+        )
+
+
+def test_monotone_ranker_accepts_boolean_binary_labels() -> None:
+    block = _example_block()
+    boolean_block = replace(block, labels=block.labels.astype(bool))
+
+    model = fit_monotone_ranking_association_model_from_blocks(
+        [boolean_block],
+        options=MonotoneRankerOptions(max_iter=10),
+    )
+
+    assert model.n_positive_examples == 3
 
 
 @pytest.mark.parametrize(

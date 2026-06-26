@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from bayescatrack.analysis.growth import (
     _optional_roi,
+    _validate_session_index,
     affine_growth_summaries,
     radial_displacement_rows,
     radial_growth_summaries,
@@ -102,6 +103,26 @@ def test_growth_optional_roi_rejects_fractional_values():
     with pytest.raises(ValueError, match="integer-like"):
         _optional_roi("1.5")
     assert _optional_roi("nan") is None
+
+
+def test_growth_optional_roi_rejects_boolean_values():
+    with pytest.raises(ValueError, match="boolean"):
+        _optional_roi(True)
+    with pytest.raises(ValueError, match="boolean"):
+        _optional_roi(False)
+    with pytest.raises(ValueError, match="boolean"):
+        _optional_roi(np.bool_(True))
+
+
+@pytest.mark.parametrize("bad_index", [True, False, np.bool_(True), 1.5, "1.5", np.nan, np.inf])
+def test_growth_session_index_rejects_bool_fractional_and_nonfinite_values(bad_index):
+    with pytest.raises(ValueError, match="session index"):
+        _validate_session_index(bad_index, 3)
+
+
+@pytest.mark.parametrize("integer_like_index", [1, np.int64(1), 1.0, "1", "1.0"])
+def test_growth_session_index_accepts_integer_like_values(integer_like_index):
+    assert _validate_session_index(integer_like_index, 3) == 1
 
 
 def test_growth_cli_help_is_registered():

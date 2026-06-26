@@ -76,14 +76,22 @@ def register_measurement_plane_by_nonrigid_fov(
         )
     if grid_shape[0] < 2 or grid_shape[1] < 2:
         raise ValueError("grid_shape must contain at least two tiles per axis")
-    if tps_regularization < 0.0:
-        raise ValueError("tps_regularization must be non-negative")
-    if bspline_regularization < 0.0:
-        raise ValueError("bspline_regularization must be non-negative")
-    if optical_flow_iterations < 0:
-        raise ValueError("optical_flow_iterations must be non-negative")
-    if optical_flow_alpha <= 0.0:
-        raise ValueError("optical_flow_alpha must be strictly positive")
+    tps_regularization = _nonnegative_float_control(
+        tps_regularization,
+        "tps_regularization",
+    )
+    bspline_regularization = _nonnegative_float_control(
+        bspline_regularization,
+        "bspline_regularization",
+    )
+    optical_flow_iterations = _nonnegative_integer_control(
+        optical_flow_iterations,
+        "optical_flow_iterations",
+    )
+    optical_flow_alpha = _positive_float_control(
+        optical_flow_alpha,
+        "optical_flow_alpha",
+    )
 
     reference = _finite_image(reference_plane.fov)
     measurement = _finite_image(measurement_plane.fov)
@@ -227,6 +235,46 @@ def _canonical_nonrigid_transform(transform_type: str) -> str:
     raise ValueError(
         f"Unsupported nonrigid transform type {transform_type!r}; expected one of {valid}"
     )
+
+
+def _finite_scalar_control(value: object, name: str) -> float:
+    array = np.asarray(value)
+    if array.shape != ():
+        raise ValueError(f"{name} must be a finite scalar")
+    if np.issubdtype(array.dtype, np.bool_) or not np.issubdtype(array.dtype, np.number):
+        raise ValueError(f"{name} must be a finite numeric scalar")
+    scalar = float(array.item())
+    if not np.isfinite(scalar):
+        raise ValueError(f"{name} must be finite")
+    return scalar
+
+
+def _nonnegative_float_control(value: object, name: str) -> float:
+    scalar = _finite_scalar_control(value, name)
+    if scalar < 0.0:
+        raise ValueError(f"{name} must be non-negative")
+    return scalar
+
+
+def _positive_float_control(value: object, name: str) -> float:
+    scalar = _finite_scalar_control(value, name)
+    if scalar <= 0.0:
+        raise ValueError(f"{name} must be strictly positive")
+    return scalar
+
+
+def _nonnegative_integer_control(value: object, name: str) -> int:
+    array = np.asarray(value)
+    if (
+        array.shape != ()
+        or np.issubdtype(array.dtype, np.bool_)
+        or not np.issubdtype(array.dtype, np.integer)
+    ):
+        raise ValueError(f"{name} must be a non-negative integer scalar")
+    scalar = int(array.item())
+    if scalar < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return scalar
 
 
 def _finite_image(image: np.ndarray) -> np.ndarray:
