@@ -1,0 +1,136 @@
+{
+  "defaults": {
+    "data": "/home/florianpfaff/codex-runs/BayesCaTrack/results/policy_dp/data_lightweight",
+    "reference": "/home/florianpfaff/codex-runs/BayesCaTrack/results/policy_dp/data_lightweight",
+    "reference_kind": "manual-gt",
+    "input_format": "suite2p",
+    "threshold_method": "min",
+    "transform_type": "affine",
+    "iou_distance_threshold": 12,
+    "cell_probability_threshold": 0.5
+  },
+  "runs": [
+    {
+      "name": "Track2p",
+      "runner": "track2p",
+      "method": "track2p-baseline",
+      "output": "full_mht_history_dynamics/track2p.csv",
+      "format": "csv"
+    },
+    {
+      "name": "FullMHTPrior2",
+      "runner": "track2p-full-mht",
+      "output": "full_mht_history_dynamics/full_mht_prior2.csv",
+      "format": "csv",
+      "seed_source": "reference",
+      "beam_width": 8,
+      "scan_hypotheses": 8,
+      "edge_top_k": 4,
+      "identity_diverse_beam": true,
+      "miss_cost": 2.0,
+      "full_mht_max_gap": 1,
+      "gap_reactivation_cost": 1.0,
+      "min_output_observations": 1,
+      "min_edge_score": 0.25,
+      "track2p_prior_weight": 12.0,
+      "track2p_non_prior_penalty": 2.0,
+      "track2p_prior_switch_penalty": 8.0,
+      "track2p_no_prior_successor_penalty": 8.0,
+      "track2p_prior_miss_penalty": 4.0
+    },
+    {
+      "name": "FullMHTHistoryDynamics025",
+      "runner": "track2p-full-mht",
+      "output": "full_mht_history_dynamics/full_mht_history_dynamics_025.csv",
+      "format": "csv",
+      "seed_source": "reference",
+      "beam_width": 8,
+      "scan_hypotheses": 8,
+      "edge_top_k": 4,
+      "identity_diverse_beam": true,
+      "miss_cost": 2.0,
+      "full_mht_max_gap": 1,
+      "gap_reactivation_cost": 1.0,
+      "min_output_observations": 1,
+      "min_edge_score": 0.25,
+      "track2p_prior_weight": 12.0,
+      "track2p_non_prior_penalty": 2.0,
+      "track2p_prior_switch_penalty": 8.0,
+      "track2p_no_prior_successor_penalty": 8.0,
+      "track2p_prior_miss_penalty": 4.0,
+      "terminal_motion_history_weight": 0.25
+    },
+    {
+      "name": "FullMHTHistoryDynamics050",
+      "runner": "track2p-full-mht",
+      "output": "full_mht_history_dynamics/full_mht_history_dynamics_050.csv",
+      "format": "csv",
+      "seed_source": "reference",
+      "beam_width": 8,
+      "scan_hypotheses": 8,
+      "edge_top_k": 4,
+      "identity_diverse_beam": true,
+      "miss_cost": 2.0,
+      "full_mht_max_gap": 1,
+      "gap_reactivation_cost": 1.0,
+      "min_output_observations": 1,
+      "min_edge_score": 0.25,
+      "track2p_prior_weight": 12.0,
+      "track2p_non_prior_penalty": 2.0,
+      "track2p_prior_switch_penalty": 8.0,
+      "track2p_no_prior_successor_penalty": 8.0,
+      "track2p_prior_miss_penalty": 4.0,
+      "terminal_motion_history_weight": 0.50
+    },
+    {
+      "name": "FullMHTHistoryDynamics100",
+      "runner": "track2p-full-mht",
+      "output": "full_mht_history_dynamics/full_mht_history_dynamics_100.csv",
+      "format": "csv",
+      "seed_source": "reference",
+      "beam_width": 8,
+      "scan_hypotheses": 8,
+      "edge_top_k": 4,
+      "identity_diverse_beam": true,
+      "miss_cost": 2.0,
+      "full_mht_max_gap": 1,
+      "gap_reactivation_cost": 1.0,
+      "min_output_observations": 1,
+      "min_edge_score": 0.25,
+      "track2p_prior_weight": 12.0,
+      "track2p_non_prior_penalty": 2.0,
+      "track2p_prior_switch_penalty": 8.0,
+      "track2p_no_prior_successor_penalty": 8.0,
+      "track2p_prior_miss_penalty": 4.0,
+      "terminal_motion_history_weight": 1.00
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "full-mht-history-dynamics-comparison-md",
+      "inputs": {
+        "Track2p": "Track2p",
+        "FullMHTPrior2": "FullMHTPrior2",
+        "FullMHTHistoryDynamics025": "FullMHTHistoryDynamics025",
+        "FullMHTHistoryDynamics050": "FullMHTHistoryDynamics050",
+        "FullMHTHistoryDynamics100": "FullMHTHistoryDynamics100"
+      },
+      "output": "full_mht_history_dynamics/full_mht_history_dynamics_comparison.md",
+      "format": "markdown",
+      "highlight_best": true
+    },
+    {
+      "name": "full-mht-history-dynamics-comparison-csv",
+      "inputs": {
+        "Track2p": "Track2p",
+        "FullMHTPrior2": "FullMHTPrior2",
+        "FullMHTHistoryDynamics025": "FullMHTHistoryDynamics025",
+        "FullMHTHistoryDynamics050": "FullMHTHistoryDynamics050",
+        "FullMHTHistoryDynamics100": "FullMHTHistoryDynamics100"
+      },
+      "output": "full_mht_history_dynamics/full_mht_history_dynamics_comparison.csv",
+      "format": "csv",
+      "highlight_best": true
+    }
+  ]
+}
