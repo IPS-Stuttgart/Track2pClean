@@ -204,3 +204,82 @@ architecture. Do not promote the row. The next useful method step is not another
 scalar terminal weight; it is either a richer birth/death likelihood or a beam
 diversity strategy that explicitly retains low-no-prior histories alongside the
 highest score histories.
+
+## Identity-Diverse Beam Probe
+
+The next implementation added an opt-in beam diversity strategy:
+
+```text
+--identity-diverse-beam
+```
+
+The default pruning path remains score/risk ordered. With the diversity flag
+enabled, pruning first keeps the top adjusted-score hypothesis, then preserves
+the best hypothesis from each accumulated no-prior-successor bucket before
+filling the remaining beam by adjusted score. The goal is to prevent clean
+identity histories from being pruned before terminal selection can evaluate
+them.
+
+Fresh server clone at commit `a0ec171476d96b795c3f5414ccfdcaa7860fb2dc`:
+
+```text
+40 passed in 0.52s
+```
+
+Output directories:
+
+`/home/florianpfaff/codex-runs/BayesCaTrack/results/full_mht_identity_diverse_beam_probe_20260626_012342`
+
+`/home/florianpfaff/codex-runs/BayesCaTrack/results/full_mht_identity_diverse_terminal_weight_probe_20260626_013930`
+
+### Weight 1
+
+The first identity-diverse run used the same calibrated settings as the previous
+terminal identity probe, with terminal no-prior weight 1.
+
+| row | pairwise F1 micro | complete-track F1 micro |
+| --- | ---: | ---: |
+| Track2p | 0.965116 | 0.924370 |
+| FullMHTPrior2 | 0.965116 | 0.924370 |
+| IdentityDiverseBeam | 0.948553 | 0.903226 |
+
+Selected best-hypothesis diagnostics:
+
+```text
+scan_selected_non_prior_edges=28
+scan_no_prior_successor_continuations=28
+scan_missed_prior_successors=0
+scan_switched_prior_successors=0
+```
+
+The diversity mechanism did retain cleaner final alternatives. For example, in
+`jm038` the final beam included hypotheses with zero no-prior continuations at
+the last scan, but the raw calibrated likelihood score still selected the risky
+history.
+
+### Terminal-Weight Bracket
+
+Changing only `--terminal-no-prior-successor-history-weight` under identity
+diversity gave:
+
+| row | terminal no-prior weight | selected non-prior edges | no-prior continuations | pairwise F1 micro | complete-track F1 micro |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| DiverseW2 | 2 | 27 | 27 | 0.947454 | 0.894309 |
+| DiverseW5 | 5 | 10 | 10 | 0.948739 | 0.909091 |
+| DiverseW10 | 10 | 10 | 10 | 0.948739 | 0.909091 |
+
+All three bracket rows had:
+
+```text
+scan_missed_prior_successors=0
+scan_switched_prior_successors=0
+```
+
+Decision: keep identity-diverse pruning as a useful full-history MHT mechanism,
+because it exposes cleaner alternatives that scalar terminal reranking alone
+could not access. Do not promote the row. The calibrated likelihood still favors
+unsafe no-prior continuation chains strongly enough that terminal weighting
+either leaves too many of them in place or returns to a conservative solution
+that remains below Track2p. The next method layer should model birth/death and
+track continuation likelihoods directly, rather than treating no-prior
+continuation as a scalar count penalty.
