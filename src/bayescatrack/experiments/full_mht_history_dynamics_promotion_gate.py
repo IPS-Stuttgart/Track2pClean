@@ -240,7 +240,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             0,
             int(args.max_non_prior_per_subject),
         ),
-        max_total_non_prior=max(0, int(args.max_total_non_prior)),
+        max_total_non_prior_edges=max(0, int(args.max_total_non_prior)),
         max_switched_prior_successors=max(0, int(args.max_switches)),
         max_no_prior_successor_continuations=max(
             0,
