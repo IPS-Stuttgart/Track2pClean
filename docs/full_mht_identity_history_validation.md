@@ -112,6 +112,8 @@ is treated as exploratory.
 | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | immediate-neighborhood sensitivity around survival weight, no-prior continuation weight, and growth-history weight |
 | `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
 | `benchmarks/full_mht_local_context_probe_manifest.json` | calibrated local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
+| `docs/full_mht_method_invariant_checklist.md` | paper-facing checklist tying method claims to required label-free regressions |
+| `test_full_mht_method_protocol.py` | regression that keeps the method protocol and invariant checklist from drifting |
 | `full_mht_local_context_integration.py` | gates the calibrated local-context likelihood feature when `local_deformation_weight <= 0` |
 | `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
 | `test_track2p_policy_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness, including reference-independent path selection |
@@ -129,6 +131,7 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 - It does not fall below `FullMHTIdentityHistoryNoLocalContext` on the required micro metrics.
 - It does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on the required micro metrics.
 - The constructed conflict witness regression passes.
+- The method-invariant checklist regression passes.
 - The sensitivity manifest reports `stable_plateau`.
 - The exposure audit reports `bounded_exposure`.
 - Prior-survival, no-prior continuation, and growth-history signals are active but not broad.
@@ -165,6 +168,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_identity_history_completion_manifest.py \
   tests/test_full_mht_identity_history_decision.py \
   tests/test_full_mht_identity_history_promotion_gate.py \
+  tests/test_full_mht_method_protocol.py \
   tests/test_full_mht_prior_survival_model.py \
   tests/test_full_mht_prior_survival_integration.py \
   tests/test_full_mht_no_prior_continuation_model.py \
