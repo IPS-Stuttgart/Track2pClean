@@ -103,6 +103,9 @@ from ._suite2p_trace_bool_validation import (
 from ._suite2p_validation import (
     install_suite2p_stat_validation as _install_suite2p_stat_validation,
 )
+from ._supervised_mask_validation import (
+    install_supervised_mask_validation as _install_supervised_mask_validation,
+)
 from ._track_row_export_option_validation import (
     install_track_row_export_option_validation as _install_track_row_export_option_validation,
 )
@@ -128,6 +131,7 @@ from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
 from .association import absence_model as _absence_model
+from .association import calibrated_costs as _calibrated_costs
 from .association import candidate_prefilter as _candidate_prefilter
 from .core import bridge as _bridge
 from .soft_overlap_costs import (
@@ -182,6 +186,7 @@ _install_multisession_solver_track_validation()
 _install_session_gap_validation()
 _install_session_match_result_validation()
 _install_roi_cue_length_validation(_absence_model)
+_install_supervised_mask_validation(_calibrated_costs)
 _install_tracking_start_roi_validation()
 _install_tracking_global_link_edge_validation()
 _install_track_row_export_option_validation()
