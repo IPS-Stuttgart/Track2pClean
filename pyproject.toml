@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "Track2pClean"
 version = "0.0.1"
-description = "Tracking cleanup toolkit for Track2p-style calcium-imaging data"
+description = "Post-hoc cleanup and benchmark toolkit for Track2p-style calcium-imaging cell tracking"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 dependencies = [
@@ -25,8 +25,8 @@ track2p = [
 ]
 
 [project.scripts]
+track2pclean = "track2pclean:main"
 bayescatrack = "bayescatrack:main"
-track2pclean = "bayescatrack:main"
 
 [project.urls]
 Repository = "https://github.com/IPS-Stuttgart/Track2pClean"
@@ -36,6 +36,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
 bayescatrack = ["configs/*.yaml", "py.typed"]
+track2pclean = ["py.typed"]
 
 [tool.poetry]
 requires-poetry = ">=2.1"

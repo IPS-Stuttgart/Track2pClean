@@ -189,9 +189,9 @@ def _normalize_output_shape_component(value: Any) -> int:
 
 
 def _normalize_bool(value: Any, error_message: str) -> bool:
-    if type(value) is not bool:
-        raise ValueError(error_message)
-    return value
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError(error_message)
 
 
 def _normalize_grid_shape(grid_shape: Any) -> tuple[int, int]:

@@ -49,9 +49,9 @@ def install_fov_affine_estimator_validation() -> None:
 
 
 def _normalize_bool(value: Any, error_message: str) -> bool:
-    if type(value) is not bool:
-        raise ValueError(error_message)
-    return value
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError(error_message)
 
 
 def _normalize_grid_shape(value: Any) -> tuple[int, int]:

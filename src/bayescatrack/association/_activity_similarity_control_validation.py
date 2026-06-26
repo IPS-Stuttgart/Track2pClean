@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from typing import Any
 
 import numpy as np
@@ -28,6 +29,8 @@ def install_activity_similarity_control_validation() -> None:
         similarity_epsilon: Any = 1.0e-12,
         event_threshold: Any = 0.0,
     ) -> dict[str, np.ndarray]:
+        _validated_plane_roi_count(reference_plane, "reference_plane")
+        _validated_plane_roi_count(measurement_plane, "measurement_plane")
         return original(
             reference_plane,
             measurement_plane,
@@ -44,6 +47,28 @@ def install_activity_similarity_control_validation() -> None:
     setattr(validated_activity_similarity_components, _ORIGINAL_ATTR, original)
     _activity_similarity.activity_similarity_components = validated_activity_similarity_components
     setattr(_activity_similarity, _PATCH_MARKER, True)
+
+
+def _validated_plane_roi_count(plane: Any, plane_name: str) -> int:
+    message = f"{plane_name}.n_rois must be a finite non-negative integer"
+    raw_count = getattr(plane, "n_rois", None)
+    if isinstance(raw_count, (bool, np.bool_)):
+        raise ValueError(message)
+
+    try:
+        count = int(operator.index(raw_count))
+    except TypeError:
+        try:
+            numeric_count = float(raw_count)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(message) from exc
+        if not np.isfinite(numeric_count) or not numeric_count.is_integer():
+            raise ValueError(message)
+        count = int(numeric_count)
+
+    if count < 0:
+        raise ValueError(message)
+    return count
 
 
 def _coerce_scalar_float(value: Any, *, error_message: str) -> float:
