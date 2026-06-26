@@ -115,7 +115,11 @@ class PriorEdgeSurvivalModel:
         used = np.asarray(self.used_features, dtype=bool)
         llr[:, ~used] = 0.0
         if float(self.per_feature_clip) > 0.0:
-            llr = np.clip(llr, -float(self.per_feature_clip), float(self.per_feature_clip))
+            llr = np.clip(
+                llr,
+                -float(self.per_feature_clip),
+                float(self.per_feature_clip),
+            )
         denom = max(1.0, math.sqrt(float(np.sum(used))))
         scores = np.sum(llr, axis=1) / denom
         if float(self.score_clip) > 0.0:
@@ -313,7 +317,9 @@ def _robust_location_scale(values: np.ndarray, *, min_scale: float) -> tuple[flo
 
 
 def _gaussian_log_density(
-    values: np.ndarray, *, location: np.ndarray, scale: np.ndarray) -> np.ndarray:
+    values: np.ndarray, *, location: np.ndarray, scale: np.ndarray
+) -> np.ndarray:
     safe_scale = np.maximum(np.asarray(scale, dtype=float), 1.0e-6)
-    standardized = (np.asarray(values, dtype=float) - np.asarray(location, dtype=float)) / safe_scale
+    centered = np.asarray(values, dtype=float) - np.asarray(location, dtype=float)
+    standardized = centered / safe_scale
     return -0.5 * standardized**2 - np.log(safe_scale)
