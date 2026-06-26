@@ -24,12 +24,15 @@ def _canonical_rows(
     identity_complete: float = 0.934,
     greedy_pairwise: float = 0.966,
     greedy_complete: float = 0.931,
+    no_local_pairwise: float = 0.965,
+    no_local_complete: float = 0.932,
 ) -> list[dict[str, str]]:
     return [
         _metric_row("Track2p", 0.965, 0.924),
         _metric_row("FullMHTPrior2", 0.965, 0.930),
         _metric_row("FullMHTPriorSurvival", 0.966, 0.932),
         _metric_row("FullMHTNoPriorContinuation100", 0.965, 0.930),
+        _metric_row("FullMHTIdentityHistoryNoLocalContext", no_local_pairwise, no_local_complete),
         _metric_row("FullMHTIdentityHistory", identity_pairwise, identity_complete),
         _metric_row("FullMHTGreedyIdentityHistory", greedy_pairwise, greedy_complete),
     ]
@@ -165,6 +168,7 @@ def test_identity_history_promotion_requires_all_gates() -> None:
     assert decision["status"] == "promotable_after_review"
     assert decision["mht_vs_local_result"] == "identity_complete_history_advantage"
     assert decision["history_search_result"] == "identity_complete_history_advantage"
+    assert decision["no_local_context_control_result"] == "identity_improves_no_local_context"
     assert decision["sensitivity_result"] == "stable_plateau"
     assert decision["exposure_result"] == "bounded_exposure"
 
@@ -178,6 +182,17 @@ def test_identity_history_promotion_rejects_manifest_tie_against_greedy() -> Non
 
     assert decision["status"] == "not_promotable_manifest"
     assert decision["mht_vs_local_result"] != "identity_complete_history_advantage"
+
+
+def test_identity_history_promotion_rejects_no_local_context_regression() -> None:
+    decision = evaluate_identity_history_promotion(
+        _canonical_rows(no_local_pairwise=0.966, no_local_complete=0.936),
+        _sensitivity_rows(),
+        [_exposure_row()],
+    )
+
+    assert decision["status"] == "not_promotable_manifest"
+    assert decision["no_local_context_control_result"] == "identity_below_no_local_context"
 
 
 def test_identity_history_promotion_rejects_unstable_sensitivity() -> None:
@@ -213,6 +228,7 @@ def test_identity_history_promotion_markdown_reports_three_gates() -> None:
 
     assert "# FullMHT Identity-History Promotion Gate" in markdown
     assert "MHT-vs-local result" in markdown
+    assert "No-local-context result" in markdown
     assert "identity_complete_history_advantage" in markdown
     assert "stable_plateau" in markdown
     assert "bounded_exposure" in markdown
