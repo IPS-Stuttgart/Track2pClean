@@ -190,6 +190,7 @@ def _run_subject_exposure_audit(
     selected_prior_edges = selected_edges & track2p_prior_edges
     selected_non_prior_edges = selected_edges - track2p_prior_edges
     history_totals = _history_totals(best.history)
+    scan_history_exposure = _scan_motion_history_exposure(best, mht_config)
     return {
         "subject": subject_dir.name,
         "n_sessions": int(n_sessions),
@@ -209,6 +210,7 @@ def _run_subject_exposure_audit(
         "terminal_motion_history_risk": float(
             final_selection.get("terminal_motion_history_risk", 0.0)
         ),
+        **scan_history_exposure,
         "n_output_tracks": int(output_tracks.shape[0]),
         "n_selected_edges": int(len(selected_edges)),
         "n_selected_prior_edges": int(len(selected_prior_edges)),
@@ -237,6 +239,27 @@ def _history_totals(history: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     totals.update(_history_no_prior_continuation_totals(history))
     totals.update(_history_prior_survival_totals(history))
     return totals
+
+
+def _scan_motion_history_exposure(hypothesis: Any, config: Any) -> dict[str, float]:
+    from bayescatrack.experiments.full_mht_scan_history_dynamics_integration import (
+        scan_motion_history_risk,
+    )
+
+    risk = float(scan_motion_history_risk(hypothesis))
+    weight = _config_float(config, "scan_motion_history_weight", default=0.0)
+    return {
+        "history_scan_motion_history_risk": float(risk),
+        "history_scan_motion_history_weighted_risk": float(risk * weight),
+    }
+
+
+def _config_float(config: Any, name: str, *, default: float) -> float:
+    try:
+        value = float(getattr(config, name, default))
+    except (TypeError, ValueError):
+        return float(default)
+    return value if np.isfinite(value) else float(default)
 
 
 def _history_int_sum(history: Sequence[Mapping[str, Any]], key: str) -> int:
@@ -387,6 +410,8 @@ def _empty_subject_row(subject: str, *, n_sessions: int) -> dict[str, Any]:
         "terminal_history_risk": 0.0,
         "terminal_identity_history_risk": 0.0,
         "terminal_motion_history_risk": 0.0,
+        "history_scan_motion_history_risk": 0.0,
+        "history_scan_motion_history_weighted_risk": 0.0,
         "n_output_tracks": 0,
         "n_selected_edges": 0,
         "n_selected_prior_edges": 0,
@@ -425,6 +450,8 @@ def _all_subjects_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "history_prior_survival_negative_edges",
     ]
     float_keys = [
+        "history_scan_motion_history_risk",
+        "history_scan_motion_history_weighted_risk",
         "history_growth_prediction_penalty",
         "history_growth_prediction_weighted_penalty",
         "history_no_prior_continuation_score",
@@ -444,6 +471,17 @@ def _all_subjects_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     output["max_missing_observations_per_subject"] = max(
         (int(row.get("n_missing_observations", 0)) for row in rows),
         default=0,
+    )
+    output["max_scan_motion_history_risk_per_subject"] = max(
+        (float(row.get("history_scan_motion_history_risk", 0.0)) for row in rows),
+        default=0.0,
+    )
+    output["max_scan_motion_history_weighted_risk_per_subject"] = max(
+        (
+            float(row.get("history_scan_motion_history_weighted_risk", 0.0))
+            for row in rows
+        ),
+        default=0.0,
     )
     output["max_growth_prediction_penalized_edges_per_subject"] = max(
         (int(row.get("history_growth_prediction_penalized_edges", 0)) for row in rows),
@@ -597,6 +635,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=0.0,
     )
     parser.add_argument("--terminal-motion-history-weight", type=float, default=0.0)
+    parser.add_argument("--scan-motion-history-weight", type=float, default=0.0)
     parser.add_argument("--growth-history-prediction-weight", type=float, default=0.0)
     parser.add_argument("--growth-history-prediction-scale", type=float, default=1.0)
     parser.add_argument("--growth-history-prediction-clip", type=float, default=8.0)
@@ -638,6 +677,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
         install_full_mht_history_dynamics_objective()
+    if float(args.scan_motion_history_weight) > 0.0:
+        from bayescatrack.experiments.full_mht_scan_history_dynamics_integration import (
+            install_full_mht_scan_history_dynamics_pruning,
+        )
+
+        install_full_mht_scan_history_dynamics_pruning()
     if float(args.growth_history_prediction_weight) > 0.0:
         from bayescatrack.experiments.full_mht_growth_history_prediction_integration import (
             install_full_mht_growth_history_prediction_scoring,
@@ -705,6 +750,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         mht_config,
         "terminal_motion_history_weight",
         float(args.terminal_motion_history_weight),
+    )
+    object.__setattr__(
+        mht_config,
+        "scan_motion_history_weight",
+        float(args.scan_motion_history_weight),
     )
     object.__setattr__(
         mht_config,
