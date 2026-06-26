@@ -7,9 +7,9 @@ admit a strong continuation and preserve the complete identity.  A greedy beam
 of width one takes the local edge and loses the track.  A bounded MHT beam keeps
 both first-scan hypotheses long enough for the globally better history to win.
 
-The second demo embeds the same conflict among many stable tracks, so the greedy
-solution remains pairwise-good while still damaging complete-track identity.  No
-ground-truth labels enter the selection scores.  The reference matrix is used
+The second demo embeds a related conflict among many stable tracks, so the greedy
+solution remains pairwise-good while still producing a wrong complete identity.
+No ground-truth labels enter the selection scores.  The reference matrix is used
 only to report the same pairwise and complete-track metrics used by the Track2p
 benchmark rows.
 """
@@ -92,31 +92,42 @@ def build_pairwise_good_complete_bad_scenario(
     """Embed one ambiguous identity in many easy tracks.
 
     This is the paper-facing toy case: local greedy assignment keeps a high
-    pairwise score because most tracks are easy, but one locally attractive edge
-    still breaks a complete identity.  The MHT beam can keep the weaker first
-    edge alive until the later continuation makes the complete history win.
+    pairwise score because most tracks are easy, but one locally attractive
+    continuation still creates a wrong complete identity.  The MHT beam can keep
+    the weaker middle edge alive until later evidence makes the complete history
+    win.
     """
 
     n_stable = max(1, int(stable_tracks))
-    reference = np.full((n_stable + 1, 3), -1, dtype=int)
+    reference = np.full((n_stable + 1, 4), -1, dtype=int)
     seed_track = np.full_like(reference, -1)
     edge_scores: dict[tuple[int, int, int, int], float] = {
-        (0, 1, 1, 10): 5.0,
-        (0, 1, 1, 20): 4.0,
-        (1, 2, 20, 30): 5.0,
+        # The first link is correct and locally easy for both arms.
+        (0, 1, 1, 20): 6.0,
+        # Greedy takes the locally stronger but globally worse continuation.
+        (1, 2, 20, 31): 5.0,
+        # The MHT beam keeps this slightly weaker continuation alive.
+        (1, 2, 20, 30): 4.0,
+        # Later evidence makes the complete correct identity best.
+        (2, 3, 30, 40): 8.0,
+        (2, 3, 31, 41): 1.0,
     }
-    reference[0] = np.asarray([1, 20, 30], dtype=int)
+    reference[0] = np.asarray([1, 20, 30, 40], dtype=int)
     seed_track[0, 0] = 1
 
     for index in range(n_stable):
         row = index + 1
         seed_roi = 1000 + index
-        middle_roi = 2000 + index
-        final_roi = 3000 + index
-        reference[row] = np.asarray([seed_roi, middle_roi, final_roi], dtype=int)
+        session_one_roi = 2000 + index
+        session_two_roi = 3000 + index
+        final_roi = 4000 + index
+        reference[row] = np.asarray(
+            [seed_roi, session_one_roi, session_two_roi, final_roi], dtype=int
+        )
         seed_track[row, 0] = seed_roi
-        edge_scores[(0, 1, seed_roi, middle_roi)] = 6.0
-        edge_scores[(1, 2, middle_roi, final_roi)] = 6.0
+        edge_scores[(0, 1, seed_roi, session_one_roi)] = 6.0
+        edge_scores[(1, 2, session_one_roi, session_two_roi)] = 6.0
+        edge_scores[(2, 3, session_two_roi, final_roi)] = 6.0
 
     return DemoScenario(
         name="pairwise-good-complete-bad",
