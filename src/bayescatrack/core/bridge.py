@@ -3,6 +3,7 @@
 # pylint: disable=duplicate-code
 
 from .._exports import BRIDGE_PUBLIC_NAMES
+from .. import _suite2p_iscell_validation as _suite2p_iscell_validation
 from . import _bridge_impl
 from . import _association_bundle_bool_validation as _association_bundle_bool_validation
 from . import _cell_probability_validation as _cell_probability_validation
@@ -30,6 +31,7 @@ _suite2p_coordinate_value_validation.install_suite2p_coordinate_value_validation
     _bridge_impl
 )
 _suite2p_overlap_value_validation.install_suite2p_overlap_value_validation(_bridge_impl)
+_suite2p_iscell_validation.install_suite2p_iscell_value_validation(_bridge_impl)
 _roi_index_validation.install_calcium_plane_roi_index_validation(
     _bridge_impl.CalciumPlaneData
 )
