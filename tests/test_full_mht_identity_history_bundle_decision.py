@@ -42,6 +42,7 @@ def test_bundle_promotes_core_when_central_gate_passes() -> None:
 
     assert decision["status"] == "promotable_core_method"
     assert decision["paper_row"] == "FullMHTIdentityHistory"
+    assert decision["core_evidence_result"] == "complete_core_evidence"
     assert decision["optional_variants"] == []
     assert decision["scan_pruning"]["status"] == "not_evaluated"
 
@@ -75,6 +76,23 @@ def test_bundle_does_not_promote_addons_when_core_fails() -> None:
     assert decision["optional_variants"] == []
     assert decision["scan_pruning"]["status"] == "candidate_addon"
     assert "central FullMHTIdentityHistory gate" in decision["guardrail"]
+
+
+def test_bundle_rejects_promotable_status_with_inconsistent_core_evidence() -> None:
+    promotion = _identity_promotion()
+    promotion["exposure_result"] = "broad_exposure"
+
+    decision = evaluate_identity_history_bundle(
+        promotion,
+        scan_pruning_promotion=_scan_promotion(),
+        terminal_completion=_terminal_decision(),
+    )
+
+    assert decision["status"] == "not_promotable_core_method"
+    assert decision["paper_row"] == ""
+    assert decision["core_evidence_result"] == "inconsistent_core_evidence"
+    assert decision["optional_variants"] == []
+    assert "status and evidence fields disagree" in decision["recommendation"]
 
 
 def test_bundle_reports_incomplete_core_before_addons() -> None:
@@ -115,4 +133,5 @@ def test_bundle_markdown_names_guardrail() -> None:
 
     assert "# FullMHT Identity-History Bundle Decision" in markdown
     assert "not_promotable_core_method" in markdown
+    assert "Core evidence" in markdown
     assert "optional add-ons are ignored" in markdown
