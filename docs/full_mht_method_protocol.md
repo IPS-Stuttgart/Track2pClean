@@ -20,15 +20,16 @@ A defensible FullMHT method should combine four label-free terms:
    deformation enter as likelihood-ratio evidence rather than hand-picked GT
    ledgers.
 3. **Identity dynamics**: missed detections, no-prior continuations, prior
-   switches, and gap reactivations are explicit history events with costs or
-   likelihoods.
+   switches, gap reactivations, and growth-history prediction are explicit
+   history events with costs or likelihoods.
 4. **Complete-history objective**: terminal selection may prefer a lower local
    scan score when the complete identity history is more plausible.
 
 The current branch implements all four hooks. The first positive benchmark row is
 still the fixed prior-veto hazard, but the branch now also has a calibrated
-prior-edge survival likelihood row, an opt-in terminal completion objective, and
-an opt-in scan-history pruning objective ready for manifest-level evaluation.
+prior-edge survival likelihood row, an opt-in terminal completion objective, an
+opt-in scan-history pruning objective, and an opt-in growth-history prediction
+objective ready for manifest-level evaluation.
 
 ## Current Evidence Map
 
@@ -43,6 +44,7 @@ an opt-in scan-history pruning objective ready for manifest-level evaluation.
 | Identity-diverse beam | implemented, exposes cleaner alternatives | calibrated-likelihood notes | keep |
 | Terminal completion objective | implemented, not yet benchmarked | `benchmarks/full_mht_terminal_completion_probe_manifest.json`, `docs/full_mht_terminal_completion_objective.md` | run as method probe |
 | Scan-time history pruning | implemented, not yet benchmarked | `benchmarks/full_mht_scan_history_dynamics_probe_manifest.json`, `docs/full_mht_history_dynamics_objective.md` | run as method probe |
+| Growth-history prediction | implemented, not yet benchmarked | `benchmarks/full_mht_growth_history_prediction_probe_manifest.json`, `docs/full_mht_growth_history_prediction.md` | run as method probe |
 | Fixed prior-veto hazard | first positive FullMHT-owned result | `docs/full_mht_prior_risk_notes.md` | freeze and validate |
 | Calibrated prior-edge survival | integrated, not yet benchmarked | `full_mht_prior_survival_model.py`, `FullMHTPriorSurvival` manifest row | run on server |
 | Manifest-level reproduction | manifest + adapter committed | `benchmarks/full_mht_prior_veto_manifest.json` | run on server |
@@ -119,6 +121,28 @@ It tests weights `0.25`, `0.50`, and `1.00` against `Track2p` and
 until it improves complete-track F1 without damaging pairwise F1 and behaves
 stably across at least two nearby weights.
 
+## Growth-History Prediction Probe
+
+The branch now also has an opt-in scan-assignment dynamics objective:
+
+```text
+growth_history_prediction_weight
+```
+
+This term parses the partial identity row's previous selected-edge summaries and
+penalizes a new candidate before Murty scan hypotheses are generated when its
+label-free growth residual, Mahalanobis residual, local deformation, or IoU terms
+deteriorate sharply relative to that row's history. The frozen probe manifest is:
+
+```text
+benchmarks/full_mht_growth_history_prediction_probe_manifest.json
+```
+
+It tests weights `0.25`, `0.50`, and `1.00` against `Track2p` and
+`FullMHTPrior2`. This is closer to a tracking dynamics model than terminal
+reranking because it can change the scan-assignment candidate set and therefore
+which histories survive the beam.
+
 ## Current Positive Row
 
 The current positive non-teacher FullMHT row is:
@@ -171,6 +195,8 @@ Do not present FullMHT as a final method if any of the following remain true:
   damages pairwise F1 by rewarding over-linking.
 - The scan-history pruning objective improves only at a single fragile weight or
   simply reproduces local-score pruning.
+- The growth-history prediction objective improves only at a single fragile
+  weight or broadly suppresses continuations.
 - Deterministic edge gating over the same candidates produces exactly the same
   behavior without any history-level conflict or history-level benefit.
 - The paper text cannot distinguish the benchmark row from post-hoc growth-veto
@@ -185,7 +211,7 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | Manifest reproduction | `bayescatrack benchmark suite benchmarks/full_mht_prior_veto_manifest.json` reproduces Track2p, FullMHTPrior2, FullMHTGreedyPrior2, FullMHTPriorVetoScaled, and FullMHTPriorSurvival rows |
 | No-GT leakage | tests confirm scoring functions do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
 | Exposure audit | all Track2p-style subjects report rare prior-veto/survival hazards and no subject receives a broad set of missed prior successors |
-| Sensitivity | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json`, `benchmarks/full_mht_terminal_completion_probe_manifest.json`, and `benchmarks/full_mht_scan_history_dynamics_probe_manifest.json` show nearby settings do not collapse pairwise or complete-track metrics |
+| Sensitivity | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json`, `benchmarks/full_mht_terminal_completion_probe_manifest.json`, `benchmarks/full_mht_scan_history_dynamics_probe_manifest.json`, and `benchmarks/full_mht_growth_history_prediction_probe_manifest.json` show nearby settings do not collapse pairwise or complete-track metrics |
 | Greedy ablation | `FullMHTGreedyPrior2` is compared against the beam rows; a tie is reported honestly as no real-data history-search advantage yet |
 | Conflict demonstration | constructed demos, and ideally one real benchmark subject, show a locally better edge loses to a better complete history |
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants where relevant |
@@ -193,14 +219,15 @@ FullMHT can be promoted as a paper method only after these gates pass:
 ## Implemented Method Jump
 
 The fixed prior-veto row is promising but still too close to a gated hazard. The
-branch now implements three method jumps: a calibrated survival probability for
-Track2p prior edges, a terminal complete-history objective, and scan-time
-motion-history pruning:
+branch now implements four method jumps: a calibrated survival probability for
+Track2p prior edges, a terminal complete-history objective, scan-time
+motion-history pruning, and growth-history prediction during candidate scoring:
 
 ```text
 log p(edge survives | label-free diagnostics)
 terminal penalty for incomplete seed-anchored histories
 scan-time penalty for internally incoherent partial identity histories
+candidate-score penalty for growth-history-incoherent continuations
 ```
 
 Candidate features include:
@@ -214,18 +241,19 @@ Candidate features include:
 - local-neighbor deformation consistency
 - terminal missing-observation counts in non-empty identity histories
 - immediate within-history motion deterioration between successive selected edges
+- candidate-vs-history deterioration before scan hypotheses are generated
 
 The MHT score can now combine:
 
 ```text
 proposal prior + association likelihood + prior-edge survival likelihood
 + missed-detection / death likelihood + scan-time history objective
-+ terminal identity-history objective
++ growth-history prediction objective + terminal identity-history objective
 ```
 
 This reduces the current hand-gated prior-veto pocket to a calibrated model layer
 when `FullMHTPriorSurvival` is enabled, and it gives both the scan-time beam and
-the terminal beam an explicit complete-history objective.
+the terminal beam explicit complete-history objectives.
 
 ## Server Commands To Run Next
 
@@ -236,6 +264,7 @@ recipe lives in:
 docs/full_mht_prior_survival_validation.md
 docs/full_mht_terminal_completion_objective.md
 docs/full_mht_history_dynamics_objective.md
+docs/full_mht_growth_history_prediction.md
 ```
 
 Minimum command bundle:
@@ -257,6 +286,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_terminal_completion_integration.py \
   tests/test_full_mht_scan_history_dynamics_integration.py \
   tests/test_full_mht_scan_history_conflict_demo.py \
+  tests/test_full_mht_growth_history_prediction_integration.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
@@ -285,9 +315,16 @@ mkdir -p "$COMP"
   benchmarks/full_mht_terminal_completion_probe_manifest.json \
   --output-dir "$COMP" \
   --summary-format table
+
+GROWTH="$REPO/results/full_mht_growth_history_prediction_probe_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$GROWTH"
+"$PY" -m bayescatrack benchmark suite \
+  benchmarks/full_mht_growth_history_prediction_probe_manifest.json \
+  --output-dir "$GROWTH" \
+  --summary-format table
 ```
 
 Record the output directories, comparison tables, and promote/keep-exploratory
 judgment in `docs/full_mht_prior_survival_validation.md`,
-`docs/full_mht_terminal_completion_objective.md`, and
+`docs/full_mht_terminal_completion_objective.md`, `docs/full_mht_growth_history_prediction.md`, and
 `docs/full_mht_manifest_integration_notes.md` after the run.
