@@ -35,6 +35,7 @@ prior-edge survival likelihood row ready for manifest-level evaluation.
 | --- | --- | --- | --- |
 | Full scan-assignment beam | implemented | `track2p-policy-full-mht` | keep |
 | Greedy-vs-MHT conflict | constructed positive | `track2p-policy-full-mht-conflict-demo` | use as method intuition |
+| Real-data greedy beam ablation | frozen, not yet run | `FullMHTGreedyPrior2` in `benchmarks/full_mht_prior_veto_manifest.json` | run on server |
 | Calibrated association likelihood | implemented, benchmark-negative | `docs/full_mht_calibrated_likelihood_notes.md` | keep as architecture, not row |
 | Identity dynamics penalties | implemented, mostly collapse to proposal solution | `track2p_prior_*` diagnostics | keep |
 | Identity-diverse beam | implemented, exposes cleaner alternatives | calibrated-likelihood notes | keep |
@@ -67,6 +68,20 @@ Run it with:
 python -m bayescatrack.experiments.track2p_policy_full_mht_conflict_demo \
   --scenario pairwise-good-complete-bad
 ```
+
+## Real-Data Greedy Ablation
+
+The canonical manifest now includes:
+
+```text
+FullMHTGreedyPrior2
+```
+
+This row uses the same proposal-prior settings and scan candidate generator as
+`FullMHTPrior2`, but fixes `beam_width = 1`. It is the real-data counterpart of
+the conflict demo. If it ties the beam row, the benchmark still does not prove a
+history-search advantage. If it loses to the beam row, the method has direct
+real-data evidence that preserving alternate identity histories matters.
 
 ## Current Positive Row
 
@@ -114,6 +129,8 @@ Do not present FullMHT as a final method if any of the following remain true:
   non-GT Track2p-style subjects.
 - A nearby threshold perturbation selects true-positive removals or causes
   complete-track loss.
+- `FullMHTGreedyPrior2` ties the beam row and no constructed or real-data case
+  demonstrates a history-level advantage.
 - Deterministic edge gating over the same candidates produces exactly the same
   behavior without any history-level conflict or history-level benefit.
 - The paper text cannot distinguish the benchmark row from post-hoc growth-veto
@@ -125,11 +142,11 @@ FullMHT can be promoted as a paper method only after these gates pass:
 
 | gate | required evidence |
 | --- | --- |
-| Manifest reproduction | `bayescatrack benchmark suite benchmarks/full_mht_prior_veto_manifest.json` reproduces Track2p, FullMHTPrior2, FullMHTPriorVetoScaled, and FullMHTPriorSurvival rows |
+| Manifest reproduction | `bayescatrack benchmark suite benchmarks/full_mht_prior_veto_manifest.json` reproduces Track2p, FullMHTPrior2, FullMHTGreedyPrior2, FullMHTPriorVetoScaled, and FullMHTPriorSurvival rows |
 | No-GT leakage | tests confirm scoring functions do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
 | Exposure audit | all Track2p-style subjects report rare prior-veto/survival hazards and no subject receives a broad set of missed prior successors |
 | Sensitivity | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json` shows nearby survival weights/clips/pseudo-label settings do not collapse pairwise or complete-track metrics |
-| Greedy ablation | deterministic local selection over the same scan candidates is compared against FullMHT history selection |
+| Greedy ablation | `FullMHTGreedyPrior2` is compared against the beam rows; a tie is reported honestly as no real-data history-search advantage yet |
 | Conflict demonstration | at least the constructed conflict demo, and ideally one real benchmark subject, shows a locally better edge loses to a better complete history |
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants where relevant |
 
