@@ -8,8 +8,9 @@ same registration, growth, and local-deformation diagnostics used by the base
 runner.
 
 The objective is intentionally installed as an opt-in hook.  Frozen baseline rows
-are unchanged unless a manifest or runner attaches ``terminal_motion_history_weight``
-to ``FullMHTConfig`` and calls ``install_full_mht_history_dynamics_objective``.
+are unchanged unless a manifest or runner attaches
+``terminal_motion_history_weight`` to ``FullMHTConfig`` and calls
+``install_full_mht_history_dynamics_objective``.
 """
 
 from __future__ import annotations
@@ -75,7 +76,10 @@ def install_full_mht_history_dynamics_objective() -> None:
                 track2p_prior_edges=track2p_prior_edges,
             )
 
-        prior_weight = max(0.0, float(getattr(config, "terminal_history_risk_weight", 0.0)))
+        prior_weight = max(
+            0.0,
+            float(getattr(config, "terminal_history_risk_weight", 0.0)),
+        )
         best = hypotheses[0]
         best_rank = 1
         best_prior_risk = 0.0
