@@ -31,9 +31,18 @@ def _prior_matrix() -> full_mht._FullMHTPairMatrices:
     area_ratio = np.full(shape, 0.50, dtype=float)
     local_deformation = np.full(shape, 0.50, dtype=float)
     np.fill_diagonal(registered, diagonal)
-    np.fill_diagonal(shifted, np.asarray([0.80, 0.78, 0.76, 0.62], dtype=float))
-    np.fill_diagonal(growth_residual, np.asarray([0.20, 0.40, 2.90, 2.60]))
-    np.fill_diagonal(growth_mahalanobis, np.asarray([0.30, 0.60, 2.70, 3.20]))
+    np.fill_diagonal(
+        shifted,
+        np.asarray([0.80, 0.78, 0.76, 0.62], dtype=float),
+    )
+    np.fill_diagonal(
+        growth_residual,
+        np.asarray([0.20, 0.40, 2.90, 2.60]),
+    )
+    np.fill_diagonal(
+        growth_mahalanobis,
+        np.asarray([0.30, 0.60, 2.70, 3.20]),
+    )
     np.fill_diagonal(area_ratio, np.asarray([0.98, 0.95, 0.86, 0.78]))
     np.fill_diagonal(local_deformation, np.asarray([0.02, 0.04, 0.25, 0.30]))
     return full_mht._FullMHTPairMatrices(
@@ -105,12 +114,13 @@ def test_prior_survival_scoring_rewards_anchors_and_penalizes_hazards(
     config = full_mht.FullMHTConfig(track2p_prior_weight=0.0)
     object.__setattr__(config, "track2p_prior_survival_weight", 1.0)
 
-    anchor_delta = _score(full_mht._edge_score, matrices, config, source_local=0) - _score(
-        original, matrices, config, source_local=0
-    )
-    hazard_delta = _score(full_mht._edge_score, matrices, config, source_local=2) - _score(
-        original, matrices, config, source_local=2
-    )
+    anchor_score = _score(full_mht._edge_score, matrices, config, source_local=0)
+    anchor_base = _score(original, matrices, config, source_local=0)
+    hazard_score = _score(full_mht._edge_score, matrices, config, source_local=2)
+    hazard_base = _score(original, matrices, config, source_local=2)
+
+    anchor_delta = anchor_score - anchor_base
+    hazard_delta = hazard_score - hazard_base
 
     assert anchor_delta > 0.0
     assert hazard_delta < 0.0
@@ -126,9 +136,10 @@ def test_prior_survival_scoring_is_disabled_without_weight(
     original = _original_edge_score()
     config = full_mht.FullMHTConfig(track2p_prior_weight=0.0)
 
-    assert _score(full_mht._edge_score, matrices, config, source_local=0) == pytest.approx(
-        _score(original, matrices, config, source_local=0)
-    )
+    patched_score = _score(full_mht._edge_score, matrices, config, source_local=0)
+    original_score = _score(original, matrices, config, source_local=0)
+
+    assert patched_score == pytest.approx(original_score)
 
 
 def test_prior_survival_scoring_falls_back_without_pseudo_class_support(
@@ -142,9 +153,10 @@ def test_prior_survival_scoring_falls_back_without_pseudo_class_support(
     object.__setattr__(config, "track2p_prior_survival_weight", 3.0)
     object.__setattr__(config, "track2p_prior_survival_min_examples_per_class", 3)
 
-    assert _score(full_mht._edge_score, matrices, config, source_local=2) == pytest.approx(
-        _score(original, matrices, config, source_local=2)
-    )
+    patched_score = _score(full_mht._edge_score, matrices, config, source_local=2)
+    original_score = _score(original, matrices, config, source_local=2)
+
+    assert patched_score == pytest.approx(original_score)
 
 
 def test_prior_survival_scoring_installer_is_idempotent() -> None:
