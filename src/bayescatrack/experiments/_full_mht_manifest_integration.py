@@ -3,8 +3,8 @@
 The full-MHT runner is the first Track2p-cleaning experiment that opens a beam
 over full identity histories instead of selecting post-hoc residual edits.  This
 integration makes the runner executable from JSON benchmark manifests, including
-the proposal-prior, prior-veto, calibrated prior-survival, and terminal
-completion controls used by the current method probe.
+the proposal-prior, prior-veto, calibrated prior-survival, terminal completion,
+and history-dynamics controls used by the current method probe.
 """
 
 from __future__ import annotations
@@ -43,6 +43,9 @@ FULL_MHT_PRIOR_SURVIVAL_FIELDS = (
 )
 FULL_MHT_TERMINAL_COMPLETION_FLOAT_FIELDS = {
     "terminal_incomplete_history_weight",
+}
+FULL_MHT_HISTORY_DYNAMICS_FLOAT_FIELDS = {
+    "terminal_motion_history_weight",
 }
 FULL_MHT_FIELDS = {
     "threshold_method",
@@ -102,6 +105,7 @@ FULL_MHT_FIELDS = {
     "growth_anchor_min_cell_probability",
     *FULL_MHT_PRIOR_SURVIVAL_FIELDS,
     *FULL_MHT_TERMINAL_COMPLETION_FLOAT_FIELDS,
+    *FULL_MHT_HISTORY_DYNAMICS_FLOAT_FIELDS,
 }
 
 
@@ -209,6 +213,12 @@ def _run_track2p_policy_full_mht_rows(
         )
 
         install_full_mht_terminal_completion_objective()
+    if _uses_history_dynamics(options):
+        from bayescatrack.experiments.full_mht_history_dynamics_integration import (
+            install_full_mht_history_dynamics_objective,
+        )
+
+        install_full_mht_history_dynamics_objective()
 
     output = run_track2p_policy_full_mht(
         config,
@@ -234,6 +244,10 @@ def _uses_prior_survival(options: Mapping[str, Any]) -> bool:
 
 def _uses_terminal_completion(options: Mapping[str, Any]) -> bool:
     return any(key in options for key in FULL_MHT_TERMINAL_COMPLETION_FLOAT_FIELDS)
+
+
+def _uses_history_dynamics(options: Mapping[str, Any]) -> bool:
+    return any(key in options for key in FULL_MHT_HISTORY_DYNAMICS_FLOAT_FIELDS)
 
 
 def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
@@ -478,7 +492,8 @@ def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
         ),
     )
     config = _attach_prior_survival_options(config, options)
-    return _attach_terminal_completion_options(config, options)
+    config = _attach_terminal_completion_options(config, options)
+    return _attach_history_dynamics_options(config, options)
 
 
 def _attach_prior_survival_options(config: Any, options: Mapping[str, Any]) -> Any:
@@ -505,6 +520,19 @@ def _attach_terminal_completion_options(config: Any, options: Mapping[str, Any])
     from bayescatrack.experiments import benchmark_manifest as manifest
 
     for key in sorted(FULL_MHT_TERMINAL_COMPLETION_FLOAT_FIELDS):
+        if key in options:
+            object.__setattr__(
+                config,
+                key,
+                manifest._float_option(options, key, default=0.0),
+            )
+    return config
+
+
+def _attach_history_dynamics_options(config: Any, options: Mapping[str, Any]) -> Any:
+    from bayescatrack.experiments import benchmark_manifest as manifest
+
+    for key in sorted(FULL_MHT_HISTORY_DYNAMICS_FLOAT_FIELDS):
         if key in options:
             object.__setattr__(
                 config,
