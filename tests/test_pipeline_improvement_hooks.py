@@ -79,6 +79,20 @@ def test_consensus_prior_relieves_edges_with_enough_votes():
     assert adjusted[(0, 1)][0, 0] == 1.0
 
 
+@pytest.mark.parametrize(
+    "matrix",
+    (
+        np.array(1.0, dtype=float),
+        np.array([1.0, 2.0], dtype=float),
+    ),
+)
+def test_consensus_prior_rejects_non_matrix_pairwise_costs(matrix):
+    votes = {(0, 1, 0, 0): 2}
+
+    with pytest.raises(ValueError, match="two-dimensional"):
+        apply_consensus_edge_priors({(0, 1): matrix}, votes)
+
+
 def test_consensus_prior_config_accepts_numeric_strings_and_csv_variants():
     config = ConsensusPriorConfig(
         variant_costs="registered-iou, roi-aware",

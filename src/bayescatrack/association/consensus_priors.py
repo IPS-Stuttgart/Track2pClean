@@ -119,10 +119,13 @@ def apply_consensus_edge_priors(
     """Subtract bounded cost relief from edges supported by enough variants."""
 
     cfg = consensus_prior_config_from_mapping(config) or ConsensusPriorConfig()
-    adjusted = {
-        (int(edge[0]), int(edge[1])): np.asarray(matrix, dtype=float).copy()
-        for edge, matrix in pairwise_costs.items()
-    }
+    adjusted: dict[SessionEdge, np.ndarray] = {}
+    for edge, matrix in pairwise_costs.items():
+        session_edge = (int(edge[0]), int(edge[1]))
+        adjusted[session_edge] = _normalize_pairwise_cost_matrix(
+            matrix,
+            session_edge,
+        )
     if cfg.relief <= 0.0 or not votes:
         return adjusted
 
@@ -144,6 +147,20 @@ def apply_consensus_edge_priors(
         relief = min(cfg.max_relief, cfg.relief * int(vote_count))
         matrix[source_roi, target_roi] = max(0.0, old_value - relief)
     return adjusted
+
+
+def _normalize_pairwise_cost_matrix(matrix: Any, edge: SessionEdge) -> np.ndarray:
+    try:
+        costs = np.asarray(matrix, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"pairwise cost matrix for session edge {edge!r} must be numeric"
+        ) from exc
+    if costs.ndim != 2:
+        raise ValueError(
+            f"pairwise cost matrix for session edge {edge!r} must be two-dimensional"
+        )
+    return costs.copy()
 
 
 def _normalize_variant_costs(values: Sequence[str] | str) -> tuple[str, ...]:
