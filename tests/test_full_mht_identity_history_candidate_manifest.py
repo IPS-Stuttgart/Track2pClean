@@ -13,6 +13,11 @@ def _manifest() -> dict:
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
+def _without_manifest_identity(row: dict) -> dict:
+    ignored_keys = {"name", "output", "local_deformation_weight"}
+    return {key: value for key, value in row.items() if key not in ignored_keys}
+
+
 def test_identity_history_candidate_manifest_is_frozen() -> None:
     manifest = _manifest()
     runs = {run["name"]: run for run in manifest["runs"]}
@@ -22,6 +27,7 @@ def test_identity_history_candidate_manifest_is_frozen() -> None:
         "FullMHTPrior2",
         "FullMHTPriorSurvival",
         "FullMHTNoPriorContinuation100",
+        "FullMHTIdentityHistoryNoLocalContext",
         "FullMHTIdentityHistory",
         "FullMHTGreedyIdentityHistory",
     ]
@@ -32,6 +38,17 @@ def test_identity_history_candidate_manifest_is_frozen() -> None:
     assert runs["FullMHTIdentityHistory"]["track2p_prior_survival_weight"] == 1.0
     assert runs["FullMHTIdentityHistory"]["no_prior_continuation_likelihood_weight"] == 1.0
     assert runs["FullMHTIdentityHistory"]["growth_history_prediction_weight"] == 0.5
+    assert runs["FullMHTIdentityHistoryNoLocalContext"]["local_deformation_weight"] == 0.0
+
+
+def test_identity_history_candidate_has_no_local_context_control() -> None:
+    runs = {run["name"]: run for run in _manifest()["runs"]}
+    candidate = runs["FullMHTIdentityHistory"]
+    no_local_context = runs["FullMHTIdentityHistoryNoLocalContext"]
+
+    assert no_local_context["output"].endswith("full_mht_identity_history_no_local_context.csv")
+    assert no_local_context["local_deformation_weight"] == 0.0
+    assert _without_manifest_identity(no_local_context) == _without_manifest_identity(candidate)
 
 
 def test_identity_history_candidate_has_matching_greedy_ablation() -> None:
@@ -73,10 +90,13 @@ def test_identity_history_candidate_has_matching_greedy_ablation() -> None:
         assert greedy[key] == candidate[key]
 
 
-def test_identity_history_comparison_includes_candidate_and_greedy() -> None:
+def test_identity_history_comparison_includes_candidate_and_controls() -> None:
     manifest = _manifest()
 
     for comparison in manifest["comparisons"]:
+        assert comparison["inputs"]["FullMHTIdentityHistoryNoLocalContext"] == (
+            "FullMHTIdentityHistoryNoLocalContext"
+        )
         assert comparison["inputs"]["FullMHTIdentityHistory"] == "FullMHTIdentityHistory"
         assert comparison["inputs"]["FullMHTGreedyIdentityHistory"] == (
             "FullMHTGreedyIdentityHistory"
