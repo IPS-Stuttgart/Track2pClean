@@ -87,6 +87,7 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_history_dynamics_integration.py \
   tests/test_full_mht_history_dynamics_decision.py \
+  tests/test_full_mht_no_gt_leakage.py \
   tests/test_benchmark_manifest_full_mht_integration.py
 
 OUT="$REPO/results/full_mht_history_dynamics_probe_$(date +%Y%m%d_%H%M%S)"
@@ -100,6 +101,14 @@ mkdir -p "$OUT"
   "$OUT/full_mht_history_dynamics/full_mht_history_dynamics_comparison.csv" \
   --output "$OUT/full_mht_history_dynamics_decision.md"
 ```
+
+## No-GT Leakage Guard
+
+`tests/test_full_mht_no_gt_leakage.py` reads the method-layer source files and
+fails if selector code references manual-GT or audit-result columns such as
+`edge_status_against_gt`, `pairwise_delta_if_removed`, or
+`complete_delta_if_removed`. The benchmark scorer still uses manual-GT to
+measure final rows; the method layers must not use it for selection.
 
 ## Frozen Decision Rule
 
