@@ -1,14 +1,15 @@
-"""Controlled full-scan MHT demo where history beats greedy assignment.
+"""Controlled full-scan MHT demos where history beats greedy assignment.
 
 The real FullMHT benchmark now opens a beam of complete track-table histories.
-This synthetic demo isolates the reason that matters.  A locally stronger first
-scan edge leads to a dead end at the next scan; a slightly weaker first edge
-admits a strong continuation and preserves the complete identity.  A greedy
-beam of width one takes the local edge and loses the track.  A bounded MHT beam
-keeps both first-scan hypotheses long enough for the globally better history to
-win.
+These synthetic demos isolate why that matters.  A locally stronger first-scan
+edge can lead to a dead end at the next scan; a slightly weaker first edge can
+admit a strong continuation and preserve the complete identity.  A greedy beam
+of width one takes the local edge and loses the track.  A bounded MHT beam keeps
+both first-scan hypotheses long enough for the globally better history to win.
 
-No ground-truth labels enter the selection scores.  The reference matrix is used
+The second demo embeds the same conflict among many stable tracks, so the greedy
+solution remains pairwise-good while still damaging complete-track identity.  No
+ground-truth labels enter the selection scores.  The reference matrix is used
 only to report the same pairwise and complete-track metrics used by the Track2p
 benchmark rows.
 """
@@ -85,15 +86,56 @@ def build_default_scenario() -> DemoScenario:
     )
 
 
+def build_pairwise_good_complete_bad_scenario(
+    *, stable_tracks: int = 20
+) -> DemoScenario:
+    """Embed one ambiguous identity in many easy tracks.
+
+    This is the paper-facing toy case: local greedy assignment keeps a high
+    pairwise score because most tracks are easy, but one locally attractive edge
+    still breaks a complete identity.  The MHT beam can keep the weaker first
+    edge alive until the later continuation makes the complete history win.
+    """
+
+    n_stable = max(1, int(stable_tracks))
+    reference = np.full((n_stable + 1, 3), -1, dtype=int)
+    seed_track = np.full_like(reference, -1)
+    edge_scores: dict[tuple[int, int, int, int], float] = {
+        (0, 1, 1, 10): 5.0,
+        (0, 1, 1, 20): 4.0,
+        (1, 2, 20, 30): 5.0,
+    }
+    reference[0] = np.asarray([1, 20, 30], dtype=int)
+    seed_track[0, 0] = 1
+
+    for index in range(n_stable):
+        row = index + 1
+        seed_roi = 1000 + index
+        middle_roi = 2000 + index
+        final_roi = 3000 + index
+        reference[row] = np.asarray([seed_roi, middle_roi, final_roi], dtype=int)
+        seed_track[row, 0] = seed_roi
+        edge_scores[(0, 1, seed_roi, middle_roi)] = 6.0
+        edge_scores[(1, 2, middle_roi, final_roi)] = 6.0
+
+    return DemoScenario(
+        name="pairwise-good-complete-bad",
+        reference=reference,
+        seed_track=seed_track,
+        edge_scores=edge_scores,
+    )
+
+
 def evaluate_demo(
     *,
+    scenario: DemoScenario | None = None,
     miss_cost: float = 2.0,
     mht_beam_width: int = 2,
     scan_hypotheses: int = 2,
 ) -> list[DemoArmResult]:
     """Compare greedy beam-1 assignment against full-history MHT."""
 
-    scenario = build_default_scenario()
+    scenario = scenario or build_default_scenario()
     greedy = _run_assignment_beam(
         scenario,
         beam_width=1,
@@ -183,7 +225,9 @@ def _advance_demo_scan(
         updated[active_rows, next_session] = -1
         return [
             _append_demo_history(
-                _DemoHypothesis(updated, hypothesis.score - float(miss_cost), hypothesis.history),
+                _DemoHypothesis(
+                    updated, hypothesis.score - float(miss_cost), hypothesis.history
+                ),
                 session_index,
                 float(miss_cost),
                 0,
@@ -340,12 +384,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--miss-cost", type=float, default=2.0)
     parser.add_argument("--mht-beam-width", type=int, default=2)
     parser.add_argument("--scan-hypotheses", type=int, default=2)
+    parser.add_argument(
+        "--scenario",
+        choices=("local-edge-dead-end", "pairwise-good-complete-bad"),
+        default="local-edge-dead-end",
+    )
+    parser.add_argument("--stable-tracks", type=int, default=20)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    scenario = (
+        build_pairwise_good_complete_bad_scenario(stable_tracks=int(args.stable_tracks))
+        if args.scenario == "pairwise-good-complete-bad"
+        else build_default_scenario()
+    )
     results = evaluate_demo(
+        scenario=scenario,
         miss_cost=float(args.miss_cost),
         mht_beam_width=max(1, int(args.mht_beam_width)),
         scan_hypotheses=max(1, int(args.scan_hypotheses)),
