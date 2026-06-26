@@ -19,8 +19,12 @@ def brier_score(
     accurate probabilistic classifier has score 0.
     """
 
-    probabilities = np.asarray(probabilities, dtype=float).reshape(-1)
-    labels = np.asarray(labels, dtype=float).reshape(-1)
+    probabilities = _as_float_vector(
+        probabilities,
+        name="probabilities",
+        reject_bool=True,
+    )
+    labels = _as_float_vector(labels, name="labels", reject_bool=False)
 
     if probabilities.shape != labels.shape:
         raise ValueError("probabilities and labels must have the same flattened shape")
@@ -46,7 +50,11 @@ def brier_score(
 def _validate_sample_weight(
     sample_weight: Any, *, expected_shape: tuple[int, ...]
 ) -> np.ndarray:
-    weights = np.asarray(sample_weight, dtype=float).reshape(-1)
+    weights = _as_float_vector(
+        sample_weight,
+        name="sample_weight",
+        reject_bool=True,
+    )
     if weights.shape != expected_shape:
         raise ValueError("sample_weight must match the flattened label shape")
     if not np.all(np.isfinite(weights)):
@@ -56,3 +64,18 @@ def _validate_sample_weight(
     if float(np.sum(weights)) <= 0.0:
         raise ValueError("At least one sample weight must be positive")
     return weights
+
+
+def _as_float_vector(values: Any, *, name: str, reject_bool: bool) -> np.ndarray:
+    try:
+        raw_values = np.asarray(values, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be numeric") from exc
+    if reject_bool and any(
+        isinstance(value, (bool, np.bool_)) for value in raw_values.flat
+    ):
+        raise ValueError(f"{name} must be numeric, not boolean")
+    try:
+        return np.asarray(raw_values, dtype=float).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be numeric") from exc
