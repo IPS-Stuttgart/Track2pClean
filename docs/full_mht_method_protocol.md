@@ -39,7 +39,7 @@ evaluation.
 | Full scan-assignment beam | implemented | `track2p-policy-full-mht` | keep |
 | Greedy-vs-MHT conflict | constructed positive | `track2p-policy-full-mht-conflict-demo` | use as method intuition |
 | Scan-history conflict | constructed positive | `full_mht_scan_history_conflict_demo` | use as method invariant |
-| Real-data greedy beam ablation | frozen, not yet run | `FullMHTGreedyPrior2` in `benchmarks/full_mht_prior_veto_manifest.json` | require complete-track beam advantage |
+| Real-data candidate greedy ablations | frozen, not yet run | `FullMHTGreedyPrior2`, `FullMHTGreedyPriorVetoScaled`, `FullMHTGreedyPriorSurvival` in `benchmarks/full_mht_prior_veto_manifest.json` | require candidate complete-track beam advantage |
 | Calibrated association likelihood | implemented, benchmark-negative | `docs/full_mht_calibrated_likelihood_notes.md` | keep as architecture, not row |
 | No-prior continuation likelihood | implemented, not yet benchmarked | `benchmarks/full_mht_no_prior_continuation_probe_manifest.json`, `docs/full_mht_no_prior_continuation_likelihood.md` | run as birth/death probe |
 | Identity dynamics penalties | implemented, mostly collapse to proposal solution | `track2p_prior_*` diagnostics | keep |
@@ -90,23 +90,27 @@ python -m bayescatrack.experiments.full_mht_scan_history_conflict_demo \
 
 ## Real-Data Greedy Ablation
 
-The canonical manifest now includes:
+The canonical manifest now includes matching greedy rows for the base FullMHT
+proposal-prior control and for both paper-facing candidate rows:
 
 ```text
 FullMHTGreedyPrior2
+FullMHTGreedyPriorVetoScaled
+FullMHTGreedyPriorSurvival
 ```
 
-This row uses the same proposal-prior settings and scan candidate generator as
-`FullMHTPrior2`, but fixes `beam_width = 1`. It is the real-data counterpart of
-the conflict demo. The paper-facing decision is deliberately stricter than "beam
-beats greedy somewhere": `full_mht_manifest_decision.py` promotes a history-search
-advantage only when the full beam improves complete-track F1 over the greedy row
-without pairwise-F1 loss.
+Each greedy row uses the same scoring options and scan candidate generator as its
+beam counterpart, but fixes `beam_width = 1` and disables identity-diverse beam
+retention. These are the real-data counterparts of the conflict demos. The
+paper-facing decision is deliberately stricter than "the base beam beats greedy":
+`full_mht_manifest_decision.py` promotes a history-search advantage only when a
+candidate row, preferably `FullMHTPriorSurvival`, improves complete-track F1 over
+its own greedy ablation without pairwise-F1 loss.
 
-If the beam ties greedy, regresses, or improves only pairwise F1, the benchmark
-still does not prove a complete-history search advantage. In that case FullMHT can
-remain an architecture layer or constructed-conflict story, but not the headline
-real-data method row.
+If candidate beams tie their greedy rows, regress, or improve only pairwise F1,
+the benchmark still does not prove a complete-history search advantage. In that
+case FullMHT can remain an architecture layer or constructed-conflict story, but
+not the headline real-data method row.
 
 ## Terminal Completion Probe
 
@@ -223,8 +227,8 @@ Do not present FullMHT as a final method if any of the following remain true:
   non-GT Track2p-style subjects.
 - A nearby threshold perturbation selects true-positive removals or causes
   complete-track loss.
-- `FullMHTGreedyPrior2` ties the beam row, the beam regresses, or the beam gain
-  is pairwise-only rather than a complete-track advantage.
+- A candidate row ties its matching greedy row, regresses, or shows only
+  pairwise-F1 gain instead of complete-track beam advantage.
 - The terminal completion objective improves only at a single fragile weight or
   damages pairwise F1 by rewarding over-linking.
 - The no-prior continuation likelihood improves only at a single fragile weight,
@@ -245,11 +249,11 @@ FullMHT can be promoted as a paper method only after these gates pass:
 
 | gate | required evidence |
 | --- | --- |
-| Manifest reproduction | `bayescatrack benchmark suite benchmarks/full_mht_prior_veto_manifest.json` reproduces Track2p, FullMHTPrior2, FullMHTGreedyPrior2, FullMHTPriorVetoScaled, and FullMHTPriorSurvival rows |
+| Manifest reproduction | `bayescatrack benchmark suite benchmarks/full_mht_prior_veto_manifest.json` reproduces Track2p, FullMHTPrior2, FullMHTGreedyPrior2, FullMHTPriorVetoScaled, FullMHTGreedyPriorVetoScaled, FullMHTPriorSurvival, and FullMHTGreedyPriorSurvival rows |
 | No-GT leakage | tests confirm scoring functions do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
 | Exposure audit | all Track2p-style subjects report rare prior-veto/survival hazards and no subject receives a broad set of missed prior successors |
 | Sensitivity | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json`, `benchmarks/full_mht_no_prior_continuation_probe_manifest.json`, `benchmarks/full_mht_terminal_completion_probe_manifest.json`, `benchmarks/full_mht_scan_history_dynamics_probe_manifest.json`, and `benchmarks/full_mht_growth_history_prediction_probe_manifest.json` show nearby settings do not collapse pairwise or complete-track metrics |
-| Greedy ablation | `full_mht_manifest_decision.py` reports `history_search_result = beam_complete_history_advantage`; ties, regressions, and pairwise-only beam gains are exploratory |
+| Greedy ablation | `full_mht_manifest_decision.py` reports `history_search_result = prior_survival_complete_history_advantage` for the calibrated candidate, or `fixed_veto_complete_history_advantage` only as an interim fixed-hazard row; ties, regressions, and pairwise-only beam gains are exploratory |
 | Conflict demonstration | constructed demos, and ideally one real benchmark subject, show a locally better edge loses to a better complete history |
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants where relevant |
 
