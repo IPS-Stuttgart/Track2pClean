@@ -115,7 +115,10 @@ def _strict_bool(value: Any, *, name: str) -> bool:
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a finite non-negative value")
-    numeric_value = float(value)
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite non-negative value") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{name} must be a finite non-negative value")
     return numeric_value
@@ -124,7 +127,10 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
 def _finite_positive_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a finite positive value")
-    numeric_value = float(value)
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite positive value") from exc
     if not np.isfinite(numeric_value) or numeric_value <= 0.0:
         raise ValueError(f"{name} must be a finite positive value")
     return numeric_value

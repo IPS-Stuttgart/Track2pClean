@@ -45,6 +45,7 @@ def install_registration_selection_validation() -> None:
         nonrigid_valid_fraction_penalty: Any = 0.75,
         complexity_penalty: Any = None,
     ) -> Any:
+        candidate_transforms = _normalize_candidate_transforms(candidate_transforms)
         min_fov_correlation_gain = _finite_nonnegative_scalar(
             min_fov_correlation_gain,
             "min_fov_correlation_gain",
@@ -99,6 +100,12 @@ def install_registration_selection_validation() -> None:
     _registration_selection.select_registration_transform = (
         select_registration_transform_with_validation
     )
+
+
+def _normalize_candidate_transforms(value: Any) -> Any:
+    if isinstance(value, str):
+        return (value,)
+    return value
 
 
 def _validated_complexity_penalty(value: Any) -> dict[str, float] | None:
