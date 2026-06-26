@@ -163,6 +163,7 @@ def test_identity_history_promotion_requires_all_gates() -> None:
     )
 
     assert decision["status"] == "promotable_after_review"
+    assert decision["mht_vs_local_result"] == "identity_complete_history_advantage"
     assert decision["history_search_result"] == "identity_complete_history_advantage"
     assert decision["sensitivity_result"] == "stable_plateau"
     assert decision["exposure_result"] == "bounded_exposure"
@@ -176,7 +177,7 @@ def test_identity_history_promotion_rejects_manifest_tie_against_greedy() -> Non
     )
 
     assert decision["status"] == "not_promotable_manifest"
-    assert decision["history_search_result"] != "identity_complete_history_advantage"
+    assert decision["mht_vs_local_result"] != "identity_complete_history_advantage"
 
 
 def test_identity_history_promotion_rejects_unstable_sensitivity() -> None:
@@ -211,6 +212,7 @@ def test_identity_history_promotion_markdown_reports_three_gates() -> None:
     )
 
     assert "# FullMHT Identity-History Promotion Gate" in markdown
+    assert "MHT-vs-local result" in markdown
     assert "identity_complete_history_advantage" in markdown
     assert "stable_plateau" in markdown
     assert "bounded_exposure" in markdown
