@@ -63,7 +63,6 @@ def test_tracks_to_suite2p_index_matrix_normalizes_solver_track_indices(
         (({0: np.nan, 1: 0},), "detection index"),
         (({0: "1", 1: 0},), "detection index"),
         ((("0", 1),), "mapping"),
-        ((("0", 1),), "mapping"),
         (({"0": 1, 1: 0},), "session index"),
         (({0: -1, 1: 0},), "detection index"),
         (({2: 0},), "session index 2 out of bounds"),
