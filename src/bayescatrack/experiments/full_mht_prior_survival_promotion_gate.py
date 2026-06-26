@@ -26,7 +26,6 @@ from bayescatrack.experiments.full_mht_manifest_decision import (
     load_comparison_rows,
 )
 
-
 PRIOR_SURVIVAL_PROMOTABLE_RESULTS = {
     "survival_improves_fixed_veto",
     "survival_ties_fixed_veto",
@@ -191,6 +190,7 @@ def evaluate_prior_survival_exposure(
     scored = _int_metric(all_row, "history_prior_survival_scored_edges")
     positive = _int_metric(all_row, "history_prior_survival_positive_edges")
     negative = _int_metric(all_row, "history_prior_survival_negative_edges")
+    active = int(positive) + int(negative)
     max_negative = _int_metric(all_row, "max_prior_survival_negative_edges_per_subject")
     weighted = _float_metric(all_row, "history_prior_survival_weighted_score")
     max_abs_weighted = _float_metric(
@@ -204,6 +204,14 @@ def evaluate_prior_survival_exposure(
             "recommendation": "rerun exposure audit with nonzero prior-survival weight",
             "history_prior_survival_scored_edges": int(scored),
         }
+    if bool(cfg.require_prior_survival_scored) and active <= 0:
+        return {
+            "status": "incomplete",
+            "exposure_result": "prior_survival_not_active",
+            "recommendation": "rerun exposure audit; survival scorer produced no signed contributions",
+            "history_prior_survival_scored_edges": int(scored),
+            "history_prior_survival_active_edges": int(active),
+        }
     if max_negative > int(cfg.max_prior_survival_negative_edges_per_subject):
         failures.append("max_prior_survival_negative_edges_per_subject")
     if negative > int(cfg.max_total_prior_survival_negative_edges):
@@ -215,6 +223,7 @@ def evaluate_prior_survival_exposure(
             "exposure_result": "bounded_exposure" if not failures else "broad_exposure",
             "failed_limits": failures,
             "history_prior_survival_scored_edges": int(scored),
+            "history_prior_survival_active_edges": int(active),
             "history_prior_survival_positive_edges": int(positive),
             "history_prior_survival_negative_edges": int(negative),
             "history_prior_survival_weighted_score": float(weighted),
@@ -329,28 +338,13 @@ def format_prior_survival_promotion_markdown(decision: Mapping[str, Any]) -> str
         "| --- | ---: | ---: |",
     ]
     for metric, limit_key in (
-        (
-            "max_selected_non_prior_edges_per_subject",
-            "limit_max_selected_non_prior_edges_per_subject",
-        ),
+        ("max_selected_non_prior_edges_per_subject", "limit_max_selected_non_prior_edges_per_subject"),
         ("history_selected_non_prior_edges", "limit_history_selected_non_prior_edges"),
-        (
-            "history_switched_prior_successors",
-            "limit_history_switched_prior_successors",
-        ),
-        (
-            "history_no_prior_successor_continuations",
-            "limit_history_no_prior_successor_continuations",
-        ),
+        ("history_switched_prior_successors", "limit_history_switched_prior_successors"),
+        ("history_no_prior_successor_continuations", "limit_history_no_prior_successor_continuations"),
         ("history_gap_reactivated_tracks", "limit_history_gap_reactivated_tracks"),
-        (
-            "history_prior_survival_negative_edges",
-            "limit_history_prior_survival_negative_edges",
-        ),
-        (
-            "max_prior_survival_negative_edges_per_subject",
-            "limit_max_prior_survival_negative_edges_per_subject",
-        ),
+        ("history_prior_survival_negative_edges", "limit_history_prior_survival_negative_edges"),
+        ("max_prior_survival_negative_edges_per_subject", "limit_max_prior_survival_negative_edges_per_subject"),
     ):
         lines.append(
             "| {metric} | {value} | {limit} |".format(
@@ -364,12 +358,14 @@ def format_prior_survival_promotion_markdown(decision: Mapping[str, Any]) -> str
         [
             "",
             "Passing sensitivity variants: {variants}".format(
-                variants=", ".join(str(item) for item in sensitivity.get("passing_variants", ()))
-                or "none"
+                variants=", ".join(str(item) for item in sensitivity.get("passing_variants", ())) or "none"
             ),
             f"Pairwise-collapse variants: {', '.join(str(item) for item in sensitivity.get('pairwise_collapse_variants', ())) or 'none'}",
             "Prior-survival scored edges: {value}".format(
                 value=exposure.get("history_prior_survival_scored_edges", "")
+            ),
+            "Prior-survival active edges: {value}".format(
+                value=exposure.get("history_prior_survival_active_edges", "")
             ),
             f"Failed exposure limits: {failed or 'none'}",
         ]
@@ -471,20 +467,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             min_passing_weight_variants=max(0, int(args.min_passing_weight_variants)),
             max_pairwise_drop=max(0.0, float(args.max_pairwise_drop)),
         ),
-        max_selected_non_prior_edges_per_subject=max(
-            0,
-            int(args.max_non_prior_per_subject),
-        ),
+        max_selected_non_prior_edges_per_subject=max(0, int(args.max_non_prior_per_subject)),
         max_total_non_prior_edges=max(0, int(args.max_total_non_prior)),
         max_switched_prior_successors=max(0, int(args.max_switches)),
-        max_no_prior_successor_continuations=max(
-            0,
-            int(args.max_no_prior_continuations),
-        ),
+        max_no_prior_successor_continuations=max(0, int(args.max_no_prior_continuations)),
         max_gap_reactivated_tracks=(
-            None
-            if args.max_gap_reactivations is None
-            else max(0, int(args.max_gap_reactivations))
+            None if args.max_gap_reactivations is None else max(0, int(args.max_gap_reactivations))
         ),
         max_prior_survival_negative_edges_per_subject=max(
             0,
@@ -503,11 +491,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config=cfg,
     )
     if args.output is not None:
-        write_prior_survival_promotion(
-            decision,
-            args.output,
-            output_format=str(args.format),
-        )
+        write_prior_survival_promotion(decision, args.output, output_format=str(args.format))
     elif args.format == "json":
         print(json.dumps(decision, indent=2))
     else:
