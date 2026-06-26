@@ -249,6 +249,12 @@ def _run_track2p_policy_full_mht_rows(
         )
 
         install_full_mht_growth_history_prediction_scoring()
+    if _uses_calibrated_association(options):
+        from bayescatrack.experiments.full_mht_local_context_integration import (
+            install_full_mht_local_context_likelihood_gate,
+        )
+
+        install_full_mht_local_context_likelihood_gate()
 
     output = run_track2p_policy_full_mht(
         config,
@@ -286,6 +292,10 @@ def _uses_scan_history_dynamics(options: Mapping[str, Any]) -> bool:
 
 def _uses_growth_history_prediction(options: Mapping[str, Any]) -> bool:
     return any(key in options for key in FULL_MHT_GROWTH_HISTORY_PREDICTION_FIELDS)
+
+
+def _uses_calibrated_association(options: Mapping[str, Any]) -> bool:
+    return str(options.get("association_score_mode", "")) == "calibrated-likelihood"
 
 
 def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
