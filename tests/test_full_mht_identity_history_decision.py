@@ -81,9 +81,17 @@ def test_identity_history_decision_rejects_pairwise_only_gain() -> None:
 
 def test_identity_history_decision_rejects_required_control_regression() -> None:
     decision = evaluate_identity_history_decision(
-        _rows(identity_pairwise=0.964, identity_complete=0.934)
+        _rows(
+            identity_pairwise=0.964,
+            identity_complete=0.934,
+            greedy_pairwise=0.963,
+            greedy_complete=0.931,
+            prior_survival_pairwise=0.964,
+            prior_survival_complete=0.932,
+        )
     )
 
+    assert decision["history_search_result"] == "identity_complete_history_advantage"
     assert decision["prior_control_result"] == "identity_below_prior"
     assert decision["recommendation"] == (
         "keep exploratory; identity-history row loses to a required control"
