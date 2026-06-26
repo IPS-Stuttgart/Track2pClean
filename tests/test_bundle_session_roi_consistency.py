@@ -31,6 +31,6 @@ def test_build_track_rows_from_bundles_rejects_inconsistent_intermediate_roi_lay
 
     with pytest.raises(
         ValueError,
-        match="inconsistent ROI indices for intermediate session 1",
+        match="consecutive bundles disagree on ROI indices",
     ):
         build_track_rows_from_bundles(bundles, start_session_index=1)
