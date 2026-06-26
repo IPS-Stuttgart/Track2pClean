@@ -16,6 +16,9 @@ from ._advanced_weight_validation import (
 from ._assignment_bundle_validation import (
     install_assignment_bundle_validation as _install_assignment_bundle_validation,
 )
+from ._bundle_session_roi_consistency_validation import (
+    install_bundle_session_roi_consistency_validation as _install_bundle_session_roi_consistency_validation,
+)
 from ._calibrated_session_gap_validation import (
     install_calibrated_session_gap_validation as _install_calibrated_session_gap_validation,
 )
@@ -188,6 +191,7 @@ _install_confidence_ordered_strict_gap_cli(_cli)
 _install_matching_layout_validation(_matching)
 _install_matching_max_cost_validation(_matching)
 _install_shared_session_roi_validation(_matching)
+_install_bundle_session_roi_consistency_validation(_matching)
 _install_soft_overlap_costs()
 _install_soft_overlap_numeric_validation()
 _install_shifted_overlap_scalar_validation()
