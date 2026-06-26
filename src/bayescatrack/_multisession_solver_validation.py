@@ -10,6 +10,9 @@ import numpy as np
 
 _INSTALLED_FLAG = "_bayescatrack_multisession_solver_validation_installed"
 _ERROR_SUFFIX = "must be a non-negative integer"
+_TRACK_MATRIX_INDEX_ERROR = (
+    "track_matrix must contain integer detection indices or -1 missing markers"
+)
 
 
 def _coerce_solver_track_index(value: Any, field_name: str) -> int:
@@ -29,6 +32,34 @@ def _coerce_solver_track_index(value: Any, field_name: str) -> int:
     if normalized < 0:
         raise ValueError(f"{field_name} {_ERROR_SUFFIX}")
     return normalized
+
+
+def _coerce_track_matrix(track_matrix: Any) -> np.ndarray:
+    raw_matrix = np.asarray(track_matrix)
+    if np.issubdtype(raw_matrix.dtype, np.bool_):
+        raise ValueError(_TRACK_MATRIX_INDEX_ERROR)
+    if np.issubdtype(raw_matrix.dtype, np.integer):
+        return raw_matrix.astype(int, copy=False)
+    if np.issubdtype(raw_matrix.dtype, np.floating):
+        if not np.all(np.isfinite(raw_matrix)) or not np.all(
+            np.equal(raw_matrix, np.floor(raw_matrix))
+        ):
+            raise ValueError(_TRACK_MATRIX_INDEX_ERROR)
+        return raw_matrix.astype(int)
+    if raw_matrix.dtype == np.dtype("O"):
+        values = tuple(raw_matrix.flat)
+        if any(isinstance(value, (bool, np.bool_, str, bytes)) for value in values):
+            raise ValueError(_TRACK_MATRIX_INDEX_ERROR)
+        try:
+            numeric_matrix = np.asarray(track_matrix, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(_TRACK_MATRIX_INDEX_ERROR) from exc
+        if not np.all(np.isfinite(numeric_matrix)) or not np.all(
+            np.equal(numeric_matrix, np.floor(numeric_matrix))
+        ):
+            raise ValueError(_TRACK_MATRIX_INDEX_ERROR)
+        return numeric_matrix.astype(int)
+    raise ValueError(_TRACK_MATRIX_INDEX_ERROR)
 
 
 def install_multisession_solver_validation(module: Any | None = None) -> None:
@@ -105,7 +136,7 @@ def install_multisession_solver_validation(module: Any | None = None) -> None:
         track_matrix: np.ndarray,
         sessions: Sequence[Any],
     ) -> np.ndarray:
-        track_matrix = np.asarray(track_matrix, dtype=int)
+        track_matrix = _coerce_track_matrix(track_matrix)
         sessions = list(sessions)
         if track_matrix.ndim != 2:
             raise ValueError("track_matrix must be two-dimensional")
