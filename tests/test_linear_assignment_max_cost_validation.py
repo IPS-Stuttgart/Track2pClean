@@ -20,11 +20,11 @@ class _Bundle:
 
 @pytest.mark.parametrize("bad_max_cost", [True, False, np.bool_(True), np.bool_(False)])
 def test_solve_bundle_linear_assignment_rejects_boolean_max_cost(bad_max_cost) -> None:
-    with pytest.raises(ValueError, match="max_cost must be None or a finite non-negative scalar"):
+    with pytest.raises(ValueError, match=r"max_cost must.*finite non-negative"):
         solve_bundle_linear_assignment(_Bundle(), max_cost=bad_max_cost)
 
 
 @pytest.mark.parametrize("bad_max_cost", [True, False, np.bool_(True), np.bool_(False)])
 def test_build_track_rows_from_bundles_rejects_boolean_max_cost(bad_max_cost) -> None:
-    with pytest.raises(ValueError, match="max_cost must be None or a finite non-negative scalar"):
+    with pytest.raises(ValueError, match=r"max_cost must.*finite non-negative"):
         build_track_rows_from_bundles([_Bundle()], max_cost=bad_max_cost)

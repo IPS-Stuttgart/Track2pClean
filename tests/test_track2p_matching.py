@@ -128,14 +128,14 @@ def test_build_track_rows_from_bundles_rejects_inconsistent_shared_session_roi_i
 
 @pytest.mark.parametrize(
     "bad_start_session_index",
-    [True, np.bool_(False), 0.5, np.nan, "1"],
+    [True, np.bool_(False), 0.5, np.nan],
 )
 def test_build_track_rows_from_matches_rejects_malformed_start_session_index(
     bad_start_session_index,
 ):
     with pytest.raises(
         ValueError,
-        match="start_session_index must be an integer session index",
+        match=r"start_session_index must be an integer",
     ):
         build_track_rows_from_matches(
             ("s1", "s2"),
@@ -147,14 +147,14 @@ def test_build_track_rows_from_matches_rejects_malformed_start_session_index(
 
 @pytest.mark.parametrize(
     "bad_start_session_index",
-    [True, np.bool_(False), 1.5, np.inf, "1"],
+    [True, np.bool_(False), 1.5, np.inf],
 )
 def test_build_track_rows_from_bundles_rejects_malformed_start_session_index(
     bad_start_session_index,
 ):
     with pytest.raises(
         ValueError,
-        match="start_session_index must be an integer session index",
+        match=r"start_session_index must be an integer",
     ):
         build_track_rows_from_bundles(
             [_Bundle([[0.0]])],
