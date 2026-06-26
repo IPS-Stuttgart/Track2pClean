@@ -13,12 +13,11 @@ FORBIDDEN_GT_TOKENS = (
     "edge_status_against_gt",
     "pairwise_delta_if_removed",
     "complete_delta_if_removed",
-    "manual_gt",
-    "manual-gt",
-    "ground_truth",
-    "ground truth",
     "reference_identity",
-    "gt_status",
+    "manual_gt_status",
+    "ground_truth_reference_source",
+    "_load_reference_for_subject",
+    "_score_prediction_against_reference",
 )
 
 
