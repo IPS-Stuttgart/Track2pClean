@@ -41,6 +41,7 @@ prior-edge survival likelihood row ready for manifest-level evaluation.
 | Fixed prior-veto hazard | first positive FullMHT-owned result | `docs/full_mht_prior_risk_notes.md` | freeze and validate |
 | Calibrated prior-edge survival | integrated, not yet benchmarked | `full_mht_prior_survival_model.py`, `FullMHTPriorSurvival` manifest row | run on server |
 | Manifest-level reproduction | manifest + adapter committed | `benchmarks/full_mht_prior_veto_manifest.json` | run on server |
+| Sensitivity/exposure bundle | committed, not yet run | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json`, `docs/full_mht_prior_survival_validation.md` | run on server |
 
 ## Current Positive Row
 
@@ -102,7 +103,7 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | Manifest reproduction | `bayescatrack benchmark suite benchmarks/full_mht_prior_veto_manifest.json` reproduces Track2p, FullMHTPrior2, FullMHTPriorVetoScaled, and FullMHTPriorSurvival rows |
 | No-GT leakage | tests confirm scoring functions do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
 | Exposure audit | all Track2p-style subjects report rare prior-veto/survival hazards and no subject receives a broad set of missed prior successors |
-| Sensitivity | immediate threshold neighbors keep complete-track F1 >= FullMHTPrior2, no selected true-positive removals, and selected edits remain tiny |
+| Sensitivity | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json` shows nearby survival weights/clips/pseudo-label settings do not collapse pairwise or complete-track metrics |
 | Greedy ablation | deterministic local selection over the same scan candidates is compared against FullMHT history selection |
 | Conflict demonstration | at least the constructed conflict demo, and ideally one real benchmark subject, shows a locally better edge loses to a better complete history |
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants where relevant |
@@ -140,7 +141,14 @@ identity-history selection rather than for validating a single cleanup edit.
 
 ## Server Commands To Run Next
 
-Use the Python 3.12 environment on the benchmark server:
+Use the Python 3.12 environment on the benchmark server. The complete validation
+recipe lives in:
+
+```text
+docs/full_mht_prior_survival_validation.md
+```
+
+Minimum command bundle:
 
 ```bash
 REPO=/home/florianpfaff/codex-runs/BayesCaTrack
@@ -158,13 +166,21 @@ export PYTHONPATH="$REPO/src"
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
 
-OUT="$REPO/results/full_mht_prior_veto_manifest_$(date +%Y%m%d_%H%M%S)"
+OUT="$REPO/results/full_mht_prior_survival_manifest_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUT"
 "$PY" -m bayescatrack benchmark suite \
   benchmarks/full_mht_prior_veto_manifest.json \
   --output-dir "$OUT" \
   --summary-format table
+
+SENS="$REPO/results/full_mht_prior_survival_sensitivity_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$SENS"
+"$PY" -m bayescatrack benchmark suite \
+  benchmarks/full_mht_prior_survival_sensitivity_manifest.json \
+  --output-dir "$SENS" \
+  --summary-format table
 ```
 
-Record the output directory and comparison table in
+Record the output directories, comparison tables, and promote/keep-exploratory
+judgment in `docs/full_mht_prior_survival_validation.md` and
 `docs/full_mht_manifest_integration_notes.md` after the run.
