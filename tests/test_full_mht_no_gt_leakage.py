@@ -16,6 +16,7 @@ METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/full_mht_terminal_completion_integration.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_model.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_integration.py",
+    "src/bayescatrack/experiments/full_mht_prior_survival_promotion_gate.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_exposure_audit.py",
 )
 
