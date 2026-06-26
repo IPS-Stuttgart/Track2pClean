@@ -64,6 +64,17 @@ def test_no_prior_continuation_exposure_gate_accepts_bounded_exposure() -> None:
     assert exposure["failed_limits"] == []
 
 
+def test_no_prior_continuation_exposure_gate_requires_no_prior_columns() -> None:
+    stale_row = _exposure_row()
+    del stale_row["history_no_prior_continuation_positive_edges"]
+
+    exposure = evaluate_no_prior_continuation_exposure([stale_row])
+
+    assert exposure["status"] == "incomplete"
+    assert exposure["exposure_result"] == "missing_no_prior_exposure_columns"
+    assert "history_no_prior_continuation_positive_edges" in exposure["missing_columns"]
+
+
 def test_no_prior_continuation_exposure_gate_rejects_broad_positive_firing() -> None:
     exposure = evaluate_no_prior_continuation_exposure(
         [
