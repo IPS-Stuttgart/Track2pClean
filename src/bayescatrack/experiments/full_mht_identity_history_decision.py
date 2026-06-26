@@ -44,6 +44,7 @@ class IdentityHistoryDecisionConfig:
     prior: str = "FullMHTPrior2"
     prior_survival: str = "FullMHTPriorSurvival"
     no_prior_continuation: str = "FullMHTNoPriorContinuation100"
+    no_local_context: str = "FullMHTIdentityHistoryNoLocalContext"
     identity_history: str = "FullMHTIdentityHistory"
     greedy_identity_history: str = "FullMHTGreedyIdentityHistory"
     tolerance: float = 1e-12
@@ -75,6 +76,7 @@ def evaluate_identity_history_decision(
         cfg.prior,
         cfg.prior_survival,
         cfg.no_prior_continuation,
+        cfg.no_local_context,
         cfg.identity_history,
         cfg.greedy_identity_history,
     )
@@ -111,6 +113,11 @@ def evaluate_identity_history_decision(
         by_approach[cfg.no_prior_continuation],
         prefix="identity_minus_no_prior_continuation",
     )
+    identity_vs_no_local = _delta_block(
+        by_approach[cfg.identity_history],
+        by_approach[cfg.no_local_context],
+        prefix="identity_minus_no_local_context",
+    )
 
     history_result = _history_result(
         identity_vs_greedy,
@@ -133,6 +140,14 @@ def evaluate_identity_history_decision(
         tie_name="identity_ties_track2p",
         below_name="identity_below_track2p",
     )
+    no_local_result = _control_result(
+        identity_vs_no_local,
+        prefix="identity_minus_no_local_context",
+        tolerance=float(cfg.tolerance),
+        improvement_name="identity_improves_no_local_context",
+        tie_name="identity_ties_no_local_context",
+        below_name="identity_below_no_local_context",
+    )
     layer_result = _layer_result(
         identity_vs_survival,
         identity_vs_no_prior,
@@ -143,6 +158,7 @@ def evaluate_identity_history_decision(
         prior_result,
         track2p_result,
         layer_result,
+        no_local_result,
     )
     status = "complete"
     return {
@@ -150,10 +166,12 @@ def evaluate_identity_history_decision(
         "rows": list(required),
         "mht_candidate": cfg.identity_history,
         "local_choice_baseline": cfg.greedy_identity_history,
+        "no_local_context_baseline": cfg.no_local_context,
         "mht_vs_local_result": history_result,
         "history_search_result": history_result,
         "prior_control_result": prior_result,
         "track2p_control_result": track2p_result,
+        "no_local_context_control_result": no_local_result,
         "layer_combination_result": layer_result,
         "recommendation": recommendation,
         **_mht_vs_local_aliases(identity_vs_greedy),
@@ -162,6 +180,7 @@ def evaluate_identity_history_decision(
         **identity_vs_track2p,
         **identity_vs_survival,
         **identity_vs_no_prior,
+        **identity_vs_no_local,
     }
 
 
@@ -185,9 +204,11 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         "",
         f"MHT-vs-local result: `{decision.get('mht_vs_local_result', decision['history_search_result'])}`",
         f"Local-choice baseline: `{decision.get('local_choice_baseline', '')}`",
+        f"No-local-context baseline: `{decision.get('no_local_context_baseline', '')}`",
         f"History-search result: `{decision['history_search_result']}`",
         f"Prior-control result: `{decision['prior_control_result']}`",
         f"Track2p-control result: `{decision['track2p_control_result']}`",
+        f"No-local-context result: `{decision['no_local_context_control_result']}`",
         f"Layer-combination result: `{decision['layer_combination_result']}`",
         f"Recommendation: {decision['recommendation']}",
         "",
@@ -200,6 +221,7 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         ("identity minus Track2p", "identity_minus_track2p"),
         ("identity minus prior survival", "identity_minus_prior_survival"),
         ("identity minus no-prior continuation", "identity_minus_no_prior_continuation"),
+        ("identity minus no-local context", "identity_minus_no_local_context"),
     ):
         lines.append(
             "| {label} | {pairwise:.6g} | {complete:.6g} |".format(
@@ -328,6 +350,7 @@ def _recommendation(
     prior_result: str,
     track2p_result: str,
     layer_result: str,
+    no_local_result: str,
 ) -> str:
     if history_result == "identity_regression_vs_greedy":
         return "do not promote; identity-history beam regresses against matching greedy ablation"
@@ -339,6 +362,8 @@ def _recommendation(
         return "keep exploratory; identity-history row loses to a required control"
     if layer_result == "combined_layer_regression":
         return "keep exploratory; combined history model falls below a component layer"
+    if no_local_result == "identity_below_no_local_context":
+        return "keep exploratory; calibrated local-context layer hurts identity-history row"
     return "promote only after no-GT, exposure, and sensitivity gates pass"
 
 
