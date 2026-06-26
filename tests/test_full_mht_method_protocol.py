@@ -46,6 +46,22 @@ def test_full_mht_method_protocol_keeps_non_promotion_warnings() -> None:
         assert warning in protocol
 
 
+def test_full_mht_method_protocol_requires_macro_stable_promotion() -> None:
+    root = Path(__file__).resolve().parents[1]
+    protocol = (root / "docs" / "full_mht_method_protocol.md").read_text(encoding="utf-8")
+
+    required = (
+        "with no regression in pairwise or complete-track micro/macro F1",
+        "on any reported pairwise or complete-track micro/macro metric",
+        "with each passing variant non-regressing on all reported micro/macro metrics",
+        "regresses on any reported\nmetric",
+        "hides a macro-metric\n  regression",
+    )
+
+    for needle in required:
+        assert needle in protocol
+
+
 def test_full_mht_method_protocol_supporting_docs_exist() -> None:
     root = Path(__file__).resolve().parents[1]
     protocol = (root / "docs" / "full_mht_method_protocol.md").read_text(encoding="utf-8")
