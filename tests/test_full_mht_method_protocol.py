@@ -6,10 +6,13 @@ from pathlib import Path
 def test_full_mht_method_protocol_names_required_method_invariants() -> None:
     root = Path(__file__).resolve().parents[1]
     protocol = (root / "docs" / "full_mht_method_protocol.md").read_text(encoding="utf-8")
+    validation = (root / "docs" / "full_mht_identity_history_validation.md").read_text(
+        encoding="utf-8"
+    )
     checklist = (root / "docs" / "full_mht_method_invariant_checklist.md").read_text(
         encoding="utf-8"
     )
-    combined = f"{protocol}\n{checklist}"
+    combined = f"{protocol}\n{validation}\n{checklist}"
 
     required = (
         "test_calibrated_likelihood_flips_scan_assignment_from_local_overlap",
@@ -24,6 +27,7 @@ def test_full_mht_method_protocol_names_required_method_invariants() -> None:
         "test_full_mht_no_gt_leakage_scan_covers_all_method_layers",
         "FullMHTIdentityHistoryNoLocalContext",
         "scan_pruning_stable_complete_history_gain",
+        "full_mht_identity_history_scan_pruning_promotion_gate.py",
         "terminal_completion_stable_gain",
         "bounded_exposure",
         "stable_plateau",
