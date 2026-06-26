@@ -19,6 +19,9 @@ from ._assignment_bundle_validation import (
 from ._candidate_centroid_validation import (
     install_candidate_centroid_validation as _install_candidate_centroid_validation,
 )
+from ._cli_exit_code_validation import (
+    install_cli_exit_code_validation as _install_cli_exit_code_validation,
+)
 from ._confidence_ordered_strict_gap_cli import (
     install_confidence_ordered_strict_gap_cli as _install_confidence_ordered_strict_gap_cli,
 )
@@ -46,6 +49,12 @@ from ._global_track_row_validation import (
 from ._ground_truth_track_validation import (
     install_ground_truth_track_validation as _install_ground_truth_track_validation,
 )
+from ._growth_optional_roi_validation import (
+    install_growth_optional_roi_validation as _install_growth_optional_roi_validation,
+)
+from ._growth_session_index_validation import (
+    install_growth_session_index_validation as _install_growth_session_index_validation,
+)
 from ._integer_translation_validation import (
     install_integer_image_translation_validation as _install_integer_translation_validation,
 )
@@ -63,6 +72,9 @@ from ._multisession_config_validation import (
 )
 from ._multisession_solver_track_validation import (
     install_multisession_solver_track_validation as _install_multisession_solver_track_validation,
+)
+from ._nonrigid_fov_image_validation import (
+    install_nonrigid_fov_image_validation as _install_nonrigid_fov_image_validation,
 )
 from ._nonrigid_registration_control_validation import (
     install_nonrigid_registration_control_validation as _install_nonrigid_registration_control_validation,
@@ -90,6 +102,9 @@ from ._session_gap_validation import (
 )
 from ._session_match_validation import (
     install_session_match_result_validation as _install_session_match_result_validation,
+)
+from ._shared_session_roi_validation import (
+    install_shared_session_roi_validation as _install_shared_session_roi_validation,
 )
 from ._shifted_overlap_validation import (
     install_shifted_overlap_scalar_validation as _install_shifted_overlap_scalar_validation,
@@ -156,12 +171,14 @@ find_track2p_session_dirs = _bridge.find_track2p_session_dirs
 load_raw_npy_plane = _bridge.load_raw_npy_plane
 load_suite2p_plane = _bridge.load_suite2p_plane
 load_track2p_subject = _bridge.load_track2p_subject
+_install_cli_exit_code_validation(_cli)
 main = _cli.main
 summarize_subject = _bridge.summarize_subject
 
 _install_confidence_ordered_strict_gap_cli(_cli)
 _install_matching_layout_validation(_matching)
 _install_matching_max_cost_validation(_matching)
+_install_shared_session_roi_validation(_matching)
 _install_soft_overlap_costs()
 _install_soft_overlap_numeric_validation()
 _install_shifted_overlap_scalar_validation()
@@ -176,8 +193,11 @@ _install_reference_validation()
 _install_fov_affine_estimator_validation()
 _install_fov_affine_warp_validation()
 _install_fov_translation_output_shape_validation()
+_install_nonrigid_fov_image_validation()
 _install_nonrigid_registration_control_validation()
 _install_ground_truth_track_validation()
+_install_growth_optional_roi_validation()
+_install_growth_session_index_validation()
 _install_registration_selection_validation()
 _install_registration_warp_validation()
 _install_strict_config_validation()

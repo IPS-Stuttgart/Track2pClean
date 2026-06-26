@@ -12,6 +12,7 @@ from . import _calibrated_session_gap_validation as _calibrated_session_gap_vali
 from . import _dynamic_edge_prior_validation as _dynamic_edge_prior_validation
 from . import _global_assignment_input_validation as _global_assignment_input_validation
 from . import _growth_coordinate_validation as _growth_coordinate_validation
+from . import _monotone_ranker_feature_validation as _monotone_ranker_feature_validation
 from . import _neuropil_ratio_shape_validation as _neuropil_ratio_shape_validation
 from . import (
     _registered_component_shape_validation as _registered_component_shape_validation,
@@ -32,6 +33,7 @@ _neuropil_ratio_shape_validation.install_neuropil_ratio_shape_validation()
 _session_edge_pair_validation.install_session_edge_pair_validation()
 _triplet_support_validation.install_triplet_support_validation()
 _global_assignment_input_validation.install_global_assignment_input_validation()
+_monotone_ranker_feature_validation.install_monotone_ranker_feature_validation()
 _roi_aware_local_validation.install_roi_aware_local_validation()
 _registered_component_shape_validation.install_registered_component_shape_validation()
 _shifted_iou_preset_validation.install_shifted_iou_preset_validation()
@@ -49,6 +51,7 @@ _PATCH_MODULES = (
     _dynamic_edge_prior_validation,
     _global_assignment_input_validation,
     _growth_coordinate_validation,
+    _monotone_ranker_feature_validation,
     _neuropil_ratio_shape_validation,
     _registered_component_shape_validation,
     _roi_aware_local_validation,
