@@ -12,9 +12,6 @@ from bayescatrack.experiments._full_mht_manifest_integration import (
 from bayescatrack.experiments.full_mht_history_consistency_model import (
     IdentityHistoryConsistencyConfig,
 )
-from bayescatrack.experiments.track2p_policy_full_mht_history_consistency_benchmark import (
-    _patched_full_mht_runner,
-)
 
 FULL_MHT_HISTORY_CONSISTENCY_RUNNER = (
     "track2p-policy-full-mht-history-consistency"
@@ -134,6 +131,10 @@ def install_full_mht_history_consistency_manifest_integration() -> None:
 def _run_track2p_policy_full_mht_history_consistency_rows(
     config: Any, options: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
+    from bayescatrack.experiments.track2p_policy_full_mht_history_consistency_benchmark import (
+        _patched_full_mht_runner,
+    )
+
     history_config = _history_consistency_config_from_options(options)
     with _patched_full_mht_runner(history_config):
         return _run_track2p_policy_full_mht_rows(config, options)
