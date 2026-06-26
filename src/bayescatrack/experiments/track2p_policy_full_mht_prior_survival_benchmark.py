@@ -138,7 +138,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _survival_only_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     _add_prior_survival_arguments(parser)
     return parser
 
