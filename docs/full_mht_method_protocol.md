@@ -25,8 +25,9 @@ A defensible FullMHT method should combine four label-free terms:
 4. **Complete-history objective**: terminal selection may prefer a lower local
    scan score when the complete identity history is more plausible.
 
-The current branch implements all four hooks, but only the proposal-prior plus
-prior-veto hazard has produced a positive benchmark row so far.
+The current branch implements all four hooks. The first positive benchmark row is
+still the fixed prior-veto hazard, but the branch now also has a calibrated
+prior-edge survival likelihood row ready for manifest-level evaluation.
 
 ## Current Evidence Map
 
@@ -37,7 +38,8 @@ prior-veto hazard has produced a positive benchmark row so far.
 | Calibrated association likelihood | implemented, benchmark-negative | `docs/full_mht_calibrated_likelihood_notes.md` | keep as architecture, not row |
 | Identity dynamics penalties | implemented, mostly collapse to proposal solution | `track2p_prior_*` diagnostics | keep |
 | Identity-diverse beam | implemented, exposes cleaner alternatives | calibrated-likelihood notes | keep |
-| Prior-edge survival hazard | first positive FullMHT-owned result | `docs/full_mht_prior_risk_notes.md` | freeze and validate |
+| Fixed prior-veto hazard | first positive FullMHT-owned result | `docs/full_mht_prior_risk_notes.md` | freeze and validate |
+| Calibrated prior-edge survival | integrated, not yet benchmarked | `full_mht_prior_survival_model.py`, `FullMHTPriorSurvival` manifest row | run on server |
 | Manifest-level reproduction | manifest + adapter committed | `benchmarks/full_mht_prior_veto_manifest.json` | run on server |
 
 ## Current Positive Row
@@ -62,14 +64,28 @@ The important methodological distinction from residual cleanup is that the bad
 prior edge is penalized during scan-assignment history selection. It is not
 removed after a completed Track2p solution is scored.
 
+## Candidate Method Row
+
+The next paper-facing candidate is:
+
+```text
+FullMHTPriorSurvival
+```
+
+It uses the same Track2p proposal prior and scan-assignment beam, but replaces
+the hand-gated prior-veto pocket with a calibrated, label-free prior-edge survival
+log-likelihood ratio. The manifest row is now frozen enough to run, but no
+benchmark result has been recorded yet.
+
 ## Non-Promotion Conditions
 
 Do not present FullMHT as a final method if any of the following remain true:
 
 - The frozen manifest cannot reproduce the positive row.
+- The candidate survival row does not match or improve the fixed prior-veto row.
 - The positive row depends on inspecting manual-GT audit columns.
-- Exposure audit shows the prior-veto hazard fires broadly across non-GT
-  Track2p-style subjects.
+- Exposure audit shows the prior-veto or survival hazard fires broadly across
+  non-GT Track2p-style subjects.
 - A nearby threshold perturbation selects true-positive removals or causes
   complete-track loss.
 - Deterministic edge gating over the same candidates produces exactly the same
@@ -83,25 +99,25 @@ FullMHT can be promoted as a paper method only after these gates pass:
 
 | gate | required evidence |
 | --- | --- |
-| Manifest reproduction | `bayescatrack benchmark suite benchmarks/full_mht_prior_veto_manifest.json` reproduces Track2p, FullMHTPrior2, and FullMHTPriorVetoScaled rows |
+| Manifest reproduction | `bayescatrack benchmark suite benchmarks/full_mht_prior_veto_manifest.json` reproduces Track2p, FullMHTPrior2, FullMHTPriorVetoScaled, and FullMHTPriorSurvival rows |
 | No-GT leakage | tests confirm scoring functions do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
-| Exposure audit | all Track2p-style subjects report rare prior-veto hazards and no subject receives a broad set of missed prior successors |
+| Exposure audit | all Track2p-style subjects report rare prior-veto/survival hazards and no subject receives a broad set of missed prior successors |
 | Sensitivity | immediate threshold neighbors keep complete-track F1 >= FullMHTPrior2, no selected true-positive removals, and selected edits remain tiny |
 | Greedy ablation | deterministic local selection over the same scan candidates is compared against FullMHT history selection |
 | Conflict demonstration | at least the constructed conflict demo, and ideally one real benchmark subject, shows a locally better edge loses to a better complete history |
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants where relevant |
 
-## Next Implementation Jump
+## Implemented Method Jump
 
-The prior-veto row is promising but still too close to a gated hazard. The next
-real method jump should replace the fixed hazard pocket with a calibrated
-survival probability for Track2p prior edges:
+The fixed prior-veto row is promising but still too close to a gated hazard. The
+branch now implements the next method jump: a calibrated survival probability for
+Track2p prior edges:
 
 ```text
 log p(edge survives | label-free diagnostics)
 ```
 
-Candidate features should include:
+Candidate features include:
 
 - registered IoU and shifted IoU
 - growth residual and growth Mahalanobis
@@ -111,16 +127,16 @@ Candidate features should include:
 - terminal-edge and complete-component indicators
 - local-neighbor deformation consistency
 
-The MHT score should then combine:
+The MHT score can now combine:
 
 ```text
 proposal prior + association likelihood + prior-edge survival likelihood
 + missed-detection / death likelihood + terminal identity-history objective
 ```
 
-This would reduce the current hand-gated prior-veto pocket to a calibrated model
-layer, making MHT responsible for full identity-history selection rather than for
-validating a single cleanup edit.
+This reduces the current hand-gated prior-veto pocket to a calibrated model layer
+when `FullMHTPriorSurvival` is enabled, making MHT responsible for full
+identity-history selection rather than for validating a single cleanup edit.
 
 ## Server Commands To Run Next
 
@@ -137,6 +153,8 @@ export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
   tests/test_benchmark_manifest_full_mht_integration.py \
+  tests/test_full_mht_prior_survival_model.py \
+  tests/test_full_mht_prior_survival_integration.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
 
