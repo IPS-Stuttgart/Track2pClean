@@ -287,6 +287,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_scan_history_dynamics_integration.py \
   tests/test_full_mht_scan_history_conflict_demo.py \
   tests/test_full_mht_growth_history_prediction_integration.py \
+  tests/test_full_mht_growth_history_prediction_decision.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
@@ -322,6 +323,10 @@ mkdir -p "$GROWTH"
   benchmarks/full_mht_growth_history_prediction_probe_manifest.json \
   --output-dir "$GROWTH" \
   --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_growth_history_prediction_decision \
+  "$GROWTH/full_mht_growth_history_prediction/full_mht_growth_history_prediction_comparison.csv" \
+  --output "$GROWTH/full_mht_growth_history_prediction_decision.md"
 ```
 
 Record the output directories, comparison tables, and promote/keep-exploratory
