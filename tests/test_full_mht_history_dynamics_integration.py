@@ -32,9 +32,21 @@ def _features(
 def test_row_motion_history_risk_ignores_coherent_history() -> None:
     risk = row_motion_history_risk(
         [
-            _features(registered_iou=0.80, shifted_iou=0.70, growth_residual=1.0),
-            _features(registered_iou=0.78, shifted_iou=0.68, growth_residual=1.2),
-            _features(registered_iou=0.82, shifted_iou=0.71, growth_residual=0.9),
+            _features(
+                registered_iou=0.80,
+                shifted_iou=0.70,
+                growth_residual=1.0,
+            ),
+            _features(
+                registered_iou=0.78,
+                shifted_iou=0.68,
+                growth_residual=1.2,
+            ),
+            _features(
+                registered_iou=0.82,
+                shifted_iou=0.71,
+                growth_residual=0.9,
+            ),
         ]
     )
 
