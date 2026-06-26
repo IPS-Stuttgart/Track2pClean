@@ -244,6 +244,11 @@ def test_policy_prior_can_rescue_column_top_k_edges() -> None:
     assert not bool(mask[2, 0])
 
 
+def test_policy_config_rejects_non_bool_consecutive_only() -> None:
+    with pytest.raises(ValueError, match="consecutive_only"):
+        Track2pPolicyPriorConfig(consecutive_only="false")
+
+
 def test_policy_config_rejects_negative_column_top_k() -> None:
     with pytest.raises(ValueError, match="column_top_k"):
         Track2pPolicyPriorConfig(column_top_k=-1)
