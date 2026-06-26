@@ -27,6 +27,13 @@ from bayescatrack.experiments.full_mht_no_prior_continuation_decision import (
     evaluate_no_prior_continuation_decision,
 )
 
+NO_PRIOR_EXPOSURE_COLUMNS = (
+    "max_no_prior_continuation_scored_edges_per_subject",
+    "max_no_prior_continuation_positive_edges_per_subject",
+    "history_no_prior_continuation_scored_edges",
+    "history_no_prior_continuation_positive_edges",
+)
+
 
 @dataclass(frozen=True)
 class NoPriorContinuationPromotionConfig:
@@ -114,6 +121,14 @@ def evaluate_no_prior_continuation_exposure(
             "status": "incomplete",
             "exposure_result": "missing_all_row",
             "recommendation": "rerun exposure audit with aggregate ALL row",
+        }
+    missing_columns = [key for key in NO_PRIOR_EXPOSURE_COLUMNS if key not in all_row]
+    if missing_columns:
+        return {
+            "status": "incomplete",
+            "exposure_result": "missing_no_prior_exposure_columns",
+            "missing_columns": missing_columns,
+            "recommendation": "rerun exposure audit with no-prior continuation scoring enabled",
         }
 
     failures = list(base.get("failed_limits", ()))
@@ -216,6 +231,9 @@ def format_no_prior_continuation_promotion_markdown(
         )
     failed = ", ".join(str(item) for item in exposure.get("failed_limits", ()))
     lines.extend(["", f"Failed exposure limits: {failed or 'none'}"])
+    if exposure.get("missing_columns"):
+        missing = ", ".join(str(item) for item in exposure.get("missing_columns", ()))
+        lines.append(f"Missing exposure columns: {missing}")
     return "\n".join(lines)
 
 
