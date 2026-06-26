@@ -26,12 +26,15 @@ def _rows(
     prior_survival_complete: float = 0.932,
     no_prior_pairwise: float = 0.965,
     no_prior_complete: float = 0.930,
+    no_local_pairwise: float = 0.965,
+    no_local_complete: float = 0.932,
 ) -> list[dict[str, str]]:
     return [
         _row("Track2p", 0.965, 0.924),
         _row("FullMHTPrior2", 0.965, 0.930),
         _row("FullMHTPriorSurvival", prior_survival_pairwise, prior_survival_complete),
         _row("FullMHTNoPriorContinuation100", no_prior_pairwise, no_prior_complete),
+        _row("FullMHTIdentityHistoryNoLocalContext", no_local_pairwise, no_local_complete),
         _row("FullMHTIdentityHistory", identity_pairwise, identity_complete),
         _row("FullMHTGreedyIdentityHistory", greedy_pairwise, greedy_complete),
     ]
@@ -42,6 +45,7 @@ def test_identity_history_decision_reports_missing_rows() -> None:
 
     assert decision["status"] == "incomplete"
     assert "FullMHTIdentityHistory" in decision["missing_approaches"]
+    assert "FullMHTIdentityHistoryNoLocalContext" in decision["missing_approaches"]
     assert "FullMHTGreedyIdentityHistory" in decision["missing_approaches"]
 
 
@@ -51,12 +55,14 @@ def test_identity_history_decision_detects_complete_history_advantage() -> None:
     assert decision["status"] == "complete"
     assert decision["mht_candidate"] == "FullMHTIdentityHistory"
     assert decision["local_choice_baseline"] == "FullMHTGreedyIdentityHistory"
+    assert decision["no_local_context_baseline"] == "FullMHTIdentityHistoryNoLocalContext"
     assert decision["mht_vs_local_result"] == "identity_complete_history_advantage"
     assert decision["history_search_result"] == "identity_complete_history_advantage"
     assert decision["mht_minus_local_pairwise_f1_micro"] == 0.0
     assert decision["mht_minus_local_complete_track_f1_micro"] > 0.0
     assert decision["prior_control_result"] == "identity_improves_prior"
     assert decision["track2p_control_result"] == "identity_improves_track2p"
+    assert decision["no_local_context_control_result"] == "identity_improves_no_local_context"
     assert decision["layer_combination_result"] == "combined_layer_gain"
     assert "promote only after" in decision["recommendation"]
 
@@ -121,10 +127,28 @@ def test_identity_history_decision_rejects_component_layer_regression() -> None:
     )
 
 
+def test_identity_history_decision_rejects_no_local_context_regression() -> None:
+    decision = evaluate_identity_history_decision(
+        _rows(
+            identity_pairwise=0.966,
+            identity_complete=0.934,
+            no_local_pairwise=0.966,
+            no_local_complete=0.936,
+        )
+    )
+
+    assert decision["no_local_context_control_result"] == "identity_below_no_local_context"
+    assert decision["recommendation"] == (
+        "keep exploratory; calibrated local-context layer hurts identity-history row"
+    )
+
+
 def test_identity_history_decision_markdown_is_compact() -> None:
     markdown = format_decision_markdown(evaluate_identity_history_decision(_rows()))
 
     assert "# FullMHT Identity-History Decision" in markdown
     assert "MHT-vs-local result" in markdown
+    assert "No-local-context result" in markdown
     assert "identity_complete_history_advantage" in markdown
     assert "MHT minus local greedy" in markdown
+    assert "identity minus no-local context" in markdown
