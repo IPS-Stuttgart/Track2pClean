@@ -58,7 +58,7 @@ def test_tracks_to_suite2p_index_matrix_normalizes_solver_track_indices(
     ("tracks", "message"),
     [
         (({0: True, 1: 0},), "detection index"),
-        (({True: 0, 1: 0},), "session index"),
+        (({True: 0, 0: 0},), "session index"),
         (({0: 1.25, 1: 0},), "detection index"),
         (({0: np.nan, 1: 0},), "detection index"),
         (({0: "1", 1: 0},), "detection index"),
