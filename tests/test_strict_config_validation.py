@@ -37,9 +37,29 @@ def test_centroid_candidate_top_k_accepts_integer_like_values(integer_like):
     assert config.column_top_k == 1
 
 
+@pytest.mark.parametrize("bad_value", [1, 0, "false", "true", None])
+def test_centroid_candidate_config_rejects_non_boolean_diagonal_flag(bad_value):
+    with pytest.raises(
+        ValueError,
+        match="include_diagonal_when_square must be a boolean",
+    ):
+        CentroidCandidatePrefilterConfig(include_diagonal_when_square=bad_value)
+
+
+@pytest.mark.parametrize("flag", [True, False, np.bool_(True), np.bool_(False)])
+def test_centroid_candidate_config_normalizes_diagonal_flag(flag):
+    config = CentroidCandidatePrefilterConfig(include_diagonal_when_square=flag)
+
+    assert isinstance(config.include_diagonal_when_square, bool)
+    assert config.include_diagonal_when_square is bool(flag)
+
+
 @pytest.mark.parametrize("bad_value", [True, False, 1.5, "1.5", np.nan, np.inf])
 def test_advanced_candidate_top_k_rejects_bad_values(bad_value):
-    with pytest.raises(ValueError, match="top_k_per_roi must be an integer"):
+    with pytest.raises(
+        ValueError,
+        match="top_k_per_roi must be a positive integer or None",
+    ):
         CandidatePruningConfig(top_k_per_roi=bad_value)
 
     with pytest.raises(ValueError, match="top_k must be an integer"):
@@ -134,12 +154,12 @@ def test_candidate_mask_from_cost_matrix_rejects_non_boolean_column_flag(
         (
             CandidatePruningConfig,
             {"large_cost": np.inf},
-            "large_cost must be a finite positive value",
+            "large_cost must be a positive finite value",
         ),
         (
             CandidatePruningConfig,
             {"large_cost": True},
-            "large_cost must be a finite positive value",
+            "large_cost must be a positive finite value",
         ),
     ],
 )

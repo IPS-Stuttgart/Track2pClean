@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -57,15 +58,19 @@ def absence_cost_vector(
     """Return per-ROI costs for allowing an observation gap/absence."""
 
     cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
-    n_rois = int(getattr(plane, "n_rois", 0))
+    n_rois = _validated_roi_count(plane, "plane")
     costs = np.full((n_rois,), float(cfg.base_absence_cost), dtype=float)
 
     cell_probabilities = getattr(plane, "cell_probabilities", None)
     if cell_probabilities is not None:
-        probs = np.asarray(cell_probabilities, dtype=float).reshape(-1)
-        if probs.shape == (n_rois,):
-            probs = _sanitize_cell_probability_vector(probs)
-            costs -= cfg.low_cell_probability_discount * (1.0 - probs)
+        probabilities = np.asarray(cell_probabilities, dtype=float).reshape(-1)
+        if probabilities.shape == (n_rois,):
+            valid_probabilities = np.isfinite(probabilities)
+            if np.any(valid_probabilities):
+                probs = np.clip(probabilities[valid_probabilities], 0.0, 1.0)
+                costs[valid_probabilities] -= cfg.low_cell_probability_discount * (
+                    1.0 - probs
+                )
 
     if registered_empty_mask is not None:
         empty = np.asarray(registered_empty_mask, dtype=bool).reshape(-1)
@@ -116,8 +121,8 @@ def gap_penalty_matrix(
     """Return pairwise gap penalties that account for observation absence cues."""
 
     cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
-    n_ref = int(getattr(reference_plane, "n_rois", 0))
-    n_meas = int(getattr(measurement_plane, "n_rois", 0))
+    n_ref = _validated_roi_count(reference_plane, "reference_plane")
+    n_meas = _validated_roi_count(measurement_plane, "measurement_plane")
     if reference_absence_costs is None:
         ref_cost = absence_cost_vector(
             reference_plane,
@@ -126,7 +131,9 @@ def gap_penalty_matrix(
         )
     else:
         ref_cost = _validated_absence_cost_vector(
-            "reference_absence_costs", reference_absence_costs, n_ref
+            "reference_absence_costs",
+            reference_absence_costs,
+            n_ref,
         )
     if measurement_absence_costs is None:
         meas_cost = absence_cost_vector(
@@ -137,8 +144,12 @@ def gap_penalty_matrix(
         )
     else:
         meas_cost = _validated_absence_cost_vector(
-            "measurement_absence_costs", measurement_absence_costs, n_meas
+            "measurement_absence_costs",
+            measurement_absence_costs,
+            n_meas,
         )
+    if ref_cost.shape != (n_ref,) or meas_cost.shape != (n_meas,):
+        raise ValueError("absence cost vectors must match plane ROI counts")
     gap = _validated_session_gap_offset(session_gap)
     return gap * 0.5 * (ref_cost[:, None] + meas_cost[None, :])
 
@@ -199,6 +210,28 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
     }
 
 
+def _validated_roi_count(plane: Any, plane_name: str) -> int:
+    message = f"{plane_name}.n_rois must be a finite non-negative integer"
+    raw_count = getattr(plane, "n_rois", 0)
+    if isinstance(raw_count, (bool, np.bool_)):
+        raise ValueError(message)
+
+    try:
+        count = int(operator.index(raw_count))
+    except TypeError:
+        try:
+            numeric_count = float(raw_count)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(message) from exc
+        if not np.isfinite(numeric_count) or not numeric_count.is_integer():
+            raise ValueError(message)
+        count = int(numeric_count)
+
+    if count < 0:
+        raise ValueError(message)
+    return count
+
+
 def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
     if isinstance(raw_value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite and non-negative")
@@ -206,11 +239,6 @@ def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
     if not np.isfinite(value) or value < 0.0:
         raise ValueError(f"{name} must be finite and non-negative")
     return value
-
-
-def _sanitize_cell_probability_vector(probabilities: np.ndarray) -> np.ndarray:
-    finite_probabilities = np.where(np.isfinite(probabilities), probabilities, 1.0)
-    return np.clip(finite_probabilities, 0.0, 1.0)
 
 
 def _validated_absence_cost_vector(name: str, raw_values: Any, n_rois: int) -> np.ndarray:
@@ -223,16 +251,41 @@ def _validated_absence_cost_vector(name: str, raw_values: Any, n_rois: int) -> n
 
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:
+    gap = _validated_positive_integer_session_gap(session_gap)
+    return float(gap - 1)
+
+
+def _validated_positive_integer_session_gap(session_gap: Any) -> int:
+    message = (
+        "session_gap must be a finite value representing an integer "
+        "greater than or equal to 1"
+    )
     if isinstance(session_gap, (bool, np.bool_)):
-        raise ValueError(
-            "session_gap must be a finite value greater than or equal to 1"
-        )
-    gap = float(session_gap)
-    if not np.isfinite(gap) or gap < 1.0:
-        raise ValueError(
-            "session_gap must be a finite value greater than or equal to 1"
-        )
-    return gap - 1.0
+        raise ValueError(message)
+
+    try:
+        gap = int(operator.index(session_gap))
+    except TypeError:
+        if isinstance(session_gap, str):
+            text = session_gap.strip()
+            if not text:
+                raise ValueError(message) from None
+            try:
+                numeric_gap = float(text)
+            except ValueError as exc:
+                raise ValueError(message) from exc
+        else:
+            try:
+                numeric_gap = float(session_gap)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(message) from exc
+        if not np.isfinite(numeric_gap) or not numeric_gap.is_integer():
+            raise ValueError(message)
+        gap = int(numeric_gap)
+
+    if gap < 1:
+        raise ValueError(message)
+    return gap
 
 
 __all__ = (
