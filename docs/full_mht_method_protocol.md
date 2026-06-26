@@ -306,6 +306,7 @@ recipe lives in:
 ```text
 docs/full_mht_prior_survival_validation.md
 docs/full_mht_no_prior_continuation_likelihood.md
+docs/full_mht_label_free_exposure_audit.md
 docs/full_mht_terminal_completion_objective.md
 docs/full_mht_history_dynamics_objective.md
 docs/full_mht_growth_history_prediction.md
@@ -331,6 +332,8 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_no_prior_continuation_integration.py \
   tests/test_full_mht_no_prior_continuation_manifest_integration.py \
   tests/test_full_mht_no_prior_continuation_decision.py \
+  tests/test_full_mht_no_prior_continuation_promotion_gate.py \
+  tests/test_full_mht_exposure_audit.py \
   tests/test_full_mht_terminal_completion_integration.py \
   tests/test_full_mht_scan_history_dynamics_integration.py \
   tests/test_full_mht_scan_history_conflict_demo.py \
@@ -374,6 +377,45 @@ mkdir -p "$NOPRIOR"
   "$NOPRIOR/full_mht_no_prior_continuation/full_mht_no_prior_continuation_comparison.csv" \
   --output "$NOPRIOR/full_mht_no_prior_continuation_decision.md"
 
+EXPOSURE="$REPO/results/full_mht_label_free_exposure_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$EXPOSURE"
+"$PY" -m bayescatrack.experiments.track2p_policy_full_mht_exposure_audit \
+  --data "$REPO/results/policy_dp/data_lightweight" \
+  --input-format suite2p \
+  --threshold-method min \
+  --transform-type affine \
+  --iou-distance-threshold 12 \
+  --cell-probability-threshold 0.5 \
+  --seed-session 0 \
+  --beam-width 8 \
+  --scan-hypotheses 8 \
+  --edge-top-k 4 \
+  --identity-diverse-beam \
+  --miss-cost 2.0 \
+  --full-mht-max-gap 1 \
+  --gap-reactivation-cost 1.0 \
+  --min-output-observations 1 \
+  --min-edge-score 0.25 \
+  --association-score-mode calibrated-likelihood \
+  --association-likelihood-weight 1.0 \
+  --association-likelihood-clip 4.0 \
+  --track2p-prior-weight 12.0 \
+  --track2p-non-prior-penalty 2.0 \
+  --track2p-prior-switch-penalty 8.0 \
+  --track2p-no-prior-successor-penalty 0.0 \
+  --track2p-prior-miss-penalty 4.0 \
+  --no-prior-continuation-likelihood-weight 1.0 \
+  --no-prior-continuation-min-examples-per-class 2 \
+  --no-prior-continuation-score-clip 8.0 \
+  --output "$EXPOSURE/full_mht_no_prior_continuation_exposure.csv" \
+  --format csv \
+  --progress
+
+"$PY" -m bayescatrack.experiments.full_mht_no_prior_continuation_promotion_gate \
+  "$NOPRIOR/full_mht_no_prior_continuation/full_mht_no_prior_continuation_comparison.csv" \
+  "$EXPOSURE/full_mht_no_prior_continuation_exposure.csv" \
+  --output "$EXPOSURE/full_mht_no_prior_continuation_promotion_gate.md"
+
 COMP="$REPO/results/full_mht_terminal_completion_probe_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$COMP"
 "$PY" -m bayescatrack benchmark suite \
@@ -396,6 +438,7 @@ mkdir -p "$GROWTH"
 Record the output directories, comparison tables, and promote/keep-exploratory
 judgment in `docs/full_mht_prior_survival_validation.md`,
 `docs/full_mht_no_prior_continuation_likelihood.md`,
+`docs/full_mht_label_free_exposure_audit.md`,
 `docs/full_mht_terminal_completion_objective.md`,
 `docs/full_mht_growth_history_prediction.md`, and
 `docs/full_mht_manifest_integration_notes.md` after the run.
