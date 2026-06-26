@@ -967,6 +967,83 @@ def test_full_mht_scan_assignment_compacts_murty_target_columns(monkeypatch):
     assert output[0].history[-1]["scan_candidates"] == 1
 
 
+
+def test_full_mht_advance_scan_reuses_scan_pair_matrix_pool(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=0,
+        target_session=1,
+        source_indices=np.asarray([5], dtype=int),
+        target_indices=np.asarray([20], dtype=int),
+        registered_iou=np.asarray([[0.9]], dtype=float),
+        shifted_iou=np.asarray([[0.9]], dtype=float),
+        centroid_distance=np.asarray([[1.0]], dtype=float),
+        area_ratio=np.ones((1, 1), dtype=float),
+        threshold=0.0,
+        growth_residual=np.zeros((1, 1), dtype=float),
+        growth_mahalanobis=np.zeros((1, 1), dtype=float),
+        local_deformation=np.zeros((1, 1), dtype=float),
+        growth_anchor_count=1,
+        growth_model_type="pooled",
+    )
+    sparse_calls: list[tuple[int, int, tuple[int, ...]]] = []
+
+    def fake_sparse_pair_matrices(
+        _sessions,
+        _feature_cache,
+        *,
+        source_session,
+        target_session,
+        source_rois,
+        **_kwargs,
+    ):
+        sparse_calls.append(
+            (int(source_session), int(target_session), tuple(int(roi) for roi in source_rois))
+        )
+        return matrices
+
+    def fake_murty(cost_matrix, **_kwargs):
+        cost_matrix = np.asarray(cost_matrix, dtype=float)
+        return [
+            {
+                "assignment": np.asarray([0], dtype=int),
+                "cost": float(cost_matrix[0, 0]),
+            }
+        ]
+
+    monkeypatch.setattr(full_mht, "_sparse_pair_matrices", fake_sparse_pair_matrices)
+    monkeypatch.setattr(full_mht, "_edge_score", lambda *_args, **_kwargs: 2.0)
+    monkeypatch.setattr(full_mht, "murty_k_best_assignments", fake_murty)
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *_args, **_kwargs: 0.9)
+
+    hypotheses = (
+        full_mht._MHTHypothesis(
+            np.asarray([[5, -1]], dtype=int), score=0.0, history=()
+        ),
+        full_mht._MHTHypothesis(
+            np.asarray([[5, -1]], dtype=int), score=-0.1, history=()
+        ),
+    )
+
+    output = full_mht._advance_scan(
+        hypotheses,
+        sessions=(object(), object()),
+        feature_cache=SimpleNamespace(
+            cell_probability_threshold=0.5, iou_distance_threshold=12.0
+        ),
+        session_index=0,
+        config=full_mht.FullMHTConfig(
+            beam_width=2,
+            edge_top_k=1,
+            min_edge_score=0.25,
+            scan_hypotheses=1,
+        ),
+        track2p_prior_edges=frozenset(),
+    )
+
+    assert sparse_calls == [(0, 1, (5,))]
+    assert len(output) == 2
+    assert all(int(hypothesis.tracks[0, 1]) == 20 for hypothesis in output)
+
 def test_full_mht_scan_assignment_decomposes_independent_components(monkeypatch):
     matrices = full_mht._FullMHTPairMatrices(
         source_session=0,

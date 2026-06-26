@@ -1321,6 +1321,77 @@ def _active_track_sources(
     return tuple(output)
 
 
+def _pair_matrices_for_active_sources(
+    sessions: Sequence[Any],
+    feature_cache: rank._FeatureCache,
+    *,
+    source_session: int,
+    target_session: int,
+    source_rois: Sequence[int],
+    edge_top_k: int,
+    config: FullMHTConfig,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+    scan_pair_matrices_by_source_session: Mapping[int, _FullMHTPairMatrices] | None,
+) -> _FullMHTPairMatrices:
+    requested_rois = tuple(sorted({int(roi) for roi in source_rois}))
+    pooled = (scan_pair_matrices_by_source_session or {}).get(int(source_session))
+    if pooled is not None:
+        pooled_rois = {int(roi) for roi in np.asarray(pooled.source_indices, dtype=int)}
+        if all(int(roi) in pooled_rois for roi in requested_rois):
+            return _subset_pair_matrices(pooled, requested_rois)
+    return _sparse_pair_matrices(
+        sessions,
+        feature_cache,
+        source_session=int(source_session),
+        target_session=int(target_session),
+        source_rois=requested_rois,
+        edge_top_k=int(edge_top_k),
+        config=config,
+        track2p_prior_edges=track2p_prior_edges,
+    )
+
+
+def _subset_pair_matrices(
+    matrices: _FullMHTPairMatrices, source_rois: Sequence[int]
+) -> _FullMHTPairMatrices:
+    source_lookup = {
+        int(roi): idx
+        for idx, roi in enumerate(np.asarray(matrices.source_indices, dtype=int))
+    }
+    row_positions = [
+        source_lookup[int(roi)]
+        for roi in source_rois
+        if int(roi) in source_lookup
+    ]
+    row_index = np.asarray(row_positions, dtype=int)
+    association = matrices.association_log_likelihood
+    return _FullMHTPairMatrices(
+        source_session=int(matrices.source_session),
+        target_session=int(matrices.target_session),
+        source_indices=np.asarray(matrices.source_indices, dtype=int)[row_index],
+        target_indices=np.asarray(matrices.target_indices, dtype=int),
+        registered_iou=np.asarray(matrices.registered_iou, dtype=float)[row_index, :],
+        shifted_iou=np.asarray(matrices.shifted_iou, dtype=float)[row_index, :],
+        centroid_distance=np.asarray(matrices.centroid_distance, dtype=float)[row_index, :],
+        area_ratio=np.asarray(matrices.area_ratio, dtype=float)[row_index, :],
+        threshold=float(matrices.threshold),
+        growth_residual=np.asarray(matrices.growth_residual, dtype=float)[row_index, :],
+        growth_mahalanobis=np.asarray(matrices.growth_mahalanobis, dtype=float)[
+            row_index, :
+        ],
+        local_deformation=np.asarray(matrices.local_deformation, dtype=float)[
+            row_index, :
+        ],
+        growth_anchor_count=int(matrices.growth_anchor_count),
+        growth_model_type=str(matrices.growth_model_type),
+        association_log_likelihood=(
+            None
+            if association is None
+            else np.asarray(association, dtype=float)[row_index, :]
+        ),
+    )
+
+
 def _matrix_diagnostics(
     matrices_by_source_session: Mapping[int, _FullMHTPairMatrices],
 ) -> dict[str, Any]:
@@ -1349,6 +1420,14 @@ def _advance_scan(
     config: FullMHTConfig,
     track2p_prior_edges: frozenset[tuple[int, int, int, int]],
 ) -> list[_MHTHypothesis]:
+    pooled_matrices = _scan_pair_matrix_pool(
+        hypotheses,
+        sessions=sessions,
+        feature_cache=feature_cache,
+        session_index=int(session_index),
+        config=config,
+        track2p_prior_edges=track2p_prior_edges,
+    )
     expanded: list[_MHTHypothesis] = []
     for hypothesis in hypotheses:
         expanded.extend(
@@ -1359,9 +1438,46 @@ def _advance_scan(
                 session_index=int(session_index),
                 config=config,
                 track2p_prior_edges=track2p_prior_edges,
+                scan_pair_matrices_by_source_session=pooled_matrices,
             )
         )
     return _prune_beam(expanded, config=config)
+
+
+def _scan_pair_matrix_pool(
+    hypotheses: Sequence[_MHTHypothesis],
+    *,
+    sessions: Sequence[Any],
+    feature_cache: rank._FeatureCache,
+    session_index: int,
+    config: FullMHTConfig,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+) -> dict[int, _FullMHTPairMatrices]:
+    next_session = int(session_index) + 1
+    source_rois_by_session: dict[int, set[int]] = {}
+    for hypothesis in hypotheses:
+        tracks = np.asarray(hypothesis.tracks, dtype=int)
+        for active_source in _active_track_sources(
+            tracks, session_index=int(session_index), max_gap=int(config.max_gap)
+        ):
+            source_rois_by_session.setdefault(
+                int(active_source.source_session), set()
+            ).add(int(active_source.source_roi))
+
+    return {
+        int(source_session): _sparse_pair_matrices(
+            sessions,
+            feature_cache,
+            source_session=int(source_session),
+            target_session=next_session,
+            source_rois=tuple(sorted(source_rois)),
+            edge_top_k=int(config.edge_top_k),
+            config=config,
+            track2p_prior_edges=track2p_prior_edges,
+        )
+        for source_session, source_rois in source_rois_by_session.items()
+        if source_rois
+    }
 
 
 def _expand_hypothesis_scan(
@@ -1372,6 +1488,9 @@ def _expand_hypothesis_scan(
     session_index: int,
     config: FullMHTConfig,
     track2p_prior_edges: frozenset[tuple[int, int, int, int]] | None = None,
+    scan_pair_matrices_by_source_session: (
+        Mapping[int, _FullMHTPairMatrices] | None
+    ) = None,
 ) -> list[_MHTHypothesis]:
     tracks = np.asarray(hypothesis.tracks, dtype=int)
     next_session = int(session_index) + 1
@@ -1413,7 +1532,7 @@ def _expand_hypothesis_scan(
             int(active_source.source_roi)
         )
     matrices_by_source_session = {
-        int(source_session): _sparse_pair_matrices(
+        int(source_session): _pair_matrices_for_active_sources(
             sessions,
             feature_cache,
             source_session=int(source_session),
@@ -1422,6 +1541,7 @@ def _expand_hypothesis_scan(
             edge_top_k=int(config.edge_top_k),
             config=config,
             track2p_prior_edges=prior_edges,
+            scan_pair_matrices_by_source_session=scan_pair_matrices_by_source_session,
         )
         for source_session, source_rois in source_rois_by_session.items()
     }
