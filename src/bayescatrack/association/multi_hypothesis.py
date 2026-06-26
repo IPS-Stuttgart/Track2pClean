@@ -10,8 +10,10 @@ import numpy as np
 
 from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
 from ._numeric_validation import integer as _integer
+from ._numeric_validation import nonnegative_integer as _nonnegative_integer
 from ._numeric_validation import positive_integer as _positive_integer
 from ._numeric_validation import probability as _probability
+from ._numeric_validation import validated_numeric_float as _validated_numeric_float
 
 Edge = tuple[int, int, int, int]
 
@@ -82,11 +84,51 @@ def _validated_session_edge(
     target_session = _integer(edge_values[1], name=f"{name} target_session")
     if source_session < 0 or target_session < 0:
         raise ValueError(f"{name} session indices must be non-negative")
+    if source_session >= target_session:
+        raise ValueError(f"{name} session edges must point forward in time")
     if n_sessions is not None and (
         source_session >= n_sessions or target_session >= n_sessions
     ):
         raise ValueError(f"{name} session indices must refer to existing sessions")
     return source_session, target_session
+
+
+def _scalar_value(value: Any, *, name: str) -> Any:
+    array = np.asarray(value)
+    if array.shape != ():
+        raise ValueError(f"{name} must be a scalar value")
+    return array.item()
+
+
+def _validated_roi_index(value: Any, *, name: str) -> int:
+    roi_index = _integer(_scalar_value(value, name=name), name=name)
+    if roi_index < 0:
+        raise ValueError(f"{name} must be a non-negative ROI index")
+    return roi_index
+
+
+def _validated_roi_index_vector(values: Any, *, name: str) -> np.ndarray:
+    raw = np.asarray(values, dtype=object)
+    if raw.ndim != 1:
+        raise ValueError(f"{name} must be a one-dimensional ROI-index sequence")
+    roi_indices = np.empty(raw.shape, dtype=int)
+    for index, value in np.ndenumerate(raw):
+        roi_indices[index] = _validated_roi_index(value, name=f"{name}[{index[0]}]")
+    return roi_indices
+
+
+def _validated_edge_candidate(candidate: Any, *, name: str) -> tuple[int, int, float]:
+    if isinstance(candidate, (str, bytes)):
+        raise ValueError(f"{name} must be a three-item edge candidate")
+    try:
+        source_roi, target_roi, cost = candidate
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a three-item edge candidate") from exc
+    return (
+        _validated_roi_index(source_roi, name=f"{name} source_roi"),
+        _validated_roi_index(target_roi, name=f"{name} target_roi"),
+        _validated_numeric_float(_scalar_value(cost, name=f"{name} cost"), name=f"{name} cost"),
+    )
 
 
 def top_k_edge_candidates(
@@ -139,8 +181,14 @@ def candidate_edge_map(
             n_sessions=n_sessions,
         )
         matrix = np.asarray(matrix_values, dtype=float)
-        source_indices = np.asarray(roi_indices_by_session[source_session], dtype=int)
-        target_indices = np.asarray(roi_indices_by_session[target_session], dtype=int)
+        source_indices = _validated_roi_index_vector(
+            roi_indices_by_session[source_session],
+            name=f"roi_indices_by_session[{source_session}]",
+        )
+        target_indices = _validated_roi_index_vector(
+            roi_indices_by_session[target_session],
+            name=f"roi_indices_by_session[{target_session}]",
+        )
         if matrix.shape != (source_indices.size, target_indices.size):
             raise ValueError(
                 f"Cost matrix shape for edge {edge} does not match ROI indices"
@@ -186,15 +234,19 @@ def enumerate_track_hypotheses(
             n_sessions=n_sessions,
         )
         source_lookup: dict[int, list[tuple[int, float]]] = {}
-        for source_roi, target_roi, cost in candidates:
-            source_lookup.setdefault(int(source_roi), []).append(
-                (int(target_roi), float(cost))
+        for candidate_index, candidate in enumerate(candidates):
+            source_roi, target_roi, cost = _validated_edge_candidate(
+                candidate,
+                name=f"edge_candidates[{edge!r}][{candidate_index}]",
             )
+            source_lookup.setdefault(source_roi, []).append((target_roi, cost))
         by_edge_source[(source_session, target_session)] = source_lookup
 
-    hypotheses = [
-        TrackHypothesis(row=(int(roi),), cost=0.0) for roi in start_roi_indices
-    ]
+    start_indices = _validated_roi_index_vector(
+        start_roi_indices,
+        name="start_roi_indices",
+    )
+    hypotheses = [TrackHypothesis(row=(int(roi),), cost=0.0) for roi in start_indices]
     for session_index in range(n_sessions - 1):
         lookup = by_edge_source.get((session_index, session_index + 1), {})
         expanded: list[TrackHypothesis] = []
@@ -306,6 +358,8 @@ def _validate_explicit_edge_set(matrix: np.ndarray) -> None:
         raise ValueError(
             "explicit edge sets must contain non-negative session and ROI indices"
         )
+    if np.any(matrix[:, 0] >= matrix[:, 1]):
+        raise ValueError("explicit edge sets must point forward in time")
 
 
 def _validate_track_matrix_roi_values(matrix: np.ndarray, *, fill_value: int) -> None:
@@ -314,6 +368,25 @@ def _validate_track_matrix_roi_values(matrix: np.ndarray, *, fill_value: int) ->
         raise ValueError(
             "track matrices must contain non-negative ROI indices or fill_value"
         )
+
+
+def _normalize_consensus_edge(edge: Any, *, name: str) -> Edge:
+    if isinstance(edge, (str, bytes)):
+        raise ValueError(f"{name} must be a four-item consensus edge")
+    try:
+        edge_values = tuple(edge)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be a four-item consensus edge") from exc
+    if len(edge_values) != 4:
+        raise ValueError(f"{name} must be a four-item consensus edge")
+
+    source_session, target_session = _validated_session_edge(
+        edge_values[:2],
+        name=name,
+    )
+    source_roi = _nonnegative_integer(edge_values[2], name=f"{name} source_roi")
+    target_roi = _nonnegative_integer(edge_values[3], name=f"{name} target_roi")
+    return int(source_session), int(target_session), int(source_roi), int(target_roi)
 
 
 def _is_edge_set_input(matrix_values: Any, matrix: np.ndarray) -> bool:
@@ -357,7 +430,8 @@ def edge_union_costs(edge_sets: Sequence[Mapping[Edge, int]]) -> dict[Edge, floa
     votes: dict[Edge, int] = {}
     for edge_set in edge_sets:
         for edge, vote_count in edge_set.items():
-            votes[edge] = votes.get(edge, 0) + _positive_integer(
-                vote_count, name="vote_count"
-            )
+            normalized_edge = _normalize_consensus_edge(edge, name="edge")
+            votes[normalized_edge] = votes.get(
+                normalized_edge, 0
+            ) + _positive_integer(vote_count, name="vote_count")
     return {edge: 1.0 / max(vote_count, 1) for edge, vote_count in votes.items()}

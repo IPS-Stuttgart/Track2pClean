@@ -11,6 +11,9 @@ from typing import Any, TypeAlias
 import numpy as np
 
 CalibrationBinRow: TypeAlias = dict[str, float | int | None]
+_THRESHOLD_SEQUENCE_ERROR = (
+    "thresholds must contain at least one finite numeric value in [0, 1]"
+)
 
 __all__ = (
     "CalibrationBinRow",
@@ -165,11 +168,9 @@ def precision_recall_threshold_table(
     """Return precision/recall/F1 rows for probability rejection thresholds."""
 
     probabilities, labels = _validate_probability_label_inputs(probabilities, labels)
-    if thresholds is None:
-        thresholds = tuple(np.linspace(0.0, 1.0, 101))
+    normalized_thresholds = _normalize_thresholds(thresholds)
     rows: list[dict[str, float | int]] = []
-    for threshold in thresholds:
-        threshold = _validate_probability_threshold(threshold)
+    for threshold in normalized_thresholds:
         predicted_positive = probabilities >= threshold
         positive = labels.astype(bool)
         tp = int(np.count_nonzero(predicted_positive & positive))
@@ -259,6 +260,23 @@ def format_reliability_bin_table(rows: Sequence[Mapping[str, object]]) -> str:
             + " |"
         )
     return "\n".join(body)
+
+
+def _normalize_thresholds(thresholds: Sequence[float] | None) -> tuple[float, ...]:
+    if thresholds is None:
+        raw_thresholds: tuple[Any, ...] = tuple(np.linspace(0.0, 1.0, 101))
+    else:
+        if isinstance(thresholds, (str, bytes, bool, np.bool_)):
+            raise ValueError(_THRESHOLD_SEQUENCE_ERROR)
+        try:
+            raw_thresholds = tuple(thresholds)
+        except TypeError as exc:
+            raise ValueError(_THRESHOLD_SEQUENCE_ERROR) from exc
+    if not raw_thresholds:
+        raise ValueError(_THRESHOLD_SEQUENCE_ERROR)
+    return tuple(
+        _validate_probability_threshold(threshold) for threshold in raw_thresholds
+    )
 
 
 def _validate_probability_label_inputs(

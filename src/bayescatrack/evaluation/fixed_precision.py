@@ -188,7 +188,17 @@ def _score_array_for_track_matrix(
 ) -> np.ndarray:
     if track_scores is None:
         return np.ones((matrix.shape[0],), dtype=float)
-    scores = np.asarray(track_scores, dtype=float)
+    raw_scores = np.asarray(track_scores, dtype=object)
+    if raw_scores.ndim != 1 or raw_scores.shape[0] != matrix.shape[0]:
+        raise ValueError(
+            "track_scores must contain exactly one score per predicted track"
+        )
+    if any(_is_boolean_scalar(score) for score in raw_scores):
+        raise ValueError("track_scores must contain finite real-valued scores")
+    try:
+        scores = np.asarray(raw_scores, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("track_scores must contain finite real-valued scores") from exc
     if scores.ndim != 1 or scores.shape[0] != matrix.shape[0]:
         raise ValueError(
             "track_scores must contain exactly one score per predicted track"
@@ -196,6 +206,13 @@ def _score_array_for_track_matrix(
     if not np.all(np.isfinite(scores)):
         raise ValueError("track_scores must contain only finite values")
     return scores
+
+
+def _is_boolean_scalar(value: object) -> bool:
+    array = np.asarray(value, dtype=object)
+    if array.shape != ():
+        return False
+    return isinstance(array.item(), (bool, np.bool_))
 
 
 def _resolve_session_indices(

@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_fov_affine_estimator_validation"
+_SUBTRACT_MEAN_ERROR = "subtract_mean must be a boolean"
 _GRID_SHAPE_ERROR = "grid_shape must contain exactly two positive integer dimensions"
 _MIN_TILE_SIZE_ERROR = "min_tile_size must be a positive integer"
 _MAX_SHIFT_FRACTION_ERROR = "max_shift_fraction must be a finite non-negative scalar"
@@ -28,7 +29,7 @@ def install_fov_affine_estimator_validation() -> None:
         reference_fov: Any,
         measurement_fov: Any,
         *,
-        subtract_mean: bool = True,
+        subtract_mean: Any = True,
         grid_shape: Any = (3, 3),
         min_tile_size: Any = 32,
         max_shift_fraction: Any = 0.55,
@@ -36,7 +37,7 @@ def install_fov_affine_estimator_validation() -> None:
         return original(
             reference_fov,
             measurement_fov,
-            subtract_mean=subtract_mean,
+            subtract_mean=_normalize_bool(subtract_mean, _SUBTRACT_MEAN_ERROR),
             grid_shape=_normalize_grid_shape(grid_shape),
             min_tile_size=_normalize_positive_int(min_tile_size, _MIN_TILE_SIZE_ERROR),
             max_shift_fraction=_normalize_nonnegative_float(max_shift_fraction),
@@ -45,6 +46,12 @@ def install_fov_affine_estimator_validation() -> None:
     setattr(estimate_fov_affine_transform_with_validation, _PATCH_MARKER, True)
     setattr(estimate_fov_affine_transform_with_validation, "_bayescatrack_original", original)
     _fov_affine_registration.estimate_fov_affine_transform = estimate_fov_affine_transform_with_validation
+
+
+def _normalize_bool(value: Any, error_message: str) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError(error_message)
 
 
 def _normalize_grid_shape(value: Any) -> tuple[int, int]:
