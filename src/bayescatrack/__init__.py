@@ -43,6 +43,9 @@ from ._fov_affine_estimator_validation import (
 from ._fov_affine_validation import (
     install_fov_affine_warp_validation as _install_fov_affine_warp_validation,
 )
+from ._fov_subpixel_shift_validation import (
+    install_fov_subpixel_shift_validation as _install_fov_subpixel_shift_validation,
+)
 from ._fov_translation_output_shape_validation import (
     install_fov_translation_output_shape_validation as _install_fov_translation_output_shape_validation,
 )
@@ -210,6 +213,7 @@ _install_reference_validation()
 _install_fov_affine_estimator_validation()
 _install_fov_affine_warp_validation()
 _install_fov_translation_output_shape_validation()
+_install_fov_subpixel_shift_validation()
 _install_nonrigid_fov_image_validation()
 _install_nonrigid_registration_control_validation()
 _install_ground_truth_track_validation()
