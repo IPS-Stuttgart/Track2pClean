@@ -19,6 +19,9 @@ from ._assignment_bundle_validation import (
 from ._candidate_centroid_validation import (
     install_candidate_centroid_validation as _install_candidate_centroid_validation,
 )
+from ._cli_exit_code_validation import (
+    install_cli_exit_code_validation as _install_cli_exit_code_validation,
+)
 from ._confidence_ordered_strict_gap_cli import (
     install_confidence_ordered_strict_gap_cli as _install_confidence_ordered_strict_gap_cli,
 )
@@ -165,6 +168,7 @@ find_track2p_session_dirs = _bridge.find_track2p_session_dirs
 load_raw_npy_plane = _bridge.load_raw_npy_plane
 load_suite2p_plane = _bridge.load_suite2p_plane
 load_track2p_subject = _bridge.load_track2p_subject
+_install_cli_exit_code_validation(_cli)
 main = _cli.main
 summarize_subject = _bridge.summarize_subject
 
