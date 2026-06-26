@@ -43,9 +43,9 @@ def _validate_suite2p_iscell_values(plane_dir: Path) -> None:
         return
 
     if iscell.ndim == 1:
-        _validate_binary_values(
+        _validate_probability_values(
             iscell,
-            message="Suite2p iscell values must contain finite binary values (0 or 1)",
+            message="Suite2p one-column iscell values must contain finite probabilities between 0 and 1",
         )
         return
 
