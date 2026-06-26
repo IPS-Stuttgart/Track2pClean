@@ -12,8 +12,11 @@ from ._confidence_ordered_strict_gap_cli import (
 from ._fov_affine_validation import (
     install_fov_affine_warp_validation as _install_fov_affine_warp_validation,
 )
+from ._full_mht_history_consistency_cli import (
+    install_full_mht_history_consistency_cli as _install_full_mht_history_consistency_cli,
+)
 from ._integer_translation_validation import (
-    install_integer_image_translation_validation as _install_integer_image_translation_validation,
+    install_integer_image_translation as _install_integer_image_translation_validation,
 )
 from ._reference_validation import (
     install_reference_validation as _install_reference_validation,
@@ -59,6 +62,7 @@ main = _cli.main
 summarize_subject = _bridge.summarize_subject
 
 _install_confidence_ordered_strict_gap_cli(_cli)
+_install_full_mht_history_consistency_cli(_cli)
 _install_soft_overlap_costs()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
