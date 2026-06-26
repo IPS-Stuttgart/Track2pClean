@@ -137,6 +137,7 @@ def test_full_mht_runner_kwargs_keep_mht_gap_separate_from_track2p_config() -> N
             "track2p_prior_survival_score_clip": 5.0,
             "terminal_incomplete_history_weight": 0.75,
             "terminal_motion_history_weight": 0.50,
+            "scan_motion_history_weight": 0.40,
         },
         "track2p-policy-full-mht",
     )
@@ -156,6 +157,7 @@ def test_full_mht_runner_kwargs_keep_mht_gap_separate_from_track2p_config() -> N
     assert kwargs["track2p_prior_survival_score_clip"] == 5.0
     assert kwargs["terminal_incomplete_history_weight"] == 0.75
     assert kwargs["terminal_motion_history_weight"] == 0.50
+    assert kwargs["scan_motion_history_weight"] == 0.40
     assert "cell_probability_threshold" not in kwargs
     assert "max_gap" not in kwargs
 
@@ -251,6 +253,7 @@ def test_full_mht_manifest_dispatches_prior_veto_survival_completion_and_history
                     "track2p_prior_survival_score_clip": 5.0,
                     "terminal_incomplete_history_weight": 0.75,
                     "terminal_motion_history_weight": 0.50,
+                    "scan_motion_history_weight": 0.40,
                 }
             ],
         },
@@ -270,6 +273,7 @@ def test_full_mht_manifest_dispatches_prior_veto_survival_completion_and_history
     assert getattr(full_mht, "_bayescatrack_prior_survival_scoring", False)
     assert getattr(full_mht, "_bayescatrack_terminal_completion_objective", False)
     assert getattr(full_mht, "_bayescatrack_history_dynamics_objective", False)
+    assert getattr(full_mht, "_bayescatrack_scan_history_dynamics_pruning", False)
     mht_config = captured["mht_config"]
     assert mht_config.beam_width == 4
     assert mht_config.scan_hypotheses == 4
@@ -294,3 +298,4 @@ def test_full_mht_manifest_dispatches_prior_veto_survival_completion_and_history
     assert getattr(mht_config, "track2p_prior_survival_score_clip") == 5.0
     assert getattr(mht_config, "terminal_incomplete_history_weight") == 0.75
     assert getattr(mht_config, "terminal_motion_history_weight") == 0.50
+    assert getattr(mht_config, "scan_motion_history_weight") == 0.40
