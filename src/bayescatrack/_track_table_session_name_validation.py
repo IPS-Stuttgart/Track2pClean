@@ -1,10 +1,10 @@
-"""Strict validation for TrackTable session-name uniqueness.
+"""Strict validation for session-name uniqueness in track/reference tables.
 
 Track-table scoring aligns prediction columns to ground-truth columns by session
 name.  Duplicate session names are ambiguous: set-based equality can hide them,
-and tuple.index(...) selects only the first duplicate column.  The validation hook
-below makes that ambiguity explicit before scoring or column reordering can use the
-wrong session column silently.
+and tuple.index(...) selects only the first duplicate column.  Track2pReference
+objects expose the same session-name contract, so references receive the same
+uniqueness guard.
 """
 
 from __future__ import annotations
@@ -12,15 +12,21 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any, Sequence
 
+from ._reference_session_name_validation import install_reference_session_name_validation
+
 _PATCH_MARKER = "_bayescatrack_track_table_session_name_validation_patch"
 
 
 def install_track_table_session_name_validation() -> None:
-    """Install idempotent validation around ground-truth TrackTable helpers."""
+    """Install idempotent validation around session-name-bearing helpers."""
 
     from . import ground_truth_eval as _ground_truth_eval  # pylint: disable=import-outside-toplevel
 
-    track_table = _ground_truth_eval.TrackTable
+    _install_track_table_session_name_validation(_ground_truth_eval.TrackTable)
+    install_reference_session_name_validation()
+
+
+def _install_track_table_session_name_validation(track_table: Any) -> None:
     if getattr(track_table, _PATCH_MARKER, False):
         return
 
