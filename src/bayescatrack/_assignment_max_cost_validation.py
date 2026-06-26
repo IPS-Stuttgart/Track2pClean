@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-_ERROR_MESSAGE = "max_cost must be a finite non-negative value or None"
+_ERROR_MESSAGE = "max_cost must be None or a finite non-negative scalar"
 
 
 def normalize_assignment_max_cost(value: Any) -> float | None:
@@ -21,10 +21,20 @@ def normalize_assignment_max_cost(value: Any) -> float | None:
 
     if value is None:
         return None
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, str, bytes)):
         raise ValueError(_ERROR_MESSAGE)
     try:
-        normalized = float(value)
+        value_array = np.asarray(value, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(_ERROR_MESSAGE) from exc
+    if value_array.shape != ():
+        raise ValueError(_ERROR_MESSAGE)
+
+    scalar = value_array.item()
+    if isinstance(scalar, (bool, np.bool_, str, bytes)):
+        raise ValueError(_ERROR_MESSAGE)
+    try:
+        normalized = float(scalar)
     except (TypeError, ValueError) as exc:
         raise ValueError(_ERROR_MESSAGE) from exc
     if not np.isfinite(normalized) or normalized < 0.0:
