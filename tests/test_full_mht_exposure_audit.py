@@ -95,6 +95,28 @@ def test_history_totals_reports_no_prior_continuation_exposure() -> None:
     assert totals["history_no_prior_continuation_weighted_score"] == pytest.approx(-0.25)
 
 
+def test_history_totals_reports_prior_survival_exposure() -> None:
+    audit = _audit_module()
+
+    totals = audit._history_totals(
+        (
+            {
+                "selected_edge_summaries": (
+                    "0:1->2|score=2.0|survival=1.5|survival_weighted=1.5;"
+                    "0:2->3|score=1.1|survival=-2|survival_weighted=-2"
+                )
+            },
+            {"selected_edge_summaries": "0:3->4|score=0.9"},
+        )
+    )
+
+    assert totals["history_prior_survival_scored_edges"] == 2
+    assert totals["history_prior_survival_positive_edges"] == 1
+    assert totals["history_prior_survival_negative_edges"] == 1
+    assert totals["history_prior_survival_score"] == pytest.approx(-0.5)
+    assert totals["history_prior_survival_weighted_score"] == pytest.approx(-0.5)
+
+
 def test_all_subjects_row_reports_exposure_maxima() -> None:
     audit = _audit_module()
 
@@ -127,6 +149,11 @@ def test_all_subjects_row_reports_exposure_maxima() -> None:
                 "history_no_prior_continuation_negative_edges": 1,
                 "history_no_prior_continuation_score": -0.5,
                 "history_no_prior_continuation_weighted_score": -0.25,
+                "history_prior_survival_scored_edges": 6,
+                "history_prior_survival_positive_edges": 5,
+                "history_prior_survival_negative_edges": 1,
+                "history_prior_survival_score": 4.0,
+                "history_prior_survival_weighted_score": 4.0,
             },
             {
                 "n_sessions": 7,
@@ -155,6 +182,11 @@ def test_all_subjects_row_reports_exposure_maxima() -> None:
                 "history_no_prior_continuation_negative_edges": 1,
                 "history_no_prior_continuation_score": 1.0,
                 "history_no_prior_continuation_weighted_score": 1.5,
+                "history_prior_survival_scored_edges": 8,
+                "history_prior_survival_positive_edges": 5,
+                "history_prior_survival_negative_edges": 3,
+                "history_prior_survival_score": -2.0,
+                "history_prior_survival_weighted_score": -2.0,
             },
         )
     )
@@ -172,6 +204,11 @@ def test_all_subjects_row_reports_exposure_maxima() -> None:
     assert all_row["history_no_prior_continuation_negative_edges"] == 2
     assert all_row["history_no_prior_continuation_score"] == pytest.approx(0.5)
     assert all_row["history_no_prior_continuation_weighted_score"] == pytest.approx(1.25)
+    assert all_row["history_prior_survival_scored_edges"] == 14
+    assert all_row["history_prior_survival_positive_edges"] == 10
+    assert all_row["history_prior_survival_negative_edges"] == 4
+    assert all_row["history_prior_survival_score"] == pytest.approx(2.0)
+    assert all_row["history_prior_survival_weighted_score"] == pytest.approx(2.0)
     assert all_row["max_selected_non_prior_edges_per_subject"] == 3
     assert all_row["max_missing_observations_per_subject"] == 5
     assert all_row["max_growth_prediction_penalized_edges_per_subject"] == 3
@@ -179,6 +216,8 @@ def test_all_subjects_row_reports_exposure_maxima() -> None:
     assert all_row["max_no_prior_continuation_scored_edges_per_subject"] == 4
     assert all_row["max_no_prior_continuation_positive_edges_per_subject"] == 3
     assert all_row["max_no_prior_continuation_abs_weighted_score_per_subject"] == pytest.approx(1.5)
+    assert all_row["max_prior_survival_negative_edges_per_subject"] == 3
+    assert all_row["max_prior_survival_abs_weighted_score_per_subject"] == pytest.approx(4.0)
 
 
 def test_parser_accepts_no_prior_continuation_exposure_flags() -> None:
@@ -208,3 +247,26 @@ def test_parser_accepts_no_prior_continuation_exposure_flags() -> None:
     assert args.no_prior_continuation_likelihood_weight == pytest.approx(1.0)
     assert args.no_prior_continuation_min_examples_per_class == 2
     assert args.no_prior_continuation_score_clip == pytest.approx(8.0)
+
+
+def test_parser_accepts_prior_survival_exposure_flags() -> None:
+    audit = _audit_module()
+
+    args = audit.build_arg_parser().parse_args(
+        [
+            "--data",
+            "/tmp/example",
+            "--track2p-prior-survival-weight",
+            "1.0",
+            "--track2p-prior-survival-min-examples-per-class",
+            "2",
+            "--track2p-prior-survival-score-clip",
+            "8.0",
+            "--output",
+            "/tmp/out.csv",
+        ]
+    )
+
+    assert args.track2p_prior_survival_weight == pytest.approx(1.0)
+    assert args.track2p_prior_survival_min_examples_per_class == 2
+    assert args.track2p_prior_survival_score_clip == pytest.approx(8.0)
