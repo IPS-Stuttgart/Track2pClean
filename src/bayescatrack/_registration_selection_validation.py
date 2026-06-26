@@ -102,10 +102,45 @@ def install_registration_selection_validation() -> None:
     )
 
 
-def _normalize_candidate_transforms(value: Any) -> Any:
+def _normalize_candidate_transforms(value: Any) -> tuple[str, ...]:
     if isinstance(value, str):
-        return (value,)
-    return value
+        candidates = (value,)
+    else:
+        try:
+            candidates = tuple(value)
+        except TypeError as exc:
+            raise ValueError(
+                "candidate_transforms must be a transform-type string or an iterable of transform-type strings"
+            ) from exc
+
+    valid_transforms = _valid_candidate_transform_names()
+    normalized: list[str] = []
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            raise ValueError("candidate_transforms must contain transform-type strings")
+        transform_type = candidate.strip()
+        if transform_type == "auto":
+            raise ValueError("'auto' must not be nested inside auto-registration candidates")
+        if transform_type not in valid_transforms:
+            valid_types = ", ".join(repr(name) for name in sorted(valid_transforms))
+            raise ValueError(
+                f"candidate_transforms contains unknown transform type {candidate!r}; expected one of {valid_types}"
+            )
+        if transform_type not in normalized:
+            normalized.append(transform_type)
+    if not normalized:
+        raise ValueError("At least one registration candidate is required")
+    return tuple(normalized)
+
+
+def _valid_candidate_transform_names() -> frozenset[str]:
+    from .track2p_registration import REGISTRATION_TRANSFORM_TYPES  # pylint: disable=import-outside-toplevel
+
+    return frozenset(
+        transform_type
+        for transform_type in REGISTRATION_TRANSFORM_TYPES
+        if transform_type != "auto"
+    )
 
 
 def _validated_complexity_penalty(value: Any) -> dict[str, float] | None:
