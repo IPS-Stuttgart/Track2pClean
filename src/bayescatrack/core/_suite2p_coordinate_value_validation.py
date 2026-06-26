@@ -1,11 +1,11 @@
-"""Suite2p coordinate-value validation used by subject-level loaders.
+"""Suite2p coordinate and per-pixel-vector validation for subject loaders.
 
 The public ``bayescatrack.load_suite2p_plane`` wrapper already rejects ambiguous
-``ypix``/``xpix`` values.  Subject-level loading goes through the lower-level
-bridge implementation, where coordinate arrays were converted with
-``dtype=int`` before validation.  That can silently truncate non-integral floats
-before masks are reconstructed.  This patch keeps the lower-level loader honest
-before any integer cast happens.
+``ypix``/``xpix`` values and malformed per-pixel ``lam``/``overlap`` arrays.
+Subject-level loading goes through the lower-level bridge implementation, where
+coordinate arrays were converted with ``dtype=int`` before validation and some
+per-pixel vectors could be broadcast or ignored.  This patch keeps the
+lower-level loader honest before any integer cast or mask reconstruction happens.
 """
 
 from __future__ import annotations
@@ -111,15 +111,18 @@ def _validate_suite2p_coordinate_values(
 
         ypix = np.asarray(roi_stat["ypix"])
         xpix = np.asarray(roi_stat["xpix"])
-        if ypix.shape != xpix.shape:
-            continue
+        overlap = _validate_per_pixel_array_shapes(
+            roi_stat,
+            roi_index=roi_index,
+            ypix=ypix,
+            xpix=xpix,
+            exclude_overlapping_pixels=bool(exclude_overlapping_pixels),
+        )
 
-        if bool(exclude_overlapping_pixels) and "overlap" in roi_stat:
-            overlap = np.asarray(roi_stat["overlap"], dtype=bool)
-            if overlap.shape == ypix.shape:
-                valid = ~overlap
-                ypix = ypix[valid]
-                xpix = xpix[valid]
+        if overlap is not None:
+            valid = ~np.asarray(overlap, dtype=bool)
+            ypix = ypix[valid]
+            xpix = xpix[valid]
 
         _validate_coordinate_array(
             ypix,
@@ -133,6 +136,37 @@ def _validate_suite2p_coordinate_values(
             name="xpix",
             axis_size=None if image_shape is None else image_shape[1],
         )
+
+
+def _validate_per_pixel_array_shapes(
+    roi_stat: Any,
+    *,
+    roi_index: int,
+    ypix: np.ndarray,
+    xpix: np.ndarray,
+    exclude_overlapping_pixels: bool,
+) -> np.ndarray | None:
+    if ypix.shape != xpix.shape:
+        raise ValueError(
+            f"Suite2p ROI {roi_index} ypix/xpix arrays must have matching shapes"
+        )
+
+    if "lam" in roi_stat:
+        lam = np.asarray(roi_stat["lam"])
+        if lam.shape != ypix.shape:
+            raise ValueError(
+                f"Suite2p ROI {roi_index} lam shape must match ypix/xpix shape"
+            )
+
+    if not exclude_overlapping_pixels or "overlap" not in roi_stat:
+        return None
+
+    overlap = np.asarray(roi_stat["overlap"])
+    if overlap.shape != ypix.shape:
+        raise ValueError(
+            f"Suite2p ROI {roi_index} overlap shape must match ypix/xpix shape"
+        )
+    return overlap
 
 
 def _load_suite2p_ops_image_shape(path: Path) -> tuple[int, int] | None:
@@ -212,9 +246,7 @@ def _validate_coordinate_array(
     try:
         numeric = np.asarray(array, dtype=float)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            _invalid_coordinate_message(roi_index, name)
-        ) from exc
+        raise ValueError(_invalid_coordinate_message(roi_index, name)) from exc
 
     if not np.all(np.isfinite(numeric)) or not np.all(numeric == np.floor(numeric)):
         _raise_invalid_coordinate_values(roi_index, name)
