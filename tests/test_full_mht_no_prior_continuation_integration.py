@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -34,10 +36,11 @@ def _matrices(full_mht):
     )
 
 
-def _config(full_mht, *, weight: float):
+def _config(full_mht, *, weight: float, **kwargs):
     config = full_mht.FullMHTConfig(
         track2p_non_prior_penalty=0.0,
         track2p_no_prior_successor_penalty=0.0,
+        **kwargs,
     )
     object.__setattr__(config, "no_prior_continuation_likelihood_weight", weight)
     object.__setattr__(config, "no_prior_continuation_min_examples_per_class", 1)
@@ -91,6 +94,52 @@ def test_no_prior_continuation_scoring_rewards_anchor_like_continuations(monkeyp
 
     assert weighted_anchor - base_anchor > 0.0
     assert weighted_weak - base_weak < 0.0
+
+
+def test_no_prior_continuation_likelihood_opens_scan_assignment_over_death(monkeypatch):
+    full_mht = _full_mht_module()
+    matrices = _matrices(full_mht)
+    monkeypatch.setattr(full_mht, "_sparse_pair_matrices", lambda *args, **kwargs: matrices)
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *args, **kwargs: 0.95)
+
+    def fake_murty(cost_matrix, **_kwargs):
+        row = np.asarray(cost_matrix[0], dtype=float)
+        selected = int(np.argmin(row))
+        return [{"assignment": np.asarray([selected], dtype=int), "cost": float(row[selected])}]
+
+    monkeypatch.setattr(full_mht, "murty_k_best_assignments", fake_murty)
+    hypothesis = full_mht._MHTHypothesis(
+        tracks=np.asarray([[5, -1]], dtype=int),
+        score=0.0,
+        history=tuple(),
+    )
+    common = {
+        "edge_top_k": 2,
+        "scan_hypotheses": 1,
+        "min_edge_score": 3.0,
+    }
+    prior_edges = frozenset({(0, 1, 99, 100)})
+
+    local_only = full_mht._expand_hypothesis_scan(
+        hypothesis,
+        sessions=(object(), object()),
+        feature_cache=SimpleNamespace(cell_probability_threshold=0.5),
+        session_index=0,
+        config=_config(full_mht, weight=0.0, **common),
+        track2p_prior_edges=prior_edges,
+    )
+    continuation_aware = full_mht._expand_hypothesis_scan(
+        hypothesis,
+        sessions=(object(), object()),
+        feature_cache=SimpleNamespace(cell_probability_threshold=0.5),
+        session_index=0,
+        config=_config(full_mht, weight=2.0, **common),
+        track2p_prior_edges=prior_edges,
+    )
+
+    assert local_only[0].tracks.tolist() == [[5, -1]]
+    assert continuation_aware[0].tracks.tolist() == [[5, 9]]
+    assert "no_prior_cont=" in continuation_aware[0].history[-1]["selected_edge_summaries"]
 
 
 def test_no_prior_continuation_scoring_does_not_affect_prior_or_switch_edges(monkeypatch):
