@@ -223,7 +223,7 @@ def test_multi_hypothesis_rejects_malformed_consensus_edges(
         ),
         (
             lambda: consensus_edges((((0, 1, 0, 1),),), min_support_fraction=0.0),
-            r"min_support_fraction must be a finite value in \(0, 1\)",
+            r"min_support_fraction must be a finite value in \(0, 1\]",
         ),
         (
             lambda: edge_union_costs(({(0, 1, 0, 1): 0},)),
