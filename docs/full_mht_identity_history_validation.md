@@ -50,6 +50,11 @@ candidate to beat or match this control on every reported pairwise and
 complete-track micro/macro metric, so the local-context layer has to earn its
 place inside the method rather than merely being present in the implementation.
 
+The subject-support decision reads the raw per-subject CSV rows from the same
+manifest.  It requires complete-track gain over the matching greedy row in at
+least two subjects and no subject-level pairwise or complete-track regression
+against the greedy row or required controls.
+
 ## Constructed Conflict Witness
 
 The branch also keeps a small label-free conflict witness in
@@ -142,16 +147,18 @@ beside a regressing weight, is treated as exploratory.
 | `docs/full_mht_method_invariant_checklist.md` | paper-facing checklist tying method claims to required label-free regressions |
 | `test_full_mht_identity_history_bundle_contract.py` | cross-manifest contract proving the central identity-history row is identical across candidate, sensitivity, scan-pruning, and completion bundles |
 | `test_full_mht_identity_history_bundle_decision.py` | regression for the paper-facing bundle decision and add-on promotion guardrail |
+| `test_full_mht_identity_history_subject_support_decision.py` | regression for the subject-level support gate |
 | `test_full_mht_method_protocol.py` | regression that keeps the method protocol and invariant checklist from drifting |
 | `full_mht_local_context_integration.py` | gates the calibrated local-context likelihood feature when `local_deformation_weight <= 0` |
 | `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
 | `test_track2p_policy_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness, including reference-independent path selection |
 | `full_mht_local_context_decision.py` | interprets the local-neighborhood deformation probe |
 | `full_mht_identity_history_decision.py` | interprets the canonical comparison table, including greedy and no-local-context controls |
+| `full_mht_identity_history_subject_support_decision.py` | checks whether the complete-history advantage is supported by multiple subjects without subject-level regression |
 | `full_mht_identity_history_scan_pruning_decision.py` | interprets scan-pruning add-on rows against matching greedy and central identity-history baselines |
 | `full_mht_identity_history_scan_pruning_promotion_gate.py` | combines scan-pruning benchmark decision with label-free scan-history exposure limits |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
-| `full_mht_identity_history_bundle_decision.py` | combines the central promotion gate and optional add-on decisions into one paper-facing recommendation |
+| `full_mht_identity_history_bundle_decision.py` | combines the central promotion gate, subject support, and optional add-on decisions into one paper-facing recommendation |
 | `full_mht_terminal_completion_decision.py` | interprets the terminal-completion probe, with row-name overrides for identity-history rows |
 | `track2p_policy_full_mht_exposure_audit.py` | runs all Track2p-style subjects without loading references or audit labels |
 
@@ -162,6 +169,7 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 - `FullMHTIdentityHistory` has complete-track F1 micro advantage over `FullMHTGreedyIdentityHistory` with no pairwise/complete micro or macro F1 loss.
 - It does not fall below `FullMHTIdentityHistoryNoLocalContext` on any reported pairwise or complete-track micro/macro metric.
 - It does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on any reported pairwise or complete-track micro/macro metric.
+- The subject-support decision reports `stable_subject_support`.
 - The identity-history bundle contract regression passes, proving all add-on probes start from the same frozen central row.
 - The constructed conflict witness regression passes.
 - The method-invariant checklist regression passes.
@@ -169,7 +177,7 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 - The exposure audit reports `bounded_exposure`.
 - Prior-survival, no-prior continuation, and growth-history signals are active but not broad.
 - The no-GT leakage regression passes.
-- The bundle decision reports `promotable_core_method`, so optional add-ons cannot rescue a failed central row.
+- The bundle decision reports `promotable_core_method` with `complete_core_evidence`, so optional add-ons cannot rescue a failed central row.
 
 Promote a scan-pruning variant only if the identity-history row itself passes
 those gates and the scan-pruning promotion gate reports `promotable_after_review`.
@@ -205,6 +213,7 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_identity_history_bundle_contract.py \
   tests/test_full_mht_identity_history_bundle_decision.py \
+  tests/test_full_mht_identity_history_subject_support_decision.py \
   tests/test_full_mht_identity_history_candidate_manifest.py \
   tests/test_full_mht_identity_history_sensitivity_manifest.py \
   tests/test_full_mht_identity_history_scan_pruning_manifest.py \
@@ -238,6 +247,27 @@ mkdir -p "$IDH"
 "$PY" -m bayescatrack.experiments.full_mht_identity_history_decision \
   "$IDH/full_mht_identity_history/full_mht_identity_history_comparison.csv" \
   --output "$IDH/full_mht_identity_history_decision.md"
+
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_subject_support_decision \
+  --input "Track2p=$IDH/full_mht_identity_history/track2p.csv" \
+  --input "FullMHTPrior2=$IDH/full_mht_identity_history/full_mht_prior2.csv" \
+  --input "FullMHTPriorSurvival=$IDH/full_mht_identity_history/full_mht_prior_survival.csv" \
+  --input "FullMHTNoPriorContinuation100=$IDH/full_mht_identity_history/full_mht_no_prior_continuation_100.csv" \
+  --input "FullMHTIdentityHistoryNoLocalContext=$IDH/full_mht_identity_history/full_mht_identity_history_no_local_context.csv" \
+  --input "FullMHTIdentityHistory=$IDH/full_mht_identity_history/full_mht_identity_history.csv" \
+  --input "FullMHTGreedyIdentityHistory=$IDH/full_mht_identity_history/full_mht_greedy_identity_history.csv" \
+  --output "$IDH/full_mht_identity_history_subject_support_decision.md"
+
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_subject_support_decision \
+  --input "Track2p=$IDH/full_mht_identity_history/track2p.csv" \
+  --input "FullMHTPrior2=$IDH/full_mht_identity_history/full_mht_prior2.csv" \
+  --input "FullMHTPriorSurvival=$IDH/full_mht_identity_history/full_mht_prior_survival.csv" \
+  --input "FullMHTNoPriorContinuation100=$IDH/full_mht_identity_history/full_mht_no_prior_continuation_100.csv" \
+  --input "FullMHTIdentityHistoryNoLocalContext=$IDH/full_mht_identity_history/full_mht_identity_history_no_local_context.csv" \
+  --input "FullMHTIdentityHistory=$IDH/full_mht_identity_history/full_mht_identity_history.csv" \
+  --input "FullMHTGreedyIdentityHistory=$IDH/full_mht_identity_history/full_mht_greedy_identity_history.csv" \
+  --output "$IDH/full_mht_identity_history_subject_support_decision.json" \
+  --format json
 
 SCAN="$REPO/results/full_mht_identity_history_scan_pruning_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$SCAN"
@@ -406,6 +436,7 @@ mkdir -p "$SCAN_EXPOSURE"
 
 "$PY" -m bayescatrack.experiments.full_mht_identity_history_bundle_decision \
   "$EXPOSURE/full_mht_identity_history_promotion_gate.json" \
+  --subject-support-json "$IDH/full_mht_identity_history_subject_support_decision.json" \
   --scan-pruning-promotion-json "$SCAN/full_mht_identity_history_scan_pruning_promotion_gate.json" \
   --terminal-completion-json "$COMP/full_mht_identity_history_completion_decision.json" \
   --local-context-json "$LOCAL/full_mht_local_context_decision.json" \
@@ -413,6 +444,7 @@ mkdir -p "$SCAN_EXPOSURE"
 
 "$PY" -m bayescatrack.experiments.full_mht_identity_history_bundle_decision \
   "$EXPOSURE/full_mht_identity_history_promotion_gate.json" \
+  --subject-support-json "$IDH/full_mht_identity_history_subject_support_decision.json" \
   --scan-pruning-promotion-json "$SCAN/full_mht_identity_history_scan_pruning_promotion_gate.json" \
   --terminal-completion-json "$COMP/full_mht_identity_history_completion_decision.json" \
   --local-context-json "$LOCAL/full_mht_local_context_decision.json" \
@@ -425,7 +457,12 @@ mkdir -p "$SCAN_EXPOSURE"
 | gate result | interpretation |
 | --- | --- |
 | `promotable_core_method` | bundle-level approval of the central `FullMHTIdentityHistory` paper row; optional add-ons remain separate variants |
+| `complete_core_evidence` | central manifest, sensitivity, exposure, and subject-support evidence agree |
+| `inconsistent_core_evidence` | at least one central evidence field disagrees with promotion and the bundle must not be promoted |
 | `not_promotable_core_method` | the central row failed, so scan-pruning or terminal-completion add-ons cannot rescue the paper row |
+| `stable_subject_support` | complete-track gain is supported by multiple subjects without subject-level regression |
+| `weak_subject_support` | aggregate gain is too concentrated to promote |
+| `subject_metric_regression` | candidate hides a subject-level pairwise or complete-track regression |
 | `promotable_after_review` | strong candidate for the paper method row only when emitted by the central identity-history promotion gate, after recording exact directories and all four metric tables |
 | `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection, or the candidate regresses on a required micro/macro control |
 | `not_promotable_sensitivity` | likely knife-edge, single-setting result, or hidden macro regression |
@@ -438,7 +475,7 @@ mkdir -p "$SCAN_EXPOSURE"
 | `terminal_completion_stable_gain` | terminal complete-history objective can be considered only when the tested weight neighborhood has at least two gains and no pairwise or complete-track regression |
 | `terminal_completion_single_weight_gain` | terminal objective is exploratory, not promotable |
 | `terminal_completion_ties_baseline` | terminal objective supports the story but does not improve the row |
-| `incomplete` | rerun the missing manifest, sensitivity, exposure, or no-GT test artifact |
+| `incomplete` | rerun the missing manifest, sensitivity, exposure, subject-support, or no-GT test artifact |
 
 The branch should not claim an original FullMHT method row until this bundle has
 been run and recorded.
