@@ -121,6 +121,18 @@ def solve_bundle_linear_assignment(
     cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
     if cost_matrix.ndim != 2:
         raise ValueError("bundle.pairwise_cost_matrix must be two-dimensional")
+
+    reference_roi_lookup = _normalize_bundle_roi_indices(
+        bundle.reference_roi_indices,
+        "reference_roi_indices",
+        expected_length=cost_matrix.shape[0],
+    )
+    measurement_roi_lookup = _normalize_bundle_roi_indices(
+        bundle.measurement_roi_indices,
+        "measurement_roi_indices",
+        expected_length=cost_matrix.shape[1],
+    )
+
     if max_cost is not None:
         max_cost = float(max_cost)
         if not np.isfinite(max_cost) or max_cost < 0.0:
@@ -166,12 +178,8 @@ def solve_bundle_linear_assignment(
     reference_positions = np.asarray(reference_positions, dtype=int)
     measurement_positions = np.asarray(measurement_positions, dtype=int)
     assignment_costs = np.asarray(assignment_costs, dtype=float)
-    reference_roi_indices = np.asarray(bundle.reference_roi_indices, dtype=int)[
-        reference_positions
-    ]
-    measurement_roi_indices = np.asarray(bundle.measurement_roi_indices, dtype=int)[
-        measurement_positions
-    ]
+    reference_roi_indices = reference_roi_lookup[reference_positions]
+    measurement_roi_indices = measurement_roi_lookup[measurement_positions]
 
     return SessionMatchResult(
         reference_session_name=str(bundle.reference_session_name),
@@ -233,12 +241,11 @@ def build_track_rows_from_matches(
     if len(matches) != max(len(session_names) - 1, 0):
         raise ValueError("matches must have length len(session_names) - 1")
 
-    start_session_index = int(start_session_index)
-    if start_session_index < 0 or start_session_index >= len(session_names):
-        raise IndexError(
-            f"start_session_index {start_session_index} out of bounds "
-            f"for {len(session_names)} sessions"
-        )
+    start_session_index = _normalize_session_index(
+        start_session_index,
+        "start_session_index",
+        num_sessions=len(session_names),
+    )
 
     normalized_matches = [_normalize_match_mapping(match) for match in matches]
 
@@ -306,6 +313,11 @@ def build_track_rows_from_bundles(
     bundles = list(bundles)
     if not bundles:
         raise ValueError("bundles must not be empty")
+    start_session_index = _normalize_session_index(
+        start_session_index,
+        "start_session_index",
+        num_sessions=len(bundles) + 1,
+    )
 
     match_results = solve_consecutive_bundle_linear_assignments(
         bundles,
@@ -379,16 +391,36 @@ def _bundle_roi_indices_for_session(
     """Return ROI indices for one session from consecutive association bundles."""
 
     n_sessions = len(bundles) + 1
-    session_index = int(session_index)
-    if session_index < 0 or session_index >= n_sessions:
-        raise IndexError(
-            f"start_session_index {session_index} out of bounds for {n_sessions} sessions"
-        )
+    session_index = _normalize_session_index(
+        session_index,
+        "start_session_index",
+        num_sessions=n_sessions,
+    )
     if session_index == 0:
         return np.asarray(bundles[0].reference_roi_indices, dtype=int)
     if session_index == n_sessions - 1:
         return np.asarray(bundles[-1].measurement_roi_indices, dtype=int)
     return np.asarray(bundles[session_index].reference_roi_indices, dtype=int)
+
+
+def _normalize_bundle_roi_indices(
+    values: Sequence[int] | np.ndarray,
+    field_name: str,
+    *,
+    expected_length: int,
+) -> np.ndarray:
+    raw_values = np.asarray(values, dtype=object)
+    if raw_values.ndim != 1:
+        raise ValueError(f"{field_name} must be one-dimensional")
+    if raw_values.shape[0] != expected_length:
+        raise ValueError(
+            f"{field_name} length {raw_values.shape[0]} does not match "
+            f"pairwise_cost_matrix axis length {expected_length}"
+        )
+    return np.asarray(
+        _normalize_roi_index_sequence(raw_values.tolist(), field_name),
+        dtype=int,
+    )
 
 
 def _invert_match_mapping(mapping: Mapping[int, int]) -> dict[int, int]:
@@ -490,6 +522,33 @@ def _normalize_roi_index(value: Any, field_name: str) -> int:
     normalized = int(normalized)
     if normalized < 0:
         raise ValueError(f"{field_name} must contain non-negative ROI indices")
+    return normalized
+
+
+def _normalize_session_index(
+    value: Any,
+    field_name: str,
+    *,
+    num_sessions: int | None = None,
+) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{field_name} must be an integer session index")
+
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{field_name} must be an integer session index")
+        normalized = int(value)
+    else:
+        try:
+            normalized = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{field_name} must be an integer session index") from exc
+
+    normalized = int(normalized)
+    if num_sessions is not None and (normalized < 0 or normalized >= num_sessions):
+        raise IndexError(
+            f"{field_name} {normalized} out of bounds for {num_sessions} sessions"
+        )
     return normalized
 
 

@@ -1,9 +1,14 @@
 """Evaluation helpers for BayesCaTrack benchmarks."""
 
+from . import _edge_ranking_roi_validation as _edge_ranking_roi_validation
+from . import _track_matrix_vector_validation as _track_matrix_vector_validation
 from . import calibration_diagnostics as _calibration_diagnostics
 from . import complete_track_scores as _scores
 from . import track2p_metrics as _track2p_metrics
 from . import track_error_ledger as _track_error_ledger
+
+_edge_ranking_roi_validation.install_edge_ranking_roi_validation()
+_track_matrix_vector_validation.install_track_matrix_vector_input_validation(_scores)
 
 brier_score = _calibration_diagnostics.brier_score
 CalibrationBinRow = _calibration_diagnostics.CalibrationBinRow
@@ -12,7 +17,7 @@ complete_track_set = _scores.complete_track_set
 expected_calibration_error = _calibration_diagnostics.expected_calibration_error
 format_reliability_bin_table = _calibration_diagnostics.format_reliability_bin_table
 maximum_calibration_error = _calibration_diagnostics.maximum_calibration_error
-normalize_track_matrix = _scores.normalize_track_matrix
+normalize_track_matrix = _track2p_metrics.normalize_track_matrix
 pairwise_track_set = _scores.pairwise_track_set
 reference_fragment_counts = _scores.reference_fragment_counts
 reliability_bin_table = _calibration_diagnostics.reliability_bin_table

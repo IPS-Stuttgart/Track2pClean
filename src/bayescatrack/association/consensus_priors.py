@@ -8,6 +8,12 @@ from typing import Any
 
 import numpy as np
 
+from ._numeric_validation import (
+    finite_nonnegative_float,
+    finite_positive_float,
+    positive_integer,
+)
+
 SessionEdge = tuple[int, int]
 TrackEdge = tuple[int, int, int, int]
 
@@ -28,14 +34,35 @@ class ConsensusPriorConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if self.min_votes < 1:
-            raise ValueError("min_votes must be positive")
-        if self.relief < 0.0 or self.max_relief < 0.0:
-            raise ValueError("consensus relief values must be non-negative")
-        if self.large_cost <= 0.0 or not np.isfinite(self.large_cost):
-            raise ValueError("large_cost must be a positive finite value")
         object.__setattr__(
-            self, "variant_costs", tuple(str(value) for value in self.variant_costs)
+            self,
+            "variant_costs",
+            _normalize_variant_costs(self.variant_costs),
+        )
+        object.__setattr__(
+            self,
+            "min_votes",
+            positive_integer(self.min_votes, name="min_votes"),
+        )
+        object.__setattr__(
+            self,
+            "relief",
+            finite_nonnegative_float(self.relief, name="relief"),
+        )
+        object.__setattr__(
+            self,
+            "max_relief",
+            finite_nonnegative_float(self.max_relief, name="max_relief"),
+        )
+        object.__setattr__(
+            self,
+            "ignore_variant_failures",
+            _strict_bool(self.ignore_variant_failures, name="ignore_variant_failures"),
+        )
+        object.__setattr__(
+            self,
+            "large_cost",
+            finite_positive_float(self.large_cost, name="large_cost"),
         )
 
 
@@ -48,16 +75,7 @@ def consensus_prior_config_from_mapping(
         return None
     if isinstance(value, ConsensusPriorConfig):
         return value
-    payload = dict(value)
-    if "variant_costs" in payload:
-        raw = payload["variant_costs"]
-        if isinstance(raw, str):
-            payload["variant_costs"] = tuple(
-                token.strip() for token in raw.split(",") if token.strip()
-            )
-        else:
-            payload["variant_costs"] = tuple(raw)
-    return ConsensusPriorConfig(**payload)
+    return ConsensusPriorConfig(**dict(value))
 
 
 def edge_votes_from_tracks(
@@ -126,6 +144,28 @@ def apply_consensus_edge_priors(
         relief = min(cfg.max_relief, cfg.relief * int(vote_count))
         matrix[source_roi, target_roi] = max(0.0, old_value - relief)
     return adjusted
+
+
+def _normalize_variant_costs(values: Sequence[str] | str) -> tuple[str, ...]:
+    if isinstance(values, str):
+        raw_values = tuple(
+            token.strip() for token in values.split(",") if token.strip()
+        )
+    else:
+        try:
+            raw_values = tuple(values)
+        except TypeError as exc:
+            raise ValueError("variant_costs must be a sequence of names") from exc
+    variant_costs = tuple(str(value).strip() for value in raw_values)
+    if not variant_costs or any(not value for value in variant_costs):
+        raise ValueError("variant_costs must contain non-empty names")
+    return variant_costs
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
 
 
 __all__ = (

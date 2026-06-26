@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections import OrderedDict
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Literal
@@ -221,7 +222,7 @@ def summarize_edge_ranking_rows(
         key = tuple(row.get(group_key, "") for group_key in group_keys)
         groups.setdefault(key, []).append(row)
 
-    hit_ks = tuple(int(value) for value in hit_ks)
+    hit_ks = _validated_hit_ks(hit_ks)
     summaries: list[dict[str, float | int | str]] = []
     for key, group_rows in groups.items():
         summary: dict[str, float | int | str] = dict(zip(group_keys, key))
@@ -460,6 +461,39 @@ def _safe_int(value: Any, *, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return int(default)
+
+
+def _validated_hit_ks(hit_ks: Sequence[int]) -> tuple[int, ...]:
+    try:
+        raw_values = tuple(hit_ks)
+    except TypeError as exc:
+        raise ValueError("hit_ks must contain positive integer cutoffs") from exc
+    if not raw_values:
+        raise ValueError("hit_ks must contain at least one cutoff")
+
+    normalized = tuple(_validated_hit_k(value) for value in raw_values)
+    if len(set(normalized)) != len(normalized):
+        raise ValueError("hit_ks must contain unique cutoffs")
+    return normalized
+
+
+def _validated_hit_k(value: Any) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("hit_ks must contain positive integer cutoffs")
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError("hit_ks must contain positive integer cutoffs")
+        integer_value = int(numeric_value)
+    else:
+        try:
+            integer_value = operator.index(value)
+        except TypeError as exc:
+            raise ValueError("hit_ks must contain positive integer cutoffs") from exc
+    integer_value = int(integer_value)
+    if integer_value <= 0:
+        raise ValueError("hit_ks must contain positive integer cutoffs")
+    return integer_value
 
 
 def _finite_float(value: Any) -> float:

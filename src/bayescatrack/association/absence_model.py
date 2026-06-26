@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -57,16 +58,19 @@ def absence_cost_vector(
     """Return per-ROI costs for allowing an observation gap/absence."""
 
     cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
-    n_rois = int(getattr(plane, "n_rois", 0))
+    n_rois = _validated_roi_count(plane, "plane")
     costs = np.full((n_rois,), float(cfg.base_absence_cost), dtype=float)
 
     cell_probabilities = getattr(plane, "cell_probabilities", None)
     if cell_probabilities is not None:
-        probs = np.clip(
-            np.asarray(cell_probabilities, dtype=float).reshape(-1), 0.0, 1.0
-        )
-        if probs.shape == (n_rois,):
-            costs -= cfg.low_cell_probability_discount * (1.0 - probs)
+        probabilities = np.asarray(cell_probabilities, dtype=float).reshape(-1)
+        if probabilities.shape == (n_rois,):
+            valid_probabilities = np.isfinite(probabilities)
+            if np.any(valid_probabilities):
+                probs = np.clip(probabilities[valid_probabilities], 0.0, 1.0)
+                costs[valid_probabilities] -= cfg.low_cell_probability_discount * (
+                    1.0 - probs
+                )
 
     if registered_empty_mask is not None:
         empty = np.asarray(registered_empty_mask, dtype=bool).reshape(-1)
@@ -76,11 +80,21 @@ def absence_cost_vector(
     if local_density is not None:
         density = np.asarray(local_density, dtype=float).reshape(-1)
         if density.shape == (n_rois,) and density.size:
-            scale = float(np.nanpercentile(density, 90.0))
+            finite_density = density[np.isfinite(density)]
+            if finite_density.size:
+                scale = float(np.percentile(finite_density, 90.0))
+            else:
+                scale = 1.0
             if not np.isfinite(scale) or scale <= 1.0e-12:
                 scale = 1.0
+            sanitized_density = np.nan_to_num(
+                density,
+                nan=0.0,
+                posinf=scale,
+                neginf=0.0,
+            )
             costs -= cfg.high_local_density_discount * np.clip(
-                density / scale, 0.0, 1.0
+                sanitized_density / scale, 0.0, 1.0
             )
 
     if (
@@ -107,8 +121,8 @@ def gap_penalty_matrix(
     """Return pairwise gap penalties that account for observation absence cues."""
 
     cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
-    n_ref = int(getattr(reference_plane, "n_rois", 0))
-    n_meas = int(getattr(measurement_plane, "n_rois", 0))
+    n_ref = _validated_roi_count(reference_plane, "reference_plane")
+    n_meas = _validated_roi_count(measurement_plane, "measurement_plane")
     if reference_absence_costs is None:
         ref_cost = absence_cost_vector(
             reference_plane,
@@ -147,7 +161,7 @@ def apply_absence_adjustment(
 
     costs = np.asarray(cost_matrix, dtype=float)
     cfg = absence_model_config_from_mapping(config) or AbsenceModelConfig()
-    return costs + gap_penalty_matrix(
+    gap_penalties = gap_penalty_matrix(
         reference_plane,
         measurement_plane,
         session_gap=session_gap,
@@ -156,6 +170,12 @@ def apply_absence_adjustment(
         measurement_local_density=measurement_local_density,
         config=cfg,
     )
+    if costs.shape != gap_penalties.shape:
+        raise ValueError(
+            "cost_matrix shape must match plane ROI counts: "
+            f"expected {gap_penalties.shape}, got {costs.shape}"
+        )
+    return costs + gap_penalties
 
 
 def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float | int]:
@@ -182,6 +202,28 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
     }
 
 
+def _validated_roi_count(plane: Any, plane_name: str) -> int:
+    message = f"{plane_name}.n_rois must be a finite non-negative integer"
+    raw_count = getattr(plane, "n_rois", 0)
+    if isinstance(raw_count, (bool, np.bool_)):
+        raise ValueError(message)
+
+    try:
+        count = int(operator.index(raw_count))
+    except TypeError:
+        try:
+            numeric_count = float(raw_count)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(message) from exc
+        if not np.isfinite(numeric_count) or not numeric_count.is_integer():
+            raise ValueError(message)
+        count = int(numeric_count)
+
+    if count < 0:
+        raise ValueError(message)
+    return count
+
+
 def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
     if isinstance(raw_value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite and non-negative")
@@ -192,16 +234,41 @@ def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
 
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:
+    gap = _validated_positive_integer_session_gap(session_gap)
+    return float(gap - 1)
+
+
+def _validated_positive_integer_session_gap(session_gap: Any) -> int:
+    message = (
+        "session_gap must be a finite value representing an integer "
+        "greater than or equal to 1"
+    )
     if isinstance(session_gap, (bool, np.bool_)):
-        raise ValueError(
-            "session_gap must be a finite value greater than or equal to 1"
-        )
-    gap = float(session_gap)
-    if not np.isfinite(gap) or gap < 1.0:
-        raise ValueError(
-            "session_gap must be a finite value greater than or equal to 1"
-        )
-    return gap - 1.0
+        raise ValueError(message)
+
+    try:
+        gap = int(operator.index(session_gap))
+    except TypeError:
+        if isinstance(session_gap, str):
+            text = session_gap.strip()
+            if not text:
+                raise ValueError(message) from None
+            try:
+                numeric_gap = float(text)
+            except ValueError as exc:
+                raise ValueError(message) from exc
+        else:
+            try:
+                numeric_gap = float(session_gap)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(message) from exc
+        if not np.isfinite(numeric_gap) or not numeric_gap.is_integer():
+            raise ValueError(message)
+        gap = int(numeric_gap)
+
+    if gap < 1:
+        raise ValueError(message)
+    return gap
 
 
 __all__ = (

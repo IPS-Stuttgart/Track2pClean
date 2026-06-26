@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import types
+
 import pytest
 from bayescatrack.experiments import track2p_policy_pyrecest_mht_conflict_demo as demo
 
@@ -119,6 +121,32 @@ def test_selection_does_not_read_ground_truth_field():
     assert [demo.residual_mht._candidate_id(row) for row in with_truth] == [
         demo.residual_mht._candidate_id(row) for row in without_truth
     ]
+
+
+def test_mht_candidates_carry_demo_metadata(monkeypatch):
+    scenario = demo.build_default_scenario()
+    captured: dict[str, tuple[object, ...]] = {}
+
+    def _fake_select(candidates, *, config):
+        captured["candidates"] = tuple(candidates)
+        return types.SimpleNamespace(candidate_ids=())
+
+    monkeypatch.setattr(demo, "select_residual_hypothesis", _fake_select)
+    config = demo.ResidualMHTConfig(
+        max_edits=3, max_hypotheses=64, edit_penalty=0.25, score_threshold=0.0
+    )
+
+    assert demo.mht_select(scenario.candidates, config=config) == []
+
+    candidates = captured["candidates"]
+    assert candidates[0].metadata == {
+        "subject": "demo",
+        "session_a": 1,
+        "session_b": 2,
+        "roi_a": 11,
+        "roi_b": 12,
+        "removal_score": 1.0,
+    }
 
 
 @pytest.mark.parametrize("value", ["0", "-1"])
