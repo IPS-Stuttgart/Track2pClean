@@ -104,6 +104,7 @@ def _validate_suite2p_coordinate_values(
         include_non_cells=bool(include_non_cells),
         cell_probability_threshold=float(cell_probability_threshold),
     )
+    image_shape = _load_suite2p_ops_image_shape(plane_dir / "ops.npy")
     for roi_index, roi_stat in enumerate(stat):
         if not keep_mask[roi_index]:
             continue
@@ -120,8 +121,46 @@ def _validate_suite2p_coordinate_values(
                 ypix = ypix[valid]
                 xpix = xpix[valid]
 
-        _validate_coordinate_array(ypix, roi_index=roi_index, name="ypix")
-        _validate_coordinate_array(xpix, roi_index=roi_index, name="xpix")
+        _validate_coordinate_array(
+            ypix,
+            roi_index=roi_index,
+            name="ypix",
+            axis_size=None if image_shape is None else image_shape[0],
+        )
+        _validate_coordinate_array(
+            xpix,
+            roi_index=roi_index,
+            name="xpix",
+            axis_size=None if image_shape is None else image_shape[1],
+        )
+
+
+def _load_suite2p_ops_image_shape(path: Path) -> tuple[int, int] | None:
+    if not path.exists():
+        return None
+    ops = np.load(path, allow_pickle=True).item()
+    try:
+        raw_ly = ops["Ly"]
+        raw_lx = ops["Lx"]
+    except (KeyError, TypeError):
+        return None
+    return (
+        _validate_positive_image_dimension(raw_ly, name="Ly"),
+        _validate_positive_image_dimension(raw_lx, name="Lx"),
+    )
+
+
+def _validate_positive_image_dimension(value: Any, *, name: str) -> int:
+    message = f"Suite2p ops {name} must be a positive integer image dimension"
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(message)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if not np.isfinite(numeric) or numeric <= 0.0 or numeric != np.floor(numeric):
+        raise ValueError(message)
+    return int(numeric)
 
 
 def _suite2p_keep_mask(
@@ -160,7 +199,13 @@ def _suite2p_keep_mask(
     return keep
 
 
-def _validate_coordinate_array(array: np.ndarray, *, roi_index: int, name: str) -> None:
+def _validate_coordinate_array(
+    array: np.ndarray,
+    *,
+    roi_index: int,
+    name: str,
+    axis_size: int | None,
+) -> None:
     if _contains_ambiguous_coordinate_tokens(array):
         _raise_invalid_coordinate_values(roi_index, name)
 
@@ -173,6 +218,12 @@ def _validate_coordinate_array(array: np.ndarray, *, roi_index: int, name: str) 
 
     if not np.all(np.isfinite(numeric)) or not np.all(numeric == np.floor(numeric)):
         _raise_invalid_coordinate_values(roi_index, name)
+    if np.any(numeric < 0.0):
+        raise ValueError(_invalid_coordinate_message(roi_index, name))
+    if axis_size is not None and np.any(numeric >= float(axis_size)):
+        raise ValueError(
+            f"Suite2p ROI {roi_index} {name} pixel coordinates must be within image bounds"
+        )
 
 
 def _contains_ambiguous_coordinate_tokens(array: np.ndarray) -> bool:

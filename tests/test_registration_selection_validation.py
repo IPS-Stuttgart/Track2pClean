@@ -77,6 +77,29 @@ def test_auto_registration_selector_rejects_malformed_control_scalars(
         )
 
 
+@pytest.mark.parametrize(
+    ("candidate_transforms", "message"),
+    [
+        (("none", "fov-tranlsation"), "unknown transform type"),
+        (("none", 1), "candidate_transforms must contain transform-type strings"),
+        (("none", "auto"), "'auto' must not be nested inside auto-registration candidates"),
+    ],
+)
+def test_auto_registration_selector_rejects_malformed_candidate_transforms(
+    candidate_transforms: object,
+    message: str,
+) -> None:
+    reference = _single_roi_plane("reference")
+    moving = _single_roi_plane("moving")
+
+    with pytest.raises(ValueError, match=message):
+        select_registration_transform(
+            reference,
+            moving,
+            candidate_transforms=candidate_transforms,
+        )
+
+
 def test_auto_registration_selector_keeps_finite_scores_for_valid_controls() -> None:
     reference = _single_roi_plane("reference")
     moving = _single_roi_plane("moving")
