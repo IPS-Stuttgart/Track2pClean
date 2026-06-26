@@ -33,19 +33,38 @@ It uses the same scan candidates and scoring terms, but sets `beam_width = 1` an
 turns off identity-diverse beam retention.  Promotion requires the full beam to
 beat this greedy row on complete-track F1 without pairwise-F1 loss.
 
+## Complete-History Objective Probe
+
+The identity-history candidate is not silently changed by this note.  A separate
+frozen probe asks whether adding the terminal complete-history objective to the
+same combined model helps:
+
+```text
+FullMHTIdentityHistoryCompletion025
+FullMHTIdentityHistoryCompletion050
+FullMHTIdentityHistoryCompletion100
+```
+
+These rows are identical to `FullMHTIdentityHistory` except for
+`terminal_incomplete_history_weight`.  The terminal objective can enter the
+paper-facing method only if at least two nearby weights improve complete-track F1
+without pairwise-F1 regression.  A single winning weight is treated as exploratory.
+
 ## Frozen Artifacts
 
 | artifact | purpose |
 | --- | --- |
 | `benchmarks/full_mht_identity_history_candidate_manifest.json` | canonical comparison against Track2p, prior-only FullMHT, prior-survival, no-prior continuation, and greedy identity-history |
 | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | immediate-neighborhood sensitivity around survival weight, no-prior continuation weight, and growth-history weight |
+| `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
 | `full_mht_identity_history_decision.py` | interprets the canonical comparison table |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
+| `full_mht_terminal_completion_decision.py` | interprets the terminal-completion probe, with row-name overrides for identity-history rows |
 | `track2p_policy_full_mht_exposure_audit.py` | runs all Track2p-style subjects without loading references or audit labels |
 
 ## Decision Rule
 
-Promote only if all of these are true:
+Promote `FullMHTIdentityHistory` only if all of these are true:
 
 - `FullMHTIdentityHistory` has complete-track advantage over `FullMHTGreedyIdentityHistory` with no pairwise-F1 loss.
 - It does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on the required micro metrics.
@@ -54,6 +73,8 @@ Promote only if all of these are true:
 - Prior-survival, no-prior continuation, and growth-history signals are active but not broad.
 - The no-GT leakage regression passes.
 
+Promote a terminal-completion variant only if the identity-history row itself
+passes those gates and the completion probe reports `terminal_completion_stable_gain`.
 If any gate fails, keep the row exploratory.  A tie against greedy means the
 benchmark still does not prove that MHT history search, rather than local scoring,
 is responsible for the result.
@@ -78,8 +99,10 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_identity_history_candidate_manifest.py \
   tests/test_full_mht_identity_history_sensitivity_manifest.py \
+  tests/test_full_mht_identity_history_completion_manifest.py \
   tests/test_full_mht_identity_history_decision.py \
   tests/test_full_mht_identity_history_promotion_gate.py \
+  tests/test_full_mht_terminal_completion_decision.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_full_mht_exposure_audit.py
 
@@ -100,6 +123,21 @@ mkdir -p "$SENS"
   benchmarks/full_mht_identity_history_sensitivity_manifest.json \
   --output-dir "$SENS" \
   --summary-format table
+
+COMP="$REPO/results/full_mht_identity_history_completion_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$COMP"
+"$PY" -m bayescatrack benchmark suite \
+  benchmarks/full_mht_identity_history_completion_manifest.json \
+  --output-dir "$COMP" \
+  --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_terminal_completion_decision \
+  "$COMP/full_mht_identity_history_completion/full_mht_identity_history_completion_comparison.csv" \
+  --baseline FullMHTIdentityHistory \
+  --candidate FullMHTIdentityHistoryCompletion025 \
+  --candidate FullMHTIdentityHistoryCompletion050 \
+  --candidate FullMHTIdentityHistoryCompletion100 \
+  --output "$COMP/full_mht_identity_history_completion_decision.md"
 
 EXPOSURE="$REPO/results/full_mht_identity_history_exposure_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$EXPOSURE"
@@ -157,6 +195,9 @@ mkdir -p "$EXPOSURE"
 | `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection |
 | `not_promotable_sensitivity` | likely knife-edge or single-setting result |
 | `not_promotable_broad_exposure` | model layer fires too broadly on label-free subjects |
+| `terminal_completion_stable_gain` | terminal complete-history objective can be considered for the combined row |
+| `terminal_completion_single_weight_gain` | terminal objective is exploratory, not promotable |
+| `terminal_completion_ties_baseline` | terminal objective supports the story but does not improve the row |
 | `incomplete` | rerun the missing manifest, sensitivity, exposure, or no-GT test artifact |
 
 The branch should not claim an original FullMHT method row until this bundle has
