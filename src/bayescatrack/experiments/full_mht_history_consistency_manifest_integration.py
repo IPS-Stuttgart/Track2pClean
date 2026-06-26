@@ -5,10 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from bayescatrack.experiments._full_mht_manifest_integration import (
-    FULL_MHT_FIELDS,
-    _run_track2p_policy_full_mht_rows,
-)
+from bayescatrack.experiments import _full_mht_manifest_integration as full_mht_manifest
 from bayescatrack.experiments.full_mht_history_consistency_model import (
     IdentityHistoryConsistencyConfig,
 )
@@ -29,9 +26,10 @@ FULL_MHT_HISTORY_CONSISTENCY_FIELDS = {
     "history_consistency_joint_margin",
     "history_consistency_score_clip",
 }
-FULL_MHT_HISTORY_CONSISTENCY_RUNNER_FIELDS = (
-    FULL_MHT_FIELDS | FULL_MHT_HISTORY_CONSISTENCY_FIELDS
-)
+
+
+def _runner_fields() -> set[str]:
+    return set(full_mht_manifest.FULL_MHT_FIELDS | FULL_MHT_HISTORY_CONSISTENCY_FIELDS)
 
 
 def install_full_mht_history_consistency_manifest_integration() -> None:
@@ -41,8 +39,12 @@ def install_full_mht_history_consistency_manifest_integration() -> None:
     from bayescatrack.experiments._full_mht_manifest_integration import (
         install_full_mht_manifest_integration,
     )
+    from bayescatrack.experiments.full_mht_no_prior_continuation_manifest_integration import (
+        install_full_mht_no_prior_continuation_manifest_integration,
+    )
 
     install_full_mht_manifest_integration()
+    install_full_mht_no_prior_continuation_manifest_integration()
     if getattr(
         manifest,
         "_bayescatrack_full_mht_history_consistency_manifest_integration",
@@ -50,10 +52,11 @@ def install_full_mht_history_consistency_manifest_integration() -> None:
     ):
         return
 
-    manifest.RUNNER_SPECIFIC_FIELDS.update(FULL_MHT_HISTORY_CONSISTENCY_RUNNER_FIELDS)
-    manifest.RUN_SPEC_FIELDS.update(FULL_MHT_HISTORY_CONSISTENCY_RUNNER_FIELDS)
+    runner_fields = _runner_fields()
+    manifest.RUNNER_SPECIFIC_FIELDS.update(runner_fields)
+    manifest.RUN_SPEC_FIELDS.update(runner_fields)
     manifest.RUNNER_CONFIG_FIELDS[FULL_MHT_HISTORY_CONSISTENCY_RUNNER] = set(
-        manifest.TRACK2P_CONFIG_FIELDS | FULL_MHT_HISTORY_CONSISTENCY_RUNNER_FIELDS
+        manifest.TRACK2P_CONFIG_FIELDS | runner_fields
     )
     for alias in FULL_MHT_HISTORY_CONSISTENCY_ALIASES:
         manifest.RUNNER_ALIASES[alias] = FULL_MHT_HISTORY_CONSISTENCY_RUNNER
@@ -67,18 +70,14 @@ def install_full_mht_history_consistency_manifest_integration() -> None:
 
     def _runner_specific_fields_with_history_consistency(runner: str) -> set[str]:
         if runner == FULL_MHT_HISTORY_CONSISTENCY_RUNNER:
-            return set(FULL_MHT_HISTORY_CONSISTENCY_RUNNER_FIELDS)
+            return _runner_fields()
         return original_runner_specific_fields(runner)
 
     def _runner_kwargs_with_history_consistency(
         run_data: Mapping[str, Any], runner: str
     ) -> dict[str, Any]:
         if runner == FULL_MHT_HISTORY_CONSISTENCY_RUNNER:
-            return {
-                key: run_data[key]
-                for key in FULL_MHT_HISTORY_CONSISTENCY_RUNNER_FIELDS
-                if key in run_data
-            }
+            return {key: run_data[key] for key in _runner_fields() if key in run_data}
         return original_runner_kwargs(run_data, runner)
 
     def _run_config_with_history_consistency(
@@ -137,7 +136,7 @@ def _run_track2p_policy_full_mht_history_consistency_rows(
 
     history_config = _history_consistency_config_from_options(options)
     with _patched_full_mht_runner(history_config):
-        return _run_track2p_policy_full_mht_rows(config, options)
+        return full_mht_manifest._run_track2p_policy_full_mht_rows(config, options)
 
 
 def _history_consistency_config_from_options(
