@@ -44,7 +44,9 @@ class PostSolveRelinkingConfig:
             ),
         )
         object.__setattr__(
-            self, "fill_value", _integer_value(self.fill_value, "fill_value")
+            self,
+            "fill_value",
+            _negative_integer_sentinel(self.fill_value, "fill_value"),
         )
         object.__setattr__(
             self,
@@ -308,6 +310,13 @@ def _joint_current_cost(
     if not np.isfinite(current_next_cost):
         return float("inf")
     return float(current_cost) + next_weight * float(current_next_cost)
+
+
+def _negative_integer_sentinel(value: Any, name: str) -> int:
+    integer_value = _integer_value(value, name)
+    if integer_value >= 0:
+        raise ValueError(f"{name} must be a negative integer sentinel")
+    return integer_value
 
 
 def _integer_value(value: Any, name: str) -> int:

@@ -95,6 +95,30 @@ def test_candidate_mask_rejects_non_binary_values(bad_mask):
         candidate_edges_from_mask(bad_mask)
 
 
+@pytest.mark.parametrize(
+    ("reference", "measurement", "message"),
+    [
+        (
+            np.array([[0.0, np.nan, 2.0], [0.0, 1.0, 2.0]]),
+            np.zeros((2, 1)),
+            "reference_centroids",
+        ),
+        (
+            np.zeros((2, 1)),
+            np.array([[0.0, np.inf], [0.0, 1.0]]),
+            "measurement_centroids",
+        ),
+    ],
+)
+def test_centroid_candidate_mask_rejects_nonfinite_centroids(
+    reference,
+    measurement,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        centroid_candidate_mask(reference, measurement)
+
+
 def test_candidate_edges_from_mask_rejects_non_2d_masks():
     with pytest.raises(ValueError, match="two-dimensional"):
         candidate_edges_from_mask(np.array([True, False]))
