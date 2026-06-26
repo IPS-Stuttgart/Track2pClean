@@ -16,6 +16,7 @@ METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/full_mht_local_context_integration.py",
     "src/bayescatrack/experiments/full_mht_local_context_decision.py",
     "src/bayescatrack/experiments/full_mht_manifest_decision.py",
+    "src/bayescatrack/experiments/full_mht_history_consistency_manifest_integration.py",
     "src/bayescatrack/experiments/full_mht_history_consistency_model.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_model.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_integration.py",
