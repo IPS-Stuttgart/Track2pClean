@@ -18,6 +18,8 @@ from typing import Any
 
 import numpy as np
 
+from ._assignment_max_cost_validation import normalize_assignment_max_cost
+
 _PATCH_MARKER = "_bayescatrack_assignment_bundle_validation_patch"
 
 
@@ -37,6 +39,11 @@ def install_assignment_bundle_validation() -> None:
         **kwargs: Any,
     ) -> Any:
         _validate_assignment_bundle_roi_indices(bundle)
+        if "max_cost" in kwargs:
+            kwargs = {
+                **kwargs,
+                "max_cost": normalize_assignment_max_cost(kwargs["max_cost"]),
+            }
         return original_solve(bundle, *args, **kwargs)
 
     setattr(solve_bundle_linear_assignment_with_bundle_validation, _PATCH_MARKER, True)
