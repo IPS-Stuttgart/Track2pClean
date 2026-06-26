@@ -121,6 +121,20 @@ class FullMHTConfig:
     track2p_prior_risk_registered_iou_weight: float = 0.0
     track2p_prior_risk_registered_iou_floor: float = 0.5
     track2p_prior_risk_scan_weight: float = 1.0
+    track2p_prior_veto_penalty: float = 0.0
+    track2p_prior_veto_min_growth_residual_mahalanobis: float = 20.0
+    track2p_prior_veto_min_growth_residual: float = 2.5
+    track2p_prior_veto_min_registered_iou: float = 0.45
+    track2p_prior_veto_max_registered_iou: float | None = 0.60
+    track2p_prior_veto_min_shifted_iou: float = 0.60
+    track2p_prior_veto_max_shifted_iou: float | None = 0.80
+    track2p_prior_veto_min_cell_probability: float = 0.50
+    track2p_prior_veto_max_min_cell_probability: float | None = 0.65
+    track2p_prior_veto_max_row_rank: int = 1
+    track2p_prior_veto_max_column_rank: int = 1
+    track2p_prior_veto_require_terminal_edge: bool = True
+    track2p_prior_veto_require_last_session_edge: bool = True
+    track2p_prior_veto_require_complete_component: bool = True
     terminal_history_risk_weight: float = 0.0
     terminal_non_prior_history_weight: float = 0.0
     terminal_no_prior_successor_history_weight: float = 0.0
@@ -436,6 +450,54 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_track2p_prior_risk_scan_weight": float(
             mht_config.track2p_prior_risk_scan_weight
+        ),
+        "track2p_full_mht_track2p_prior_veto_penalty": float(
+            mht_config.track2p_prior_veto_penalty
+        ),
+        "track2p_full_mht_track2p_prior_veto_min_growth_residual_mahalanobis": float(
+            mht_config.track2p_prior_veto_min_growth_residual_mahalanobis
+        ),
+        "track2p_full_mht_track2p_prior_veto_min_growth_residual": float(
+            mht_config.track2p_prior_veto_min_growth_residual
+        ),
+        "track2p_full_mht_track2p_prior_veto_min_registered_iou": float(
+            mht_config.track2p_prior_veto_min_registered_iou
+        ),
+        "track2p_full_mht_track2p_prior_veto_max_registered_iou": (
+            float(mht_config.track2p_prior_veto_max_registered_iou)
+            if mht_config.track2p_prior_veto_max_registered_iou is not None
+            else ""
+        ),
+        "track2p_full_mht_track2p_prior_veto_min_shifted_iou": float(
+            mht_config.track2p_prior_veto_min_shifted_iou
+        ),
+        "track2p_full_mht_track2p_prior_veto_max_shifted_iou": (
+            float(mht_config.track2p_prior_veto_max_shifted_iou)
+            if mht_config.track2p_prior_veto_max_shifted_iou is not None
+            else ""
+        ),
+        "track2p_full_mht_track2p_prior_veto_min_cell_probability": float(
+            mht_config.track2p_prior_veto_min_cell_probability
+        ),
+        "track2p_full_mht_track2p_prior_veto_max_min_cell_probability": (
+            float(mht_config.track2p_prior_veto_max_min_cell_probability)
+            if mht_config.track2p_prior_veto_max_min_cell_probability is not None
+            else ""
+        ),
+        "track2p_full_mht_track2p_prior_veto_max_row_rank": int(
+            mht_config.track2p_prior_veto_max_row_rank
+        ),
+        "track2p_full_mht_track2p_prior_veto_max_column_rank": int(
+            mht_config.track2p_prior_veto_max_column_rank
+        ),
+        "track2p_full_mht_track2p_prior_veto_require_terminal_edge": int(
+            mht_config.track2p_prior_veto_require_terminal_edge
+        ),
+        "track2p_full_mht_track2p_prior_veto_require_last_session_edge": int(
+            mht_config.track2p_prior_veto_require_last_session_edge
+        ),
+        "track2p_full_mht_track2p_prior_veto_require_complete_component": int(
+            mht_config.track2p_prior_veto_require_complete_component
         ),
         "track2p_full_mht_terminal_history_risk_weight": float(
             mht_config.terminal_history_risk_weight
@@ -1630,6 +1692,20 @@ def _identity_diversity_bucket(hypothesis: _MHTHypothesis) -> int:
     )
 
 
+def _edge_rank_values(
+    values: np.ndarray, *, source_local: int, target_local: int
+) -> tuple[int, int]:
+    matrix = np.asarray(values, dtype=float)
+    current = _finite_float(matrix[int(source_local), int(target_local)], float("nan"))
+    if not np.isfinite(current):
+        return 999, 999
+    row = np.asarray(matrix[int(source_local), :], dtype=float)
+    column = np.asarray(matrix[:, int(target_local)], dtype=float)
+    row_rank = 1 + int(np.sum(np.isfinite(row) & (row > current)))
+    column_rank = 1 + int(np.sum(np.isfinite(column) & (column > current)))
+    return int(row_rank), int(column_rank)
+
+
 def _edge_score(
     sessions: Sequence[Any],
     matrices: _FullMHTPairMatrices,
@@ -1655,14 +1731,16 @@ def _edge_score(
     )
     source_roi = int(matrices.source_indices[int(source_local)])
     target_roi = int(matrices.target_indices[int(target_local)])
+    cell_a = _cell_probability(sessions, int(matrices.source_session), source_roi)
     cell_b = _cell_probability(sessions, int(target_session), target_roi)
     threshold_margin = registered - float(matrices.threshold)
-    track2p_prior = (
+    edge = (
         int(matrices.source_session),
         int(matrices.target_session),
         source_roi,
         target_roi,
-    ) in track2p_prior_edges
+    )
+    track2p_prior = edge in track2p_prior_edges
     if config.association_score_mode == "heuristic":
         score = 0.0
         score += float(config.registered_iou_weight) * registered
@@ -1690,11 +1768,25 @@ def _edge_score(
             f"Unsupported association_score_mode: {config.association_score_mode!r}"
         )
     if track2p_prior:
+        row_rank, column_rank = _edge_rank_values(
+            matrices.registered_iou,
+            source_local=int(source_local),
+            target_local=int(target_local),
+        )
         score += float(config.track2p_prior_weight)
         score -= float(config.track2p_prior_risk_scan_weight) * (
             _track2p_prior_edge_risk(
                 registered_iou=registered,
+                shifted_iou=shifted,
+                growth_residual=growth_residual,
                 growth_mahalanobis=growth_mahalanobis,
+                cell_probability_a=cell_a,
+                cell_probability_b=cell_b,
+                row_rank=row_rank,
+                column_rank=column_rank,
+                edge=edge,
+                n_sessions=len(sessions),
+                track2p_prior_edges=track2p_prior_edges,
                 config=config,
             )
         )
@@ -1908,7 +2000,16 @@ def _terminal_identity_history_risk(
 def _track2p_prior_edge_risk(
     *,
     registered_iou: float,
+    shifted_iou: float | None = None,
+    growth_residual: float | None = None,
     growth_mahalanobis: float,
+    cell_probability_a: float | None = None,
+    cell_probability_b: float | None = None,
+    row_rank: int | None = None,
+    column_rank: int | None = None,
+    edge: tuple[int, int, int, int] | None = None,
+    n_sessions: int | None = None,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]] | None = None,
     config: FullMHTConfig,
 ) -> float:
     risk = 0.0
@@ -1922,7 +2023,147 @@ def _track2p_prior_edge_risk(
         float(config.track2p_prior_risk_registered_iou_floor)
         - float(registered_iou),
     )
+    if (
+        _track2p_prior_veto_reason(
+            registered_iou=registered_iou,
+            shifted_iou=shifted_iou,
+            growth_residual=growth_residual,
+            growth_mahalanobis=growth_mahalanobis,
+            cell_probability_a=cell_probability_a,
+            cell_probability_b=cell_probability_b,
+            row_rank=row_rank,
+            column_rank=column_rank,
+            edge=edge,
+            n_sessions=n_sessions,
+            track2p_prior_edges=track2p_prior_edges or frozenset(),
+            config=config,
+        )
+        == "accepted"
+    ):
+        risk += float(config.track2p_prior_veto_penalty)
     return float(risk)
+
+
+def _track2p_prior_veto_reason(
+    *,
+    registered_iou: float,
+    shifted_iou: float | None,
+    growth_residual: float | None,
+    growth_mahalanobis: float,
+    cell_probability_a: float | None,
+    cell_probability_b: float | None,
+    row_rank: int | None,
+    column_rank: int | None,
+    edge: tuple[int, int, int, int] | None,
+    n_sessions: int | None,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+    config: FullMHTConfig,
+) -> str:
+    if float(config.track2p_prior_veto_penalty) <= 0.0:
+        return "prior_veto_disabled"
+    if edge is None or edge not in track2p_prior_edges:
+        return "not_prior_edge"
+    if n_sessions is None:
+        return "n_sessions_missing"
+    if bool(config.track2p_prior_veto_require_last_session_edge) and int(edge[1]) != (
+        int(n_sessions) - 1
+    ):
+        return "not_last_session_edge"
+    if bool(config.track2p_prior_veto_require_terminal_edge) and not _prior_edge_is_terminal(
+        edge, track2p_prior_edges=track2p_prior_edges
+    ):
+        return "not_terminal_edge"
+    if bool(
+        config.track2p_prior_veto_require_complete_component
+    ) and _prior_component_session_count(
+        edge, track2p_prior_edges=track2p_prior_edges
+    ) < int(n_sessions):
+        return "not_complete_component"
+
+    if not np.isfinite(float(growth_mahalanobis)) or float(growth_mahalanobis) < float(
+        config.track2p_prior_veto_min_growth_residual_mahalanobis
+    ):
+        return "growth_residual_mahalanobis_below_gate"
+    if growth_residual is None or not np.isfinite(float(growth_residual)):
+        return "growth_residual_missing"
+    if float(growth_residual) < float(config.track2p_prior_veto_min_growth_residual):
+        return "growth_residual_below_gate"
+    if not np.isfinite(float(registered_iou)) or float(registered_iou) < float(
+        config.track2p_prior_veto_min_registered_iou
+    ):
+        return "registered_iou_below_gate"
+    if config.track2p_prior_veto_max_registered_iou is not None and (
+        not np.isfinite(float(registered_iou))
+        or float(registered_iou) > float(config.track2p_prior_veto_max_registered_iou)
+    ):
+        return "registered_iou_above_gate"
+    if shifted_iou is None or not np.isfinite(float(shifted_iou)):
+        return "shifted_iou_missing"
+    if float(shifted_iou) < float(config.track2p_prior_veto_min_shifted_iou):
+        return "shifted_iou_below_gate"
+    if config.track2p_prior_veto_max_shifted_iou is not None and (
+        not np.isfinite(float(shifted_iou))
+        or float(shifted_iou) > float(config.track2p_prior_veto_max_shifted_iou)
+    ):
+        return "shifted_iou_above_gate"
+    if cell_probability_a is None or cell_probability_b is None:
+        return "cell_probability_missing"
+    if not np.isfinite(float(cell_probability_a)) or not np.isfinite(
+        float(cell_probability_b)
+    ):
+        return "cell_probability_missing"
+    min_cell_probability = min(float(cell_probability_a), float(cell_probability_b))
+    if min_cell_probability < float(config.track2p_prior_veto_min_cell_probability):
+        return "cell_probability_below_gate"
+    if config.track2p_prior_veto_max_min_cell_probability is not None and (
+        min_cell_probability > float(config.track2p_prior_veto_max_min_cell_probability)
+    ):
+        return "min_cell_probability_above_gate"
+    if row_rank is None or int(row_rank) <= 0:
+        return "row_rank_missing"
+    if int(row_rank) > int(config.track2p_prior_veto_max_row_rank):
+        return "row_rank_above_gate"
+    if column_rank is None or int(column_rank) <= 0:
+        return "column_rank_missing"
+    if int(column_rank) > int(config.track2p_prior_veto_max_column_rank):
+        return "column_rank_above_gate"
+    return "accepted"
+
+
+def _prior_edge_is_terminal(
+    edge: tuple[int, int, int, int],
+    *,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+) -> bool:
+    _session_a, session_b, _roi_a, roi_b = edge
+    return not any(
+        int(next_session_a) == int(session_b) and int(next_roi_a) == int(roi_b)
+        for next_session_a, _next_session_b, next_roi_a, _next_roi_b in track2p_prior_edges
+    )
+
+
+def _prior_component_session_count(
+    edge: tuple[int, int, int, int],
+    *,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+) -> int:
+    start = (int(edge[0]), int(edge[2]))
+    target = (int(edge[1]), int(edge[3]))
+    adjacency: dict[tuple[int, int], set[tuple[int, int]]] = {}
+    for session_a, session_b, roi_a, roi_b in track2p_prior_edges:
+        node_a = (int(session_a), int(roi_a))
+        node_b = (int(session_b), int(roi_b))
+        adjacency.setdefault(node_a, set()).add(node_b)
+        adjacency.setdefault(node_b, set()).add(node_a)
+    pending = [start, target]
+    visited: set[tuple[int, int]] = set()
+    while pending:
+        node = pending.pop()
+        if node in visited:
+            continue
+        visited.add(node)
+        pending.extend(sorted(adjacency.get(node, ())))
+    return int(len({session for session, _roi in visited}))
 
 
 def _selected_edge_summary(
@@ -1964,6 +2205,14 @@ def _selected_edge_summary(
         matrices.local_deformation[source_local, target_local], 0.0
     )
     cell_probability = _cell_probability(sessions, int(target_session), target)
+    source_cell_probability = _cell_probability(
+        sessions, int(matrices.source_session), source_roi
+    )
+    row_rank, column_rank = _edge_rank_values(
+        matrices.registered_iou,
+        source_local=source_local,
+        target_local=target_local,
+    )
     score = _edge_score(
         sessions,
         matrices,
@@ -1977,23 +2226,53 @@ def _selected_edge_summary(
     prior_risk = (
         _track2p_prior_edge_risk(
             registered_iou=registered,
+            shifted_iou=shifted,
+            growth_residual=growth_residual,
             growth_mahalanobis=growth_mahalanobis,
+            cell_probability_a=source_cell_probability,
+            cell_probability_b=cell_probability,
+            row_rank=row_rank,
+            column_rank=column_rank,
+            edge=edge,
+            n_sessions=len(sessions),
+            track2p_prior_edges=track2p_prior_edges,
             config=config,
         )
         if is_prior
         else 0.0
+    )
+    veto_reason = (
+        _track2p_prior_veto_reason(
+            registered_iou=registered,
+            shifted_iou=shifted,
+            growth_residual=growth_residual,
+            growth_mahalanobis=growth_mahalanobis,
+            cell_probability_a=source_cell_probability,
+            cell_probability_b=cell_probability,
+            row_rank=row_rank,
+            column_rank=column_rank,
+            edge=edge,
+            n_sessions=len(sessions),
+            track2p_prior_edges=track2p_prior_edges,
+            config=config,
+        )
+        if is_prior
+        else "not_prior_edge"
     )
     summary = (
         f"{int(matrices.source_session)}:{source_roi}->{int(target_session)}:{target}"
         f"|prior={int(is_prior)}"
         f"|score={_diagnostic_float(score)}"
         f"|risk={_diagnostic_float(prior_risk)}"
+        f"|veto={veto_reason}"
         f"|reg={_diagnostic_float(registered)}"
         f"|shift={_diagnostic_float(shifted)}"
         f"|growth={_diagnostic_float(growth_residual)}"
         f"|mahal={_diagnostic_float(growth_mahalanobis)}"
         f"|local={_diagnostic_float(local_deformation)}"
         f"|cell={_diagnostic_float(cell_probability)}"
+        f"|row_rank={row_rank}"
+        f"|column_rank={column_rank}"
     )
     return {
         "is_track2p_prior": int(is_prior),
@@ -2007,6 +2286,12 @@ def _diagnostic_float(value: float) -> str:
     if not np.isfinite(number):
         return "nan"
     return f"{number:.4g}"
+
+
+def _optional_float_arg(value: str) -> float | None:
+    if str(value).strip().lower() in {"none", "null", "off", "disabled"}:
+        return None
+    return float(value)
 
 
 def _miss_cost(
@@ -2192,6 +2477,56 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--track2p-prior-risk-registered-iou-floor", type=float, default=0.5
     )
     parser.add_argument("--track2p-prior-risk-scan-weight", type=float, default=1.0)
+    parser.add_argument("--track2p-prior-veto-penalty", type=float, default=0.0)
+    parser.add_argument(
+        "--track2p-prior-veto-min-growth-residual-mahalanobis",
+        type=float,
+        default=20.0,
+    )
+    parser.add_argument(
+        "--track2p-prior-veto-min-growth-residual", type=float, default=2.5
+    )
+    parser.add_argument(
+        "--track2p-prior-veto-min-registered-iou", type=float, default=0.45
+    )
+    parser.add_argument(
+        "--track2p-prior-veto-max-registered-iou",
+        type=_optional_float_arg,
+        default=0.60,
+    )
+    parser.add_argument(
+        "--track2p-prior-veto-min-shifted-iou", type=float, default=0.60
+    )
+    parser.add_argument(
+        "--track2p-prior-veto-max-shifted-iou",
+        type=_optional_float_arg,
+        default=0.80,
+    )
+    parser.add_argument(
+        "--track2p-prior-veto-min-cell-probability", type=float, default=0.50
+    )
+    parser.add_argument(
+        "--track2p-prior-veto-max-min-cell-probability",
+        type=_optional_float_arg,
+        default=0.65,
+    )
+    parser.add_argument("--track2p-prior-veto-max-row-rank", type=int, default=1)
+    parser.add_argument("--track2p-prior-veto-max-column-rank", type=int, default=1)
+    parser.add_argument(
+        "--track2p-prior-veto-require-terminal-edge",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--track2p-prior-veto-require-last-session-edge",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--track2p-prior-veto-require-complete-component",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument("--terminal-history-risk-weight", type=float, default=0.0)
     parser.add_argument("--terminal-non-prior-history-weight", type=float, default=0.0)
     parser.add_argument(
@@ -2286,6 +2621,52 @@ def main(argv: list[str] | None = None) -> int:
             ),
             track2p_prior_risk_scan_weight=float(
                 args.track2p_prior_risk_scan_weight
+            ),
+            track2p_prior_veto_penalty=float(args.track2p_prior_veto_penalty),
+            track2p_prior_veto_min_growth_residual_mahalanobis=float(
+                args.track2p_prior_veto_min_growth_residual_mahalanobis
+            ),
+            track2p_prior_veto_min_growth_residual=float(
+                args.track2p_prior_veto_min_growth_residual
+            ),
+            track2p_prior_veto_min_registered_iou=float(
+                args.track2p_prior_veto_min_registered_iou
+            ),
+            track2p_prior_veto_max_registered_iou=(
+                None
+                if args.track2p_prior_veto_max_registered_iou is None
+                else float(args.track2p_prior_veto_max_registered_iou)
+            ),
+            track2p_prior_veto_min_shifted_iou=float(
+                args.track2p_prior_veto_min_shifted_iou
+            ),
+            track2p_prior_veto_max_shifted_iou=(
+                None
+                if args.track2p_prior_veto_max_shifted_iou is None
+                else float(args.track2p_prior_veto_max_shifted_iou)
+            ),
+            track2p_prior_veto_min_cell_probability=float(
+                args.track2p_prior_veto_min_cell_probability
+            ),
+            track2p_prior_veto_max_min_cell_probability=(
+                None
+                if args.track2p_prior_veto_max_min_cell_probability is None
+                else float(args.track2p_prior_veto_max_min_cell_probability)
+            ),
+            track2p_prior_veto_max_row_rank=max(
+                1, int(args.track2p_prior_veto_max_row_rank)
+            ),
+            track2p_prior_veto_max_column_rank=max(
+                1, int(args.track2p_prior_veto_max_column_rank)
+            ),
+            track2p_prior_veto_require_terminal_edge=bool(
+                args.track2p_prior_veto_require_terminal_edge
+            ),
+            track2p_prior_veto_require_last_session_edge=bool(
+                args.track2p_prior_veto_require_last_session_edge
+            ),
+            track2p_prior_veto_require_complete_component=bool(
+                args.track2p_prior_veto_require_complete_component
             ),
             terminal_history_risk_weight=float(args.terminal_history_risk_weight),
             terminal_non_prior_history_weight=float(

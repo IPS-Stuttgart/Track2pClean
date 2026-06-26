@@ -468,6 +468,103 @@ def test_full_mht_track2p_prior_edge_risk_penalizes_suspicious_prior_edge(monkey
     assert scan_disabled == pytest.approx(without_prior + 2.0)
 
 
+def test_full_mht_prior_veto_risk_accepts_strict_label_free_pocket():
+    config = full_mht.FullMHTConfig(track2p_prior_veto_penalty=11.0)
+    prior_edges = frozenset({(0, 1, 3, 5), (1, 2, 5, 9)})
+    reason = full_mht._track2p_prior_veto_reason(
+        registered_iou=0.50,
+        shifted_iou=0.70,
+        growth_residual=2.5,
+        growth_mahalanobis=20.0,
+        cell_probability_a=0.6,
+        cell_probability_b=0.6,
+        row_rank=1,
+        column_rank=1,
+        edge=(1, 2, 5, 9),
+        n_sessions=3,
+        track2p_prior_edges=prior_edges,
+        config=config,
+    )
+    rejected = full_mht._track2p_prior_veto_reason(
+        registered_iou=0.50,
+        shifted_iou=0.70,
+        growth_residual=2.5,
+        growth_mahalanobis=20.0,
+        cell_probability_a=0.9,
+        cell_probability_b=0.9,
+        row_rank=1,
+        column_rank=1,
+        edge=(1, 2, 5, 9),
+        n_sessions=3,
+        track2p_prior_edges=prior_edges,
+        config=config,
+    )
+    risk = full_mht._track2p_prior_edge_risk(
+        registered_iou=0.50,
+        shifted_iou=0.70,
+        growth_residual=2.5,
+        growth_mahalanobis=20.0,
+        cell_probability_a=0.6,
+        cell_probability_b=0.6,
+        row_rank=1,
+        column_rank=1,
+        edge=(1, 2, 5, 9),
+        n_sessions=3,
+        track2p_prior_edges=prior_edges,
+        config=config,
+    )
+
+    assert reason == "accepted"
+    assert rejected == "min_cell_probability_above_gate"
+    assert risk == pytest.approx(11.0)
+
+
+def test_full_mht_edge_score_applies_prior_veto_penalty(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=1,
+        target_session=2,
+        source_indices=np.asarray([5], dtype=int),
+        target_indices=np.asarray([9], dtype=int),
+        registered_iou=np.asarray([[0.50]], dtype=float),
+        shifted_iou=np.asarray([[0.70]], dtype=float),
+        centroid_distance=np.asarray([[1.0]], dtype=float),
+        area_ratio=np.asarray([[1.0]], dtype=float),
+        threshold=0.0,
+        growth_residual=np.asarray([[2.5]], dtype=float),
+        growth_mahalanobis=np.asarray([[20.0]], dtype=float),
+        local_deformation=np.asarray([[0.0]], dtype=float),
+        growth_anchor_count=2,
+        growth_model_type="affine",
+    )
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *args, **kwargs: 0.6)
+    config = full_mht.FullMHTConfig(
+        track2p_prior_weight=12.0,
+        track2p_prior_veto_penalty=20.0,
+    )
+    prior_edges = frozenset({(0, 1, 3, 5), (1, 2, 5, 9)})
+
+    without_prior = full_mht._edge_score(
+        (object(), object(), object()),
+        matrices,
+        target_session=2,
+        source_local=0,
+        target_local=0,
+        config=config,
+        track2p_prior_edges=frozenset(),
+    )
+    with_prior = full_mht._edge_score(
+        (object(), object(), object()),
+        matrices,
+        target_session=2,
+        source_local=0,
+        target_local=0,
+        config=config,
+        track2p_prior_edges=prior_edges,
+    )
+
+    assert with_prior == pytest.approx(without_prior + 12.0 - 20.0)
+
+
 def test_full_mht_calibrated_likelihood_rewards_anchor_like_edges():
     registered = np.asarray(
         [[0.92, 0.12, 0.10], [0.11, 0.89, 0.13], [0.14, 0.10, 0.87]],
