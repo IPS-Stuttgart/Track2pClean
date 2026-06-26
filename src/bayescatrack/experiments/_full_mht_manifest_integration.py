@@ -121,6 +121,7 @@ FULL_MHT_FIELDS = {
     "track2p_prior_anomaly_max_anchor_growth_mahalanobis",
     "track2p_prior_anomaly_min_anchor_cell_probability",
     "track2p_prior_anomaly_min_feature_scale",
+    "track2p_prior_anomaly_joint_margin",
     "track2p_prior_anomaly_score_clip",
     "terminal_history_risk_weight",
     "terminal_non_prior_history_weight",
@@ -556,6 +557,11 @@ def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
             options,
             "track2p_prior_anomaly_min_feature_scale",
             default=defaults.track2p_prior_anomaly_min_feature_scale,
+        ),
+        track2p_prior_anomaly_joint_margin=manifest._float_option(
+            options,
+            "track2p_prior_anomaly_joint_margin",
+            default=defaults.track2p_prior_anomaly_joint_margin,
         ),
         track2p_prior_anomaly_score_clip=manifest._float_option(
             options,

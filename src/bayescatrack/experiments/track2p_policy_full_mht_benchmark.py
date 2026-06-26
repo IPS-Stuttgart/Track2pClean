@@ -144,6 +144,7 @@ class FullMHTConfig:
     track2p_prior_anomaly_max_anchor_growth_mahalanobis: float = 2.0
     track2p_prior_anomaly_min_anchor_cell_probability: float = 0.75
     track2p_prior_anomaly_min_feature_scale: float = 0.05
+    track2p_prior_anomaly_joint_margin: float = 1.0
     track2p_prior_anomaly_score_clip: float = 8.0
     terminal_history_risk_weight: float = 0.0
     terminal_non_prior_history_weight: float = 0.0
@@ -547,6 +548,9 @@ def _run_subject_full_mht(
         ),
         "track2p_full_mht_track2p_prior_anomaly_min_feature_scale": float(
             mht_config.track2p_prior_anomaly_min_feature_scale
+        ),
+        "track2p_full_mht_track2p_prior_anomaly_joint_margin": float(
+            mht_config.track2p_prior_anomaly_joint_margin
         ),
         "track2p_full_mht_track2p_prior_anomaly_score_clip": float(
             mht_config.track2p_prior_anomaly_score_clip
@@ -2508,29 +2512,68 @@ def _track2p_prior_anomaly_risk(
         target_local=int(target_local),
     )
     anchor_rows = prior_rows[np.asarray(anchor_mask, dtype=bool)]
-    directions = np.asarray([-1.0, -1.0, -1.0, 1.0, 1.0, 1.0], dtype=float)
-    risk_terms: list[float] = []
-    for index, direction in enumerate(directions):
-        anchor_values = anchor_rows[:, int(index)]
-        anchor_values = anchor_values[np.isfinite(anchor_values)]
-        value = float(target_row[int(index)])
-        if anchor_values.size < int(config.track2p_prior_anomaly_min_anchors):
-            continue
-        if not np.isfinite(value):
-            continue
-        location, scale = _robust_location_scale(
-            anchor_values,
-            min_scale=float(config.track2p_prior_anomaly_min_feature_scale),
-        )
-        signed_deviation = float(direction) * (value - float(location))
-        risk_terms.append(max(0.0, signed_deviation / max(float(scale), 1.0e-9)))
-    if not risk_terms:
-        return 0.0
-    risk = float(np.sum(risk_terms) / max(1.0, np.sqrt(float(len(risk_terms)))))
+    low_overlap = max(
+        _one_sided_anchor_deviation(
+            anchor_rows[:, 0],
+            float(target_row[0]),
+            direction=-1.0,
+            config=config,
+        ),
+        0.5
+        * _one_sided_anchor_deviation(
+            anchor_rows[:, 1],
+            float(target_row[1]),
+            direction=-1.0,
+            config=config,
+        ),
+    )
+    growth_motion = max(
+        _one_sided_anchor_deviation(
+            anchor_rows[:, 3],
+            float(target_row[3]),
+            direction=1.0,
+            config=config,
+        ),
+        _one_sided_anchor_deviation(
+            anchor_rows[:, 4],
+            float(target_row[4]),
+            direction=1.0,
+            config=config,
+        ),
+        0.5
+        * _one_sided_anchor_deviation(
+            anchor_rows[:, 5],
+            float(target_row[5]),
+            direction=1.0,
+            config=config,
+        ),
+    )
+    joint_risk = min(float(low_overlap), float(growth_motion))
+    risk = max(0.0, joint_risk - float(config.track2p_prior_anomaly_joint_margin))
     clip = max(0.0, float(config.track2p_prior_anomaly_score_clip))
     if clip > 0.0:
         risk = min(float(clip), risk)
     return float(max(0.0, risk))
+
+
+def _one_sided_anchor_deviation(
+    anchor_values: np.ndarray,
+    value: float,
+    *,
+    direction: float,
+    config: FullMHTConfig,
+) -> float:
+    values = np.asarray(anchor_values, dtype=float)
+    values = values[np.isfinite(values)]
+    if values.size < int(config.track2p_prior_anomaly_min_anchors):
+        return 0.0
+    if not np.isfinite(float(value)):
+        return 0.0
+    location, scale = _robust_location_scale(
+        values, min_scale=float(config.track2p_prior_anomaly_min_feature_scale)
+    )
+    signed_deviation = float(direction) * (float(value) - float(location))
+    return float(max(0.0, signed_deviation / max(float(scale), 1.0e-9)))
 
 
 def _track2p_prior_anomaly_rows(
@@ -3185,6 +3228,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--track2p-prior-anomaly-min-feature-scale", type=float, default=0.05
     )
+    parser.add_argument("--track2p-prior-anomaly-joint-margin", type=float, default=1.0)
     parser.add_argument("--track2p-prior-anomaly-score-clip", type=float, default=8.0)
     parser.add_argument("--terminal-history-risk-weight", type=float, default=0.0)
     parser.add_argument("--terminal-non-prior-history-weight", type=float, default=0.0)
@@ -3348,6 +3392,9 @@ def main(argv: list[str] | None = None) -> int:
             ),
             track2p_prior_anomaly_min_feature_scale=float(
                 args.track2p_prior_anomaly_min_feature_scale
+            ),
+            track2p_prior_anomaly_joint_margin=float(
+                args.track2p_prior_anomaly_joint_margin
             ),
             track2p_prior_anomaly_score_clip=float(
                 args.track2p_prior_anomaly_score_clip
