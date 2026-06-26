@@ -28,6 +28,8 @@ def test_full_mht_method_protocol_names_required_method_invariants() -> None:
         "test_full_mht_identity_history_bundle_contract.py",
         "test_full_mht_identity_history_bundle_decision.py",
         "full_mht_identity_history_bundle_decision.py",
+        "test_full_mht_identity_history_method_lock.py",
+        "full_mht_identity_history_method_lock.json",
         "test_full_mht_identity_history_subject_support_decision.py",
         "full_mht_identity_history_subject_support_decision.py",
         "FullMHTIdentityHistoryNoLocalContext",
