@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 from bayescatrack.experiments import track2p_mask_input_sweep
 from bayescatrack.experiments.track2p_benchmark import (
@@ -41,6 +42,52 @@ def test_mask_input_settings_deduplicate_all_roi_thresholds():
     assert all(
         setting.weighted_centroids == setting.weighted_masks for setting in settings
     )
+
+
+def test_mask_input_settings_accept_numpy_bool_options():
+    config = MaskInputSweepConfig(
+        benchmark=Track2pBenchmarkConfig(
+            data=Path("dataset"), method="global-assignment", progress=False
+        ),
+        include_non_cells=(np.bool_(False), np.bool_(True)),
+        cell_probability_thresholds=(0.5,),
+        weighted_masks=(np.bool_(False),),
+        weighted_centroids=(np.bool_(False),),
+        exclude_overlapping_pixels=(np.bool_(True),),
+    )
+
+    settings = _mask_input_settings(config)
+
+    assert {setting.include_non_cells for setting in settings} == {False, True}
+    assert {setting.weighted_masks for setting in settings} == {False}
+    assert {setting.exclude_overlapping_pixels for setting in settings} == {True}
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"include_non_cells": ("no",)}, "include_non_cells"),
+        ({"weighted_masks": (1,)}, "weighted_masks"),
+        ({"weighted_centroids": ("yes",)}, "weighted_centroids"),
+        ({"exclude_overlapping_pixels": (0,)}, "exclude_overlapping_pixels"),
+    ],
+)
+def test_mask_input_settings_reject_non_bool_option_values(overrides, message):
+    config_kwargs = {
+        "benchmark": Track2pBenchmarkConfig(
+            data=Path("dataset"), method="global-assignment", progress=False
+        ),
+        "include_non_cells": (False,),
+        "cell_probability_thresholds": (0.5,),
+        "weighted_masks": (False,),
+        "weighted_centroids": (False,),
+        "exclude_overlapping_pixels": (True,),
+    }
+    config_kwargs.update(overrides)
+    config = MaskInputSweepConfig(**config_kwargs)
+
+    with pytest.raises(ValueError, match=f"{message}.*booleans"):
+        _mask_input_settings(config)
 
 
 def test_mask_input_sweep_augments_rows_and_forwards_config(monkeypatch):

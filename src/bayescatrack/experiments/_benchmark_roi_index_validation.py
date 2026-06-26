@@ -7,7 +7,7 @@ from functools import wraps
 
 import numpy as np
 
-_PATCH_MARKER = "_bayescatrack_benchmark_roi_index_validation_patch"
+_PATCH_MARKER = "_track2pclean_benchmark_roi_index_validation_patch"
 
 
 def install_benchmark_roi_index_validation() -> None:
@@ -24,7 +24,7 @@ def install_benchmark_roi_index_validation() -> None:
         return _is_nonnegative_integral_roi_index(value)
 
     setattr(_is_strict_valid_roi_index, _PATCH_MARKER, True)
-    setattr(_is_strict_valid_roi_index, "_bayescatrack_original", original)
+    setattr(_is_strict_valid_roi_index, "_track2pclean_original", original)
     benchmark._is_valid_roi_index = _is_strict_valid_roi_index  # type: ignore[assignment]  # pylint: disable=protected-access
 
 
@@ -46,15 +46,6 @@ def _is_nonnegative_integral_roi_index(value: object) -> bool:
             and numeric_value.is_integer()
             and int(numeric_value) >= 0
         )
-
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return False
-        try:
-            return int(text) >= 0
-        except ValueError:
-            return False
 
     return False
 

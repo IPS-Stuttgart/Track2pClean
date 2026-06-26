@@ -4,8 +4,8 @@ import numpy as np
 from bayescatrack.experiments import track2p_benchmark as benchmark
 
 
-def test_benchmark_roi_predicate_rejects_fractional_and_boolean_indices():
-    valid_values = [0, np.int64(1), 2.0, np.float64(3.0), "4"]
+def test_benchmark_roi_predicate_rejects_fractional_boolean_and_textual_indices() -> None:
+    valid_values = [0, np.int64(1), 2.0, np.float64(3.0)]
     invalid_values = [
         True,
         np.bool_(False),
@@ -14,7 +14,7 @@ def test_benchmark_roi_predicate_rejects_fractional_and_boolean_indices():
         np.nan,
         np.inf,
         -1,
-        "-1",
+        "1",
         "1.0",
         object(),
     ]
@@ -25,7 +25,7 @@ def test_benchmark_roi_predicate_rejects_fractional_and_boolean_indices():
         assert not benchmark._is_valid_roi_index(value)
 
 
-def test_reference_seed_roi_set_does_not_truncate_corrupt_indices():
+def test_reference_seed_roi_set_does_not_truncate_corrupt_indices() -> None:
     reference_matrix = np.asarray(
         [[0.0], [1.5], [True], [np.float64(2.0)], ["3"], [-1], [np.nan]],
         dtype=object,
@@ -34,5 +34,4 @@ def test_reference_seed_roi_set_does_not_truncate_corrupt_indices():
     assert benchmark._reference_seed_roi_set(reference_matrix, seed_session=0) == {
         0,
         2,
-        3,
     }

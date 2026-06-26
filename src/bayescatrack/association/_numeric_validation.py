@@ -8,15 +8,32 @@ import numpy as np
 
 
 def validated_numeric_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be finite")
     try:
-        numeric = float(value)
+        scalar_value = _numeric_scalar_candidate(value, name=name)
+        numeric = float(scalar_value)
     except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be finite") from exc
     if not np.isfinite(numeric):
         raise ValueError(f"{name} must be finite")
     return numeric
+
+
+def _numeric_scalar_candidate(value: Any, *, name: str) -> Any:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+
+    try:
+        array_value = np.asarray(value)
+    except (TypeError, ValueError, OverflowError):
+        return value
+
+    if array_value.ndim != 0:
+        raise ValueError(f"{name} must be finite")
+
+    scalar_value = array_value.item()
+    if isinstance(scalar_value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    return scalar_value
 
 
 def finite_positive_float(value: Any, *, name: str) -> float:
