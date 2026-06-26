@@ -82,10 +82,15 @@ class CalibratedPairwiseAssociationModel:
         )
 
     def predict_match_probability(self, features: Any) -> np.ndarray:
+        sample_features, pairwise_shape = _flatten_pairwise_feature_tensor(features)
         if hasattr(self.model, "predict_match_probability"):
-            probabilities = self.model.predict_match_probability(features)
+            probabilities = _predict_match_probability_with_shape_restore(
+                self.model,
+                features,
+                sample_features,
+                pairwise_shape,
+            )
         elif hasattr(self.model, "predict_proba"):
-            sample_features, pairwise_shape = _flatten_pairwise_feature_tensor(features)
             probabilities = np.asarray(
                 self.model.predict_proba(sample_features),
                 dtype=float,
@@ -122,6 +127,34 @@ def load_logistic_pairwise_association_model() -> type[Any]:
         ) from exc
 
 
+def _predict_match_probability_with_shape_restore(
+    model: Any,
+    features: Any,
+    sample_features: np.ndarray,
+    pairwise_shape: tuple[int, ...] | None,
+) -> np.ndarray:
+    try:
+        probabilities = model.predict_match_probability(features)
+    except (TypeError, ValueError):
+        if pairwise_shape is None:
+            raise
+    else:
+        try:
+            return _restore_pairwise_probability_shape(
+                np.asarray(probabilities, dtype=float),
+                pairwise_shape,
+            )
+        except ValueError:
+            if pairwise_shape is None:
+                raise
+
+    probabilities = model.predict_match_probability(sample_features)
+    return _restore_pairwise_probability_shape(
+        np.asarray(probabilities, dtype=float),
+        pairwise_shape,
+    )
+
+
 def _local_pairwise_feature_tensor(
     pairwise_components: Mapping[str, Any],
     schema: NamedPairwiseFeatureSchema,
@@ -156,6 +189,8 @@ def _restore_pairwise_probability_shape(
 ) -> np.ndarray:
     if pairwise_shape is None:
         return probabilities
+    if probabilities.shape == pairwise_shape:
+        return probabilities
 
     expected_size = int(np.prod(pairwise_shape, dtype=int))
     if probabilities.ndim == 1 and probabilities.shape[0] == expected_size:
@@ -163,7 +198,7 @@ def _restore_pairwise_probability_shape(
     if probabilities.shape == (expected_size, 1):
         return probabilities.reshape(pairwise_shape)
     raise ValueError(
-        "predict_proba returned probabilities that cannot be reshaped back to the pairwise matrix"
+        "model returned probabilities that cannot be reshaped back to the pairwise matrix"
     )
 
 
