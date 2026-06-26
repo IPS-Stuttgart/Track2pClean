@@ -94,6 +94,26 @@ def test_terminal_completion_decision_rejects_pairwise_regression() -> None:
     assert decision["candidate_decisions"][0]["decision"] == "pairwise_regression"
 
 
+def test_terminal_completion_decision_rejects_regression_even_with_two_gains() -> None:
+    decision = evaluate_terminal_completion_decision(
+        _probe_rows(c025=(0.965, 0.931), c050=(0.965, 0.932), c100=(0.964, 0.933))
+    )
+
+    assert decision["terminal_completion_result"] == "terminal_completion_pairwise_regression"
+    assert decision["viable_candidate_count"] == 2
+    assert decision["pairwise_regression_count"] == 1
+
+
+def test_terminal_completion_decision_rejects_complete_regression_even_with_two_gains() -> None:
+    decision = evaluate_terminal_completion_decision(
+        _probe_rows(c025=(0.965, 0.931), c050=(0.965, 0.932), c100=(0.965, 0.929))
+    )
+
+    assert decision["terminal_completion_result"] == "terminal_completion_complete_regression"
+    assert decision["viable_candidate_count"] == 2
+    assert decision["complete_regression_count"] == 1
+
+
 def test_terminal_completion_decision_accepts_custom_identity_history_rows() -> None:
     rows = [
         _row("Track2p", pairwise_micro=0.962, complete_micro=0.920),
