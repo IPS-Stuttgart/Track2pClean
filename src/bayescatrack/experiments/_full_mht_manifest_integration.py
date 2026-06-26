@@ -3,7 +3,8 @@
 The full-MHT runner is the first Track2p-cleaning experiment that opens a beam
 over full identity histories instead of selecting post-hoc residual edits.  This
 integration makes the runner executable from JSON benchmark manifests, including
-the proposal-prior and prior-veto controls used by the current method probe.
+the proposal-prior, prior-veto, and calibrated prior-survival controls used by
+the current method probe.
 """
 
 from __future__ import annotations
@@ -17,6 +18,29 @@ FULL_MHT_ALIASES = {
     "track2p-full-mht",
     "track2p-pyrecest-full-mht",
 }
+FULL_MHT_PRIOR_SURVIVAL_FLOAT_FIELDS = {
+    "track2p_prior_survival_weight",
+    "track2p_prior_survival_min_anchor_registered_iou",
+    "track2p_prior_survival_min_anchor_shifted_iou",
+    "track2p_prior_survival_max_anchor_growth_mahalanobis",
+    "track2p_prior_survival_max_anchor_growth_residual",
+    "track2p_prior_survival_min_anchor_cell_probability",
+    "track2p_prior_survival_max_background_registered_iou",
+    "track2p_prior_survival_max_background_shifted_iou",
+    "track2p_prior_survival_min_background_growth_mahalanobis",
+    "track2p_prior_survival_min_background_growth_residual",
+    "track2p_prior_survival_max_background_cell_probability",
+    "track2p_prior_survival_min_feature_scale",
+    "track2p_prior_survival_per_feature_clip",
+    "track2p_prior_survival_score_clip",
+}
+FULL_MHT_PRIOR_SURVIVAL_INT_FIELDS = {
+    "track2p_prior_survival_max_anchor_rank",
+    "track2p_prior_survival_min_examples_per_class",
+}
+FULL_MHT_PRIOR_SURVIVAL_FIELDS = (
+    FULL_MHT_PRIOR_SURVIVAL_FLOAT_FIELDS | FULL_MHT_PRIOR_SURVIVAL_INT_FIELDS
+)
 FULL_MHT_FIELDS = {
     "threshold_method",
     "iou_distance_threshold",
@@ -73,6 +97,7 @@ FULL_MHT_FIELDS = {
     "growth_anchor_min_registered_iou",
     "growth_anchor_min_shifted_iou",
     "growth_anchor_min_cell_probability",
+    *FULL_MHT_PRIOR_SURVIVAL_FIELDS,
 }
 
 
@@ -168,6 +193,13 @@ def _run_track2p_policy_full_mht_rows(
         run_track2p_policy_full_mht,
     )
 
+    if _uses_prior_survival(options):
+        from bayescatrack.experiments.full_mht_prior_survival_integration import (
+            install_full_mht_prior_survival_scoring,
+        )
+
+        install_full_mht_prior_survival_scoring()
+
     output = run_track2p_policy_full_mht(
         config,
         threshold_method=manifest._policy_threshold_method(
@@ -186,6 +218,10 @@ def _run_track2p_policy_full_mht_rows(
     return [result.to_dict() for result in output.results]
 
 
+def _uses_prior_survival(options: Mapping[str, Any]) -> bool:
+    return any(key in options for key in FULL_MHT_PRIOR_SURVIVAL_FIELDS)
+
+
 def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
     from bayescatrack.experiments import benchmark_manifest as manifest
     from bayescatrack.experiments.track2p_policy_full_mht_benchmark import (
@@ -193,7 +229,7 @@ def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
     )
 
     defaults = FullMHTConfig()
-    return FullMHTConfig(
+    config = FullMHTConfig(
         beam_width=manifest._positive_int_option(
             options, "beam_width", default=defaults.beam_width
         ),
@@ -427,6 +463,27 @@ def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
             default=defaults.growth_anchor_min_cell_probability,
         ),
     )
+    return _attach_prior_survival_options(config, options)
+
+
+def _attach_prior_survival_options(config: Any, options: Mapping[str, Any]) -> Any:
+    from bayescatrack.experiments import benchmark_manifest as manifest
+
+    for key in sorted(FULL_MHT_PRIOR_SURVIVAL_FLOAT_FIELDS):
+        if key in options:
+            object.__setattr__(
+                config,
+                key,
+                manifest._float_option(options, key, default=0.0),
+            )
+    for key in sorted(FULL_MHT_PRIOR_SURVIVAL_INT_FIELDS):
+        if key in options:
+            object.__setattr__(
+                config,
+                key,
+                manifest._positive_int_option(options, key, default=1),
+            )
+    return config
 
 
 def _optional_float_with_default(
