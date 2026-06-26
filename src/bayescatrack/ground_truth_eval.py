@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import operator
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -443,7 +444,15 @@ def tracks_from_consecutive_matches(
     *,
     start_roi_indices: Sequence[int] | None = None,
 ) -> TrackTable:
-    """Reconstruct wide tracks from consecutive pairwise assignments."""
+    """Reconstruct wide tracks from consecutive pairwise assignments.
+
+    When ``start_roi_indices`` is omitted, only ROIs that appear in the first
+    consecutive match are used as seed rows. Pass explicit seed ROI indices when
+    unmatched start-session ROIs must be retained in the output table.
+    """
+
+    if start_roi_indices is None:
+        start_roi_indices = _infer_start_roi_indices_from_first_match(matches)
     track_rows = build_track_rows_from_matches(
         session_names,
         matches,
@@ -453,6 +462,52 @@ def tracks_from_consecutive_matches(
     return TrackTable(
         session_names=tuple(str(name) for name in session_names), tracks=track_rows
     )
+
+
+def _infer_start_roi_indices_from_first_match(
+    matches: Sequence[
+        Mapping[int, int]
+        | Sequence[tuple[int, int]]
+        | np.ndarray
+        | tuple[Sequence[int], Sequence[int]]
+    ],
+) -> list[int]:
+    if not matches:
+        return []
+
+    first_match = matches[0]
+    if isinstance(first_match, Mapping):
+        start_values = list(first_match.keys())
+    elif isinstance(first_match, tuple) and len(first_match) == 2:
+        start_values = list(first_match[0])
+    else:
+        match_array = np.asarray(first_match, dtype=object)
+        if match_array.size == 0:
+            return []
+        if match_array.ndim != 2 or match_array.shape[1] != 2:
+            raise TypeError("unsupported match representation")
+        start_values = match_array[:, 0].tolist()
+
+    return sorted({_parse_start_roi_index(value) for value in start_values})
+
+
+def _parse_start_roi_index(value: object) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("start ROI indices must be non-negative integers")
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError("start ROI indices must be non-negative integers")
+        normalized = int(value)
+    else:
+        try:
+            normalized = operator.index(value)
+        except TypeError as exc:
+            raise ValueError("start ROI indices must be non-negative integers") from exc
+
+    normalized = int(normalized)
+    if normalized < 0:
+        raise ValueError("start ROI indices must be non-negative integers")
+    return normalized
 
 
 def _align_prediction_to_ground_truth(
