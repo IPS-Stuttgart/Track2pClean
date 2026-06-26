@@ -6,11 +6,13 @@ The frozen FullMHT manifests are now paired with benchmark-suite integration cod
 
 - `benchmarks/full_mht_prior_veto_manifest.json`
 - `benchmarks/full_mht_prior_survival_sensitivity_manifest.json`
+- `benchmarks/full_mht_terminal_completion_probe_manifest.json`
 - `src/bayescatrack/experiments/_full_mht_manifest_integration.py`
 - `src/bayescatrack/experiments/full_mht_manifest_decision.py`
 - `tests/test_benchmark_manifest_full_mht_integration.py`
 - `tests/test_full_mht_manifest_decision.py`
 - `docs/full_mht_prior_survival_validation.md`
+- `docs/full_mht_terminal_completion_objective.md`
 
 ## Runner Registration
 
@@ -24,7 +26,9 @@ The integration installs these manifest runner names:
 
 The adapter translates manifest fields into `FullMHTConfig` and keeps ordinary
 Track2p `max_gap` separate from the FullMHT assignment/reactivation horizon,
-which is named `full_mht_max_gap` in JSON manifests.
+which is named `full_mht_max_gap` in JSON manifests. Dynamic opt-in method fields
+such as `track2p_prior_survival_*` and `terminal_incomplete_history_weight` are
+attached to the frozen FullMHT config object before the run.
 
 ## Canonical Reproduction Manifest
 
@@ -76,7 +80,7 @@ This decision artifact reports whether the full beam beats the greedy beam-width
 ablation and whether calibrated prior-survival improves, ties, or falls below the
 fixed prior-veto hazard.
 
-## Sensitivity Manifest
+## Sensitivity Manifests
 
 `benchmarks/full_mht_prior_survival_sensitivity_manifest.json` checks the
 immediate neighborhood around the calibrated survival row:
@@ -88,10 +92,16 @@ immediate neighborhood around the calibrated survival row:
 | minimum pseudo examples per class | `2`, `3` |
 | anchor strictness | default vs stricter anchor overlap/confidence |
 
-This is not a tuning grid. It is a robustness check. If the method only works at
-one point, keep it exploratory. If the neighborhood is stable, the calibrated
-survival likelihood is a stronger paper-facing row than the fixed prior-veto
-hazard.
+`benchmarks/full_mht_terminal_completion_probe_manifest.json` checks the immediate
+neighborhood around the complete-history terminal objective:
+
+| factor | values |
+| --- | --- |
+| terminal incomplete-history weight | `0.25`, `0.50`, `1.00` |
+
+These are not tuning grids. They are robustness checks. If a method layer only
+works at one point, keep it exploratory. If a small neighborhood is stable, the
+layer can be considered for a future canonical row.
 
 ## Verification Status
 
@@ -113,6 +123,7 @@ export PYTHONPATH="$PWD/src"
   tests/test_full_mht_manifest_decision.py \
   tests/test_full_mht_prior_survival_model.py \
   tests/test_full_mht_prior_survival_integration.py \
+  tests/test_full_mht_terminal_completion_integration.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
 ```
@@ -137,7 +148,15 @@ mkdir -p "$SENS"
   benchmarks/full_mht_prior_survival_sensitivity_manifest.json \
   --output-dir "$SENS" \
   --summary-format table
+
+COMP="$PWD/results/full_mht_terminal_completion_probe_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$COMP"
+"$PY" -m bayescatrack benchmark suite \
+  benchmarks/full_mht_terminal_completion_probe_manifest.json \
+  --output-dir "$COMP" \
+  --summary-format table
 ```
 
 The full validation recipe, including the non-GT exposure audit, is in
-`docs/full_mht_prior_survival_validation.md`.
+`docs/full_mht_prior_survival_validation.md`. The terminal-completion probe is
+described in `docs/full_mht_terminal_completion_objective.md`.
