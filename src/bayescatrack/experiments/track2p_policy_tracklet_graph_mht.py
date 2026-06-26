@@ -31,6 +31,7 @@ from bayescatrack.experiments.track2p_benchmark import (
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
+    _predict_subject_tracks,
     discover_subject_dirs,
     write_results,
 )
@@ -91,6 +92,10 @@ class TrackletGraphConfig:
     growth_anchor_min_registered_iou: float = 0.55
     growth_anchor_min_shifted_iou: float = 0.30
     growth_anchor_min_cell_probability: float = 0.80
+    track2p_proposal_edges: bool = False
+    track2p_proposal_only: bool = False
+    track2p_proposal_bonus: float = 1.0
+    track2p_proposal_feature_weight: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -250,31 +255,78 @@ def _run_subject_tracklet_graph(
     )
     matrix_config = _matrix_config(graph_config)
     forced_rois = {int(config.seed_session): tuple(seed_rois)}
-    tracklets, local_rows = _build_conservative_tracklets(
-        sessions,
-        feature_cache=feature_cache,
-        matrix_config=matrix_config,
-        graph_config=graph_config,
-        forced_rois_by_session=forced_rois,
-        progress=progress,
-        subject=subject_dir.name,
-    )
+    proposal_matrix: np.ndarray | None = None
+    if graph_config.track2p_proposal_edges and graph_config.track2p_proposal_only:
+        proposal_matrix, _variant = _predict_subject_tracks(
+            subject_dir,
+            replace(config, method="track2p-baseline"),
+        )
+        tracklets, local_rows = _build_singleton_proposal_tracklets(
+            subject_dir.name,
+            proposal_matrix=np.asarray(proposal_matrix, dtype=int),
+            seed_rois=seed_rois,
+            seed_session=int(config.seed_session),
+        )
+    else:
+        tracklets, local_rows = _build_conservative_tracklets(
+            sessions,
+            feature_cache=feature_cache,
+            matrix_config=matrix_config,
+            graph_config=graph_config,
+            forced_rois_by_session=forced_rois,
+            progress=progress,
+            subject=subject_dir.name,
+        )
     seed_tracklet_ids = _seed_tracklet_ids(
         tracklets,
         seed_rois=seed_rois,
         seed_session=int(config.seed_session),
     )
-    edges, edge_rows, expanded_source_ids = _build_tracklet_edges(
-        sessions,
-        tracklets,
-        feature_cache=feature_cache,
-        matrix_config=matrix_config,
-        graph_config=graph_config,
-        seed_tracklet_ids=seed_tracklet_ids,
-        n_sessions=n_sessions,
-        subject=subject_dir.name,
-        progress=progress,
-    )
+    if graph_config.track2p_proposal_edges and graph_config.track2p_proposal_only:
+        edges: tuple[TrackletEdge, ...] = tuple()
+        edge_rows: list[dict[str, Any]] = []
+        expanded_source_ids: tuple[int, ...] = tuple()
+    else:
+        edges, edge_rows, expanded_source_ids = _build_tracklet_edges(
+            sessions,
+            tracklets,
+            feature_cache=feature_cache,
+            matrix_config=matrix_config,
+            graph_config=graph_config,
+            seed_tracklet_ids=seed_tracklet_ids,
+            n_sessions=n_sessions,
+            subject=subject_dir.name,
+            progress=progress,
+        )
+    track2p_proposal_count = 0
+    if graph_config.track2p_proposal_edges:
+        proposal_edges = _track2p_proposal_edges(
+            subject_dir,
+            config=config,
+            sessions=sessions,
+            tracklets=tracklets,
+            feature_cache=feature_cache,
+            graph_config=graph_config,
+            n_sessions=n_sessions,
+            proposal_matrix=proposal_matrix,
+        )
+        track2p_proposal_count = int(len(proposal_edges))
+        edges = _merge_tracklet_edges((*edges, *proposal_edges))
+        expanded_source_ids = tuple(
+            sorted(
+                {
+                    *[int(tracklet_id) for tracklet_id in expanded_source_ids],
+                    *[int(edge.source_id) for edge in proposal_edges],
+                }
+            )
+        )
+        tracklets_by_id = {
+            int(tracklet.tracklet_id): tracklet for tracklet in tracklets
+        }
+        edge_rows = [
+            _tracklet_edge_row(subject_dir.name, edge, tracklets_by_id)
+            for edge in edges
+        ]
     selected_paths = _select_seed_paths(
         tracklets,
         edges,
@@ -306,6 +358,10 @@ def _run_subject_tracklet_graph(
         "tracklet_graph_mht_n_selected_joins": int(
             sum(len(path.edge_ids) for path in selected_paths)
         ),
+        "tracklet_graph_mht_track2p_proposal_edges": int(track2p_proposal_count),
+        "tracklet_graph_mht_track2p_proposal_only": int(
+            bool(graph_config.track2p_proposal_only)
+        ),
         "tracklet_graph_mht_beam_width": int(graph_config.beam_width),
         "tracklet_graph_mht_path_hypotheses": int(graph_config.path_hypotheses),
         "tracklet_graph_mht_max_join_gap": int(graph_config.max_join_gap),
@@ -327,6 +383,8 @@ def _run_subject_tracklet_graph(
         "n_candidate_edges": int(len(edges)),
         "n_selected_paths": int(len(selected_paths)),
         "n_selected_joins": int(sum(len(path.edge_ids) for path in selected_paths)),
+        "n_track2p_proposal_edges": int(track2p_proposal_count),
+        "track2p_proposal_only": int(bool(graph_config.track2p_proposal_only)),
         "best_score": float(sum(float(path.score) for path in selected_paths)),
         "pairwise_f1": float(scores.get("pairwise_f1", float("nan"))),
         "complete_track_f1": float(scores.get("complete_track_f1", float("nan"))),
@@ -464,6 +522,31 @@ def _eligible_rois(
         ):
             output.append(int(roi))
     return tuple(sorted(set(output)))
+
+
+def _build_singleton_proposal_tracklets(
+    subject: str,
+    *,
+    proposal_matrix: np.ndarray,
+    seed_rois: Sequence[int],
+    seed_session: int,
+) -> tuple[tuple[Tracklet, ...], list[dict[str, Any]]]:
+    observations = {
+        (int(session_index), int(roi))
+        for row in np.asarray(proposal_matrix, dtype=int)
+        for session_index, roi in enumerate(row)
+        if int(roi) >= 0
+    }
+    observations.update(
+        (int(seed_session), int(seed_roi))
+        for seed_roi in seed_rois
+        if int(seed_roi) >= 0
+    )
+    tracklets = tuple(
+        Tracklet(tracklet_id=index, rois=(int(roi),), start_session=int(session_index))
+        for index, (session_index, roi) in enumerate(sorted(observations))
+    )
+    return tracklets, _tracklet_diagnostic_rows(subject, tracklets)
 
 
 def _conservative_adjacent_links(
@@ -776,6 +859,332 @@ def _candidate_edges_for_source(
             )
     scored.sort(key=lambda edge: -float(edge.score))
     return scored
+
+
+def _track2p_proposal_edges(
+    subject_dir: Path,
+    *,
+    config: Track2pBenchmarkConfig,
+    sessions: Sequence[Any],
+    tracklets: Sequence[Tracklet],
+    feature_cache: rank._FeatureCache,
+    graph_config: TrackletGraphConfig,
+    n_sessions: int,
+    proposal_matrix: np.ndarray | None = None,
+) -> tuple[TrackletEdge, ...]:
+    if proposal_matrix is None:
+        proposal_matrix, _variant = _predict_subject_tracks(
+            subject_dir,
+            replace(config, method="track2p-baseline"),
+        )
+    observation_to_tracklet = _observation_tracklet_map(tracklets)
+    tracklets_by_id = {int(tracklet.tracklet_id): tracklet for tracklet in tracklets}
+    edges: list[TrackletEdge] = []
+    seen: set[tuple[int, int]] = set()
+    for proposal_row in np.asarray(proposal_matrix, dtype=int):
+        for source_session in range(max(0, int(n_sessions) - 1)):
+            target_session = int(source_session) + 1
+            source_roi = int(proposal_row[int(source_session)])
+            target_roi = int(proposal_row[int(target_session)])
+            if source_roi < 0 or target_roi < 0:
+                continue
+            source_id = observation_to_tracklet.get((int(source_session), source_roi))
+            target_id = observation_to_tracklet.get((int(target_session), target_roi))
+            if (
+                source_id is None
+                or target_id is None
+                or int(source_id) == int(target_id)
+            ):
+                continue
+            edge_key = (int(source_id), int(target_id))
+            if edge_key in seen:
+                continue
+            source = tracklets_by_id.get(int(source_id))
+            target = tracklets_by_id.get(int(target_id))
+            if source is None or target is None:
+                continue
+            if int(source.end_session) != int(source_session):
+                continue
+            if int(target.start_session) != int(target_session):
+                continue
+            edge = _make_track2p_proposal_edge(
+                sessions,
+                source,
+                target,
+                feature_cache=feature_cache,
+                graph_config=graph_config,
+                n_sessions=int(n_sessions),
+            )
+            if edge is None:
+                continue
+            seen.add(edge_key)
+            edges.append(edge)
+    return _rank_duplicate_edges(edges)
+
+
+def _merge_tracklet_edges(edges: Sequence[TrackletEdge]) -> tuple[TrackletEdge, ...]:
+    best_by_key: dict[tuple[int, int], TrackletEdge] = {}
+    for edge in edges:
+        key = (int(edge.source_id), int(edge.target_id))
+        previous = best_by_key.get(key)
+        if previous is None or float(edge.score) > float(previous.score):
+            best_by_key[key] = edge
+    return _rank_duplicate_edges(tuple(best_by_key.values()))
+
+
+def _make_track2p_proposal_edge(
+    sessions: Sequence[Any],
+    source: Tracklet,
+    target: Tracklet,
+    *,
+    feature_cache: rank._FeatureCache,
+    graph_config: TrackletGraphConfig,
+    n_sessions: int,
+) -> TrackletEdge | None:
+    if float(graph_config.track2p_proposal_feature_weight) > 0.0:
+        features = _direct_boundary_features(
+            sessions,
+            feature_cache,
+            source_session=int(source.end_session),
+            source_roi=int(source.rois[-1]),
+            target_session=int(target.start_session),
+            target_roi=int(target.rois[0]),
+        )
+    else:
+        features = _unregistered_boundary_features(
+            sessions,
+            feature_cache,
+            source_session=int(source.end_session),
+            source_roi=int(source.rois[-1]),
+            target_session=int(target.start_session),
+            target_roi=int(target.rois[0]),
+        )
+    if features is None:
+        return None
+    gap = int(target.start_session - source.end_session)
+    feature_score = _direct_feature_score(features, graph_config)
+    raw_score = float(graph_config.track2p_proposal_bonus) + float(
+        graph_config.track2p_proposal_feature_weight
+    ) * max(0.0, feature_score)
+    component_incoherence = _component_incoherence(
+        raw_score=float(raw_score),
+        source=source,
+        target=target,
+        n_sessions=int(n_sessions),
+        config=graph_config,
+    )
+    score = (
+        float(raw_score)
+        - float(graph_config.join_complexity_penalty)
+        - float(graph_config.gap_penalty) * float(max(0, gap - 1))
+        - float(graph_config.component_incoherence_weight) * component_incoherence
+    )
+    return TrackletEdge(
+        source_id=int(source.tracklet_id),
+        target_id=int(target.tracklet_id),
+        score=float(score),
+        raw_score=float(raw_score),
+        gap=int(gap),
+        registered_iou=float(features["registered_iou"]),
+        shifted_iou=float(features["shifted_iou"]),
+        centroid_distance=float(features["centroid_distance"]),
+        area_ratio=float(features["area_ratio"]),
+        growth_residual=float(features["growth_residual"]),
+        growth_mahalanobis=float(features["growth_mahalanobis"]),
+        endpoint_cell_probability_min=float(features["endpoint_cell_probability_min"]),
+        duplicate_source_rank=0,
+        duplicate_target_rank=0,
+        would_complete_track=_would_complete_track(
+            source, target, n_sessions=int(n_sessions)
+        ),
+        suspicious_complete_component=component_incoherence > 0.0,
+        component_incoherence=component_incoherence,
+    )
+
+
+def _unregistered_boundary_features(
+    sessions: Sequence[Any],
+    feature_cache: rank._FeatureCache,
+    *,
+    source_session: int,
+    source_roi: int,
+    target_session: int,
+    target_roi: int,
+) -> dict[str, float] | None:
+    source_rois = [
+        int(roi) for roi in full_mht._roi_indices(sessions[int(source_session)])
+    ]
+    target_rois = [
+        int(roi) for roi in full_mht._roi_indices(sessions[int(target_session)])
+    ]
+    try:
+        source_pos = source_rois.index(int(source_roi))
+        target_pos = target_rois.index(int(target_roi))
+    except ValueError:
+        return None
+    source_mask = _cached_roi_mask(
+        feature_cache,
+        sessions[int(source_session)].plane_data.roi_masks,
+        cache_key=("source", int(source_session), int(source_roi)),
+        position=int(source_pos),
+    )
+    target_mask = _cached_roi_mask(
+        feature_cache,
+        sessions[int(target_session)].plane_data.roi_masks,
+        cache_key=("target", int(target_session), int(target_roi)),
+        position=int(target_pos),
+    )
+    source_centroid = full_mht._mask_centroids(source_mask[None, :, :])[0]
+    target_centroid = full_mht._mask_centroids(target_mask[None, :, :])[0]
+    centroid_distance = float(np.linalg.norm(target_centroid - source_centroid))
+    source_area = int(source_mask.sum())
+    target_area = int(target_mask.sum())
+    area_ratio = (
+        float(min(source_area, target_area)) / float(max(source_area, target_area))
+        if max(source_area, target_area)
+        else 0.0
+    )
+    endpoint_cell_probability_min = min(
+        full_mht._cell_probability(sessions, int(source_session), int(source_roi)),
+        full_mht._cell_probability(sessions, int(target_session), int(target_roi)),
+    )
+    return {
+        "registered_iou": 0.0,
+        "shifted_iou": 0.0,
+        "centroid_distance": float(centroid_distance),
+        "area_ratio": float(area_ratio),
+        "growth_residual": float(centroid_distance),
+        "growth_mahalanobis": 0.0,
+        "endpoint_cell_probability_min": float(endpoint_cell_probability_min),
+    }
+
+
+def _direct_boundary_features(
+    sessions: Sequence[Any],
+    feature_cache: rank._FeatureCache,
+    *,
+    source_session: int,
+    source_roi: int,
+    target_session: int,
+    target_roi: int,
+) -> dict[str, float] | None:
+    registered = full_mht._registered_pair(
+        sessions,
+        feature_cache,
+        source_session=int(source_session),
+        target_session=int(target_session),
+    )
+    source_rois = [
+        int(roi) for roi in full_mht._roi_indices(sessions[int(source_session)])
+    ]
+    target_rois = [
+        int(roi) for roi in full_mht._roi_indices(sessions[int(target_session)])
+    ]
+    try:
+        source_pos = source_rois.index(int(source_roi))
+        target_pos = target_rois.index(int(target_roi))
+    except ValueError:
+        return None
+    source_mask = _cached_roi_mask(
+        feature_cache,
+        sessions[int(source_session)].plane_data.roi_masks,
+        cache_key=("source", int(source_session), int(source_roi)),
+        position=int(source_pos),
+    )
+    target_mask = _cached_roi_mask(
+        feature_cache,
+        registered.roi_masks,
+        cache_key=(
+            "registered_target",
+            int(source_session),
+            int(target_session),
+            int(target_roi),
+        ),
+        position=int(target_pos),
+    )
+    union = int(np.logical_or(source_mask, target_mask).sum())
+    registered_iou = (
+        float(np.logical_and(source_mask, target_mask).sum()) / float(union)
+        if union
+        else 0.0
+    )
+    shifted_iou = float(
+        rank._pairwise_shifted_iou_from_support(
+            source_mask[None, :, :],
+            target_mask[None, :, :],
+            radius=2,
+        )["shifted_iou"][0, 0]
+    )
+    source_centroid = full_mht._mask_centroids(source_mask[None, :, :])[0]
+    target_centroid = full_mht._mask_centroids(target_mask[None, :, :])[0]
+    centroid_distance = float(np.linalg.norm(target_centroid - source_centroid))
+    source_area = int(source_mask.sum())
+    target_area = int(target_mask.sum())
+    area_ratio = (
+        float(min(source_area, target_area)) / float(max(source_area, target_area))
+        if max(source_area, target_area)
+        else 0.0
+    )
+    endpoint_cell_probability_min = min(
+        full_mht._cell_probability(
+            sessions, int(source_session), int(source_roi)
+        ),
+        full_mht._cell_probability(
+            sessions, int(target_session), int(target_roi)
+        ),
+    )
+    return {
+        "registered_iou": float(registered_iou),
+        "shifted_iou": float(shifted_iou),
+        "centroid_distance": float(centroid_distance),
+        "area_ratio": float(area_ratio),
+        "growth_residual": float(centroid_distance),
+        "growth_mahalanobis": 0.0,
+        "endpoint_cell_probability_min": float(endpoint_cell_probability_min),
+    }
+
+
+def _cached_roi_mask(
+    feature_cache: rank._FeatureCache,
+    masks: Any,
+    *,
+    cache_key: tuple[Any, ...],
+    position: int,
+) -> np.ndarray:
+    mask_cache = getattr(feature_cache, "_tracklet_graph_roi_mask_cache", None)
+    if mask_cache is None:
+        mask_cache = {}
+        setattr(feature_cache, "_tracklet_graph_roi_mask_cache", mask_cache)
+    cached = mask_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    mask = np.asarray(masks[int(position)]) > 0
+    mask_cache[cache_key] = mask
+    return mask
+
+
+def _direct_feature_score(
+    features: Mapping[str, float],
+    config: TrackletGraphConfig,
+) -> float:
+    registered = float(features["registered_iou"])
+    shifted = float(features["shifted_iou"])
+    centroid = float(features["centroid_distance"])
+    area_ratio = float(features["area_ratio"])
+    cell_probability = float(features["endpoint_cell_probability_min"])
+    growth_residual = float(features["growth_residual"])
+    growth_mahalanobis = float(features["growth_mahalanobis"])
+    score = 0.0
+    score += float(config.registered_iou_weight) * registered
+    score += float(config.shifted_iou_weight) * shifted
+    score += float(config.area_ratio_weight) * max(0.0, min(1.0, area_ratio))
+    score += float(config.cell_probability_weight) * max(
+        0.0, min(1.0, cell_probability)
+    )
+    score -= float(config.centroid_distance_weight) * max(0.0, centroid)
+    score -= float(config.growth_residual_weight) * max(0.0, growth_residual)
+    score -= float(config.growth_mahalanobis_weight) * max(0.0, growth_mahalanobis)
+    return float(score)
 
 
 def _make_tracklet_edge(
@@ -1983,6 +2392,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--growth-anchor-min-cell-probability", type=float, default=0.80
     )
+    parser.add_argument(
+        "--track2p-proposal-edges",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    parser.add_argument(
+        "--track2p-proposal-only",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    parser.add_argument("--track2p-proposal-bonus", type=float, default=1.0)
+    parser.add_argument("--track2p-proposal-feature-weight", type=float, default=0.0)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--format", choices=("table", "json", "csv"), default="csv")
     parser.add_argument("--diagnostics-output", type=Path, default=None)
@@ -2079,6 +2500,12 @@ def main(argv: list[str] | None = None) -> int:
             growth_anchor_min_shifted_iou=float(args.growth_anchor_min_shifted_iou),
             growth_anchor_min_cell_probability=float(
                 args.growth_anchor_min_cell_probability
+            ),
+            track2p_proposal_edges=bool(args.track2p_proposal_edges),
+            track2p_proposal_only=bool(args.track2p_proposal_only),
+            track2p_proposal_bonus=float(args.track2p_proposal_bonus),
+            track2p_proposal_feature_weight=float(
+                args.track2p_proposal_feature_weight
             ),
         ),
         progress=bool(args.progress),

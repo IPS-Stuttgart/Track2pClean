@@ -142,6 +142,29 @@ def test_join_valid_mask_admits_strong_score_frontier_candidate():
     assert valid.tolist() == [[True, False]]
 
 
+def test_singleton_proposal_tracklets_include_proposals_and_seed_rois():
+    proposal_matrix = np.asarray(
+        [
+            [10, 20, -1],
+            [11, -1, 31],
+        ],
+        dtype=int,
+    )
+
+    tracklets, rows = graph_mht._build_singleton_proposal_tracklets(
+        "subject-a",
+        proposal_matrix=proposal_matrix,
+        seed_rois=(10, 99),
+        seed_session=0,
+    )
+
+    observations = {
+        (int(tracklet.start_session), int(tracklet.rois[0])) for tracklet in tracklets
+    }
+    assert observations == {(0, 10), (0, 11), (0, 99), (1, 20), (2, 31)}
+    assert len(rows) == len(tracklets)
+
+
 def test_coverage_audit_splits_candidate_presence_from_solver_rejection():
     reference_tracks = np.asarray([[10, 11, 12, 13]], dtype=int)
     tracklets = (
