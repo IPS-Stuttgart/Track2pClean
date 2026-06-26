@@ -95,21 +95,21 @@ The decision helper does not tune the method. It only interprets the frozen
 comparison table. A stable terminal-completion gain now requires two things:
 
 ```text
-at least two nearby weights improve complete-track F1 without pairwise loss
-and no tested neighboring weight regresses pairwise or complete-track F1
+at least two nearby weights improve complete-track F1 micro
+and no tested neighboring weight regresses pairwise or complete-track micro/macro F1
 ```
 
-That second clause is important: if a nearby weight causes regression, the
-complete-history pressure is treated as too fragile for promotion even when two
-other weights look attractive.
+That second clause is important: if a nearby weight causes any reported metric to
+regress, the complete-history pressure is treated as too fragile for promotion
+even when two other weights look attractive in the micro aggregate.
 
 | result | meaning |
 | --- | --- |
-| `terminal_completion_stable_gain` | at least two nearby weights improve complete-track F1 and the full tested neighborhood has no pairwise or complete-track regression |
-| `terminal_completion_single_weight_gain` | only one weight improves complete-track F1, so treat it as knife-edge |
+| `terminal_completion_stable_gain` | at least two nearby weights improve complete-track F1 micro and the full tested neighborhood has no pairwise or complete-track micro/macro regression |
+| `terminal_completion_single_weight_gain` | only one weight improves complete-track F1 micro, so treat it as knife-edge |
 | `terminal_completion_ties_baseline` | complete-history objective validates the story but does not improve metrics |
-| `terminal_completion_pairwise_regression` | do not promote; complete history pressure damages pairwise tracking in the tested neighborhood |
-| `terminal_completion_complete_regression` | do not promote; complete-track identity is worse for at least one tested neighboring weight |
+| `terminal_completion_pairwise_regression` | do not promote; complete history pressure damages pairwise tracking in at least one reported micro/macro metric |
+| `terminal_completion_complete_regression` | do not promote; complete-track identity is worse for at least one reported micro/macro metric |
 
 Promotion still requires the broader no-GT, exposure, and sensitivity gates.
 
@@ -161,12 +161,14 @@ This is not yet a promoted row. It is a method probe.
 
 Positive evidence would be:
 
-- pairwise F1 stays close to `FullMHTPrior2`;
-- complete-track F1 improves over `FullMHTPrior2` or the greedy beam row;
+- pairwise micro and macro F1 stay close to `FullMHTPrior2`;
+- complete-track F1 micro improves over `FullMHTPrior2` or the greedy beam row;
+- complete-track F1 macro does not regress;
 - diagnostics show reranking toward complete histories without broad non-prior
   continuations or prior switches;
 - at least two nearby weights are stable, not a single exact spike;
-- no tested neighboring weight regresses pairwise or complete-track F1.
+- no tested neighboring weight regresses pairwise or complete-track micro/macro
+  F1.
 
 Negative evidence would be:
 
