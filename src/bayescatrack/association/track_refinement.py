@@ -76,11 +76,7 @@ def roi_position_tables_from_sessions(
         )
         if centroids.ndim != 2 or centroids.shape[0] != 2:
             raise ValueError("session centroids must have shape (2, n_roi)")
-        roi_indices = (
-            np.asarray(plane.roi_indices, dtype=int)
-            if plane.roi_indices is not None
-            else np.arange(plane.n_rois, dtype=int)
-        )
+        roi_indices = _position_table_roi_indices(plane, n_centroids=centroids.shape[1])
         tables.append(
             {
                 int(roi_index): centroids[:, local_index].astype(float)
@@ -216,6 +212,34 @@ def geometry_issue_rows(
         }
         for issue in issues
     ]
+
+
+def _position_table_roi_indices(plane: Any, *, n_centroids: int) -> np.ndarray:
+    n_rois = _integer_at_least(getattr(plane, "n_rois", n_centroids), name="plane.n_rois", minimum=0)
+    if n_rois != n_centroids:
+        raise ValueError("plane.n_rois must match the number of centroid columns")
+
+    roi_indices = getattr(plane, "roi_indices", None)
+    if roi_indices is None:
+        return np.arange(n_centroids, dtype=int)
+
+    normalized = _nonnegative_integer_vector(roi_indices, name="plane.roi_indices")
+    if normalized.shape != (n_centroids,):
+        raise ValueError("plane.roi_indices must have one entry per centroid")
+    if len(set(normalized.tolist())) != n_centroids:
+        raise ValueError("plane.roi_indices must contain unique ROI indices")
+    return normalized
+
+
+def _nonnegative_integer_vector(values: Any, *, name: str) -> np.ndarray:
+    value_array = np.asarray(values, dtype=object).reshape(-1)
+    normalized = np.empty(value_array.shape, dtype=int)
+    for index, value in np.ndenumerate(value_array):
+        integer_value = _integer_value(value, name=name)
+        if integer_value < 0:
+            raise ValueError(f"{name} must contain non-negative ROI indices")
+        normalized[index] = integer_value
+    return normalized
 
 
 def _validated_track_rows_and_position_tables(
