@@ -71,8 +71,9 @@ def _validate_shared_session_roi_indices(
             continue
 
         raise ValueError(
-            "consecutive bundles disagree on ROI indices for shared session "
-            f"{shared_session_name!r}: bundle {bundle_index} "
+            "inconsistent ROI indices for intermediate session "
+            f"{bundle_index + 1}: consecutive bundles disagree on ROI indices "
+            f"for shared session {shared_session_name!r}: bundle {bundle_index} "
             "measurement_roi_indices do not match bundle "
             f"{bundle_index + 1} reference_roi_indices"
         )
