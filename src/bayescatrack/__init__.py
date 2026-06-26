@@ -1,12 +1,15 @@
-"""BayesCaTrack public package API."""
+"""Track2pClean public package API.
+
+The implementation currently keeps the historical ``bayescatrack`` Python
+namespace for backward compatibility. New user-facing documentation and the
+console entry point use the Track2pClean name.
+"""
 
 # pylint: disable=duplicate-code
 
+from . import _strict_config_validation as _strict_config_validation
 from . import cli as _cli
 from . import matching as _matching
-from ._absence_cue_shape_validation import (
-    install_absence_cue_shape_validation as _install_absence_cue_shape_validation,
-)
 from ._advanced_weight_validation import (
     install_advanced_weight_validation as _install_advanced_weight_validation,
 )
@@ -30,6 +33,9 @@ from ._fov_affine_validation import (
 )
 from ._fov_translation_output_shape_validation import (
     install_fov_translation_output_shape_validation as _install_fov_translation_output_shape_validation,
+)
+from ._global_cost_preset_validation import (
+    install_global_cost_preset_validation as _install_global_cost_preset_validation,
 )
 from ._ground_truth_track_validation import (
     install_ground_truth_track_validation as _install_ground_truth_track_validation,
@@ -63,6 +69,9 @@ from ._registration_selection_validation import (
 )
 from ._registration_warp_validation import (
     install_registration_warp_validation as _install_registration_warp_validation,
+)
+from ._roi_cue_length_validation import (
+    install_roi_cue_length_validation as _install_roi_cue_length_validation,
 )
 from ._session_gap_validation import (
     install_session_gap_validation as _install_session_gap_validation,
@@ -104,6 +113,7 @@ from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
 from .association import absence_model as _absence_model
+from .association import candidate_prefilter as _candidate_prefilter
 from .core import bridge as _bridge
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
@@ -127,12 +137,12 @@ load_track2p_subject = _bridge.load_track2p_subject
 main = _cli.main
 summarize_subject = _bridge.summarize_subject
 
-_install_absence_cue_shape_validation(_absence_model)
 _install_confidence_ordered_strict_gap_cli(_cli)
 _install_matching_layout_validation(_matching)
 _install_matching_max_cost_validation(_matching)
 _install_soft_overlap_costs()
 _install_shifted_overlap_scalar_validation()
+_install_global_cost_preset_validation()
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
 _install_assignment_bundle_validation()
@@ -146,12 +156,14 @@ _install_ground_truth_track_validation()
 _install_registration_selection_validation()
 _install_registration_warp_validation()
 _install_strict_config_validation()
+_strict_config_validation._positive_int = _candidate_prefilter._positive_int
 _install_empty_candidate_gate_margin_fix()
 _install_empty_registered_roi_mask_validation()
 _install_matching_bundle_roi_index_validation()
 _install_multisession_solver_track_validation()
 _install_session_gap_validation()
 _install_session_match_result_validation()
+_install_roi_cue_length_validation(_absence_model)
 _install_tracking_start_roi_validation()
 _install_track_row_export_option_validation()
 _install_track_row_fill_value_validation()
