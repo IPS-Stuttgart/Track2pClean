@@ -1,9 +1,8 @@
 """Strict scalar validation for shifted-overlap pairwise-cost knobs.
 
 The shifted-overlap wrapper is often exercised through experiment manifests and
-YAML-derived dictionaries.  Avoid Python truthiness/NaN corner cases there so a
-string such as ``"false"`` cannot enable a replacement cost term and non-finite
-weights cannot silently become hard-gated costs.
+YAML-derived dictionaries. Avoid Python truthiness and non-finite scalar corner
+cases there so ambiguous values cannot silently change shifted-overlap behavior.
 """
 
 from __future__ import annotations
@@ -14,14 +13,21 @@ from typing import Any
 import numpy as np
 
 _MARKER = "_bayescatrack_shifted_overlap_scalar_validation"
-_BOOLEAN_KWARGS = (
+_BOOLEAN_OR_NONE_KWARGS = (
     "use_shifted_iou_for_iou_cost",
     "use_shifted_mask_cosine_for_mask_cosine_cost",
 )
+_STRICT_BOOLEAN_KWARGS = ("return_components",)
 _NONNEGATIVE_FLOAT_KWARGS = (
     "shifted_iou_weight",
     "shifted_mask_cosine_weight",
     "shifted_iou_shift_penalty_weight",
+    "iou_weight",
+    "mask_cosine_weight",
+)
+_POSITIVE_FLOAT_KWARGS = (
+    "similarity_epsilon",
+    "large_cost",
 )
 
 
@@ -50,12 +56,18 @@ def install_shifted_overlap_scalar_validation() -> None:
 
 def _validate_shifted_overlap_scalar_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     validated = dict(kwargs)
-    for name in _BOOLEAN_KWARGS:
+    for name in _BOOLEAN_OR_NONE_KWARGS:
         if name in validated:
             validated[name] = _strict_bool_or_none(validated[name], name=name)
+    for name in _STRICT_BOOLEAN_KWARGS:
+        if name in validated:
+            validated[name] = _strict_bool(validated[name], name=name)
     for name in _NONNEGATIVE_FLOAT_KWARGS:
         if name in validated:
             validated[name] = _finite_nonnegative_float(validated[name], name=name)
+    for name in _POSITIVE_FLOAT_KWARGS:
+        if name in validated:
+            validated[name] = _finite_positive_float(validated[name], name=name)
     if (
         "shifted_iou_shift_penalty_scale" in validated
         and validated["shifted_iou_shift_penalty_scale"] is not None
@@ -70,6 +82,10 @@ def _validate_shifted_overlap_scalar_kwargs(kwargs: dict[str, Any]) -> dict[str,
 def _strict_bool_or_none(value: Any, *, name: str) -> bool:
     if value is None:
         return False
+    return _strict_bool(value, name=name)
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
     if not isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a boolean")
     return bool(value)
