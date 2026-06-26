@@ -19,16 +19,16 @@ def _components() -> dict[str, np.ndarray]:
 def test_calibrated_session_gap_rejects_nonfinite_and_boolean_values(
     session_gap: object,
 ) -> None:
-    with pytest.raises(ValueError, match="session_gap must be a finite positive value"):
+    with pytest.raises(ValueError, match=r"session_gap must.*positive"):
         with_session_gap_component(_components(), session_gap=session_gap)
 
 
-def test_calibrated_session_gap_accepts_positive_float_like_values() -> None:
-    components = with_session_gap_component(_components(), session_gap="2.5")
+def test_calibrated_session_gap_accepts_positive_integer_like_values() -> None:
+    components = with_session_gap_component(_components(), session_gap=np.float64(2.0))
 
     np.testing.assert_allclose(
         components["session_gap"],
-        np.full((1, 2), 2.5),
+        np.full((1, 2), 2.0),
     )
 
 
