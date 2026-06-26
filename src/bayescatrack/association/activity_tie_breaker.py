@@ -19,6 +19,8 @@ _ACTIVITY_AVAILABILITY_COMPONENTS = {
     "neuropil_ratio_absdiff": "neuropil_ratio_available",
 }
 
+_WEIGHT_ERROR = "weight must be a finite non-negative scalar"
+
 
 def activity_tie_breaker_cost_matrix(
     pairwise_components: Mapping[str, Any],
@@ -37,9 +39,7 @@ def activity_tie_breaker_cost_matrix(
     the solver's edge-cost threshold.
     """
 
-    weight = float(weight)
-    if weight < 0.0:
-        raise ValueError("weight must be non-negative")
+    weight = _normalize_weight(weight)
     if component_name not in pairwise_components:
         raise KeyError(f"Pairwise components do not contain {component_name!r}")
     values = np.asarray(pairwise_components[component_name], dtype=float)
@@ -59,6 +59,27 @@ def activity_tie_breaker_cost_matrix(
         shape=values.shape,
     )
     return weight * np.where(availability > 0.0, sanitized_values, 0.0)
+
+
+def _normalize_weight(weight: Any) -> float:
+    if isinstance(weight, (bool, np.bool_, str, bytes)):
+        raise ValueError(_WEIGHT_ERROR)
+
+    try:
+        weight_array = np.asarray(weight, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(_WEIGHT_ERROR) from exc
+    if weight_array.shape != ():
+        raise ValueError(_WEIGHT_ERROR)
+
+    try:
+        normalized_weight = float(weight_array.item())
+    except (TypeError, ValueError) as exc:
+        raise ValueError(_WEIGHT_ERROR) from exc
+
+    if not np.isfinite(normalized_weight) or normalized_weight < 0.0:
+        raise ValueError(_WEIGHT_ERROR)
+    return normalized_weight
 
 
 def _activity_availability_matrix(

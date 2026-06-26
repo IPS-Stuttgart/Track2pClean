@@ -158,3 +158,32 @@ def test_adaptive_edge_priors_reject_malformed_edge_key_shape(make_track2p_sessi
 
     with pytest.raises(ValueError, match="length-2 session-edge pairs"):
         apply_adaptive_edge_priors({"01": np.zeros((1, 1))}, sessions)
+
+
+@pytest.mark.parametrize("edge", [(0, 0), (1, 0), (0, 2), (2, 3)])
+def test_adaptive_edge_priors_reject_invalid_session_edge_when_disabled(
+    make_track2p_session,
+    edge: tuple[int, int],
+) -> None:
+    masks = np.ones((1, 2, 2), dtype=bool)
+    sessions = (
+        make_track2p_session("2024-01-01_a", masks),
+        make_track2p_session("2024-01-02_a", masks),
+    )
+
+    with pytest.raises(ValueError, match="Invalid session edge"):
+        apply_adaptive_edge_priors({edge: np.zeros((1, 1))}, sessions)
+
+
+def test_adaptive_edge_priors_reject_shape_mismatch_when_disabled(
+    make_track2p_session,
+) -> None:
+    source_masks = np.ones((1, 2, 2), dtype=bool)
+    target_masks = np.ones((2, 2, 2), dtype=bool)
+    sessions = (
+        make_track2p_session("2024-01-01_a", source_masks),
+        make_track2p_session("2024-01-02_a", target_masks),
+    )
+
+    with pytest.raises(ValueError, match="does not match the loaded session ROI counts"):
+        apply_adaptive_edge_priors({(0, 1): np.zeros((1, 1))}, sessions)

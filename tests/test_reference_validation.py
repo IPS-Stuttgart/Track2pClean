@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import numpy.testing as npt
 import pytest
+from bayescatrack.evaluation.track2p_metrics import score_track_matrix_against_reference
 from bayescatrack.reference import (
     Track2pReference,
     score_complete_tracks_against_reference,
@@ -25,6 +26,40 @@ def test_track2p_reference_parses_explicit_curated_mask_strings() -> None:
     npt.assert_array_equal(
         reference.filtered_indices(curated_only=True), np.array([[1, 11]], dtype=object)
     )
+
+
+def test_track2p_reference_accepts_numpy_boolean_curated_only() -> None:
+    reference = _reference(curated_mask=np.array([True, False], dtype=bool))
+
+    npt.assert_array_equal(
+        reference.filtered_indices(curated_only=np.bool_(True)),
+        np.array([[0, 10]], dtype=object),
+    )
+    scores = score_track_matrix_against_reference(
+        np.array([[0, 10], [1, 11]], dtype=object),
+        reference,
+        curated_only=np.bool_(True),
+    )
+    assert scores["reference_complete_tracks"] == 1
+    assert scores["complete_track_precision"] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize(
+    "curated_only",
+    ["false", "true", 1, 0, np.array(True, dtype=bool)],
+)
+def test_track2p_reference_rejects_malformed_curated_only(curated_only) -> None:
+    reference = _reference(curated_mask=np.array([True, False], dtype=bool))
+
+    with pytest.raises(ValueError, match="curated_only"):
+        reference.filtered_indices(curated_only=curated_only)
+
+    with pytest.raises(ValueError, match="curated_only"):
+        score_track_matrix_against_reference(
+            np.array([[0, 10], [1, 11]], dtype=object),
+            reference,
+            curated_only=curated_only,
+        )
 
 
 @pytest.mark.parametrize(

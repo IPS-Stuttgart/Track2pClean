@@ -126,6 +126,27 @@ def _validate_order(order: str) -> str:
     return order
 
 
+def _validate_boolean_flag(value: Any, *, name: str) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError(f"{name} must be a boolean.")
+
+
+def _validate_unit_threshold(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite scalar in [0, 1].")
+    array = np.asarray(value)
+    if array.shape != ():
+        raise ValueError(f"{name} must be a finite scalar in [0, 1].")
+    try:
+        threshold = float(array)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite scalar in [0, 1].") from exc
+    if not np.isfinite(threshold) or threshold < 0.0 or threshold > 1.0:
+        raise ValueError(f"{name} must be a finite scalar in [0, 1].")
+    return threshold
+
+
 def _equivalent_roi_diameter(plane: CalciumPlaneData) -> float:
     areas = np.asarray(plane.roi_areas(weighted=False), dtype=float)
     positive_areas = areas[areas > 0.0]
@@ -370,6 +391,9 @@ def warp_roi_masks_into_reference_frame(
     """Warp a stack of ROI masks into the reference frame."""
 
     order = _validate_order(order)
+    binarize = _validate_boolean_flag(binarize, name="binarize")
+    if binarize:
+        threshold = _validate_unit_threshold(threshold, name="threshold")
     roi_masks = np.asarray(roi_masks, dtype=float)
     if roi_masks.ndim != 3:
         raise ValueError("roi_masks must have shape (n_roi, height, width).")

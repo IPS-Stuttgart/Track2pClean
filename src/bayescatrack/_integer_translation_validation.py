@@ -17,42 +17,72 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_integer_translation_validation_patch"
+_ROI_PATCH_MARKER = "_bayescatrack_integer_roi_translation_validation_patch"
 _SHIFT_ERROR = "shift_yx must contain exactly two integer values"
 
 
 def install_integer_image_translation_validation() -> None:
-    """Install idempotent validation around integer image translations."""
+    """Install idempotent validation around integer image/ROI translations."""
 
     from . import (
         fov_registration as _fov_registration,  # pylint: disable=import-outside-toplevel
     )
 
-    original = _fov_registration.apply_integer_image_translation
-    if getattr(original, _PATCH_MARKER, False):
-        return
+    image_original = _fov_registration.apply_integer_image_translation
+    if not getattr(image_original, _PATCH_MARKER, False):
 
-    @wraps(original)
-    def apply_integer_image_translation_with_shift_validation(
-        image: Any,
-        shift_yx: Any,
-        *args: Any,
-        **kwargs: Any,
-    ) -> np.ndarray:
-        return original(
-            image,
-            _normalize_integer_shift_yx(shift_yx),
-            *args,
-            **kwargs,
+        @wraps(image_original)
+        def apply_integer_image_translation_with_shift_validation(
+            image: Any,
+            shift_yx: Any,
+            *args: Any,
+            **kwargs: Any,
+        ) -> np.ndarray:
+            return image_original(
+                image,
+                _normalize_integer_shift_yx(shift_yx),
+                *args,
+                **kwargs,
+            )
+
+        _mark_patch(
+            apply_integer_image_translation_with_shift_validation,
+            image_original,
+            _PATCH_MARKER,
+        )
+        _fov_registration.apply_integer_image_translation = (
+            apply_integer_image_translation_with_shift_validation
         )
 
-    _mark_patch(apply_integer_image_translation_with_shift_validation, original)
-    _fov_registration.apply_integer_image_translation = (
-        apply_integer_image_translation_with_shift_validation
-    )
+    roi_original = _fov_registration.apply_integer_roi_mask_translation
+    if not getattr(roi_original, _ROI_PATCH_MARKER, False):
+
+        @wraps(roi_original)
+        def apply_integer_roi_mask_translation_with_shift_validation(
+            roi_masks: Any,
+            shift_yx: Any,
+            *args: Any,
+            **kwargs: Any,
+        ) -> np.ndarray:
+            return roi_original(
+                roi_masks,
+                _normalize_integer_shift_yx(shift_yx),
+                *args,
+                **kwargs,
+            )
+
+        _mark_patch(
+            apply_integer_roi_mask_translation_with_shift_validation,
+            roi_original,
+            _ROI_PATCH_MARKER,
+        )
+        _fov_registration.apply_integer_roi_mask_translation = (
+            apply_integer_roi_mask_translation_with_shift_validation
+        )
 
 
-def _mark_patch(wrapper: Any, original: Any) -> None:
-    setattr(wrapper, _PATCH_MARKER, True)
+def _mark_patch(wrapper: Any, original: Any, marker: str) -> None:
+    setattr(wrapper, marker, True)
     setattr(wrapper, "_bayescatrack_original", original)
 
 

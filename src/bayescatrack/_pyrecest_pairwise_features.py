@@ -118,6 +118,34 @@ def _validate_covariance_stack(name: str, covariances: Any) -> np.ndarray:
     return covariances
 
 
+def _validate_real_scalar(
+    value: Any,
+    *,
+    name: str,
+    strictly_positive: bool,
+) -> float:
+    requirement = "positive" if strictly_positive else "non-negative"
+    message = f"{name} must be a finite {requirement} scalar"
+    array = np.asarray(value)
+    if array.shape != ():
+        raise ValueError(message)
+    scalar = array.item()
+    if isinstance(scalar, (bool, np.bool_)):
+        raise ValueError(message)
+    try:
+        value_float = float(scalar)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if not np.isfinite(value_float):
+        raise ValueError(message)
+    if strictly_positive:
+        if value_float <= 0.0:
+            raise ValueError(message)
+    elif value_float < 0.0:
+        raise ValueError(message)
+    return value_float
+
+
 def _fallback_pairwise_mahalanobis_distances(
     means_a: Any,
     covariances_a: Any,
@@ -126,8 +154,11 @@ def _fallback_pairwise_mahalanobis_distances(
     *,
     regularization: float,
 ) -> np.ndarray:
-    if regularization < 0.0:
-        raise ValueError("regularization must be non-negative")
+    regularization = _validate_real_scalar(
+        regularization,
+        name="regularization",
+        strictly_positive=False,
+    )
     means_a, covariances_a = _validate_means_and_covariances(
         means_a,
         covariances_a,
@@ -168,12 +199,15 @@ def _fallback_pairwise_covariance_shape_components(
     *,
     epsilon: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    epsilon = _validate_real_scalar(
+        epsilon,
+        name="epsilon",
+        strictly_positive=True,
+    )
     covariances_a = _validate_covariance_stack("covariances_a", covariances_a)
     covariances_b = _validate_covariance_stack("covariances_b", covariances_b)
     if covariances_a.shape[0] != covariances_b.shape[0]:
         raise ValueError("covariance stacks must have the same matrix dimension")
-    if epsilon <= 0.0:
-        raise ValueError("epsilon must be strictly positive")
 
     n_a = covariances_a.shape[2]
     n_b = covariances_b.shape[2]
