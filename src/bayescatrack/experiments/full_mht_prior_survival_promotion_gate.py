@@ -31,6 +31,13 @@ PRIOR_SURVIVAL_PROMOTABLE_RESULTS = {
     "survival_improves_fixed_veto",
     "survival_ties_fixed_veto",
 }
+PRIOR_SURVIVAL_EXPOSURE_COLUMNS = (
+    "history_prior_survival_scored_edges",
+    "history_prior_survival_positive_edges",
+    "history_prior_survival_negative_edges",
+    "history_prior_survival_weighted_score",
+    "max_prior_survival_negative_edges_per_subject",
+)
 
 
 @dataclass(frozen=True)
@@ -70,6 +77,9 @@ class PriorSurvivalPromotionConfig:
     max_switched_prior_successors: int = 0
     max_no_prior_successor_continuations: int = 10
     max_gap_reactivated_tracks: int | None = None
+    max_prior_survival_negative_edges_per_subject: int = 3
+    max_total_prior_survival_negative_edges: int = 10
+    require_prior_survival_scored: bool = True
 
 
 def evaluate_prior_survival_promotion(
@@ -87,20 +97,7 @@ def evaluate_prior_survival_promotion(
         sensitivity_rows,
         config=cfg.sensitivity,
     )
-    exposure = evaluate_exposure_gate(
-        exposure_rows,
-        config=HistoryDynamicsPromotionConfig(
-            max_selected_non_prior_edges_per_subject=int(
-                cfg.max_selected_non_prior_edges_per_subject
-            ),
-            max_total_non_prior_edges=int(cfg.max_total_non_prior_edges),
-            max_switched_prior_successors=int(cfg.max_switched_prior_successors),
-            max_no_prior_successor_continuations=int(
-                cfg.max_no_prior_successor_continuations
-            ),
-            max_gap_reactivated_tracks=cfg.max_gap_reactivated_tracks,
-        ),
-    )
+    exposure = evaluate_prior_survival_exposure(exposure_rows, config=cfg)
 
     manifest_result = str(manifest.get("history_search_result", "incomplete"))
     survival_result = str(manifest.get("prior_survival_result", "incomplete"))
@@ -120,7 +117,7 @@ def evaluate_prior_survival_promotion(
         recommendation = "rerun prior-survival sensitivity manifest"
     elif exposure.get("status") != "complete":
         status = "incomplete"
-        recommendation = "rerun label-free FullMHT exposure audit"
+        recommendation = "rerun label-free FullMHT exposure audit with prior-survival enabled"
     elif manifest_promotable and sensitivity_result == "stable_plateau" and exposure_result == "bounded_exposure":
         status = "promotable_after_review"
         recommendation = "promote only after recording exact output directories and no-GT test results"
@@ -148,6 +145,90 @@ def evaluate_prior_survival_promotion(
         "sensitivity": sensitivity,
         "exposure": exposure,
     }
+
+
+def evaluate_prior_survival_exposure(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    config: PriorSurvivalPromotionConfig | None = None,
+) -> dict[str, Any]:
+    """Evaluate generic FullMHT exposure plus prior-survival firing."""
+
+    cfg = config or PriorSurvivalPromotionConfig()
+    base = evaluate_exposure_gate(
+        rows,
+        config=HistoryDynamicsPromotionConfig(
+            max_selected_non_prior_edges_per_subject=int(
+                cfg.max_selected_non_prior_edges_per_subject
+            ),
+            max_total_non_prior_edges=int(cfg.max_total_non_prior_edges),
+            max_switched_prior_successors=int(cfg.max_switched_prior_successors),
+            max_no_prior_successor_continuations=int(
+                cfg.max_no_prior_successor_continuations
+            ),
+            max_gap_reactivated_tracks=cfg.max_gap_reactivated_tracks,
+        ),
+    )
+    if base.get("status") != "complete":
+        return base
+    all_row = _all_row(rows)
+    if all_row is None:
+        return {
+            "status": "incomplete",
+            "exposure_result": "missing_all_row",
+            "recommendation": "rerun exposure audit with aggregate ALL row",
+        }
+    missing_columns = [key for key in PRIOR_SURVIVAL_EXPOSURE_COLUMNS if key not in all_row]
+    if missing_columns:
+        return {
+            "status": "incomplete",
+            "exposure_result": "missing_prior_survival_exposure_columns",
+            "missing_columns": missing_columns,
+            "recommendation": "rerun exposure audit with prior-survival scoring enabled",
+        }
+
+    failures = list(base.get("failed_limits", ()))
+    scored = _int_metric(all_row, "history_prior_survival_scored_edges")
+    positive = _int_metric(all_row, "history_prior_survival_positive_edges")
+    negative = _int_metric(all_row, "history_prior_survival_negative_edges")
+    max_negative = _int_metric(all_row, "max_prior_survival_negative_edges_per_subject")
+    weighted = _float_metric(all_row, "history_prior_survival_weighted_score")
+    max_abs_weighted = _float_metric(
+        all_row,
+        "max_prior_survival_abs_weighted_score_per_subject",
+    )
+    if bool(cfg.require_prior_survival_scored) and scored <= 0:
+        return {
+            "status": "incomplete",
+            "exposure_result": "prior_survival_not_scored",
+            "recommendation": "rerun exposure audit with nonzero prior-survival weight",
+            "history_prior_survival_scored_edges": int(scored),
+        }
+    if max_negative > int(cfg.max_prior_survival_negative_edges_per_subject):
+        failures.append("max_prior_survival_negative_edges_per_subject")
+    if negative > int(cfg.max_total_prior_survival_negative_edges):
+        failures.append("history_prior_survival_negative_edges")
+
+    output = dict(base)
+    output.update(
+        {
+            "exposure_result": "bounded_exposure" if not failures else "broad_exposure",
+            "failed_limits": failures,
+            "history_prior_survival_scored_edges": int(scored),
+            "history_prior_survival_positive_edges": int(positive),
+            "history_prior_survival_negative_edges": int(negative),
+            "history_prior_survival_weighted_score": float(weighted),
+            "max_prior_survival_negative_edges_per_subject": int(max_negative),
+            "max_prior_survival_abs_weighted_score_per_subject": float(max_abs_weighted),
+            "limit_max_prior_survival_negative_edges_per_subject": int(
+                cfg.max_prior_survival_negative_edges_per_subject
+            ),
+            "limit_history_prior_survival_negative_edges": int(
+                cfg.max_total_prior_survival_negative_edges
+            ),
+        }
+    )
+    return output
 
 
 def evaluate_prior_survival_sensitivity(
@@ -262,6 +343,14 @@ def format_prior_survival_promotion_markdown(decision: Mapping[str, Any]) -> str
             "limit_history_no_prior_successor_continuations",
         ),
         ("history_gap_reactivated_tracks", "limit_history_gap_reactivated_tracks"),
+        (
+            "history_prior_survival_negative_edges",
+            "limit_history_prior_survival_negative_edges",
+        ),
+        (
+            "max_prior_survival_negative_edges_per_subject",
+            "limit_max_prior_survival_negative_edges_per_subject",
+        ),
     ):
         lines.append(
             "| {metric} | {value} | {limit} |".format(
@@ -279,9 +368,15 @@ def format_prior_survival_promotion_markdown(decision: Mapping[str, Any]) -> str
                 or "none"
             ),
             f"Pairwise-collapse variants: {', '.join(str(item) for item in sensitivity.get('pairwise_collapse_variants', ())) or 'none'}",
+            "Prior-survival scored edges: {value}".format(
+                value=exposure.get("history_prior_survival_scored_edges", "")
+            ),
             f"Failed exposure limits: {failed or 'none'}",
         ]
     )
+    if exposure.get("missing_columns"):
+        missing = ", ".join(str(item) for item in exposure.get("missing_columns", ()))
+        lines.append(f"Missing exposure columns: {missing}")
     return "\n".join(lines)
 
 
@@ -310,6 +405,13 @@ def _rows_by_approach(rows: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[st
     return by_approach
 
 
+def _all_row(rows: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+    for row in rows:
+        if str(row.get("subject", "")) == "ALL":
+            return row
+    return None
+
+
 def _metric(row: Mapping[str, Any], metric: str) -> float:
     try:
         return float(row[metric])
@@ -317,6 +419,20 @@ def _metric(row: Mapping[str, Any], metric: str) -> float:
         raise ValueError(f"Comparison row is missing metric column {metric!r}") from exc
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Comparison metric {metric!r} is not numeric: {row.get(metric)!r}") from exc
+
+
+def _int_metric(row: Mapping[str, Any], key: str) -> int:
+    try:
+        return int(float(row.get(key, 0)))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Exposure metric {key!r} is not numeric: {row.get(key)!r}") from exc
+
+
+def _float_metric(row: Mapping[str, Any], key: str) -> float:
+    try:
+        return float(row.get(key, 0.0))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Exposure metric {key!r} is not numeric: {row.get(key)!r}") from exc
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -337,6 +453,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-switches", type=int, default=0)
     parser.add_argument("--max-no-prior-continuations", type=int, default=10)
     parser.add_argument("--max-gap-reactivations", type=int, default=None)
+    parser.add_argument("--max-prior-survival-negative-per-subject", type=int, default=3)
+    parser.add_argument("--max-total-prior-survival-negative", type=int, default=10)
+    parser.add_argument(
+        "--require-prior-survival-scored",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     return parser
 
 
@@ -363,6 +486,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.max_gap_reactivations is None
             else max(0, int(args.max_gap_reactivations))
         ),
+        max_prior_survival_negative_edges_per_subject=max(
+            0,
+            int(args.max_prior_survival_negative_per_subject),
+        ),
+        max_total_prior_survival_negative_edges=max(
+            0,
+            int(args.max_total_prior_survival_negative),
+        ),
+        require_prior_survival_scored=bool(args.require_prior_survival_scored),
     )
     decision = evaluate_prior_survival_promotion(
         load_comparison_rows(args.canonical_comparison_csv),
