@@ -120,6 +120,11 @@ def row_scan_motion_history_risk(
     risk += _high_outlier_risk(growth, allowed_offset=_GROWTH_RESIDUAL_OFFSET)
     risk += _high_outlier_risk(mahalanobis, allowed_offset=_GROWTH_MAHALANOBIS_OFFSET)
     risk += _high_outlier_risk(local, allowed_offset=_LOCAL_DEFORMATION_OFFSET)
+    risk += _low_successive_deterioration_risk(registered, allowed_drop=_REGISTERED_IOU_DROP)
+    risk += _low_successive_deterioration_risk(shifted, allowed_drop=_SHIFTED_IOU_DROP)
+    risk += _high_successive_deterioration_risk(growth, allowed_offset=_GROWTH_RESIDUAL_OFFSET)
+    risk += _high_successive_deterioration_risk(mahalanobis, allowed_offset=_GROWTH_MAHALANOBIS_OFFSET)
+    risk += _high_successive_deterioration_risk(local, allowed_offset=_LOCAL_DEFORMATION_OFFSET)
     return float(risk)
 
 
@@ -194,6 +199,36 @@ def _high_outlier_risk(values: np.ndarray, *, allowed_offset: float) -> float:
         return 0.0
     reference = float(np.median(finite))
     return float(np.sum(np.maximum(0.0, finite - reference - float(allowed_offset))))
+
+
+def _low_successive_deterioration_risk(values: np.ndarray, *, allowed_drop: float) -> float:
+    finite = np.asarray(values, dtype=float)
+    if finite.size < 2:
+        return 0.0
+    previous = finite[:-1]
+    current = finite[1:]
+    usable = np.isfinite(previous) & np.isfinite(current)
+    if not np.any(usable):
+        return 0.0
+    return float(
+        np.sum(np.maximum(0.0, previous[usable] - current[usable] - float(allowed_drop)))
+    )
+
+
+def _high_successive_deterioration_risk(values: np.ndarray, *, allowed_offset: float) -> float:
+    finite = np.asarray(values, dtype=float)
+    if finite.size < 2:
+        return 0.0
+    previous = finite[:-1]
+    current = finite[1:]
+    usable = np.isfinite(previous) & np.isfinite(current)
+    if not np.any(usable):
+        return 0.0
+    return float(
+        np.sum(
+            np.maximum(0.0, current[usable] - previous[usable] - float(allowed_offset))
+        )
+    )
 
 
 def _scan_motion_history_weight(config: Any) -> float:
