@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import export_subject_to_npz
 
 
@@ -26,9 +25,7 @@ def _write_minimal_raw_npy_plane(plane_dir):
 )
 def test_export_subject_to_npz_rejects_non_boolean_controls(tmp_path, kwarg):
     subject_dir = tmp_path / "jm123"
-    _write_minimal_raw_npy_plane(
-        subject_dir / "2024-05-01_a" / "data_npy" / "plane0"
-    )
+    _write_minimal_raw_npy_plane(subject_dir / "2024-05-01_a" / "data_npy" / "plane0")
 
     with pytest.raises(ValueError, match=f"{kwarg} must be a boolean"):
         export_subject_to_npz(

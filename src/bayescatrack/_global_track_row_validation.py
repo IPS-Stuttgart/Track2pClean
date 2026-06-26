@@ -42,8 +42,12 @@ def install_global_track_row_validation() -> None:
         return original(track_rows, fill_value=fill_value)
 
     setattr(coerce_global_track_rows_with_roi_validation, _PATCH_MARKER, True)
-    setattr(coerce_global_track_rows_with_roi_validation, "_bayescatrack_original", original)
-    _tracking._coerce_global_track_rows = coerce_global_track_rows_with_roi_validation  # pylint: disable=protected-access
+    setattr(
+        coerce_global_track_rows_with_roi_validation, "_bayescatrack_original", original
+    )
+    _tracking._coerce_global_track_rows = (
+        coerce_global_track_rows_with_roi_validation  # pylint: disable=protected-access
+    )
 
 
 def _validate_global_track_rows(track_rows: Any) -> None:

@@ -252,7 +252,9 @@ def _resolve_monotone_feature_names(
     return selected
 
 
-def _validated_label_matrix(labels: Any, *, expected_shape: tuple[int, int]) -> np.ndarray:
+def _validated_label_matrix(
+    labels: Any, *, expected_shape: tuple[int, int]
+) -> np.ndarray:
     label_array = np.asarray(labels)
     if label_array.shape != expected_shape:
         raise ValueError("Pairwise features and labels have incompatible shapes")
@@ -286,7 +288,9 @@ def _collect_training_arrays(
         )
         if features.ndim != 3:
             raise ValueError("Pairwise features and labels have incompatible shapes")
-        labels = _validated_label_matrix(block.labels, expected_shape=features.shape[:2])
+        labels = _validated_label_matrix(
+            block.labels, expected_shape=features.shape[:2]
+        )
         selected = features[..., feature_indices]
         hardness = np.mean(selected, axis=-1)
         for positive_row, positive_col in np.argwhere(labels != 0):

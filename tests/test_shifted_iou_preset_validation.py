@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association import pyrecest_global_assignment as global_assignment
 
 
@@ -38,13 +37,28 @@ def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
         ({"similarity_epsilon": True}, "similarity_epsilon"),
         ({"similarity_epsilon": 0.0}, "similarity_epsilon"),
         ({"similarity_epsilon": np.nan}, "similarity_epsilon"),
-        ({"shifted_iou_shift_penalty_weight": True}, "shifted_iou_shift_penalty_weight"),
-        ({"shifted_iou_shift_penalty_weight": np.nan}, "shifted_iou_shift_penalty_weight"),
-        ({"shifted_iou_shift_penalty_weight": np.inf}, "shifted_iou_shift_penalty_weight"),
+        (
+            {"shifted_iou_shift_penalty_weight": True},
+            "shifted_iou_shift_penalty_weight",
+        ),
+        (
+            {"shifted_iou_shift_penalty_weight": np.nan},
+            "shifted_iou_shift_penalty_weight",
+        ),
+        (
+            {"shifted_iou_shift_penalty_weight": np.inf},
+            "shifted_iou_shift_penalty_weight",
+        ),
         ({"shifted_iou_shift_penalty_scale": True}, "shifted_iou_shift_penalty_scale"),
         ({"shifted_iou_shift_penalty_scale": 0.0}, "shifted_iou_shift_penalty_scale"),
-        ({"shifted_iou_shift_penalty_scale": np.nan}, "shifted_iou_shift_penalty_scale"),
-        ({"shifted_iou_shift_penalty_scale": np.inf}, "shifted_iou_shift_penalty_scale"),
+        (
+            {"shifted_iou_shift_penalty_scale": np.nan},
+            "shifted_iou_shift_penalty_scale",
+        ),
+        (
+            {"shifted_iou_shift_penalty_scale": np.inf},
+            "shifted_iou_shift_penalty_scale",
+        ),
     ],
 )
 def test_registered_shifted_iou_cost_kwargs_reject_invalid_float_controls(

@@ -52,13 +52,17 @@ def install_track_refinement_fill_value_validation() -> None:
                 fill_value=_normalize_fill_value(fill_value),
             )
 
-        setattr(smoothed_track_positions_with_fill_value_validation, _PATCH_MARKER, True)
+        setattr(
+            smoothed_track_positions_with_fill_value_validation, _PATCH_MARKER, True
+        )
         setattr(
             smoothed_track_positions_with_fill_value_validation,
             "_bayescatrack_original",
             original_smoothed,
         )
-        module.smoothed_track_positions = smoothed_track_positions_with_fill_value_validation
+        module.smoothed_track_positions = (
+            smoothed_track_positions_with_fill_value_validation
+        )
 
     original_split = module.split_tracks_at_issues
     if not getattr(original_split, _PATCH_MARKER, False):
@@ -82,7 +86,9 @@ def install_track_refinement_fill_value_validation() -> None:
             "_bayescatrack_original",
             original_split,
         )
-        module.split_tracks_at_issues = split_tracks_at_issues_with_fill_value_validation
+        module.split_tracks_at_issues = (
+            split_tracks_at_issues_with_fill_value_validation
+        )
 
 
 def _normalize_fill_value(value: Any) -> int:

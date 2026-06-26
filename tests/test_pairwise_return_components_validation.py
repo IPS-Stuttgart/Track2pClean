@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.core.bridge import CalciumPlaneData
-
 
 _AMBIGUOUS_BOOL_VALUES = ["false", "true", 0, 1, None, np.array(True), np.array([True])]
 

@@ -127,9 +127,7 @@ def _normalize_session_edges(
     try:
         edge_values = tuple(edges)
     except TypeError as exc:
-        raise ValueError(
-            f"{context} must be a sequence of session edge pairs"
-        ) from exc
+        raise ValueError(f"{context} must be a sequence of session edge pairs") from exc
 
     normalized = tuple(
         _normalize_session_edge(

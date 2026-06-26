@@ -14,11 +14,15 @@ def install_mask_input_sweep_option_validation() -> None:
 
     from . import track2p_mask_input_sweep as sweep
 
-    original_normalise = sweep._normalise_bool_options  # pylint: disable=protected-access
+    original_normalise = (
+        sweep._normalise_bool_options
+    )  # pylint: disable=protected-access
     if getattr(original_normalise, _PATCH_ATTR, False):
         return
 
-    def _normalise_bool_options(values: Sequence[bool], *, name: str) -> tuple[bool, ...]:
+    def _normalise_bool_options(
+        values: Sequence[bool], *, name: str
+    ) -> tuple[bool, ...]:
         normalised_values: list[bool] = []
         for value in values:
             if type(value) is not bool and not isinstance(value, np.bool_):
@@ -31,7 +35,9 @@ def install_mask_input_sweep_option_validation() -> None:
 
     setattr(_normalise_bool_options, _PATCH_ATTR, True)
     setattr(_normalise_bool_options, "_track2pclean_original", original_normalise)
-    sweep._normalise_bool_options = _normalise_bool_options  # pylint: disable=protected-access
+    sweep._normalise_bool_options = (
+        _normalise_bool_options  # pylint: disable=protected-access
+    )
 
 
 __all__ = ["install_mask_input_sweep_option_validation"]

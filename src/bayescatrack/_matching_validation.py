@@ -8,7 +8,6 @@ from typing import Any, Callable
 
 import numpy as np
 
-
 _PATCH_MARKER = "_bayescatrack_assignment_layout_validation_patch"
 _FILL_VALUE_PATCH_MARKER = "_bayescatrack_matching_fill_value_validation_patch"
 _FILL_VALUE_ERROR_MESSAGE = "fill_value must be a negative integer sentinel"

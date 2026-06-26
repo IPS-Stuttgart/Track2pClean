@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import numpy as np
-
-from bayescatrack.advanced_roi_components import CandidatePruningConfig, candidate_mask_from_cost_matrix
+from bayescatrack.advanced_roi_components import (
+    CandidatePruningConfig,
+    candidate_mask_from_cost_matrix,
+)
 
 
 def test_advanced_top_k_controls_accept_text_integer_values_for_compatibility():

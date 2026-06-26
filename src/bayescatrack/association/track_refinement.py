@@ -215,7 +215,9 @@ def geometry_issue_rows(
 
 
 def _position_table_roi_indices(plane: Any, *, n_centroids: int) -> np.ndarray:
-    n_rois = _integer_at_least(getattr(plane, "n_rois", n_centroids), name="plane.n_rois", minimum=0)
+    n_rois = _integer_at_least(
+        getattr(plane, "n_rois", n_centroids), name="plane.n_rois", minimum=0
+    )
     if n_rois != n_centroids:
         raise ValueError("plane.n_rois must match the number of centroid columns")
 
@@ -277,7 +279,9 @@ def _contains_ambiguous_track_row_tokens(rows: np.ndarray) -> bool:
         return True
     if rows.dtype != object:
         return False
-    return any(isinstance(value, (bool, np.bool_, str, bytes)) for value in rows.ravel())
+    return any(
+        isinstance(value, (bool, np.bool_, str, bytes)) for value in rows.ravel()
+    )
 
 
 def _track_positions(

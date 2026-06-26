@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.evaluation.edge_ranking import score_matrices_from_feature_tensor
 
 

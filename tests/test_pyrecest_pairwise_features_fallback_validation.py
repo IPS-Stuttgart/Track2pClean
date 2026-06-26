@@ -4,7 +4,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-
 from bayescatrack import _pyrecest_pairwise_features as pairwise_features
 
 
@@ -24,7 +23,9 @@ def test_fallback_mahalanobis_rejects_invalid_regularization(
     monkeypatch: pytest.MonkeyPatch,
     regularization: Any,
 ) -> None:
-    monkeypatch.setattr(pairwise_features, "_pyrecest_pairwise_mahalanobis_distances", None)
+    monkeypatch.setattr(
+        pairwise_features, "_pyrecest_pairwise_mahalanobis_distances", None
+    )
 
     with pytest.raises(
         ValueError,
@@ -42,7 +43,9 @@ def test_fallback_mahalanobis_rejects_invalid_regularization(
 def test_fallback_mahalanobis_accepts_valid_regularization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(pairwise_features, "_pyrecest_pairwise_mahalanobis_distances", None)
+    monkeypatch.setattr(
+        pairwise_features, "_pyrecest_pairwise_mahalanobis_distances", None
+    )
 
     distances = pairwise_features.pairwise_mahalanobis_distances(
         _means(),

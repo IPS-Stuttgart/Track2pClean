@@ -298,7 +298,9 @@ def _validate_probability(value: Any, field_name: str) -> float:
     try:
         normalized = float(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"{field_name} must be a finite probability in [0, 1]") from exc
+        raise ValueError(
+            f"{field_name} must be a finite probability in [0, 1]"
+        ) from exc
     if not np.isfinite(normalized) or not 0.0 <= normalized <= 1.0:
         raise ValueError(f"{field_name} must be a finite probability in [0, 1]")
     return normalized

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bayescatrack.evaluation import score_track_matrices as package_score_track_matrices
 from bayescatrack.evaluation.complete_track_scores import score_track_matrices
 

@@ -17,8 +17,8 @@ components for calibration, error taxonomy and ablations.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import operator
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np

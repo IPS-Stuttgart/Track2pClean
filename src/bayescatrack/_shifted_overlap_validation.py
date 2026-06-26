@@ -50,8 +50,12 @@ def install_shifted_overlap_scalar_validation() -> None:
         return current(original_method, self, other, **validated_kwargs)
 
     setattr(_validated_shifted_iou_pairwise_cost_matrix, _MARKER, True)
-    setattr(_validated_shifted_iou_pairwise_cost_matrix, "_bayescatrack_original", current)
-    shifted_overlap.shifted_iou_pairwise_cost_matrix = _validated_shifted_iou_pairwise_cost_matrix
+    setattr(
+        _validated_shifted_iou_pairwise_cost_matrix, "_bayescatrack_original", current
+    )
+    shifted_overlap.shifted_iou_pairwise_cost_matrix = (
+        _validated_shifted_iou_pairwise_cost_matrix
+    )
 
 
 def _validate_shifted_overlap_scalar_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:

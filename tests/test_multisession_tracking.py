@@ -71,7 +71,9 @@ def test_multisession_tracking_rejects_negative_solver_detection_index():
         del pairwise_costs, kwargs
         return {"tracks": [{0: -1, 1: 0}]}
 
-    with pytest.raises(ValueError, match="detection index must be a non-negative integer"):
+    with pytest.raises(
+        ValueError, match="detection index must be a non-negative integer"
+    ):
         track_sessions_multisession(sessions, solver=solver)
 
 
@@ -93,7 +95,9 @@ def test_multisession_tracking_rejects_boolean_solver_detection_index():
         del pairwise_costs, kwargs
         return {"tracks": [{0: True, 1: 0}]}
 
-    with pytest.raises(ValueError, match="detection index must be a non-negative integer"):
+    with pytest.raises(
+        ValueError, match="detection index must be a non-negative integer"
+    ):
         track_sessions_multisession(sessions, solver=solver)
 
 

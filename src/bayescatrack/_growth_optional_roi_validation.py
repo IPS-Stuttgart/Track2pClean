@@ -38,7 +38,9 @@ def _install_optional_roi_validation(_growth: Any) -> None:
         return original_optional_roi(value)
 
     setattr(_optional_roi_with_validation, _OPTIONAL_ROI_PATCH_MARKER, True)
-    setattr(_optional_roi_with_validation, "_bayescatrack_original", original_optional_roi)
+    setattr(
+        _optional_roi_with_validation, "_bayescatrack_original", original_optional_roi
+    )
     _growth._optional_roi = _optional_roi_with_validation
 
 
@@ -83,7 +85,9 @@ def _session_index_to_int(index: object) -> int:
         try:
             numeric = float(text)
         except ValueError as exc:
-            raise ValueError(f"session index must be integer-like, got {index!r}") from exc
+            raise ValueError(
+                f"session index must be integer-like, got {index!r}"
+            ) from exc
         return _parse_integer_like_session_index(numeric, original=index)
     raise ValueError(f"session index must be integer-like, got {type(index).__name__}")
 
