@@ -25,6 +25,7 @@ def test_full_mht_method_protocol_names_required_method_invariants() -> None:
         "test_full_mht_conflict_demo_selection_is_reference_independent",
         "test_full_mht_method_layers_do_not_read_gt_or_audit_columns",
         "test_full_mht_no_gt_leakage_scan_covers_all_method_layers",
+        "test_full_mht_identity_history_bundle_contract.py",
         "FullMHTIdentityHistoryNoLocalContext",
         "scan_pruning_stable_complete_history_gain",
         "full_mht_identity_history_scan_pruning_promotion_gate.py",
