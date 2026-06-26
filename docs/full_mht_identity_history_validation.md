@@ -33,6 +33,19 @@ It uses the same scan candidates and scoring terms, but sets `beam_width = 1` an
 turns off identity-diverse beam retention.  Promotion requires the full beam to
 beat this greedy row on complete-track F1 without pairwise-F1 loss.
 
+The canonical manifest also includes the local-context ablation:
+
+```text
+FullMHTIdentityHistoryNoLocalContext
+```
+
+This row is identical to `FullMHTIdentityHistory` except that
+`local_deformation_weight = 0.0`, which makes the calibrated association
+likelihood ignore local-neighborhood deformation.  Promotion requires the full
+candidate to beat or match this control on the required micro metrics, so the
+local-context layer has to earn its place inside the method rather than merely
+being present in the implementation.
+
 ## Constructed Conflict Witness
 
 The branch also keeps a small label-free conflict witness in
@@ -89,7 +102,7 @@ without pairwise-F1 regression.  A single winning weight is treated as explorato
 
 | artifact | purpose |
 | --- | --- |
-| `benchmarks/full_mht_identity_history_candidate_manifest.json` | canonical comparison against Track2p, prior-only FullMHT, prior-survival, no-prior continuation, and greedy identity-history |
+| `benchmarks/full_mht_identity_history_candidate_manifest.json` | canonical comparison against Track2p, prior-only FullMHT, prior-survival, no-prior continuation, no-local-context identity history, and greedy identity history |
 | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | immediate-neighborhood sensitivity around survival weight, no-prior continuation weight, and growth-history weight |
 | `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
 | `benchmarks/full_mht_local_context_probe_manifest.json` | calibrated local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
@@ -97,7 +110,7 @@ without pairwise-F1 regression.  A single winning weight is treated as explorato
 | `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
 | `test_track2p_policy_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness |
 | `full_mht_local_context_decision.py` | interprets the local-neighborhood deformation probe |
-| `full_mht_identity_history_decision.py` | interprets the canonical comparison table |
+| `full_mht_identity_history_decision.py` | interprets the canonical comparison table, including greedy and no-local-context controls |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
 | `full_mht_terminal_completion_decision.py` | interprets the terminal-completion probe, with row-name overrides for identity-history rows |
 | `track2p_policy_full_mht_exposure_audit.py` | runs all Track2p-style subjects without loading references or audit labels |
@@ -107,6 +120,7 @@ without pairwise-F1 regression.  A single winning weight is treated as explorato
 Promote `FullMHTIdentityHistory` only if all of these are true:
 
 - `FullMHTIdentityHistory` has complete-track advantage over `FullMHTGreedyIdentityHistory` with no pairwise-F1 loss.
+- It does not fall below `FullMHTIdentityHistoryNoLocalContext` on the required micro metrics.
 - It does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on the required micro metrics.
 - The constructed conflict witness regression passes.
 - The sensitivity manifest reports `stable_plateau`.
@@ -118,7 +132,8 @@ Promote a terminal-completion variant only if the identity-history row itself
 passes those gates and the completion probe reports `terminal_completion_stable_gain`.
 If any gate fails, keep the row exploratory.  A tie against greedy means the
 benchmark still does not prove that MHT history search, rather than local scoring,
-is responsible for the result.
+is responsible for the result.  A loss against the no-local-context control means
+the calibrated local-neighborhood layer should be removed or kept exploratory.
 
 ## Server Bundle
 
@@ -248,7 +263,7 @@ mkdir -p "$EXPOSURE"
 | gate result | interpretation |
 | --- | --- |
 | `promotable_after_review` | strong candidate for the paper method row, after recording exact directories and metric tables |
-| `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection |
+| `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection, or the combined local-context candidate fails its no-local-context control |
 | `not_promotable_sensitivity` | likely knife-edge or single-setting result |
 | `not_promotable_broad_exposure` | model layer fires too broadly on label-free subjects |
 | `history_dynamics_stable_gain` | local context or another dynamics probe shows stable complete-track gain without pairwise loss |
