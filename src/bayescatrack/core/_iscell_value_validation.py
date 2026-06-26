@@ -15,7 +15,9 @@ from typing import Any
 
 import numpy as np
 
-_ISCELL_VALUE_VALIDATION_MARKER = "_bayescatrack_suite2p_iscell_value_validation_patch"
+_ISCELL_VALUE_VALIDATION_MARKER = (
+    "_bayescatrack_suite2p_iscell_value_validation_patch"
+)
 
 
 def install_suite2p_iscell_value_validation(bridge_impl: ModuleType) -> None:
