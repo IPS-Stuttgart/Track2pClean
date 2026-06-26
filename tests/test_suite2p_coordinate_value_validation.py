@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bayescatrack import load_track2p_subject
+from bayescatrack import load_suite2p_plane, load_track2p_subject
 
 
 def test_load_track2p_subject_rejects_noninteger_suite2p_coordinates(tmp_path):
@@ -85,6 +85,35 @@ def test_load_track2p_subject_rejects_out_of_bounds_suite2p_coordinates(tmp_path
             subject_dir,
             input_format="suite2p",
             plane_name="plane0",
+            load_traces=False,
+            load_spike_traces=False,
+        )
+
+
+@pytest.mark.parametrize(
+    ("ypix", "xpix", "message"),
+    [
+        (np.asarray([-1, 0], dtype=int), np.asarray([0, 0], dtype=int), "non-negative"),
+        (np.asarray([0], dtype=int), np.asarray([4], dtype=int), "within image bounds"),
+    ],
+)
+def test_load_suite2p_plane_rejects_invalid_stat_pixel_bounds(tmp_path, ypix, xpix, message):
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray(ypix),
+                "xpix": np.asarray(xpix),
+                "lam": np.ones(len(ypix), dtype=float),
+            }
+        ],
+        dtype=object,
+    )
+    np.save(tmp_path / "stat.npy", stat)
+    np.save(tmp_path / "ops.npy", {"Ly": 4, "Lx": 4})
+
+    with pytest.raises(ValueError, match=message):
+        load_suite2p_plane(
+            tmp_path,
             load_traces=False,
             load_spike_traces=False,
         )
