@@ -75,8 +75,8 @@ FullMHTGreedyIdentityHistory
 
 It uses the same scan candidates and scoring terms, but sets `beam_width = 1`
 and disables identity-diverse beam retention.  The full beam must beat this row
-on complete-track F1 without pairwise-F1 loss before the benchmark can claim that
-MHT history search matters on real data.
+on complete-track F1 micro without any pairwise/complete micro or macro F1 loss
+before the benchmark can claim that MHT history search matters on real data.
 
 The canonical manifest also includes:
 
@@ -85,8 +85,9 @@ FullMHTIdentityHistoryNoLocalContext
 ```
 
 This row is identical to the candidate except `local_deformation_weight = 0.0`.
-The candidate must not fall below this control; otherwise the local-neighborhood
-term has not earned its place in the method.
+The candidate must not fall below this control on any reported pairwise or
+complete-track micro/macro metric; otherwise the local-neighborhood term has not
+earned its place in the method.
 
 A separate probe tests whether the terminal complete-history objective should be
 added to the combined method:
@@ -109,20 +110,20 @@ FullMHT can be promoted as a paper method only after these gates pass:
 
 | gate | required evidence |
 | --- | --- |
-| Manifest comparison | `FullMHTIdentityHistory` beats `FullMHTGreedyIdentityHistory` on complete-track F1 without pairwise-F1 loss |
-| Required controls | `FullMHTIdentityHistory` does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, `FullMHTNoPriorContinuation100`, or `FullMHTIdentityHistoryNoLocalContext` on the required micro metrics |
+| Manifest comparison | `FullMHTIdentityHistory` beats `FullMHTGreedyIdentityHistory` on complete-track F1 micro with no regression in pairwise or complete-track micro/macro F1 |
+| Required controls | `FullMHTIdentityHistory` does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, `FullMHTNoPriorContinuation100`, or `FullMHTIdentityHistoryNoLocalContext` on any reported pairwise or complete-track micro/macro metric |
 | Conflict witness | constructed FullMHT-vs-greedy witness passes and selected paths remain unchanged when only the evaluation reference is altered |
 | Method-layer invariants | calibrated likelihood changes scan assignment from local-overlap-only behavior; no-prior continuation likelihood can choose continuation over death; growth-history prediction can flip a scan assignment to a coherent history |
-| Sensitivity | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` reports `stable_plateau` |
+| Sensitivity | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` reports `stable_plateau`, with each passing variant non-regressing on all reported micro/macro metrics |
 | Exposure | label-free exposure audit reports `bounded_exposure` with active but rare prior-survival, no-prior-continuation, and growth-history signals |
 | No-GT leakage | tests confirm method layers do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
 | Terminal objective | optional completion variant reports `terminal_completion_stable_gain`, meaning at least two gains and no regressing neighbor in the tested weight neighborhood |
-| Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants where relevant |
+| Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants |
 
-If the identity-history beam ties its greedy row, regresses, or improves only
-pairwise F1, the benchmark does not yet prove a complete-history search
-advantage.  In that case FullMHT remains an architecture and constructed-conflict
-story, not the headline real-data method row.
+If the identity-history beam ties its greedy row, regresses on any reported
+metric, or improves only pairwise F1, the benchmark does not yet prove a
+complete-history search advantage.  In that case FullMHT remains an architecture
+and constructed-conflict story, not the headline real-data method row.
 
 ## Non-Promotion Conditions
 
@@ -130,9 +131,10 @@ Do not present FullMHT as a final method if any of the following remain true:
 
 - The frozen identity-history manifest has not been run.
 - The candidate row ties or loses to its matching greedy ablation.
-- The candidate row is worse than a required control on pairwise or complete-track
-  micro F1, including the no-local-context control.
-- The sensitivity neighborhood is a single-weight spike.
+- The candidate row is worse than a required control on any reported pairwise or
+  complete-track micro/macro F1 metric, including the no-local-context control.
+- The sensitivity neighborhood is a single-weight spike or hides a macro-metric
+  regression.
 - The exposure audit shows broad non-prior continuations, broad prior-survival
   penalties, broad growth-history penalties, or many prior switches.
 - The terminal complete-history objective improves only at one fragile weight,
