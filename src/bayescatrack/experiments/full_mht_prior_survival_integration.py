@@ -31,6 +31,7 @@ def install_full_mht_prior_survival_scoring() -> None:
         return
 
     original_edge_score = full_mht._edge_score
+    original_selected_edge_summary = full_mht._selected_edge_summary
 
     def _edge_score_with_prior_survival(
         sessions: Sequence[Any],
@@ -51,47 +52,131 @@ def install_full_mht_prior_survival_scoring() -> None:
             config=config,
             track2p_prior_edges=track2p_prior_edges,
         )
-        weight = float(getattr(config, "track2p_prior_survival_weight", 0.0))
-        if weight == 0.0 or not track2p_prior_edges:
-            return float(score)
-        source_roi = int(matrices.source_indices[int(source_local)])
-        target_roi = int(matrices.target_indices[int(target_local)])
-        edge = (
-            int(matrices.source_session),
-            int(matrices.target_session),
-            source_roi,
-            target_roi,
-        )
-        if edge not in track2p_prior_edges:
-            return float(score)
-        diagnostics = _prior_edge_diagnostics_for_matrix(
-            sessions,
-            matrices,
-            n_sessions=len(sessions),
-            track2p_prior_edges=track2p_prior_edges,
-            full_mht=full_mht,
-        )
-        model = calibrate_prior_edge_survival_model(
-            diagnostics,
-            config=_survival_config_from_full_mht_config(config),
-        )
-        if not model.enabled:
-            return float(score)
-        edge_diag = _prior_edge_diagnostic(
+        survival_score = _prior_edge_survival_score(
             sessions,
             matrices,
             source_local=int(source_local),
             target_local=int(target_local),
-            n_sessions=len(sessions),
+            config=config,
             track2p_prior_edges=track2p_prior_edges,
             full_mht=full_mht,
         )
-        survival_score = float(model.log_survival_ratio((edge_diag,))[0])
-        return float(score) + weight * survival_score
+        if survival_score is None:
+            return float(score)
+        weight = float(getattr(config, "track2p_prior_survival_weight", 0.0))
+        return float(score) + weight * float(survival_score)
+
+    def _selected_edge_summary_with_prior_survival(
+        sessions: Sequence[Any],
+        matrices: Any,
+        *,
+        active_source: Any,
+        target_session: int,
+        target_roi: int,
+        config: Any,
+        track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+    ) -> dict[str, Any]:
+        output = original_selected_edge_summary(
+            sessions,
+            matrices,
+            active_source=active_source,
+            target_session=target_session,
+            target_roi=target_roi,
+            config=config,
+            track2p_prior_edges=track2p_prior_edges,
+        )
+        if not int(output.get("is_track2p_prior", 0)):
+            return output
+        weight = float(getattr(config, "track2p_prior_survival_weight", 0.0))
+        if weight == 0.0:
+            return output
+        source_matches = np.flatnonzero(
+            np.asarray(matrices.source_indices, dtype=int)
+            == int(active_source.source_roi)
+        )
+        target_matches = np.flatnonzero(
+            np.asarray(matrices.target_indices, dtype=int) == int(target_roi)
+        )
+        if source_matches.size == 0 or target_matches.size == 0:
+            return output
+        survival_score = _prior_edge_survival_score(
+            sessions,
+            matrices,
+            source_local=int(source_matches[0]),
+            target_local=int(target_matches[0]),
+            config=config,
+            track2p_prior_edges=track2p_prior_edges,
+            full_mht=full_mht,
+        )
+        if survival_score is None:
+            output["track2p_prior_survival_score"] = "disabled"
+            output["summary"] = f'{output["summary"]}|survival=disabled'
+            return output
+        weighted = weight * float(survival_score)
+        output["track2p_prior_survival_score"] = float(survival_score)
+        output["track2p_prior_survival_weighted_score"] = float(weighted)
+        output["summary"] = (
+            f'{output["summary"]}'
+            f"|survival={full_mht._diagnostic_float(float(survival_score))}"
+            f"|survival_weighted={full_mht._diagnostic_float(float(weighted))}"
+        )
+        return output
 
     full_mht._edge_score = _edge_score_with_prior_survival
+    full_mht._selected_edge_summary = _selected_edge_summary_with_prior_survival
     full_mht._bayescatrack_prior_survival_original_edge_score = original_edge_score
+    full_mht._bayescatrack_prior_survival_original_selected_edge_summary = (
+        original_selected_edge_summary
+    )
     full_mht._bayescatrack_prior_survival_scoring = True
+
+
+def _prior_edge_survival_score(
+    sessions: Sequence[Any],
+    matrices: Any,
+    *,
+    source_local: int,
+    target_local: int,
+    config: Any,
+    track2p_prior_edges: frozenset[tuple[int, int, int, int]],
+    full_mht: Any,
+) -> float | None:
+    weight = float(getattr(config, "track2p_prior_survival_weight", 0.0))
+    if weight == 0.0 or not track2p_prior_edges:
+        return None
+    source_roi = int(matrices.source_indices[int(source_local)])
+    target_roi = int(matrices.target_indices[int(target_local)])
+    edge = (
+        int(matrices.source_session),
+        int(matrices.target_session),
+        source_roi,
+        target_roi,
+    )
+    if edge not in track2p_prior_edges:
+        return None
+    diagnostics = _prior_edge_diagnostics_for_matrix(
+        sessions,
+        matrices,
+        n_sessions=len(sessions),
+        track2p_prior_edges=track2p_prior_edges,
+        full_mht=full_mht,
+    )
+    model = calibrate_prior_edge_survival_model(
+        diagnostics,
+        config=_survival_config_from_full_mht_config(config),
+    )
+    if not model.enabled:
+        return None
+    edge_diag = _prior_edge_diagnostic(
+        sessions,
+        matrices,
+        source_local=int(source_local),
+        target_local=int(target_local),
+        n_sessions=len(sessions),
+        track2p_prior_edges=track2p_prior_edges,
+        full_mht=full_mht,
+    )
+    return float(model.log_survival_ratio((edge_diag,))[0])
 
 
 def _prior_edge_diagnostics_for_matrix(
