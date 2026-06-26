@@ -70,6 +70,9 @@ from ._nonrigid_registration_control_validation import (
 from ._pairwise_return_components_validation import (
     install_return_components_validation as _install_return_components_validation,
 )
+from ._pyrecest_shifted_validation import (
+    install_pyrecest_shifted_validation as _install_pyrecest_shifted_validation,
+)
 from ._reference_validation import (
     install_reference_validation as _install_reference_validation,
 )
@@ -154,6 +157,7 @@ _install_matching_layout_validation(_matching)
 _install_matching_max_cost_validation(_matching)
 _install_soft_overlap_costs()
 _install_shifted_overlap_scalar_validation()
+_install_pyrecest_shifted_validation()
 _install_global_cost_preset_validation()
 _install_candidate_centroid_validation(_candidate_prefilter)
 _install_advanced_roi_components()
