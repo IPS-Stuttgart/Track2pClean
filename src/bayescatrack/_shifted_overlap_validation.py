@@ -3,7 +3,8 @@
 The shifted-overlap wrapper is often exercised through experiment manifests and
 YAML-derived dictionaries.  Avoid Python truthiness/NaN corner cases there so a
 string such as ``"false"`` cannot enable a replacement cost term and non-finite
-weights cannot silently become hard-gated costs.
+weights cannot silently become hard-gated costs or non-finite diagnostic
+components.
 """
 
 from __future__ import annotations
@@ -22,6 +23,12 @@ _NONNEGATIVE_FLOAT_KWARGS = (
     "shifted_iou_weight",
     "shifted_mask_cosine_weight",
     "shifted_iou_shift_penalty_weight",
+    "iou_weight",
+    "mask_cosine_weight",
+)
+_POSITIVE_FLOAT_KWARGS = (
+    "similarity_epsilon",
+    "large_cost",
 )
 
 
@@ -56,6 +63,9 @@ def _validate_shifted_overlap_scalar_kwargs(kwargs: dict[str, Any]) -> dict[str,
     for name in _NONNEGATIVE_FLOAT_KWARGS:
         if name in validated:
             validated[name] = _finite_nonnegative_float(validated[name], name=name)
+    for name in _POSITIVE_FLOAT_KWARGS:
+        if name in validated:
+            validated[name] = _finite_positive_float(validated[name], name=name)
     if (
         "shifted_iou_shift_penalty_scale" in validated
         and validated["shifted_iou_shift_penalty_scale"] is not None
