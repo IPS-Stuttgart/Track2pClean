@@ -16,6 +16,9 @@ from ._advanced_weight_validation import (
 from ._assignment_bundle_validation import (
     install_assignment_bundle_validation as _install_assignment_bundle_validation,
 )
+from ._candidate_centroid_validation import (
+    install_candidate_centroid_validation as _install_candidate_centroid_validation,
+)
 from ._confidence_ordered_strict_gap_cli import (
     install_confidence_ordered_strict_gap_cli as _install_confidence_ordered_strict_gap_cli,
 )
@@ -152,6 +155,7 @@ _install_matching_max_cost_validation(_matching)
 _install_soft_overlap_costs()
 _install_shifted_overlap_scalar_validation()
 _install_global_cost_preset_validation()
+_install_candidate_centroid_validation(_candidate_prefilter)
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
 _install_assignment_bundle_validation()
