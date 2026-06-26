@@ -31,6 +31,7 @@ METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/full_mht_identity_history_decision.py",
     "src/bayescatrack/experiments/full_mht_identity_history_promotion_gate.py",
     "src/bayescatrack/experiments/full_mht_identity_history_scan_pruning_decision.py",
+    "src/bayescatrack/experiments/full_mht_identity_history_scan_pruning_promotion_gate.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_conflict_demo.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_history_consistency_benchmark.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_terminal_completion_benchmark.py",
