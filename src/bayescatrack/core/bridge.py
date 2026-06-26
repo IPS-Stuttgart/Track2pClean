@@ -8,6 +8,7 @@ from . import _association_bundle_bool_validation as _association_bundle_bool_va
 from . import _cell_probability_validation as _cell_probability_validation
 from . import _core_scalar_validation as _core_scalar_validation
 from . import _export_bool_validation as _export_bool_validation
+from . import _iscell_value_validation as _iscell_value_validation
 from . import _loader_bool_validation as _loader_bool_validation
 from . import _loader_validation as _loader_validation
 from . import _local_evidence as _local_evidence
@@ -30,6 +31,7 @@ _suite2p_coordinate_value_validation.install_suite2p_coordinate_value_validation
     _bridge_impl
 )
 _suite2p_overlap_value_validation.install_suite2p_overlap_value_validation(_bridge_impl)
+_iscell_value_validation.install_suite2p_iscell_value_validation(_bridge_impl)
 _roi_index_validation.install_calcium_plane_roi_index_validation(
     _bridge_impl.CalciumPlaneData
 )
