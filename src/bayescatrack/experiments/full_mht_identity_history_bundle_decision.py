@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import Any
 
 CORE_ROW = "FullMHTIdentityHistory"
+CORE_MHT_RESULT = "identity_complete_history_advantage"
+CORE_SENSITIVITY_RESULT = "stable_plateau"
+CORE_EXPOSURE_RESULT = "bounded_exposure"
 
 
 def load_decision(path: Path) -> dict[str, Any]:
@@ -37,11 +40,20 @@ def evaluate_identity_history_bundle(
     """Combine central and optional FullMHT identity-history evidence."""
 
     core_status = str(identity_promotion.get("status", "incomplete"))
+    core_mht_result = str(identity_promotion.get("mht_vs_local_result", "incomplete"))
+    core_sensitivity_result = str(identity_promotion.get("sensitivity_result", "incomplete"))
+    core_exposure_result = str(identity_promotion.get("exposure_result", "incomplete"))
+    core_evidence_ok = (
+        core_mht_result == CORE_MHT_RESULT
+        and core_sensitivity_result == CORE_SENSITIVITY_RESULT
+        and core_exposure_result == CORE_EXPOSURE_RESULT
+    )
+    core_evidence_result = "complete_core_evidence" if core_evidence_ok else "inconsistent_core_evidence"
     scan = _scan_pruning_block(scan_pruning_promotion)
     terminal = _terminal_completion_block(terminal_completion)
     local = _local_context_block(local_context)
 
-    if core_status == "promotable_after_review":
+    if core_status == "promotable_after_review" and core_evidence_ok:
         status = "promotable_core_method"
         paper_row = CORE_ROW
         recommendation = "promote the central identity-history row; treat add-ons as separate variants"
@@ -52,7 +64,10 @@ def evaluate_identity_history_bundle(
     else:
         status = "not_promotable_core_method"
         paper_row = ""
-        recommendation = "do not promote optional add-ons because the central identity-history row failed"
+        if core_status == "promotable_after_review":
+            recommendation = "rerun or inspect central promotion gate; status and evidence fields disagree"
+        else:
+            recommendation = "do not promote optional add-ons because the central identity-history row failed"
 
     optional_variants: list[str] = []
     exploratory_variants: list[str] = []
@@ -71,13 +86,10 @@ def evaluate_identity_history_bundle(
         "paper_row": paper_row,
         "recommendation": recommendation,
         "core_status": core_status,
-        "core_mht_vs_local_result": str(
-            identity_promotion.get("mht_vs_local_result", "incomplete")
-        ),
-        "core_sensitivity_result": str(
-            identity_promotion.get("sensitivity_result", "incomplete")
-        ),
-        "core_exposure_result": str(identity_promotion.get("exposure_result", "incomplete")),
+        "core_evidence_result": core_evidence_result,
+        "core_mht_vs_local_result": core_mht_result,
+        "core_sensitivity_result": core_sensitivity_result,
+        "core_exposure_result": core_exposure_result,
         "scan_pruning": scan,
         "terminal_completion": terminal,
         "local_context": local,
@@ -85,7 +97,8 @@ def evaluate_identity_history_bundle(
         "exploratory_variants": exploratory_variants,
         "guardrail": (
             "optional add-ons are ignored for promotion unless the central "
-            "FullMHTIdentityHistory gate is promotable_after_review"
+            "FullMHTIdentityHistory gate is promotable_after_review with complete, "
+            "consistent core evidence"
         ),
     }
 
@@ -102,6 +115,7 @@ def format_bundle_markdown(decision: Mapping[str, Any]) -> str:
         f"Status: `{decision.get('status', '')}`",
         f"Paper row: `{decision.get('paper_row', '')}`",
         f"Core gate: `{decision.get('core_status', '')}`",
+        f"Core evidence: `{decision.get('core_evidence_result', '')}`",
         f"MHT-vs-local: `{decision.get('core_mht_vs_local_result', '')}`",
         f"Sensitivity: `{decision.get('core_sensitivity_result', '')}`",
         f"Exposure: `{decision.get('core_exposure_result', '')}`",
