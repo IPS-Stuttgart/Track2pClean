@@ -74,6 +74,7 @@ export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
   tests/test_full_mht_growth_history_prediction_integration.py \
+  tests/test_full_mht_growth_history_prediction_decision.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_benchmark_manifest_full_mht_integration.py
 
@@ -83,6 +84,10 @@ mkdir -p "$OUT"
   benchmarks/full_mht_growth_history_prediction_probe_manifest.json \
   --output-dir "$OUT" \
   --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_growth_history_prediction_decision \
+  "$OUT/full_mht_growth_history_prediction/full_mht_growth_history_prediction_comparison.csv" \
+  --output "$OUT/full_mht_growth_history_prediction_decision.md"
 ```
 
 ## Decision Rule
@@ -94,6 +99,10 @@ Treat this as a method probe, not a promoted row, until the manifest shows:
 - the effect is not limited to a single knife-edge weight;
 - diagnostics show that the penalty is rare and targeted rather than suppressing
   broad continuation.
+
+The frozen helper `full_mht_growth_history_prediction_decision.py` classifies the
+probe as stable gain, single-weight gain, tie, pairwise regression, or complete
+regression using the same no-tuning rule as the other FullMHT dynamics probes.
 
 If it improves complete-track identity at more than one nearby weight, it becomes
 a stronger FullMHT method component than a fixed prior-veto pocket. If it ties,
