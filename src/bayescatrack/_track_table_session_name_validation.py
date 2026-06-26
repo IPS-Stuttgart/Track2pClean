@@ -12,24 +12,22 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any, Sequence
 
-from ._reference_session_name_validation import (
-    install_reference_session_name_validation,
-)
-
-_PATCH_MARKER = "_bayescatrack_track_table_session_name_validation_patch"
+_TRACK_TABLE_PATCH_MARKER = "_bayescatrack_track_table_session_name_validation_patch"
+_REFERENCE_PATCH_MARKER = "_bayescatrack_reference_session_name_validation_patch"
 
 
 def install_track_table_session_name_validation() -> None:
     """Install idempotent validation around session-name-bearing helpers."""
 
     from . import ground_truth_eval  # pylint: disable=import-outside-toplevel
+    from . import reference  # pylint: disable=import-outside-toplevel
 
     _install_track_table_session_name_validation(ground_truth_eval.TrackTable)
-    install_reference_session_name_validation()
+    _install_reference_session_name_validation(reference.Track2pReference)
 
 
 def _install_track_table_session_name_validation(track_table: Any) -> None:
-    if getattr(track_table, _PATCH_MARKER, False):
+    if getattr(track_table, _TRACK_TABLE_PATCH_MARKER, False):
         return
 
     original_post_init = track_table.__post_init__
@@ -57,7 +55,26 @@ def _install_track_table_session_name_validation(track_table: Any) -> None:
 
     setattr(track_table, "__post_init__", __post_init__)
     setattr(track_table, "aligned_to", aligned_to)
-    setattr(track_table, _PATCH_MARKER, True)
+    setattr(track_table, _TRACK_TABLE_PATCH_MARKER, True)
+
+
+def _install_reference_session_name_validation(reference_cls: Any) -> None:
+    original_post_init = reference_cls.__post_init__
+    if getattr(original_post_init, _REFERENCE_PATCH_MARKER, False):
+        return
+
+    @wraps(original_post_init)
+    def __post_init__(self: Any) -> None:
+        normalized_session_names = _normalize_unique_session_names(
+            self.session_names,
+            field_name="session_names",
+        )
+        object.__setattr__(self, "session_names", normalized_session_names)
+        original_post_init(self)
+
+    setattr(__post_init__, _REFERENCE_PATCH_MARKER, True)
+    setattr(__post_init__, "_bayescatrack_original", original_post_init)
+    reference_cls.__post_init__ = __post_init__
 
 
 def _normalize_unique_session_names(
