@@ -275,7 +275,11 @@ def _track_positions(
             continue
         session_indices.append(session_index)
         roi_indices.append(roi_int)
-        positions.append(np.asarray(position, dtype=float).reshape(2))
+        positions.append(
+            _validated_position_vector(
+                position, session_index=session_index, roi_index=roi_int
+            )
+        )
     if not positions:
         return (
             np.zeros((0,), dtype=int),
@@ -287,6 +291,30 @@ def _track_positions(
         np.vstack(positions),
         np.asarray(roi_indices, dtype=int),
     )
+
+
+def _validated_position_vector(
+    position: Any,
+    *,
+    session_index: int,
+    roi_index: int,
+) -> np.ndarray:
+    try:
+        vector = np.asarray(position, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"position_tables[{session_index}][{roi_index}] must be a finite 2-vector"
+        ) from exc
+    if vector.size != 2:
+        raise ValueError(
+            f"position_tables[{session_index}][{roi_index}] must be a finite 2-vector"
+        )
+    vector = vector.reshape(2)
+    if not np.all(np.isfinite(vector)):
+        raise ValueError(
+            f"position_tables[{session_index}][{roi_index}] must be a finite 2-vector"
+        )
+    return vector
 
 
 def _fit_linear_track(session_indices: np.ndarray, positions: np.ndarray) -> np.ndarray:

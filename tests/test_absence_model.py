@@ -154,6 +154,26 @@ def test_gap_penalty_matrix_accepts_integer_like_session_gap(
     np.testing.assert_allclose(penalties, np.asarray([[1.0]], dtype=float))
 
 
+def test_gap_penalty_matrix_rejects_invalid_absence_cost_vectors() -> None:
+    reference = _plane(2)
+    measurement = _plane(1)
+
+    with pytest.raises(ValueError, match="reference_absence_costs"):
+        gap_penalty_matrix(
+            reference,
+            measurement,
+            reference_absence_costs=np.asarray([1.0, np.nan], dtype=float),
+            measurement_absence_costs=np.asarray([1.0], dtype=float),
+        )
+    with pytest.raises(ValueError, match="measurement_absence_costs"):
+        gap_penalty_matrix(
+            reference,
+            measurement,
+            reference_absence_costs=np.asarray([1.0, 1.0], dtype=float),
+            measurement_absence_costs=np.asarray([-0.1], dtype=float),
+        )
+
+
 def test_apply_absence_adjustment_rejects_broadcastable_shape_mismatch() -> None:
     reference = _plane(2)
     measurement = _plane(3)
