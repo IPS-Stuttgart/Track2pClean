@@ -8,7 +8,7 @@ from bayescatrack.tracking import _coerce_global_track_rows
 
 @pytest.mark.parametrize(
     "bad_value",
-    [True, np.bool_(False), 1.25, np.float64(np.inf), "2"],
+    [True, np.bool_(False), 1.25, np.float64(np.inf), "2", -2, np.int64(-3)],
 )
 def test_global_track_rows_reject_malformed_roi_entries(bad_value) -> None:
     track_rows = np.asarray([[0, bad_value]], dtype=object)
@@ -17,8 +17,8 @@ def test_global_track_rows_reject_malformed_roi_entries(bad_value) -> None:
         _coerce_global_track_rows(track_rows, fill_value=-1)
 
 
-def test_global_track_rows_allow_missing_and_integer_like_entries() -> None:
-    track_rows = np.asarray([[0, None, -99, 2.0, np.int64(3)]], dtype=object)
+def test_global_track_rows_allow_configured_missing_and_integer_like_entries() -> None:
+    track_rows = np.asarray([[0, None, -7, 2.0, np.int64(3)]], dtype=object)
 
     coerced = _coerce_global_track_rows(track_rows, fill_value=-7)
 
