@@ -214,11 +214,15 @@ comparison tables:
 
 | result | meaning |
 | --- | --- |
-| `history_dynamics_stable_gain` | at least two nearby weights improve complete-track F1 without pairwise regression |
-| `history_dynamics_single_weight_gain` | only one weight improves complete-track F1, so treat it as knife-edge |
+| `history_dynamics_stable_gain` | at least two nearby weights improve complete-track F1 micro and the full tested neighborhood has no pairwise or complete-track micro/macro regression |
+| `history_dynamics_single_weight_gain` | only one weight improves complete-track F1 micro, so treat it as knife-edge |
 | `history_dynamics_ties_baseline` | history dynamics validates the story but does not improve metrics |
-| `history_dynamics_pairwise_regression` | do not promote; history pressure damages pairwise tracking |
-| `history_dynamics_complete_regression` | do not promote; complete-track identity is worse |
+| `history_dynamics_pairwise_regression` | do not promote; history pressure damages pairwise tracking in at least one reported micro/macro metric |
+| `history_dynamics_complete_regression` | do not promote; complete-track identity is worse for at least one reported micro/macro metric |
+
+A nearby regressing weight blocks promotion even when two other weights improve
+the micro aggregate. That keeps the history-dynamics layer from becoming a
+single-neighborhood metric artifact.
 
 Promotion still requires the broader no-GT, exposure, and sensitivity gates.
 
@@ -226,8 +230,9 @@ Promotion still requires the broader no-GT, exposure, and sensitivity gates.
 
 Positive evidence would be:
 
-- pairwise F1 does not regress against `FullMHTPrior2`;
-- complete-track F1 improves at more than one nearby weight;
+- pairwise micro and macro F1 do not regress against `FullMHTPrior2`;
+- complete-track F1 micro improves at more than one nearby weight;
+- complete-track F1 macro does not regress;
 - selected histories show fewer internally anomalous edges, not broad over-linking;
 - the beam result beats or meaningfully differs from the greedy beam ablation.
 
@@ -236,7 +241,8 @@ Negative evidence would be:
 - the term has no effect because the beam did not preserve the relevant
   alternatives;
 - it damages pairwise F1 by over-preferring complete-looking histories;
-- it only works at one exact weight.
+- it only works at one exact weight;
+- a neighboring weight improves one aggregate metric while damaging another.
 
 If it works, this is a stronger method story than post-hoc cleanup: MHT is
 choosing among full identity histories using label-free within-history dynamics.
