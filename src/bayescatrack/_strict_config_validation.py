@@ -32,12 +32,11 @@ class CandidatePruningConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if self.top_k_per_roi is not None:
-            object.__setattr__(
-                self,
-                "top_k_per_roi",
-                _positive_int(self.top_k_per_roi, name="top_k_per_roi"),
-            )
+        object.__setattr__(
+            self,
+            "top_k_per_roi",
+            _optional_positive_int(self.top_k_per_roi, name="top_k_per_roi"),
+        )
         object.__setattr__(
             self,
             "include_column_top_k",
@@ -149,6 +148,15 @@ def _original_function(wrapper: Callable[..., Any], name: str) -> Callable[..., 
             f"strict config validation wrapper '{name}' is not installed"
         )
     return original
+
+
+def _optional_positive_int(value: Any, *, name: str) -> int | None:
+    if value is None:
+        return None
+    try:
+        return _positive_int(value, name=name)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a positive integer or None") from exc
 
 
 def _positive_int(value: Any, *, name: str) -> int:
