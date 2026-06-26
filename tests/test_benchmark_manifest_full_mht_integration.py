@@ -77,6 +77,7 @@ def test_full_mht_runner_kwargs_keep_mht_gap_separate_from_track2p_config() -> N
             "track2p_prior_survival_min_anchor_registered_iou": 0.82,
             "track2p_prior_survival_min_examples_per_class": 3,
             "track2p_prior_survival_score_clip": 5.0,
+            "terminal_incomplete_history_weight": 0.75,
         },
         "track2p-policy-full-mht",
     )
@@ -94,11 +95,12 @@ def test_full_mht_runner_kwargs_keep_mht_gap_separate_from_track2p_config() -> N
     assert kwargs["track2p_prior_survival_min_anchor_registered_iou"] == 0.82
     assert kwargs["track2p_prior_survival_min_examples_per_class"] == 3
     assert kwargs["track2p_prior_survival_score_clip"] == 5.0
+    assert kwargs["terminal_incomplete_history_weight"] == 0.75
     assert "cell_probability_threshold" not in kwargs
     assert "max_gap" not in kwargs
 
 
-def test_full_mht_manifest_dispatches_prior_veto_and_survival_options(
+def test_full_mht_manifest_dispatches_prior_veto_survival_and_completion_options(
     tmp_path, monkeypatch
 ) -> None:
     pytest.importorskip("pyrecest")
@@ -138,7 +140,7 @@ def test_full_mht_manifest_dispatches_prior_veto_and_survival_options(
             },
             "runs": [
                 {
-                    "name": "FullMHTPriorSurvival",
+                    "name": "FullMHTPriorSurvivalCompletion",
                     "runner": "track2p-full-mht",
                     "output": "results/full_mht.csv",
                     "beam_width": 4,
@@ -187,6 +189,7 @@ def test_full_mht_manifest_dispatches_prior_veto_and_survival_options(
                     "track2p_prior_survival_min_feature_scale": 0.07,
                     "track2p_prior_survival_per_feature_clip": 3.5,
                     "track2p_prior_survival_score_clip": 5.0,
+                    "terminal_incomplete_history_weight": 0.75,
                 }
             ],
         },
@@ -194,7 +197,7 @@ def test_full_mht_manifest_dispatches_prior_veto_and_survival_options(
 
     result = run_benchmark_manifest(load_benchmark_manifest(manifest_path))
 
-    assert [run.name for run in result.runs] == ["FullMHTPriorSurvival"]
+    assert [run.name for run in result.runs] == ["FullMHTPriorSurvivalCompletion"]
     rows = _read_csv_rows(tmp_path / "results" / "full_mht.csv")
     assert rows[0]["subject"] == "jm_fake"
     assert captured["config"].method == "global-assignment"
@@ -204,6 +207,7 @@ def test_full_mht_manifest_dispatches_prior_veto_and_survival_options(
     assert captured["transform_type"] == "affine"
     assert captured["cell_probability_threshold"] == 0.5
     assert getattr(full_mht, "_bayescatrack_prior_survival_scoring", False)
+    assert getattr(full_mht, "_bayescatrack_terminal_completion_objective", False)
     mht_config = captured["mht_config"]
     assert mht_config.beam_width == 4
     assert mht_config.scan_hypotheses == 4
@@ -226,3 +230,4 @@ def test_full_mht_manifest_dispatches_prior_veto_and_survival_options(
     assert getattr(mht_config, "track2p_prior_survival_max_anchor_rank") == 1
     assert getattr(mht_config, "track2p_prior_survival_min_examples_per_class") == 3
     assert getattr(mht_config, "track2p_prior_survival_score_clip") == 5.0
+    assert getattr(mht_config, "terminal_incomplete_history_weight") == 0.75
