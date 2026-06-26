@@ -23,8 +23,8 @@ def test_full_mht_conflict_demo_pairwise_good_can_be_complete_bad():
     scenario = demo.build_pairwise_good_complete_bad_scenario(stable_tracks=20)
     results = {result.arm: result for result in demo.evaluate_demo(scenario=scenario)}
 
-    assert results["greedy"].path == (1, 10, -1)
-    assert results["full_mht"].path == (1, 20, 30)
+    assert results["greedy"].path == (1, 20, 31, 41)
+    assert results["full_mht"].path == (1, 20, 30, 40)
     assert results["greedy"].pairwise_f1 > 0.95
     assert results["greedy"].pairwise_f1 > results["greedy"].complete_track_f1
     assert results["full_mht"].complete_track_f1 > results["greedy"].complete_track_f1
