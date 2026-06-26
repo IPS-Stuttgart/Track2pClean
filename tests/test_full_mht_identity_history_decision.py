@@ -132,15 +132,25 @@ def test_identity_history_decision_rejects_required_control_regression() -> None
 
 
 def test_identity_history_decision_rejects_macro_regression_against_control() -> None:
-    rows = _rows(identity_pairwise=0.966, identity_complete=0.934)
+    rows = _rows(
+        identity_pairwise=0.966,
+        identity_complete=0.934,
+        greedy_pairwise=0.963,
+        prior_survival_pairwise=0.963,
+        no_prior_pairwise=0.963,
+        no_local_pairwise=0.963,
+    )
     for row in rows:
         if row["approach"] == "FullMHTIdentityHistory":
-            row["pairwise_f1_macro"] = "0.900"
+            row["pairwise_f1_macro"] = "0.964"
         elif row["approach"] == "Track2p":
             row["pairwise_f1_macro"] = "0.965"
+        elif row["approach"] == "FullMHTPrior2":
+            row["pairwise_f1_macro"] = "0.963"
 
     decision = evaluate_identity_history_decision(rows)
 
+    assert decision["mht_vs_local_result"] == "identity_complete_history_advantage"
     assert decision["identity_minus_track2p_pairwise_f1_micro"] > 0.0
     assert decision["identity_minus_track2p_pairwise_f1_macro"] < 0.0
     assert decision["track2p_control_result"] == "identity_below_track2p"
