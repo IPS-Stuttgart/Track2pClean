@@ -127,6 +127,9 @@ from ._soft_overlap_numeric_validation import (
 from ._strict_config_validation import (
     install_strict_config_validation as _install_strict_config_validation,
 )
+from ._suite2p_iscell_validation import (
+    install_suite2p_iscell_value_validation as _install_suite2p_iscell_value_validation,
+)
 from ._suite2p_trace_bool_validation import (
     install_suite2p_trace_bool_validation as _install_suite2p_trace_bool_validation,
 )
@@ -170,6 +173,7 @@ from .soft_overlap_costs import (
 
 _install_suite2p_stat_validation(_bridge)
 _install_suite2p_trace_bool_validation(_bridge)
+_install_suite2p_iscell_value_validation(_bridge)
 
 CalciumPlaneData = _bridge.CalciumPlaneData
 SessionAssociationBundle = _bridge.SessionAssociationBundle
