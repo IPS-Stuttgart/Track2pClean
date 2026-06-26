@@ -4,7 +4,8 @@ The identity-history candidate combines calibrated association likelihood,
 calibrated prior-edge survival, no-prior continuation likelihood, and scan-time
 growth-history prediction.  This helper keeps the interpretation narrow: the row
 is interesting only if the full beam beats its matching greedy beam-width-1
-local-choice ablation on complete-track F1 without pairwise-F1 loss.
+local-choice ablation on complete-track F1 without pairwise-F1 or macro-metric
+loss.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ REPORT_METRICS: tuple[MetricName, ...] = (
     "pairwise_f1_macro",
     "complete_track_f1_macro",
 )
+NON_REGRESSION_METRICS: tuple[MetricName, ...] = REPORT_METRICS
 
 
 @dataclass(frozen=True)
@@ -212,8 +214,8 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         f"Layer-combination result: `{decision['layer_combination_result']}`",
         f"Recommendation: {decision['recommendation']}",
         "",
-        "| comparison | pairwise F1 micro delta | complete-track F1 micro delta |",
-        "| --- | ---: | ---: |",
+        "| comparison | pairwise F1 micro delta | complete-track F1 micro delta | pairwise F1 macro delta | complete-track F1 macro delta |",
+        "| --- | ---: | ---: | ---: | ---: |",
     ]
     for label, prefix in (
         ("MHT minus local greedy", "mht_minus_local"),
@@ -224,10 +226,12 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         ("identity minus no-local context", "identity_minus_no_local_context"),
     ):
         lines.append(
-            "| {label} | {pairwise:.6g} | {complete:.6g} |".format(
+            "| {label} | {pairwise_micro:.6g} | {complete_micro:.6g} | {pairwise_macro:.6g} | {complete_macro:.6g} |".format(
                 label=label,
-                pairwise=float(decision[f"{prefix}_pairwise_f1_micro"]),
-                complete=float(decision[f"{prefix}_complete_track_f1_micro"]),
+                pairwise_micro=float(decision[f"{prefix}_pairwise_f1_micro"]),
+                complete_micro=float(decision[f"{prefix}_complete_track_f1_micro"]),
+                pairwise_macro=float(decision[f"{prefix}_pairwise_f1_macro"]),
+                complete_macro=float(decision[f"{prefix}_complete_track_f1_macro"]),
             )
         )
     return "\n".join(lines)
@@ -288,9 +292,10 @@ def _history_result(
     prefix: str,
     tolerance: float,
 ) -> str:
+    values = [float(deltas[f"{prefix}_{metric}"]) for metric in NON_REGRESSION_METRICS]
     pairwise = float(deltas[f"{prefix}_pairwise_f1_micro"])
     complete = float(deltas[f"{prefix}_complete_track_f1_micro"])
-    if pairwise < -tolerance or complete < -tolerance:
+    if any(delta < -tolerance for delta in values):
         return "identity_regression_vs_greedy"
     if complete > tolerance:
         return "identity_complete_history_advantage"
@@ -308,12 +313,15 @@ def _control_result(
     tie_name: str,
     below_name: str,
 ) -> str:
-    values = [float(deltas[f"{prefix}_{metric}"]) for metric in KEY_METRICS]
-    if all(delta >= -tolerance for delta in values) and any(delta > tolerance for delta in values):
+    values = [float(deltas[f"{prefix}_{metric}"]) for metric in NON_REGRESSION_METRICS]
+    key_values = [float(deltas[f"{prefix}_{metric}"]) for metric in KEY_METRICS]
+    if any(delta < -tolerance for delta in values):
+        return below_name
+    if any(delta > tolerance for delta in key_values) or any(delta > tolerance for delta in values):
         return improvement_name
     if all(abs(delta) <= tolerance for delta in values):
         return tie_name
-    return below_name
+    return tie_name
 
 
 def _layer_result(
