@@ -258,7 +258,7 @@ def _run_subject_tracklet_graph(
         seed_rois=seed_rois,
         seed_session=int(config.seed_session),
     )
-    edges, edge_rows = _build_tracklet_edges(
+    edges, edge_rows, expanded_source_ids = _build_tracklet_edges(
         sessions,
         tracklets,
         feature_cache=feature_cache,
@@ -283,7 +283,13 @@ def _run_subject_tracklet_graph(
         tracklets=tracklets,
         edges=edges,
         selected_paths=selected_paths,
+        sessions=sessions,
+        feature_cache=feature_cache,
+        matrix_config=matrix_config,
+        graph_config=graph_config,
+        expanded_source_ids=expanded_source_ids,
         seed_session=int(config.seed_session),
+        n_sessions=n_sessions,
     )
     scores = _score_prediction_against_reference(prediction, reference, config=config)
     scores = {
@@ -638,7 +644,7 @@ def _build_tracklet_edges(
     n_sessions: int,
     subject: str,
     progress: bool,
-) -> tuple[tuple[TrackletEdge, ...], list[dict[str, Any]]]:
+) -> tuple[tuple[TrackletEdge, ...], list[dict[str, Any]], tuple[int, ...]]:
     edges: list[TrackletEdge] = []
     tracklets_by_id = {int(tracklet.tracklet_id): tracklet for tracklet in tracklets}
     tracklets_by_start: dict[int, list[Tracklet]] = {}
@@ -682,7 +688,7 @@ def _build_tracklet_edges(
     rows: list[dict[str, Any]] = []
     for edge in ranked_edges:
         rows.append(_tracklet_edge_row(subject, edge, tracklets_by_id))
-    return tuple(ranked_edges), rows
+    return tuple(ranked_edges), rows, tuple(sorted(expanded_sources))
 
 
 def _candidate_edges_for_source(
@@ -1004,14 +1010,27 @@ def _coverage_audit_rows(
     tracklets: Sequence[Tracklet],
     edges: Sequence[TrackletEdge],
     selected_paths: Sequence[_PathHypothesis],
-    seed_session: int,
+    sessions: Sequence[Any] | None = None,
+    feature_cache: rank._FeatureCache | None = None,
+    matrix_config: full_mht.FullMHTConfig | None = None,
+    graph_config: TrackletGraphConfig | None = None,
+    expanded_source_ids: Sequence[int] = (),
+    seed_session: int = 0,
+    n_sessions: int | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Return GT-only coverage diagnostics after graph selection is fixed."""
 
     reference = np.asarray(reference_tracks, dtype=int)
+    audit_n_sessions = (
+        int(reference.shape[1]) if n_sessions is None else int(n_sessions)
+    )
     observation_to_tracklet = _observation_tracklet_map(tracklets)
     tracklets_by_id = {int(tracklet.tracklet_id): tracklet for tracklet in tracklets}
+    tracklets_by_start: dict[int, list[Tracklet]] = {}
+    for tracklet in tracklets:
+        tracklets_by_start.setdefault(int(tracklet.start_session), []).append(tracklet)
     candidate_edges = {(int(edge.source_id), int(edge.target_id)) for edge in edges}
+    expanded_sources = {int(tracklet_id) for tracklet_id in expanded_source_ids}
     selected_edges = {
         (int(source_id), int(target_id))
         for path in selected_paths
@@ -1042,6 +1061,20 @@ def _coverage_audit_rows(
         "tracklet_graph_audit_failure_solver_too_conservative": 0,
         "tracklet_graph_audit_failure_conflict_issue": 0,
         "tracklet_graph_audit_recovered_correct_joins": 0,
+        "tracklet_graph_audit_missing_source_not_reachable": 0,
+        "tracklet_graph_audit_missing_outside_max_join_gap": 0,
+        "tracklet_graph_audit_missing_source_not_in_sparse_support": 0,
+        "tracklet_graph_audit_missing_target_cell_probability_below_threshold": 0,
+        "tracklet_graph_audit_missing_target_not_in_sparse_support": 0,
+        "tracklet_graph_audit_missing_registered_iou_below_gate": 0,
+        "tracklet_graph_audit_missing_shifted_iou_below_gate": 0,
+        "tracklet_graph_audit_missing_area_ratio_below_gate": 0,
+        "tracklet_graph_audit_missing_centroid_distance_above_gate": 0,
+        "tracklet_graph_audit_missing_growth_residual_above_gate": 0,
+        "tracklet_graph_audit_missing_score_below_gate": 0,
+        "tracklet_graph_audit_missing_lost_by_edge_top_k": 0,
+        "tracklet_graph_audit_missing_materialization_unexpected": 0,
+        "tracklet_graph_audit_missing_unclassified": 0,
         "tracklet_graph_audit_tracks_split_0": 0,
         "tracklet_graph_audit_tracks_split_1": 0,
         "tracklet_graph_audit_tracks_split_2": 0,
@@ -1059,7 +1092,14 @@ def _coverage_audit_rows(
             selected_edges=selected_edges,
             selected_successor_by_source=selected_successor_by_source,
             selected_predecessor_by_target=selected_predecessor_by_target,
+            sessions=sessions,
+            feature_cache=feature_cache,
+            matrix_config=matrix_config,
+            graph_config=graph_config,
+            expanded_sources=expanded_sources,
+            tracklets_by_start=tracklets_by_start,
             seed_session=int(seed_session),
+            n_sessions=audit_n_sessions,
         )
         rows.append(track_row)
         rows.extend(break_rows)
@@ -1090,7 +1130,14 @@ def _reference_track_coverage_rows(
     selected_edges: set[tuple[int, int]],
     selected_successor_by_source: Mapping[int, int],
     selected_predecessor_by_target: Mapping[int, int],
+    sessions: Sequence[Any] | None,
+    feature_cache: rank._FeatureCache | None,
+    matrix_config: full_mht.FullMHTConfig | None,
+    graph_config: TrackletGraphConfig | None,
+    expanded_sources: set[int],
+    tracklets_by_start: Mapping[int, Sequence[Tracklet]],
     seed_session: int,
+    n_sessions: int | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     observations = [
         (int(session_index), int(roi))
@@ -1140,6 +1187,13 @@ def _reference_track_coverage_rows(
                 selected_edges=selected_edges,
                 selected_successor_by_source=selected_successor_by_source,
                 selected_predecessor_by_target=selected_predecessor_by_target,
+                sessions=sessions,
+                feature_cache=feature_cache,
+                matrix_config=matrix_config,
+                graph_config=graph_config,
+                expanded_sources=expanded_sources,
+                tracklets_by_start=tracklets_by_start,
+                n_sessions=int(n_sessions),
             )
         )
     covered_tracklet_ids = [
@@ -1185,6 +1239,13 @@ def _reference_break_row(
     selected_edges: set[tuple[int, int]],
     selected_successor_by_source: Mapping[int, int],
     selected_predecessor_by_target: Mapping[int, int],
+    sessions: Sequence[Any] | None,
+    feature_cache: rank._FeatureCache | None,
+    matrix_config: full_mht.FullMHTConfig | None,
+    graph_config: TrackletGraphConfig | None,
+    expanded_sources: set[int],
+    tracklets_by_start: Mapping[int, Sequence[Tracklet]],
+    n_sessions: int | None,
 ) -> dict[str, Any]:
     source_tracklet = (
         tracklets_by_id.get(int(source_tracklet_id))
@@ -1226,6 +1287,20 @@ def _reference_break_row(
         selected_successor_by_source=selected_successor_by_source,
         selected_predecessor_by_target=selected_predecessor_by_target,
     )
+    missing_candidate_audit = _missing_candidate_audit(
+        sessions,
+        source_tracklet,
+        target_tracklet,
+        feature_cache=feature_cache,
+        matrix_config=matrix_config,
+        graph_config=graph_config,
+        expanded_sources=expanded_sources,
+        tracklets_by_start=tracklets_by_start,
+        candidate_edges=candidate_edges,
+        edge_key=edge_key,
+        break_reason=reason,
+        n_sessions=n_sessions,
+    )
     return {
         "row_type": "reference_break",
         "subject": subject,
@@ -1258,7 +1333,212 @@ def _reference_break_row(
         "solver_rejected_correct_join": int(join_present and not join_selected),
         "break_reason": reason,
         "failure_class": failure_class,
+        **missing_candidate_audit,
     }
+
+
+def _missing_candidate_audit(
+    sessions: Sequence[Any],
+    source_tracklet: Tracklet | None,
+    target_tracklet: Tracklet | None,
+    *,
+    feature_cache: rank._FeatureCache | None,
+    matrix_config: full_mht.FullMHTConfig | None,
+    graph_config: TrackletGraphConfig | None,
+    expanded_sources: set[int],
+    tracklets_by_start: Mapping[int, Sequence[Tracklet]],
+    candidate_edges: set[tuple[int, int]],
+    edge_key: tuple[int, int],
+    break_reason: str,
+    n_sessions: int | None,
+) -> dict[str, Any]:
+    fields = _empty_missing_candidate_audit()
+    if break_reason != "correct_join_candidate_missing":
+        return fields
+    if (
+        sessions is None
+        or feature_cache is None
+        or matrix_config is None
+        or graph_config is None
+        or n_sessions is None
+    ):
+        return fields
+    if source_tracklet is None or target_tracklet is None:
+        return {**fields, "missing_candidate_primary_reason": "tracklet_uncovered"}
+
+    gap = int(target_tracklet.start_session - source_tracklet.end_session)
+    source_expanded = int(source_tracklet.tracklet_id) in expanded_sources
+    within_gap = 1 <= gap <= max(1, int(graph_config.max_join_gap))
+    fields.update(
+        {
+            "missing_candidate_source_expanded": int(source_expanded),
+            "missing_candidate_gap": int(gap),
+            "missing_candidate_within_max_join_gap": int(within_gap),
+            "missing_candidate_source_cell_probability": full_mht._cell_probability(
+                sessions, source_tracklet.end_session, int(source_tracklet.rois[-1])
+            ),
+            "missing_candidate_target_cell_probability": full_mht._cell_probability(
+                sessions, target_tracklet.start_session, int(target_tracklet.rois[0])
+            ),
+        }
+    )
+    if not source_expanded:
+        fields["missing_candidate_primary_reason"] = "source_not_reachable"
+    elif not within_gap:
+        fields["missing_candidate_primary_reason"] = "outside_max_join_gap"
+        return fields
+
+    matrices = full_mht._sparse_pair_matrices(
+        sessions,
+        feature_cache,
+        source_session=int(source_tracklet.end_session),
+        target_session=int(target_tracklet.start_session),
+        source_rois=(int(source_tracklet.rois[-1]),),
+        edge_top_k=max(1, int(graph_config.edge_top_k)),
+        config=matrix_config,
+    )
+    source_lookup = {
+        int(roi): index for index, roi in enumerate(np.asarray(matrices.source_indices))
+    }
+    target_lookup = {
+        int(roi): index for index, roi in enumerate(np.asarray(matrices.target_indices))
+    }
+    source_local = source_lookup.get(int(source_tracklet.rois[-1]))
+    target_local = target_lookup.get(int(target_tracklet.rois[0]))
+    if source_local is None or source_local >= int(matrices.registered_iou.shape[0]):
+        if source_expanded:
+            fields["missing_candidate_primary_reason"] = "source_not_in_sparse_support"
+        return fields
+    if target_local is None:
+        if fields["missing_candidate_primary_reason"] == "":
+            if (
+                float(fields["missing_candidate_target_cell_probability"])
+                < float(feature_cache.cell_probability_threshold)
+            ):
+                reason = "target_cell_probability_below_threshold"
+            else:
+                reason = "target_not_in_sparse_support"
+            fields["missing_candidate_primary_reason"] = reason
+        return fields
+
+    score_matrix = _score_matrix(
+        sessions,
+        matrices,
+        target_session=int(target_tracklet.start_session),
+        matrix_config=matrix_config,
+    )
+    raw_score = float(score_matrix[int(source_local), int(target_local)])
+    fields.update(
+        {
+            "missing_candidate_target_in_sparse_support": 1,
+            "missing_candidate_raw_score": raw_score,
+            "missing_candidate_registered_iou": float(
+                matrices.registered_iou[int(source_local), int(target_local)]
+            ),
+            "missing_candidate_shifted_iou": float(
+                matrices.shifted_iou[int(source_local), int(target_local)]
+            ),
+            "missing_candidate_centroid_distance": float(
+                matrices.centroid_distance[int(source_local), int(target_local)]
+            ),
+            "missing_candidate_area_ratio": float(
+                matrices.area_ratio[int(source_local), int(target_local)]
+            ),
+            "missing_candidate_growth_residual": float(
+                matrices.growth_residual[int(source_local), int(target_local)]
+            ),
+            "missing_candidate_growth_mahalanobis": float(
+                matrices.growth_mahalanobis[int(source_local), int(target_local)]
+            ),
+            "missing_candidate_endpoint_cell_probability_min": min(
+                float(fields["missing_candidate_source_cell_probability"]),
+                float(fields["missing_candidate_target_cell_probability"]),
+            ),
+        }
+    )
+    gate_failures = _missing_candidate_gate_failures(fields, graph_config)
+    fields["missing_candidate_gate_failures"] = ";".join(gate_failures)
+    if fields["missing_candidate_primary_reason"] == "" and gate_failures:
+        fields["missing_candidate_primary_reason"] = gate_failures[0]
+
+    valid_edges = _candidate_edges_for_source(
+        sessions,
+        source_tracklet,
+        tracklets_by_start=tracklets_by_start,
+        feature_cache=feature_cache,
+        matrix_config=matrix_config,
+        graph_config=graph_config,
+        n_sessions=int(n_sessions),
+    )
+    fields["missing_candidate_valid_candidate_count_for_source"] = len(valid_edges)
+    for rank_index, edge in enumerate(valid_edges, start=1):
+        if int(edge.target_id) != int(target_tracklet.tracklet_id):
+            continue
+        fields["missing_candidate_rank_for_source"] = int(rank_index)
+        fields["missing_candidate_candidate_score"] = float(edge.score)
+        break
+    if fields["missing_candidate_primary_reason"] == "":
+        rank_value = fields["missing_candidate_rank_for_source"]
+        if rank_value != "" and int(rank_value) > max(1, int(graph_config.edge_top_k)):
+            fields["missing_candidate_primary_reason"] = "lost_by_edge_top_k"
+        elif edge_key not in candidate_edges:
+            fields["missing_candidate_primary_reason"] = "materialization_unexpected"
+    return fields
+
+
+def _empty_missing_candidate_audit() -> dict[str, Any]:
+    return {
+        "missing_candidate_primary_reason": "",
+        "missing_candidate_gate_failures": "",
+        "missing_candidate_source_expanded": "",
+        "missing_candidate_gap": "",
+        "missing_candidate_within_max_join_gap": "",
+        "missing_candidate_target_in_sparse_support": "",
+        "missing_candidate_source_cell_probability": "",
+        "missing_candidate_target_cell_probability": "",
+        "missing_candidate_endpoint_cell_probability_min": "",
+        "missing_candidate_registered_iou": "",
+        "missing_candidate_shifted_iou": "",
+        "missing_candidate_centroid_distance": "",
+        "missing_candidate_area_ratio": "",
+        "missing_candidate_growth_residual": "",
+        "missing_candidate_growth_mahalanobis": "",
+        "missing_candidate_raw_score": "",
+        "missing_candidate_candidate_score": "",
+        "missing_candidate_rank_for_source": "",
+        "missing_candidate_valid_candidate_count_for_source": "",
+    }
+
+
+def _missing_candidate_gate_failures(
+    fields: Mapping[str, Any], graph_config: TrackletGraphConfig
+) -> list[str]:
+    failures: list[str] = []
+    if float(fields["missing_candidate_registered_iou"]) < float(
+        graph_config.join_min_registered_iou
+    ):
+        failures.append("registered_iou_below_gate")
+    if float(fields["missing_candidate_shifted_iou"]) < float(
+        graph_config.join_min_shifted_iou
+    ):
+        failures.append("shifted_iou_below_gate")
+    if float(fields["missing_candidate_area_ratio"]) < float(
+        graph_config.join_min_area_ratio
+    ):
+        failures.append("area_ratio_below_gate")
+    if float(fields["missing_candidate_centroid_distance"]) > float(
+        graph_config.join_max_centroid_distance
+    ):
+        failures.append("centroid_distance_above_gate")
+    if float(fields["missing_candidate_growth_residual"]) > float(
+        graph_config.join_max_growth_residual
+    ):
+        failures.append("growth_residual_above_gate")
+    if float(fields["missing_candidate_raw_score"]) < float(
+        graph_config.join_min_edge_score
+    ):
+        failures.append("score_below_gate")
+    return failures
 
 
 def _reference_break_failure_class(
@@ -1365,6 +1645,52 @@ def _accumulate_coverage_summary(
             summary["tracklet_graph_audit_failure_conflict_issue"] += 1
         elif failure_class == "recovered_correct_join":
             summary["tracklet_graph_audit_recovered_correct_joins"] += 1
+        missing_reason = str(row.get("missing_candidate_primary_reason", ""))
+        if not missing_reason:
+            continue
+        _increment_missing_candidate_summary(summary, missing_reason)
+
+
+def _increment_missing_candidate_summary(
+    summary: dict[str, int], missing_reason: str
+) -> None:
+    key_by_reason = {
+        "source_not_reachable": "tracklet_graph_audit_missing_source_not_reachable",
+        "outside_max_join_gap": "tracklet_graph_audit_missing_outside_max_join_gap",
+        "source_not_in_sparse_support": (
+            "tracklet_graph_audit_missing_source_not_in_sparse_support"
+        ),
+        "target_cell_probability_below_threshold": (
+            "tracklet_graph_audit_missing_target_cell_probability_below_threshold"
+        ),
+        "target_not_in_sparse_support": (
+            "tracklet_graph_audit_missing_target_not_in_sparse_support"
+        ),
+        "registered_iou_below_gate": (
+            "tracklet_graph_audit_missing_registered_iou_below_gate"
+        ),
+        "shifted_iou_below_gate": (
+            "tracklet_graph_audit_missing_shifted_iou_below_gate"
+        ),
+        "area_ratio_below_gate": (
+            "tracklet_graph_audit_missing_area_ratio_below_gate"
+        ),
+        "centroid_distance_above_gate": (
+            "tracklet_graph_audit_missing_centroid_distance_above_gate"
+        ),
+        "growth_residual_above_gate": (
+            "tracklet_graph_audit_missing_growth_residual_above_gate"
+        ),
+        "score_below_gate": "tracklet_graph_audit_missing_score_below_gate",
+        "lost_by_edge_top_k": "tracklet_graph_audit_missing_lost_by_edge_top_k",
+        "materialization_unexpected": (
+            "tracklet_graph_audit_missing_materialization_unexpected"
+        ),
+    }
+    key = key_by_reason.get(
+        missing_reason, "tracklet_graph_audit_missing_unclassified"
+    )
+    summary[key] += 1
 
 
 def _edge_feature_row(
