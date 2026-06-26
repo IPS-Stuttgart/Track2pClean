@@ -104,6 +104,15 @@ def test_growth_optional_roi_rejects_fractional_values():
     assert _optional_roi("nan") is None
 
 
+def test_growth_optional_roi_rejects_boolean_values():
+    with pytest.raises(ValueError, match="boolean"):
+        _optional_roi(True)
+    with pytest.raises(ValueError, match="boolean"):
+        _optional_roi(False)
+    with pytest.raises(ValueError, match="boolean"):
+        _optional_roi(np.bool_(True))
+
+
 def test_growth_cli_help_is_registered():
     proc = run_module("-m", "bayescatrack", "growth", "--help")
     assert "radial" in proc.stdout
