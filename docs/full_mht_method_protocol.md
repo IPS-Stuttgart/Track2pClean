@@ -34,17 +34,20 @@ exposure artifacts prove that the method does something useful and stable.
 | layer | current status | evidence | decision |
 | --- | --- | --- | --- |
 | Full scan-assignment beam | implemented | `track2p-policy-full-mht` | keep |
-| Greedy-vs-MHT conflict | constructed positive | `track2p-policy-full-mht-conflict-demo` | use as method invariant, not benchmark proof |
+| Greedy-vs-MHT conflict | constructed positive and reference-independent | `track2p-policy-full-mht-conflict-demo` | use as method invariant, not benchmark proof |
 | Scan-history conflict | constructed positive | `full_mht_scan_history_conflict_demo` | use as label-free history-search invariant |
 | Fixed prior-veto hazard | first positive FullMHT-owned benchmark result | `docs/full_mht_prior_risk_notes.md` | validate, but do not stop here |
+| Calibrated association likelihood | implemented | `association_score_mode = calibrated-likelihood` and local-context gate | use in candidate rows |
 | Calibrated prior-edge survival | implemented | `FullMHTPriorSurvival` rows and `full_mht_prior_survival_model.py` | run prior-survival bundle |
 | No-prior continuation likelihood | implemented | `benchmarks/full_mht_no_prior_continuation_probe_manifest.json` | run as birth/death probe |
-| Growth-history prediction | implemented | `benchmarks/full_mht_growth_history_prediction_probe_manifest.json` | run benchmark plus exposure gate |
+| Growth-history prediction | implemented and scan-time active | `benchmarks/full_mht_growth_history_prediction_probe_manifest.json` | run benchmark plus exposure gate |
+| Local-context ablation | frozen | `FullMHTIdentityHistoryNoLocalContext` | required control for candidate row |
 | Terminal complete-history objective | implemented | `benchmarks/full_mht_terminal_completion_probe_manifest.json` | run as complete-objective probe |
 | Combined identity-history row | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_candidate_manifest.json` | current paper-facing candidate |
 | Combined identity-history sensitivity | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | required before promotion |
-| Combined terminal-completion add-on | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_completion_manifest.json` | can enter only if stable |
+| Combined terminal-completion add-on | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_completion_manifest.json` | can enter only if stable and non-regressing |
 | Label-free exposure audit | implemented | `track2p_policy_full_mht_exposure_audit.py` | required before promotion |
+| No-GT leakage guard | implemented and widened | `tests/test_full_mht_no_gt_leakage.py` | required before promotion |
 
 ## Candidate Method Row
 
@@ -75,6 +78,16 @@ and disables identity-diverse beam retention.  The full beam must beat this row
 on complete-track F1 without pairwise-F1 loss before the benchmark can claim that
 MHT history search matters on real data.
 
+The canonical manifest also includes:
+
+```text
+FullMHTIdentityHistoryNoLocalContext
+```
+
+This row is identical to the candidate except `local_deformation_weight = 0.0`.
+The candidate must not fall below this control; otherwise the local-neighborhood
+term has not earned its place in the method.
+
 A separate probe tests whether the terminal complete-history objective should be
 added to the combined method:
 
@@ -87,7 +100,8 @@ FullMHTIdentityHistoryCompletion100
 These rows are identical to `FullMHTIdentityHistory` except for
 `terminal_incomplete_history_weight`.  They are not a new default.  They become a
 candidate only if at least two nearby weights improve complete-track F1 without
-pairwise-F1 regression.
+pairwise-F1 loss and no tested neighboring weight regresses pairwise or
+complete-track F1.
 
 ## Promotion Gates
 
@@ -96,11 +110,12 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | gate | required evidence |
 | --- | --- |
 | Manifest comparison | `FullMHTIdentityHistory` beats `FullMHTGreedyIdentityHistory` on complete-track F1 without pairwise-F1 loss |
-| Required controls | `FullMHTIdentityHistory` does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on the required micro metrics |
+| Required controls | `FullMHTIdentityHistory` does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, `FullMHTNoPriorContinuation100`, or `FullMHTIdentityHistoryNoLocalContext` on the required micro metrics |
+| Conflict witness | constructed FullMHT-vs-greedy witness passes and selected paths remain unchanged when only the evaluation reference is altered |
 | Sensitivity | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` reports `stable_plateau` |
 | Exposure | label-free exposure audit reports `bounded_exposure` with active but rare prior-survival, no-prior-continuation, and growth-history signals |
 | No-GT leakage | tests confirm method layers do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
-| Terminal objective | optional completion variant reports `terminal_completion_stable_gain` before it can replace the base identity-history row |
+| Terminal objective | optional completion variant reports `terminal_completion_stable_gain`, meaning at least two gains and no regressing neighbor in the tested weight neighborhood |
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants where relevant |
 
 If the identity-history beam ties its greedy row, regresses, or improves only
@@ -115,14 +130,17 @@ Do not present FullMHT as a final method if any of the following remain true:
 - The frozen identity-history manifest has not been run.
 - The candidate row ties or loses to its matching greedy ablation.
 - The candidate row is worse than a required control on pairwise or complete-track
-  micro F1.
+  micro F1, including the no-local-context control.
 - The sensitivity neighborhood is a single-weight spike.
 - The exposure audit shows broad non-prior continuations, broad prior-survival
   penalties, broad growth-history penalties, or many prior switches.
-- The terminal complete-history objective improves only at one fragile weight or
-  damages pairwise F1.
+- The terminal complete-history objective improves only at one fragile weight,
+  damages pairwise F1, or damages complete-track F1 at a neighboring tested
+  weight.
 - Deterministic edge gating over the same candidates produces the same behavior
   without any history-level conflict or history-level benefit.
+- The constructed conflict witness changes selected paths when only the reporting
+  reference is changed.
 - The paper text cannot distinguish the benchmark row from post-hoc growth-veto
   cleanup.
 
