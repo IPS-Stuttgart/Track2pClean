@@ -71,11 +71,21 @@ def _validate_suite2p_iscell_values(plane_dir: Path) -> None:
         _validate_probability_like_values(iscell, column_name="values")
         return
 
-    _validate_probability_like_values(iscell[:, 0], column_name="cell-flag column")
+    _validate_binary_flag_values(iscell[:, 0], column_name="cell-flag column")
     if iscell.shape[1] > 1:
         _validate_probability_like_values(
             iscell[:, 1],
             column_name="cell-probability column",
+        )
+
+
+def _validate_binary_flag_values(values: np.ndarray, *, column_name: str) -> None:
+    _validate_probability_like_values(values, column_name=column_name)
+    numeric_values = np.asarray(values, dtype=float)
+    if np.any((numeric_values != 0.0) & (numeric_values != 1.0)):
+        raise ValueError(
+            f"iscell.npy {column_name} must contain finite numbers in [0, 1] "
+            "and binary 0/1 values"
         )
 
 
