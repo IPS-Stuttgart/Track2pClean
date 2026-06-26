@@ -71,6 +71,12 @@ class TrackletGraphConfig:
     join_min_area_ratio: float = 0.55
     join_max_centroid_distance: float = 14.0
     join_max_growth_residual: float = 8.0
+    join_score_frontier_min_edge_score: float = 0.0
+    join_score_frontier_min_registered_iou: float = 0.30
+    join_score_frontier_min_shifted_iou: float = 0.50
+    join_score_frontier_min_area_ratio: float = 0.65
+    join_score_frontier_max_centroid_distance: float = 4.5
+    join_score_frontier_max_growth_residual: float = 4.5
     join_complexity_penalty: float = 0.35
     gap_penalty: float = 0.20
     component_incoherence_weight: float = 0.25
@@ -565,7 +571,7 @@ def _join_valid_mask(
     score_matrix: np.ndarray,
     config: TrackletGraphConfig,
 ) -> np.ndarray:
-    return (
+    strict = (
         np.isfinite(score_matrix)
         & (score_matrix >= float(config.join_min_edge_score))
         & (matrices.registered_iou >= float(config.join_min_registered_iou))
@@ -574,6 +580,25 @@ def _join_valid_mask(
         & (matrices.centroid_distance <= float(config.join_max_centroid_distance))
         & (matrices.growth_residual <= float(config.join_max_growth_residual))
     )
+    score_frontier = (
+        np.isfinite(score_matrix)
+        & (score_matrix >= float(config.join_score_frontier_min_edge_score))
+        & (
+            matrices.registered_iou
+            >= float(config.join_score_frontier_min_registered_iou)
+        )
+        & (matrices.shifted_iou >= float(config.join_score_frontier_min_shifted_iou))
+        & (matrices.area_ratio >= float(config.join_score_frontier_min_area_ratio))
+        & (
+            matrices.centroid_distance
+            <= float(config.join_score_frontier_max_centroid_distance)
+        )
+        & (
+            matrices.growth_residual
+            <= float(config.join_score_frontier_max_growth_residual)
+        )
+    )
+    return strict | score_frontier
 
 
 def _mutual_local_links(
@@ -1912,6 +1937,22 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--join-min-area-ratio", type=float, default=0.55)
     parser.add_argument("--join-max-centroid-distance", type=float, default=14.0)
     parser.add_argument("--join-max-growth-residual", type=float, default=8.0)
+    parser.add_argument("--join-score-frontier-min-edge-score", type=float, default=0.0)
+    parser.add_argument(
+        "--join-score-frontier-min-registered-iou", type=float, default=0.30
+    )
+    parser.add_argument(
+        "--join-score-frontier-min-shifted-iou", type=float, default=0.50
+    )
+    parser.add_argument(
+        "--join-score-frontier-min-area-ratio", type=float, default=0.65
+    )
+    parser.add_argument(
+        "--join-score-frontier-max-centroid-distance", type=float, default=4.5
+    )
+    parser.add_argument(
+        "--join-score-frontier-max-growth-residual", type=float, default=4.5
+    )
     parser.add_argument("--join-complexity-penalty", type=float, default=0.35)
     parser.add_argument("--gap-penalty", type=float, default=0.20)
     parser.add_argument("--component-incoherence-weight", type=float, default=0.25)
@@ -1989,6 +2030,24 @@ def main(argv: list[str] | None = None) -> int:
             join_min_area_ratio=float(args.join_min_area_ratio),
             join_max_centroid_distance=float(args.join_max_centroid_distance),
             join_max_growth_residual=float(args.join_max_growth_residual),
+            join_score_frontier_min_edge_score=float(
+                args.join_score_frontier_min_edge_score
+            ),
+            join_score_frontier_min_registered_iou=float(
+                args.join_score_frontier_min_registered_iou
+            ),
+            join_score_frontier_min_shifted_iou=float(
+                args.join_score_frontier_min_shifted_iou
+            ),
+            join_score_frontier_min_area_ratio=float(
+                args.join_score_frontier_min_area_ratio
+            ),
+            join_score_frontier_max_centroid_distance=float(
+                args.join_score_frontier_max_centroid_distance
+            ),
+            join_score_frontier_max_growth_residual=float(
+                args.join_score_frontier_max_growth_residual
+            ),
             join_complexity_penalty=float(args.join_complexity_penalty),
             gap_penalty=float(args.gap_penalty),
             component_incoherence_weight=float(args.component_incoherence_weight),

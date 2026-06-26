@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -119,6 +121,25 @@ def test_seed_path_selection_enforces_tracklet_conflicts():
 
     assert graph_mht._PathHypothesis((0, 2), ((0, 2),), 2.0) in paths
     assert graph_mht._PathHypothesis((1,), tuple(), 0.0) in paths
+
+
+def test_join_valid_mask_admits_strong_score_frontier_candidate():
+    matrices = SimpleNamespace(
+        registered_iou=np.asarray([[0.35, 0.35]], dtype=float),
+        shifted_iou=np.asarray([[0.60, 0.30]], dtype=float),
+        area_ratio=np.asarray([[0.80, 0.80]], dtype=float),
+        centroid_distance=np.asarray([[3.0, 3.0]], dtype=float),
+        growth_residual=np.asarray([[3.0, 3.0]], dtype=float),
+    )
+    scores = np.asarray([[0.50, 0.50]], dtype=float)
+
+    valid = graph_mht._join_valid_mask(
+        matrices,
+        scores,
+        graph_mht.TrackletGraphConfig(join_min_edge_score=0.75),
+    )
+
+    assert valid.tolist() == [[True, False]]
 
 
 def test_coverage_audit_splits_candidate_presence_from_solver_rejection():
