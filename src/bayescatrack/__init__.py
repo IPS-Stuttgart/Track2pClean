@@ -94,6 +94,9 @@ from ._session_gap_validation import (
 from ._session_match_validation import (
     install_session_match_result_validation as _install_session_match_result_validation,
 )
+from ._shared_session_roi_validation import (
+    install_shared_session_roi_validation as _install_shared_session_roi_validation,
+)
 from ._shifted_overlap_validation import (
     install_shifted_overlap_scalar_validation as _install_shifted_overlap_scalar_validation,
 )
@@ -165,6 +168,7 @@ summarize_subject = _bridge.summarize_subject
 _install_confidence_ordered_strict_gap_cli(_cli)
 _install_matching_layout_validation(_matching)
 _install_matching_max_cost_validation(_matching)
+_install_shared_session_roi_validation(_matching)
 _install_soft_overlap_costs()
 _install_soft_overlap_numeric_validation()
 _install_shifted_overlap_scalar_validation()
