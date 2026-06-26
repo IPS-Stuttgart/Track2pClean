@@ -116,6 +116,7 @@ def evaluate_identity_history_promotion(
     exposure = evaluate_identity_history_exposure(exposure_rows, config=cfg)
 
     history_result = str(manifest.get("history_search_result", "incomplete"))
+    mht_vs_local_result = str(manifest.get("mht_vs_local_result", history_result))
     prior_result = str(manifest.get("prior_control_result", "incomplete"))
     track2p_result = str(manifest.get("track2p_control_result", "incomplete"))
     layer_result = str(manifest.get("layer_combination_result", "incomplete"))
@@ -123,7 +124,7 @@ def evaluate_identity_history_promotion(
     exposure_result = str(exposure.get("exposure_result", "incomplete"))
     manifest_promotable = (
         manifest.get("status") == "complete"
-        and history_result == "identity_complete_history_advantage"
+        and mht_vs_local_result == "identity_complete_history_advantage"
         and prior_result != "identity_below_prior"
         and track2p_result != "identity_below_track2p"
         and layer_result != "combined_layer_regression"
@@ -143,7 +144,7 @@ def evaluate_identity_history_promotion(
         recommendation = "promote only after recording exact output directories and no-GT test results"
     elif not manifest_promotable:
         status = "not_promotable_manifest"
-        recommendation = "keep exploratory; manifest does not prove identity-history beam advantage"
+        recommendation = "keep exploratory; manifest does not prove MHT-vs-local identity-history advantage"
     elif sensitivity_result != "stable_plateau":
         status = "not_promotable_sensitivity"
         recommendation = "keep exploratory; identity-history gain is absent or knife-edge"
@@ -157,6 +158,7 @@ def evaluate_identity_history_promotion(
     return {
         "status": status,
         "recommendation": recommendation,
+        "mht_vs_local_result": mht_vs_local_result,
         "history_search_result": history_result,
         "prior_control_result": prior_result,
         "track2p_control_result": track2p_result,
@@ -366,6 +368,7 @@ def format_identity_history_promotion_markdown(decision: Mapping[str, Any]) -> s
         "# FullMHT Identity-History Promotion Gate",
         "",
         f"Status: `{decision.get('status', '')}`",
+        f"MHT-vs-local result: `{decision.get('mht_vs_local_result', decision.get('history_search_result', ''))}`",
         f"History-search result: `{decision.get('history_search_result', '')}`",
         f"Prior-control result: `{decision.get('prior_control_result', '')}`",
         f"Track2p-control result: `{decision.get('track2p_control_result', '')}`",
