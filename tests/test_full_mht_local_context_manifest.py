@@ -24,6 +24,9 @@ def test_local_context_probe_manifest_is_frozen() -> None:
         "FullMHTLocalContext050",
         "FullMHTLocalContext100",
     ]
+    assert runs["FullMHTLocalContext000"]["association_score_mode"] == (
+        "calibrated-likelihood"
+    )
     assert runs["FullMHTLocalContext000"]["local_deformation_weight"] == 0.0
     assert runs["FullMHTLocalContext025"]["local_deformation_weight"] == 0.25
     assert runs["FullMHTLocalContext050"]["local_deformation_weight"] == 0.5
@@ -46,6 +49,9 @@ def test_local_context_probe_changes_only_local_weight() -> None:
         "gap_reactivation_cost",
         "min_output_observations",
         "min_edge_score",
+        "association_score_mode",
+        "association_likelihood_weight",
+        "association_likelihood_clip",
         "track2p_prior_weight",
         "track2p_non_prior_penalty",
         "track2p_prior_switch_penalty",
