@@ -37,9 +37,9 @@ exposure artifacts prove that the method does something useful and stable.
 | Greedy-vs-MHT conflict | constructed positive and reference-independent | `track2p-policy-full-mht-conflict-demo` | use as method invariant, not benchmark proof |
 | Scan-history conflict | constructed positive | `full_mht_scan_history_conflict_demo` | use as label-free history-search invariant |
 | Fixed prior-veto hazard | first positive FullMHT-owned benchmark result | `docs/full_mht_prior_risk_notes.md` | validate, but do not stop here |
-| Calibrated association likelihood | implemented | `association_score_mode = calibrated-likelihood` and local-context gate | use in candidate rows |
+| Calibrated association likelihood | implemented and scan-assignment active | `test_calibrated_likelihood_flips_scan_assignment_from_local_overlap` | required method-layer invariant |
 | Calibrated prior-edge survival | implemented | `FullMHTPriorSurvival` rows and `full_mht_prior_survival_model.py` | run prior-survival bundle |
-| No-prior continuation likelihood | implemented | `benchmarks/full_mht_no_prior_continuation_probe_manifest.json` | run as birth/death probe |
+| No-prior continuation likelihood | implemented and can open continuation over death | `test_no_prior_continuation_likelihood_opens_scan_assignment_over_death` | run as birth/death probe |
 | Growth-history prediction | implemented and scan-time active | `benchmarks/full_mht_growth_history_prediction_probe_manifest.json` | run benchmark plus exposure gate |
 | Local-context ablation | frozen | `FullMHTIdentityHistoryNoLocalContext` | required control for candidate row |
 | Terminal complete-history objective | implemented | `benchmarks/full_mht_terminal_completion_probe_manifest.json` | run as complete-objective probe |
@@ -112,6 +112,7 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | Manifest comparison | `FullMHTIdentityHistory` beats `FullMHTGreedyIdentityHistory` on complete-track F1 without pairwise-F1 loss |
 | Required controls | `FullMHTIdentityHistory` does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, `FullMHTNoPriorContinuation100`, or `FullMHTIdentityHistoryNoLocalContext` on the required micro metrics |
 | Conflict witness | constructed FullMHT-vs-greedy witness passes and selected paths remain unchanged when only the evaluation reference is altered |
+| Method-layer invariants | calibrated likelihood changes scan assignment from local-overlap-only behavior; no-prior continuation likelihood can choose continuation over death; growth-history prediction can flip a scan assignment to a coherent history |
 | Sensitivity | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` reports `stable_plateau` |
 | Exposure | label-free exposure audit reports `bounded_exposure` with active but rare prior-survival, no-prior-continuation, and growth-history signals |
 | No-GT leakage | tests confirm method layers do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
