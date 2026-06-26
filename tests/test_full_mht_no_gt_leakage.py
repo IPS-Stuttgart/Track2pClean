@@ -16,6 +16,7 @@ METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/full_mht_local_context_integration.py",
     "src/bayescatrack/experiments/full_mht_local_context_decision.py",
     "src/bayescatrack/experiments/full_mht_manifest_decision.py",
+    "src/bayescatrack/experiments/full_mht_history_consistency_model.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_model.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_integration.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_manifest_integration.py",
@@ -29,6 +30,7 @@ METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/full_mht_identity_history_decision.py",
     "src/bayescatrack/experiments/full_mht_identity_history_promotion_gate.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_conflict_demo.py",
+    "src/bayescatrack/experiments/track2p_policy_full_mht_history_consistency_benchmark.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_terminal_completion_benchmark.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_exposure_audit.py",
 )
@@ -72,6 +74,7 @@ def test_full_mht_no_gt_leakage_scan_covers_all_method_layers() -> None:
     expected.update(
         {
             "src/bayescatrack/experiments/track2p_policy_full_mht_conflict_demo.py",
+            "src/bayescatrack/experiments/track2p_policy_full_mht_history_consistency_benchmark.py",
             "src/bayescatrack/experiments/track2p_policy_full_mht_terminal_completion_benchmark.py",
         }
     )
