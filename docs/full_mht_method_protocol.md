@@ -156,10 +156,11 @@ docs/full_mht_identity_history_validation.md
 Supporting probes and background notes live in:
 
 ```text
+docs/full_mht_method_invariant_checklist.md
 docs/full_mht_prior_survival_validation.md
 docs/full_mht_no_prior_continuation_likelihood.md
 docs/full_mht_terminal_completion_objective.md
-docs/full_mht_growth_history_prediction.md
+docs/full_mht_growth_history.md
 docs/full_mht_label_free_exposure_audit.md
 docs/full_mht_manifest_integration_notes.md
 ```
