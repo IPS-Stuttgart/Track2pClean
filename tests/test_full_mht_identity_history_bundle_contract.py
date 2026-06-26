@@ -91,9 +91,9 @@ def test_completion_addon_rows_change_only_terminal_weight() -> None:
 
 
 def test_sensitivity_rows_change_only_one_declared_axis() -> None:
-    baseline = _normalized(
-        _runs("full_mht_identity_history_candidate_manifest.json")["FullMHTIdentityHistory"]
-    )
+    candidate = _runs("full_mht_identity_history_candidate_manifest.json")[
+        "FullMHTIdentityHistory"
+    ]
     sensitivity_runs = _runs("full_mht_identity_history_sensitivity_manifest.json")
     expected_changes = {
         "IdentityHistorySurvivalW05": {"track2p_prior_survival_weight": 0.5},
@@ -106,6 +106,10 @@ def test_sensitivity_rows_change_only_one_declared_axis() -> None:
 
     for row_name, changed in expected_changes.items():
         row = sensitivity_runs[row_name]
+        ignored = set(changed)
         for key, value in changed.items():
             assert row[key] == value
-        assert _normalized(row, extra_ignored=set(changed)) == baseline
+        assert _normalized(row, extra_ignored=ignored) == _normalized(
+            candidate,
+            extra_ignored=ignored,
+        )
