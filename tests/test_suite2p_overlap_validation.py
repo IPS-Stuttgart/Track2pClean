@@ -19,15 +19,12 @@ def _write_suite2p_plane_with_invalid_overlap_pixel(plane_dir):
     )
 
 
-def test_load_suite2p_plane_validation_respects_overlap_pixel_exclusion(tmp_path):
+def test_load_suite2p_plane_validation_rejects_out_of_bounds_overlap_pixels_before_exclusion(tmp_path):
     plane_dir = tmp_path / "plane0"
     _write_suite2p_plane_with_invalid_overlap_pixel(plane_dir)
 
-    plane = load_suite2p_plane(plane_dir)
-
-    assert plane.n_rois == 1
-    assert int(np.count_nonzero(plane.roi_masks[0])) == 1
-    assert bool(plane.roi_masks[0, 0, 0])
+    with pytest.raises(ValueError, match="within image bounds"):
+        load_suite2p_plane(plane_dir)
 
 
 def test_load_suite2p_plane_validation_rejects_out_of_bounds_overlap_pixels_when_retained(
@@ -36,5 +33,5 @@ def test_load_suite2p_plane_validation_rejects_out_of_bounds_overlap_pixels_when
     plane_dir = tmp_path / "plane0"
     _write_suite2p_plane_with_invalid_overlap_pixel(plane_dir)
 
-    with pytest.raises(ValueError, match="out of bounds"):
+    with pytest.raises(ValueError, match="within image bounds"):
         load_suite2p_plane(plane_dir, exclude_overlapping_pixels=False)
