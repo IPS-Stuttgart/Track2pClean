@@ -9,8 +9,12 @@ The frozen FullMHT manifests are now paired with benchmark-suite integration cod
 - `benchmarks/full_mht_terminal_completion_probe_manifest.json`
 - `src/bayescatrack/experiments/_full_mht_manifest_integration.py`
 - `src/bayescatrack/experiments/full_mht_manifest_decision.py`
+- `src/bayescatrack/experiments/full_mht_prior_survival_promotion_gate.py`
+- `src/bayescatrack/experiments/track2p_policy_full_mht_exposure_audit.py`
 - `tests/test_benchmark_manifest_full_mht_integration.py`
 - `tests/test_full_mht_manifest_decision.py`
+- `tests/test_full_mht_prior_survival_promotion_gate.py`
+- `tests/test_full_mht_exposure_audit.py`
 - `docs/full_mht_prior_survival_validation.md`
 - `docs/full_mht_terminal_completion_objective.md`
 
@@ -70,7 +74,7 @@ track2p_prior_survival_min_examples_per_class = 2
 track2p_prior_survival_score_clip = 8.0
 ```
 
-After the canonical comparison CSV is produced, summarize the promotion gates
+After the canonical comparison CSV is produced, summarize the manifest decision
 with:
 
 ```bash
@@ -84,7 +88,7 @@ calibrated-survival beam beat their matching greedy beam-width-1 ablations, and
 whether calibrated prior-survival improves, ties, or falls below the fixed
 prior-veto hazard.
 
-## Sensitivity Manifests
+## Sensitivity And Exposure
 
 `benchmarks/full_mht_prior_survival_sensitivity_manifest.json` checks the
 immediate neighborhood around the calibrated survival row:
@@ -95,6 +99,22 @@ immediate neighborhood around the calibrated survival row:
 | survival score clip | `4.0`, `8.0` |
 | minimum pseudo examples per class | `2`, `3` |
 | anchor strictness | default vs stricter anchor overlap/confidence |
+
+`track2p_policy_full_mht_exposure_audit.py` runs a label-free audit across
+Track2p-style subjects and now accepts the same prior-survival scoring flags. The
+combined promotion helper is:
+
+```bash
+"$PY" -m bayescatrack.experiments.full_mht_prior_survival_promotion_gate \
+  "$OUT/full_mht_prior_veto/full_mht_prior_veto_comparison.csv" \
+  "$SENS/full_mht_prior_survival_sensitivity/full_mht_prior_survival_sensitivity.csv" \
+  "$AUDIT/prior_survival_exposure.csv" \
+  --output "$AUDIT/prior_survival_promotion_gate.md"
+```
+
+It requires candidate-specific complete-history beam advantage, stable sensitivity,
+bounded label-free exposure, and active prior-survival scoring. If any gate fails,
+keep the calibrated survival row exploratory.
 
 `benchmarks/full_mht_terminal_completion_probe_manifest.json` checks the immediate
 neighborhood around the complete-history terminal objective:
@@ -127,6 +147,9 @@ export PYTHONPATH="$PWD/src"
   tests/test_full_mht_manifest_decision.py \
   tests/test_full_mht_prior_survival_model.py \
   tests/test_full_mht_prior_survival_integration.py \
+  tests/test_full_mht_prior_survival_promotion_gate.py \
+  tests/test_full_mht_exposure_audit.py \
+  tests/test_full_mht_no_gt_leakage.py \
   tests/test_full_mht_terminal_completion_integration.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
@@ -152,15 +175,8 @@ mkdir -p "$SENS"
   benchmarks/full_mht_prior_survival_sensitivity_manifest.json \
   --output-dir "$SENS" \
   --summary-format table
-
-COMP="$PWD/results/full_mht_terminal_completion_probe_$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$COMP"
-"$PY" -m bayescatrack benchmark suite \
-  benchmarks/full_mht_terminal_completion_probe_manifest.json \
-  --output-dir "$COMP" \
-  --summary-format table
 ```
 
-The full validation recipe, including the non-GT exposure audit, is in
-`docs/full_mht_prior_survival_validation.md`. The terminal-completion probe is
-described in `docs/full_mht_terminal_completion_objective.md`.
+The full validation recipe, including the exact non-GT exposure audit command and
+combined promotion gate, is in `docs/full_mht_prior_survival_validation.md`. The
+terminal-completion probe is described in `docs/full_mht_terminal_completion_objective.md`.
