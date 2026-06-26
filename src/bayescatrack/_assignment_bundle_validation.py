@@ -87,6 +87,8 @@ def _normalize_roi_index_array(values: Any, field_name: str) -> np.ndarray:
     normalized = tuple(
         _normalize_roi_index(value, field_name) for value in array.tolist()
     )
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(f"{field_name} must contain unique ROI indices")
     return np.asarray(normalized, dtype=int)
 
 
