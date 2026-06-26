@@ -34,7 +34,11 @@ def install_subject_export_bool_validation(bridge_impl: Any) -> None:
         return original_export(*args, **validated_kwargs)
 
     setattr(export_subject_to_npz_with_bool_validation, _PATCH_ATTR, True)
-    setattr(export_subject_to_npz_with_bool_validation, "_bayescatrack_original", original_export)
+    setattr(
+        export_subject_to_npz_with_bool_validation,
+        "_bayescatrack_original",
+        original_export,
+    )
     bridge_impl.export_subject_to_npz = export_subject_to_npz_with_bool_validation
 
 

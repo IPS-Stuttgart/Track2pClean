@@ -18,13 +18,17 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_fov_translation_output_shape_validation_patch"
-_OUTPUT_SHAPE_ERROR = "output_shape must contain exactly two positive integer dimensions"
+_OUTPUT_SHAPE_ERROR = (
+    "output_shape must contain exactly two positive integer dimensions"
+)
 
 
 def install_fov_translation_output_shape_validation() -> None:
     """Install idempotent validation around FOV translation output shapes."""
 
-    from . import fov_registration as _fov_registration  # pylint: disable=import-outside-toplevel
+    from . import (
+        fov_registration as _fov_registration,  # pylint: disable=import-outside-toplevel
+    )
 
     _wrap_output_shape_kwarg(
         _fov_registration,

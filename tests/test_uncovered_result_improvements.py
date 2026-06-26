@@ -272,7 +272,9 @@ def test_growth_priors_accept_coordinate_row_centroid_matrices() -> None:
     target_centroids = target.T
 
     affine = estimate_affine_growth_field(source_centroids, target_centroids)
-    residuals = affine_growth_residuals(source_centroids, target_centroids, affine=affine)
+    residuals = affine_growth_residuals(
+        source_centroids, target_centroids, affine=affine
+    )
     penalties = growth_penalty_matrix(source_centroids, target_centroids, affine=affine)
 
     np.testing.assert_allclose(residuals, np.zeros(3), atol=1.0e-10)

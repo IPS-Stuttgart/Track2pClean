@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import export_subject_to_npz, load_track2p_subject, summarize_subject
 
 
@@ -25,7 +24,9 @@ def _write_minimal_suite2p_plane(plane_dir):
     "flag_name",
     ["load_traces", "load_spike_traces", "load_neuropil_traces"],
 )
-def test_load_track2p_subject_rejects_non_python_bool_trace_controls(tmp_path, flag_name):
+def test_load_track2p_subject_rejects_non_python_bool_trace_controls(
+    tmp_path, flag_name
+):
     _write_minimal_suite2p_plane(tmp_path / "2024-01-01" / "suite2p" / "plane0")
 
     with pytest.raises(ValueError, match=flag_name):
@@ -39,7 +40,9 @@ def test_load_track2p_subject_rejects_non_python_bool_trace_controls(tmp_path, f
         (export_subject_to_npz, ("subject.npz",)),
     ],
 )
-@pytest.mark.parametrize("flag_name", ["load_traces", "load_spike_traces", "load_neuropil_traces"])
+@pytest.mark.parametrize(
+    "flag_name", ["load_traces", "load_spike_traces", "load_neuropil_traces"]
+)
 def test_subject_summary_and_export_reject_non_python_bool_trace_controls(
     tmp_path,
     entrypoint,

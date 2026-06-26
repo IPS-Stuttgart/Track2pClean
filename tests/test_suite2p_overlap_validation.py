@@ -19,7 +19,9 @@ def _write_suite2p_plane_with_invalid_overlap_pixel(plane_dir):
     )
 
 
-def test_load_suite2p_plane_validation_rejects_out_of_bounds_overlap_pixels_before_exclusion(tmp_path):
+def test_load_suite2p_plane_validation_rejects_out_of_bounds_overlap_pixels_before_exclusion(
+    tmp_path,
+):
     plane_dir = tmp_path / "plane0"
     _write_suite2p_plane_with_invalid_overlap_pixel(plane_dir)
 

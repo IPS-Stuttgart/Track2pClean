@@ -18,7 +18,9 @@ _PATCH_MARKER = "_bayescatrack_track_table_session_name_validation_patch"
 def install_track_table_session_name_validation() -> None:
     """Install idempotent validation around ground-truth TrackTable helpers."""
 
-    from . import ground_truth_eval as _ground_truth_eval  # pylint: disable=import-outside-toplevel
+    from . import (
+        ground_truth_eval as _ground_truth_eval,  # pylint: disable=import-outside-toplevel
+    )
 
     track_table = _ground_truth_eval.TrackTable
     if getattr(track_table, _PATCH_MARKER, False):

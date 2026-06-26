@@ -241,7 +241,9 @@ def _finite_scalar_control(value: object, name: str) -> float:
     array = np.asarray(value)
     if array.shape != ():
         raise ValueError(f"{name} must be a finite scalar")
-    if np.issubdtype(array.dtype, np.bool_) or not np.issubdtype(array.dtype, np.number):
+    if np.issubdtype(array.dtype, np.bool_) or not np.issubdtype(
+        array.dtype, np.number
+    ):
         raise ValueError(f"{name} must be a finite numeric scalar")
     scalar = float(array.item())
     if not np.isfinite(scalar):

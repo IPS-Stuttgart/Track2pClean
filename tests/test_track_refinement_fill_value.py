@@ -12,8 +12,12 @@ from bayescatrack.association.track_refinement import (
 )
 
 
-@pytest.mark.parametrize("bad_fill_value", [0, 1, True, np.bool_(False), 1.5, np.nan, ""])
-def test_track_smoothing_config_rejects_non_negative_or_malformed_fill_value(bad_fill_value):
+@pytest.mark.parametrize(
+    "bad_fill_value", [0, 1, True, np.bool_(False), 1.5, np.nan, ""]
+)
+def test_track_smoothing_config_rejects_non_negative_or_malformed_fill_value(
+    bad_fill_value,
+):
     with pytest.raises(ValueError, match="fill_value"):
         TrackSmoothingConfig(fill_value=bad_fill_value)
 
@@ -30,7 +34,9 @@ def test_smoothed_track_positions_rejects_non_negative_fill_value():
     "bad_position",
     [np.array([np.nan, 0.0]), np.array([np.inf, 0.0]), np.array([0.0]), "bad"],
 )
-def test_smoothed_track_positions_rejects_malformed_position_table_entries(bad_position):
+def test_smoothed_track_positions_rejects_malformed_position_table_entries(
+    bad_position,
+):
     track_rows = np.array([[0, 1]], dtype=int)
     position_tables = ({0: np.array([0.0, 0.0])}, {1: bad_position})
 

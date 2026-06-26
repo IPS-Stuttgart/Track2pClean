@@ -142,11 +142,11 @@ from ._track_row_fill_value_validation import (
 from ._track_table_session_name_validation import (
     install_track_table_session_name_validation as _install_track_table_session_name_validation,
 )
-from ._tracking_global_link_edge_validation import (
-    install_tracking_global_link_edge_validation as _install_tracking_global_link_edge_validation,
-)
 from ._tracking_fill_value_validation import (
     install_tracking_fill_value_validation as _install_tracking_fill_value_validation,
+)
+from ._tracking_global_link_edge_validation import (
+    install_tracking_global_link_edge_validation as _install_tracking_global_link_edge_validation,
 )
 from ._tracking_result_matrix_validation import (
     install_tracking_result_matrix_validation as _install_tracking_result_matrix_validation,

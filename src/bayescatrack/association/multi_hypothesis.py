@@ -127,7 +127,9 @@ def _validated_edge_candidate(candidate: Any, *, name: str) -> tuple[int, int, f
     return (
         _validated_roi_index(source_roi, name=f"{name} source_roi"),
         _validated_roi_index(target_roi, name=f"{name} target_roi"),
-        _validated_numeric_float(_scalar_value(cost, name=f"{name} cost"), name=f"{name} cost"),
+        _validated_numeric_float(
+            _scalar_value(cost, name=f"{name} cost"), name=f"{name} cost"
+        ),
     )
 
 
@@ -431,7 +433,7 @@ def edge_union_costs(edge_sets: Sequence[Mapping[Edge, int]]) -> dict[Edge, floa
     for edge_set in edge_sets:
         for edge, vote_count in edge_set.items():
             normalized_edge = _normalize_consensus_edge(edge, name="edge")
-            votes[normalized_edge] = votes.get(
-                normalized_edge, 0
-            ) + _positive_integer(vote_count, name="vote_count")
+            votes[normalized_edge] = votes.get(normalized_edge, 0) + _positive_integer(
+                vote_count, name="vote_count"
+            )
     return {edge: 1.0 / max(vote_count, 1) for edge, vote_count in votes.items()}

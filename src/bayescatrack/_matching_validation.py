@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 import numpy as np
 
-
 _PATCH_MARKER = "_bayescatrack_assignment_layout_validation_patch"
 
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.pyrecest_global_assignment import (
     TripletSupportConsistencyConfig,
     apply_triplet_support_consistency,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.evaluation.edge_ranking import rank_labeled_edges
 
 
@@ -14,7 +13,9 @@ def test_rank_labeled_edges_accepts_binary_label_entries():
         measurement_roi_indices=np.array([20, 21]),
     )
 
-    assert [(row["reference_roi_index"], row["measurement_roi_index"]) for row in rows] == [
+    assert [
+        (row["reference_roi_index"], row["measurement_roi_index"]) for row in rows
+    ] == [
         (10, 20),
         (11, 21),
     ]

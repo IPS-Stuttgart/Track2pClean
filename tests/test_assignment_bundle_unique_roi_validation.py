@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from bayescatrack.matching import solve_bundle_linear_assignment
 
 

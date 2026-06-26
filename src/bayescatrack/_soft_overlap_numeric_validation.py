@@ -43,7 +43,9 @@ def _strict_finite_float(
         numeric_value = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a finite {qualifier} value") from exc
-    violates_bound = numeric_value <= lower_bound if positive else numeric_value < lower_bound
+    violates_bound = (
+        numeric_value <= lower_bound if positive else numeric_value < lower_bound
+    )
     if not np.isfinite(numeric_value) or violates_bound:
         raise ValueError(f"{name} must be a finite {qualifier} value")
     return numeric_value

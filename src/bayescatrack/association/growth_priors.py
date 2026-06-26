@@ -305,7 +305,9 @@ def _integer_track_row_matrix(track_rows: Any) -> np.ndarray:
 
 def _integer_track_row_entry(value: Any) -> int:
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError("track_rows must contain integer ROI indices or negative missing sentinels")
+        raise ValueError(
+            "track_rows must contain integer ROI indices or negative missing sentinels"
+        )
     if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
@@ -337,7 +339,9 @@ def _normalize_session_column(value: Any, *, name: str, num_sessions: int) -> in
     if normalized < 0:
         normalized += num_sessions
     if normalized < 0 or normalized >= num_sessions:
-        raise IndexError(f"{name} {normalized} out of bounds for {num_sessions} sessions")
+        raise IndexError(
+            f"{name} {normalized} out of bounds for {num_sessions} sessions"
+        )
     return normalized
 
 

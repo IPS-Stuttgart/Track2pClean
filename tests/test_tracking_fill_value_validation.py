@@ -1,7 +1,6 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
-
 from bayescatrack.registration import RegisteredConsecutiveBundles
 from bayescatrack.tracking import SubjectTrackingResult, _coerce_global_track_rows
 
