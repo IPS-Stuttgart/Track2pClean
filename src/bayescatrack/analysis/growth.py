@@ -714,12 +714,41 @@ def _target_sessions(
 
 
 def _validate_session_index(index: int, n_sessions: int) -> int:
-    index = int(index)
-    if index < 0 or index >= n_sessions:
+    if isinstance(index, (bool, np.bool_)):
+        raise ValueError(f"session index must not be boolean, got {index!r}")
+    if isinstance(index, bytes):
+        index = index.decode("utf-8")
+    if isinstance(index, (int, np.integer)):
+        session_index = int(index)
+    elif isinstance(index, (float, np.floating)):
+        session_index = _parse_integer_like_session_index(float(index), original=index)
+    elif isinstance(index, str):
+        session_index = _parse_integer_like_session_index_text(index.strip())
+    else:
+        raise ValueError(f"session index must be integer-like, got {index!r}")
+    if session_index < 0 or session_index >= n_sessions:
         raise IndexError(
-            f"session index {index} out of bounds for {n_sessions} sessions"
+            f"session index {session_index} out of bounds for {n_sessions} sessions"
         )
-    return index
+    return session_index
+
+
+def _parse_integer_like_session_index(value: float, *, original: object) -> int:
+    if not np.isfinite(value) or not float(value).is_integer():
+        raise ValueError(f"session index must be integer-like, got {original!r}")
+    return int(value)
+
+
+def _parse_integer_like_session_index_text(text: str) -> int:
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        numeric = float(text)
+    except ValueError as exc:
+        raise ValueError(f"session index must be integer-like, got {text!r}") from exc
+    return _parse_integer_like_session_index(numeric, original=text)
 
 
 def _normalize_track_matrix(track_matrix: Any, *, n_sessions: int) -> np.ndarray:
@@ -743,6 +772,8 @@ def _optional_roi(value: object) -> int | None:
 
     if value is None:
         return None
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"ROI index must not be boolean, got {value!r}")
     if isinstance(value, bytes):
         value = value.decode("utf-8")
     if isinstance(value, (int, np.integer)):
