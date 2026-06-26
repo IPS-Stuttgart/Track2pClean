@@ -2,10 +2,11 @@
 
 Growth analysis treats ROI IDs and session indices as categorical labels. Python
 booleans are a subclass of ``int``, and the base growth helpers coerce session
-indices with ``int(...)``. Without guards, malformed values such as ``True`` or
-``1.5`` can silently select session ``1``. Positive ROI IDs that are absent from
-the loaded session must also fail fast; otherwise growth summaries silently drop
-those tracks and report biased aggregate displacements.
+indices with ``int(...)``. Without guards, malformed values such as ``True``,
+``1.5``, or arbitrary text can silently select a session, become a fabricated ROI,
+or be treated as a missing ROI. Positive ROI IDs that are absent from the loaded
+session must also fail fast; otherwise growth summaries silently drop those tracks
+and report biased aggregate displacements.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import numpy as np
 _OPTIONAL_ROI_PATCH_MARKER = "_bayescatrack_growth_optional_roi_validation_patch"
 _SESSION_INDEX_PATCH_MARKER = "_bayescatrack_growth_session_index_validation_patch"
 _TRACK_ROI_LOOKUP_PATCH_MARKER = "_bayescatrack_growth_track_roi_lookup_validation_patch"
+_MISSING_ROI_STRINGS = frozenset({"", "-", "na", "nan", "none", "null"})
 
 
 def install_growth_optional_roi_validation() -> None:
@@ -38,13 +40,62 @@ def _install_optional_roi_validation(_growth: Any) -> None:
 
     @wraps(original_optional_roi)
     def _optional_roi_with_validation(value: object) -> int | None:
-        if isinstance(value, (bool, np.bool_)):
-            raise ValueError("ROI index must be integer-like, got boolean")
-        return original_optional_roi(value)
+        return _normalize_optional_roi(value)
 
     setattr(_optional_roi_with_validation, _OPTIONAL_ROI_PATCH_MARKER, True)
     setattr(_optional_roi_with_validation, "_bayescatrack_original", original_optional_roi)
     _growth._optional_roi = _optional_roi_with_validation
+
+
+def _normalize_optional_roi(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("ROI index must be integer-like or missing, got boolean")
+    if isinstance(value, bytes):
+        try:
+            value = value.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("ROI index must be integer-like or missing, got bytes") from exc
+    if isinstance(value, (int, np.integer)):
+        return _missing_if_negative(int(value))
+    if isinstance(value, (float, np.floating)):
+        return _parse_optional_roi_float(float(value), original=value)
+    if isinstance(value, str):
+        return _parse_optional_roi_text(value)
+    raise ValueError(
+        "ROI index must be integer-like or missing, "
+        f"got {type(value).__name__}"
+    )
+
+
+def _missing_if_negative(value: int) -> int | None:
+    return None if int(value) < 0 else int(value)
+
+
+def _parse_optional_roi_float(value: float, *, original: object) -> int | None:
+    if np.isnan(value):
+        return None
+    if not np.isfinite(value) or not float(value).is_integer():
+        raise ValueError(f"ROI index must be integer-like or missing, got {original!r}")
+    return _missing_if_negative(int(value))
+
+
+def _parse_optional_roi_text(value: str) -> int | None:
+    text = value.strip()
+    if text.lower() in _MISSING_ROI_STRINGS:
+        return None
+    try:
+        return _missing_if_negative(int(text))
+    except ValueError:
+        pass
+    try:
+        numeric = float(text)
+    except ValueError as exc:
+        raise ValueError(
+            f"ROI index must be integer-like or missing, got {value!r}"
+        ) from exc
+    return _parse_optional_roi_float(numeric, original=value)
 
 
 def _install_session_index_validation(_growth: Any) -> None:
