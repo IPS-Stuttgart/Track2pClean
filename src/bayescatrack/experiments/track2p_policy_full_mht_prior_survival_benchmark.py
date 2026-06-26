@@ -73,7 +73,7 @@ _SURVIVAL_FLOAT_OPTIONS: tuple[tuple[str, str, float, str], ...] = (
         "track2p_prior_survival_min_background_growth_mahalanobis",
         "--track2p-prior-survival-min-background-growth-mahalanobis",
         PriorEdgeSurvivalConfig.min_background_growth_mahalanobis,
-        "Minimum growth Mahalanobis residual for pseudo-hazard background examples.",
+        "Minimum growth Mahalanobis residual for pseudo-hazard examples.",
     ),
     (
         "track2p_prior_survival_min_background_growth_residual",
@@ -85,7 +85,7 @@ _SURVIVAL_FLOAT_OPTIONS: tuple[tuple[str, str, float, str], ...] = (
         "track2p_prior_survival_max_background_cell_probability",
         "--track2p-prior-survival-max-background-cell-probability",
         PriorEdgeSurvivalConfig.max_background_cell_probability,
-        "Maximum endpoint cell probability for pseudo-hazard background examples.",
+        "Maximum endpoint cell probability for pseudo-hazard examples.",
     ),
     (
         "track2p_prior_survival_min_feature_scale",
@@ -146,9 +146,21 @@ def _survival_only_parser() -> argparse.ArgumentParser:
 def _add_prior_survival_arguments(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("calibrated prior-edge survival")
     for dest, flag, default, help_text in _SURVIVAL_FLOAT_OPTIONS:
-        group.add_argument(flag, dest=dest, type=float, default=default, help=help_text)
+        group.add_argument(
+            flag,
+            dest=dest,
+            type=float,
+            default=default,
+            help=help_text,
+        )
     for dest, flag, default, help_text in _SURVIVAL_INT_OPTIONS:
-        group.add_argument(flag, dest=dest, type=int, default=default, help=help_text)
+        group.add_argument(
+            flag,
+            dest=dest,
+            type=int,
+            default=default,
+            help=help_text,
+        )
 
 
 def _split_survival_args(argv: Sequence[str]) -> tuple[list[str], dict[str, float | int]]:
