@@ -110,6 +110,7 @@ def evaluate_exposure_gate(
     switches = _int_metric(all_row, "history_switched_prior_successors")
     no_prior = _int_metric(all_row, "history_no_prior_successor_continuations")
     gap_reactivations = _int_metric(all_row, "history_gap_reactivated_tracks")
+    gap_reactivation_limit: int | str = "none"
     failures: list[str] = []
     if max_non_prior > int(cfg.max_selected_non_prior_edges_per_subject):
         failures.append("max_selected_non_prior_edges_per_subject")
@@ -119,10 +120,10 @@ def evaluate_exposure_gate(
         failures.append("history_switched_prior_successors")
     if no_prior > int(cfg.max_no_prior_successor_continuations):
         failures.append("history_no_prior_successor_continuations")
-    if cfg.max_gap_reactivated_tracks is not None and gap_reactivations > int(
-        cfg.max_gap_reactivated_tracks
-    ):
-        failures.append("history_gap_reactivated_tracks")
+    if cfg.max_gap_reactivated_tracks is not None:
+        gap_reactivation_limit = int(cfg.max_gap_reactivated_tracks)
+        if gap_reactivations > gap_reactivation_limit:
+            failures.append("history_gap_reactivated_tracks")
 
     return {
         "status": "complete",
@@ -141,6 +142,7 @@ def evaluate_exposure_gate(
         "limit_history_no_prior_successor_continuations": int(
             cfg.max_no_prior_successor_continuations
         ),
+        "limit_history_gap_reactivated_tracks": gap_reactivation_limit,
     }
 
 
@@ -173,6 +175,7 @@ def format_promotion_markdown(decision: Mapping[str, Any]) -> str:
             "history_no_prior_successor_continuations",
             "limit_history_no_prior_successor_continuations",
         ),
+        ("history_gap_reactivated_tracks", "limit_history_gap_reactivated_tracks"),
     ):
         lines.append(
             "| {metric} | {value} | {limit} |".format(
