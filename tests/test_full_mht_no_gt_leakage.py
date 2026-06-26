@@ -4,6 +4,7 @@ from pathlib import Path
 
 METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/full_mht_history_dynamics_integration.py",
+    "src/bayescatrack/experiments/full_mht_scan_history_dynamics_integration.py",
     "src/bayescatrack/experiments/full_mht_terminal_completion_integration.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_model.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_integration.py",
