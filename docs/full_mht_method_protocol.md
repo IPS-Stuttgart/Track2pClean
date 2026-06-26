@@ -48,6 +48,7 @@ exposure artifacts prove that the method does something useful and stable.
 | Combined identity-history sensitivity | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | required before promotion |
 | Combined scan-history pruning add-on | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_scan_pruning_manifest.json` | can enter only if full beam beats matching greedy at multiple nearby weights |
 | Combined terminal-completion add-on | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_completion_manifest.json` | can enter only if stable and non-regressing |
+| Bundle decision guardrail | implemented | `full_mht_identity_history_bundle_decision.py` | requires `promotable_core_method` with `complete_core_evidence`; `inconsistent_core_evidence` blocks promotion |
 | Label-free exposure audit | implemented | `track2p_policy_full_mht_exposure_audit.py` | required before promotion |
 | No-GT leakage guard | implemented and widened | `tests/test_full_mht_no_gt_leakage.py` | required before promotion |
 
@@ -142,6 +143,7 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | Exposure | label-free exposure audit reports `bounded_exposure` with active but rare prior-survival, no-prior-continuation, and growth-history signals |
 | No-GT leakage | tests confirm method layers do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
 | Terminal objective | optional completion variant reports `terminal_completion_stable_gain`, meaning at least two gains and no regressing neighbor in the tested weight neighborhood |
+| Bundle decision | final bundle artifact reports `promotable_core_method` with `complete_core_evidence`; `inconsistent_core_evidence` means a stale or contradictory artifact must be rerun |
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants |
 
 If the identity-history beam ties its greedy row, regresses on any reported
@@ -161,6 +163,8 @@ Do not present FullMHT as a final method if any of the following remain true:
   regression.
 - The exposure audit shows broad non-prior continuations, broad prior-survival
   penalties, broad growth-history penalties, or many prior switches.
+- The final bundle artifact reports `inconsistent_core_evidence`, even if a
+  copied or stale top-level status says the row is promotable.
 - Scan-history pruning improves only one weight, improves only pairwise F1, loses
   to the matching greedy row, or regresses against the central identity-history
   row.
