@@ -60,14 +60,22 @@ Required rows:
 | `FullMHTPriorVetoScaled` | fixed hand-gated prior-survival hazard |
 | `FullMHTPriorSurvival` | calibrated label-free prior-survival likelihood |
 
-Promotion requires `FullMHTPriorSurvival` to match or improve
-`FullMHTPriorVetoScaled` on complete-track F1 without losing pairwise F1 beyond a
-single-edge-scale fluctuation. If it ties `FullMHTPrior2`, keep it as an
-implemented model layer but not the headline row.
+Promotion requires both of these manifest-decision conditions:
+
+```text
+history_search_result = beam_complete_history_advantage
+prior_survival_result = survival_improves_fixed_veto or survival_ties_fixed_veto
+```
+
+`beam_complete_history_advantage` means the full beam improves complete-track F1
+over `FullMHTGreedyPrior2` without pairwise-F1 loss. A pairwise-only beam gain is
+not evidence for the paper's complete-identity claim and must be recorded as
+exploratory.
 
 The decision artifact reports:
 
-- whether the beam row beats or ties `FullMHTGreedyPrior2`;
+- whether the beam row gives a complete-track advantage, ties the greedy row,
+  regresses against it, or improves only pairwise F1;
 - whether `FullMHTPriorSurvival` improves, ties, or falls below
   `FullMHTPriorVetoScaled`;
 - the pairwise/complete-track micro deltas used for the decision.
