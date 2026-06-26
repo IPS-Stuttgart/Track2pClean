@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -20,6 +21,36 @@ def _write_manifest(path, manifest):
 def _read_csv_rows(path):
     with path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
+
+
+def test_full_mht_canonical_manifest_keeps_greedy_beam_ablation() -> None:
+    manifest_path = (
+        Path(__file__).resolve().parents[1]
+        / "benchmarks"
+        / "full_mht_prior_veto_manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    runs = {run["name"]: run for run in manifest["runs"]}
+
+    assert list(runs) == [
+        "Track2p",
+        "FullMHTPrior2",
+        "FullMHTGreedyPrior2",
+        "FullMHTPriorVetoScaled",
+        "FullMHTPriorSurvival",
+    ]
+    greedy = runs["FullMHTGreedyPrior2"]
+    beam = runs["FullMHTPrior2"]
+    assert greedy["runner"] == "track2p-full-mht"
+    assert greedy["beam_width"] == 1
+    assert greedy["scan_hypotheses"] == beam["scan_hypotheses"]
+    assert greedy["edge_top_k"] == beam["edge_top_k"]
+    assert greedy["track2p_prior_weight"] == beam["track2p_prior_weight"]
+    assert greedy["track2p_non_prior_penalty"] == beam["track2p_non_prior_penalty"]
+    assert greedy["track2p_prior_miss_penalty"] == beam["track2p_prior_miss_penalty"]
+
+    for comparison in manifest["comparisons"]:
+        assert comparison["inputs"]["FullMHTGreedyPrior2"] == "FullMHTGreedyPrior2"
 
 
 def test_full_mht_manifest_runner_aliases_are_supported() -> None:
