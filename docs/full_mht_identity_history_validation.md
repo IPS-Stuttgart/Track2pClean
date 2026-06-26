@@ -31,7 +31,8 @@ FullMHTGreedyIdentityHistory
 
 It uses the same scan candidates and scoring terms, but sets `beam_width = 1` and
 turns off identity-diverse beam retention.  Promotion requires the full beam to
-beat this greedy row on complete-track F1 without pairwise-F1 loss.
+beat this greedy row on complete-track F1 micro without loss on any reported
+pairwise or complete-track micro/macro metric.
 
 The canonical manifest also includes the local-context ablation:
 
@@ -42,9 +43,9 @@ FullMHTIdentityHistoryNoLocalContext
 This row is identical to `FullMHTIdentityHistory` except that
 `local_deformation_weight = 0.0`, which makes the calibrated association
 likelihood ignore local-neighborhood deformation.  Promotion requires the full
-candidate to beat or match this control on the required micro metrics, so the
-local-context layer has to earn its place inside the method rather than merely
-being present in the implementation.
+candidate to beat or match this control on every reported pairwise and
+complete-track micro/macro metric, so the local-context layer has to earn its
+place inside the method rather than merely being present in the implementation.
 
 ## Constructed Conflict Witness
 
@@ -100,9 +101,9 @@ FullMHTIdentityHistoryCompletion100
 These rows are identical to `FullMHTIdentityHistory` except for
 `terminal_incomplete_history_weight`.  The terminal objective can enter the
 paper-facing method only if at least two nearby weights improve complete-track F1
-without pairwise-F1 loss and no tested neighboring weight regresses pairwise or
-complete-track F1.  A single winning weight, or a win beside a regressing weight,
-is treated as exploratory.
+without pairwise-F1 loss and no tested neighboring weight regresses any reported
+pairwise or complete-track micro/macro metric.  A single winning weight, or a win
+beside a regressing weight, is treated as exploratory.
 
 ## Frozen Artifacts
 
@@ -127,12 +128,12 @@ is treated as exploratory.
 
 Promote `FullMHTIdentityHistory` only if all of these are true:
 
-- `FullMHTIdentityHistory` has complete-track advantage over `FullMHTGreedyIdentityHistory` with no pairwise-F1 loss.
-- It does not fall below `FullMHTIdentityHistoryNoLocalContext` on the required micro metrics.
-- It does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on the required micro metrics.
+- `FullMHTIdentityHistory` has complete-track F1 micro advantage over `FullMHTGreedyIdentityHistory` with no pairwise/complete micro or macro F1 loss.
+- It does not fall below `FullMHTIdentityHistoryNoLocalContext` on any reported pairwise or complete-track micro/macro metric.
+- It does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on any reported pairwise or complete-track micro/macro metric.
 - The constructed conflict witness regression passes.
 - The method-invariant checklist regression passes.
-- The sensitivity manifest reports `stable_plateau`.
+- The sensitivity manifest reports `stable_plateau`, with passing variants non-regressing on all reported metrics.
 - The exposure audit reports `bounded_exposure`.
 - Prior-survival, no-prior continuation, and growth-history signals are active but not broad.
 - The no-GT leakage regression passes.
@@ -278,9 +279,9 @@ mkdir -p "$EXPOSURE"
 
 | gate result | interpretation |
 | --- | --- |
-| `promotable_after_review` | strong candidate for the paper method row, after recording exact directories and metric tables |
-| `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection, or the combined local-context candidate fails its no-local-context control |
-| `not_promotable_sensitivity` | likely knife-edge or single-setting result |
+| `promotable_after_review` | strong candidate for the paper method row, after recording exact directories and all four metric tables |
+| `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection, or the candidate regresses on a required micro/macro control |
+| `not_promotable_sensitivity` | likely knife-edge, single-setting result, or hidden macro regression |
 | `not_promotable_broad_exposure` | model layer fires too broadly on label-free subjects |
 | `history_dynamics_stable_gain` | local context or another dynamics probe shows stable complete-track gain without pairwise loss |
 | `history_dynamics_single_weight_gain` | layer probe is exploratory, not promotable |
