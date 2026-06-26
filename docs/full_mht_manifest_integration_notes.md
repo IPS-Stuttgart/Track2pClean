@@ -7,7 +7,9 @@ The frozen FullMHT manifests are now paired with benchmark-suite integration cod
 - `benchmarks/full_mht_prior_veto_manifest.json`
 - `benchmarks/full_mht_prior_survival_sensitivity_manifest.json`
 - `src/bayescatrack/experiments/_full_mht_manifest_integration.py`
+- `src/bayescatrack/experiments/full_mht_manifest_decision.py`
 - `tests/test_benchmark_manifest_full_mht_integration.py`
+- `tests/test_full_mht_manifest_decision.py`
 - `docs/full_mht_prior_survival_validation.md`
 
 ## Runner Registration
@@ -61,6 +63,19 @@ track2p_prior_survival_min_examples_per_class = 2
 track2p_prior_survival_score_clip = 8.0
 ```
 
+After the canonical comparison CSV is produced, summarize the promotion gates
+with:
+
+```bash
+"$PY" -m bayescatrack.experiments.full_mht_manifest_decision \
+  "$OUT/full_mht_prior_veto/full_mht_prior_veto_comparison.csv" \
+  --output "$OUT/full_mht_manifest_decision.md"
+```
+
+This decision artifact reports whether the full beam beats the greedy beam-width-1
+ablation and whether calibrated prior-survival improves, ties, or falls below the
+fixed prior-veto hazard.
+
 ## Sensitivity Manifest
 
 `benchmarks/full_mht_prior_survival_sensitivity_manifest.json` checks the
@@ -95,6 +110,7 @@ export PYTHONPATH="$PWD/src"
 
 "$PY" -m pytest -q \
   tests/test_benchmark_manifest_full_mht_integration.py \
+  tests/test_full_mht_manifest_decision.py \
   tests/test_full_mht_prior_survival_model.py \
   tests/test_full_mht_prior_survival_integration.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
@@ -110,6 +126,10 @@ mkdir -p "$OUT"
   benchmarks/full_mht_prior_veto_manifest.json \
   --output-dir "$OUT" \
   --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_manifest_decision \
+  "$OUT/full_mht_prior_veto/full_mht_prior_veto_comparison.csv" \
+  --output "$OUT/full_mht_manifest_decision.md"
 
 SENS="$PWD/results/full_mht_prior_survival_sensitivity_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$SENS"
