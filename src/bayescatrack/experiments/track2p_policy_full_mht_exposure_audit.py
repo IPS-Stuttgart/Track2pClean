@@ -310,7 +310,7 @@ def _write_rows(
     *,
     output_format: Literal["csv", "json"],
 ) -> None:
-    output.parent.mkdir(parents=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
         output.write_text(json.dumps(list(rows), indent=2) + "\n", encoding="utf-8")
         return
