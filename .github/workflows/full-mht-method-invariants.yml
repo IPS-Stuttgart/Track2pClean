@@ -1,0 +1,95 @@
+name: FullMHT method invariants
+
+on:
+  push:
+    branches:
+      - codex/full-mht-prototype
+    paths:
+      - "src/bayescatrack/experiments/full_mht_*.py"
+      - "src/bayescatrack/experiments/track2p_policy_full_mht*.py"
+      - "src/bayescatrack/experiments/_full_mht_manifest_integration.py"
+      - "benchmarks/full_mht_*.json"
+      - "docs/full_mht_*.md"
+      - "tests/test_full_mht*.py"
+      - "tests/test_track2p_policy_full_mht*.py"
+      - "tests/test_benchmark_manifest_full_mht_integration.py"
+      - "pyproject.toml"
+      - ".github/workflows/full-mht-method-invariants.yml"
+  pull_request:
+    paths:
+      - "src/bayescatrack/experiments/full_mht_*.py"
+      - "src/bayescatrack/experiments/track2p_policy_full_mht*.py"
+      - "src/bayescatrack/experiments/_full_mht_manifest_integration.py"
+      - "benchmarks/full_mht_*.json"
+      - "docs/full_mht_*.md"
+      - "tests/test_full_mht*.py"
+      - "tests/test_track2p_policy_full_mht*.py"
+      - "tests/test_benchmark_manifest_full_mht_integration.py"
+      - "pyproject.toml"
+      - ".github/workflows/full-mht-method-invariants.yml"
+  workflow_dispatch:
+
+jobs:
+  invariant-tests:
+    name: Python 3.12 focused invariant tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[calibration]" pytest
+
+      - name: Run FullMHT method invariant tests
+        run: |
+          python -m pytest -q \
+            tests/test_benchmark_manifest_full_mht_integration.py \
+            tests/test_full_mht_exposure_audit.py \
+            tests/test_full_mht_growth_history_prediction_decision.py \
+            tests/test_full_mht_growth_history_prediction_integration.py \
+            tests/test_full_mht_growth_history_prediction_promotion_gate.py \
+            tests/test_full_mht_history_consistency_benchmark.py \
+            tests/test_full_mht_history_consistency_cli.py \
+            tests/test_full_mht_history_consistency_manifest.py \
+            tests/test_full_mht_history_consistency_manifest_integration.py \
+            tests/test_full_mht_history_consistency_model.py \
+            tests/test_full_mht_history_dynamics_decision.py \
+            tests/test_full_mht_history_dynamics_integration.py \
+            tests/test_full_mht_history_dynamics_promotion_gate.py \
+            tests/test_full_mht_identity_history_candidate_manifest.py \
+            tests/test_full_mht_identity_history_completion_manifest.py \
+            tests/test_full_mht_identity_history_decision.py \
+            tests/test_full_mht_identity_history_promotion_gate.py \
+            tests/test_full_mht_identity_history_sensitivity_manifest.py \
+            tests/test_full_mht_local_context_decision.py \
+            tests/test_full_mht_local_context_integration.py \
+            tests/test_full_mht_local_context_manifest.py \
+            tests/test_full_mht_manifest_decision.py \
+            tests/test_full_mht_method_protocol.py \
+            tests/test_full_mht_no_gt_leakage.py \
+            tests/test_full_mht_no_prior_continuation_decision.py \
+            tests/test_full_mht_no_prior_continuation_integration.py \
+            tests/test_full_mht_no_prior_continuation_manifest_integration.py \
+            tests/test_full_mht_no_prior_continuation_model.py \
+            tests/test_full_mht_no_prior_continuation_promotion_gate.py \
+            tests/test_full_mht_prior_survival_integration.py \
+            tests/test_full_mht_prior_survival_model.py \
+            tests/test_full_mht_prior_survival_promotion_gate.py \
+            tests/test_full_mht_prior_survival_runner.py \
+            tests/test_full_mht_scan_history_conflict_demo.py \
+            tests/test_full_mht_scan_history_dynamics_decision.py \
+            tests/test_full_mht_scan_history_dynamics_integration.py \
+            tests/test_full_mht_terminal_completion_decision.py \
+            tests/test_full_mht_terminal_completion_integration.py \
+            tests/test_track2p_policy_full_mht_conflict_demo.py \
+            tests/test_track2p_policy_full_mht_growth_prior.py
