@@ -11,6 +11,8 @@ METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_model.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_integration.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_manifest_integration.py",
+    "src/bayescatrack/experiments/full_mht_no_prior_continuation_decision.py",
+    "src/bayescatrack/experiments/full_mht_no_prior_continuation_promotion_gate.py",
     "src/bayescatrack/experiments/full_mht_terminal_completion_integration.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_model.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_integration.py",
