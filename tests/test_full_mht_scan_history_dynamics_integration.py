@@ -159,4 +159,5 @@ def test_scan_history_pruning_can_keep_lower_score_coherent_history() -> None:
         config=config,
     )
 
-    assert selected == [lower_score_coherent_history]
+    assert len(selected) == 1
+    assert selected[0] is lower_score_coherent_history
