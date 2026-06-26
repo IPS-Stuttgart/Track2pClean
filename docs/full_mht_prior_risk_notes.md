@@ -251,13 +251,18 @@ The intended reproducibility bundle is now frozen in:
 
 `benchmarks/full_mht_prior_veto_manifest.json`
 
-It contains three rows:
+It now contains the canonical reproduction rows plus matching greedy ablations
+for the base and candidate FullMHT rows:
 
 | row | purpose |
 | --- | --- |
 | Track2p | original Track2p proposal baseline |
 | FullMHTPrior2 | full scan-assignment MHT constrained by the Track2p proposal prior |
-| FullMHTPriorVetoScaled | FullMHT with the label-free prior-edge survival hazard enabled |
+| FullMHTGreedyPrior2 | beam-width-1 ablation for the proposal-prior control |
+| FullMHTPriorVetoScaled | FullMHT with the fixed label-free prior-edge survival hazard |
+| FullMHTGreedyPriorVetoScaled | beam-width-1 ablation for the fixed hazard |
+| FullMHTPriorSurvival | FullMHT with calibrated label-free prior-edge survival likelihood |
+| FullMHTGreedyPriorSurvival | beam-width-1 ablation for the calibrated survival row |
 
 The manifest intentionally records the scale-aligned prior-veto gates that
 produced the first positive FullMHT-owned row:
@@ -270,9 +275,12 @@ track2p_prior_veto_max_registered_iou = 0.40
 track2p_prior_veto_max_min_cell_probability = 0.65
 ```
 
-Status: frozen but not yet canonical. The benchmark-suite manifest adapter still
-needs to register `track2p-policy-full-mht` / `track2p-full-mht` and translate
-these JSON fields into `FullMHTConfig` before this file can be executed with
-`bayescatrack benchmark suite`. Until that adapter is merged, use the existing CLI
-commands as the authoritative execution path and treat this manifest as the
-pre-registered target bundle.
+Status: frozen and executable through `bayescatrack benchmark suite`. The
+benchmark-suite adapter now registers `track2p-policy-full-mht` /
+`track2p-full-mht`, translates the FullMHT JSON fields into `FullMHTConfig`, and
+records candidate-specific greedy ablations. Use
+`full_mht_manifest_decision.py` after the suite run to decide whether any
+candidate row shows complete-history beam advantage over its matching greedy row.
+The calibrated `FullMHTPriorSurvival` row additionally requires the full
+sensitivity and exposure bundle in `docs/full_mht_prior_survival_validation.md`
+before it can be promoted beyond exploratory status.
