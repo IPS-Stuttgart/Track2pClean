@@ -53,6 +53,35 @@ def test_full_mht_canonical_manifest_keeps_greedy_beam_ablation() -> None:
         assert comparison["inputs"]["FullMHTGreedyPrior2"] == "FullMHTGreedyPrior2"
 
 
+def test_full_mht_terminal_completion_probe_manifest_is_frozen() -> None:
+    manifest_path = (
+        Path(__file__).resolve().parents[1]
+        / "benchmarks"
+        / "full_mht_terminal_completion_probe_manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    runs = {run["name"]: run for run in manifest["runs"]}
+
+    assert list(runs) == [
+        "Track2p",
+        "FullMHTPrior2",
+        "FullMHTTerminalCompletion025",
+        "FullMHTTerminalCompletion050",
+        "FullMHTTerminalCompletion100",
+    ]
+    assert runs["FullMHTTerminalCompletion025"]["terminal_incomplete_history_weight"] == 0.25
+    assert runs["FullMHTTerminalCompletion050"]["terminal_incomplete_history_weight"] == 0.50
+    assert runs["FullMHTTerminalCompletion100"]["terminal_incomplete_history_weight"] == 1.00
+    for name in (
+        "FullMHTTerminalCompletion025",
+        "FullMHTTerminalCompletion050",
+        "FullMHTTerminalCompletion100",
+    ):
+        assert runs[name]["runner"] == "track2p-full-mht"
+        assert runs[name]["beam_width"] == runs["FullMHTPrior2"]["beam_width"]
+        assert runs[name]["track2p_prior_weight"] == runs["FullMHTPrior2"]["track2p_prior_weight"]
+
+
 def test_full_mht_manifest_runner_aliases_are_supported() -> None:
     assert bm._runner_name("track2p-policy-full-mht") == "track2p-policy-full-mht"
     assert bm._runner_name("track2p-full-mht") == "track2p-policy-full-mht"
