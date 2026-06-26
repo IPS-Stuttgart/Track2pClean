@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -37,12 +38,20 @@ def fit_affine_growth_transform(
 ) -> np.ndarray:
     """Fit an affine transform mapping source points to target points."""
 
-    source = np.asarray(source_points_xy, dtype=float)
-    target = np.asarray(target_points_xy, dtype=float)
+    source = _as_xy_point_matrix(
+        source_points_xy,
+        name="source_points_xy",
+        peer_values=target_points_xy,
+    )
+    target = _as_xy_point_matrix(
+        target_points_xy,
+        name="target_points_xy",
+        peer_values=source_points_xy,
+    )
     regularization = _nonnegative_float(regularization, name="regularization")
-    if source.shape != target.shape or source.ndim != 2 or source.shape[1] != 2:
+    if source.shape != target.shape:
         raise ValueError(
-            "source_points_xy and target_points_xy must both have shape (n, 2)"
+            "source_points_xy and target_points_xy must describe the same number of xy points"
         )
     if source.shape[0] < 3:
         raise ValueError("At least three point pairs are required for affine growth")
@@ -68,12 +77,20 @@ def affine_growth_residuals(
 ) -> np.ndarray:
     """Return per-pair residual distances under an affine growth field."""
 
-    source = np.asarray(source_points_xy, dtype=float)
-    target = np.asarray(target_points_xy, dtype=float)
+    source = _as_xy_point_matrix(
+        source_points_xy,
+        name="source_points_xy",
+        peer_values=target_points_xy,
+    )
+    target = _as_xy_point_matrix(
+        target_points_xy,
+        name="target_points_xy",
+        peer_values=source_points_xy,
+    )
     matrix = np.asarray(affine, dtype=float)
-    if source.shape != target.shape or source.ndim != 2 or source.shape[1] != 2:
+    if source.shape != target.shape:
         raise ValueError(
-            "source_points_xy and target_points_xy must both have shape (n, 2)"
+            "source_points_xy and target_points_xy must describe the same number of xy points"
         )
     if matrix.shape != (2, 3):
         raise ValueError("affine must have shape (2, 3)")
@@ -90,8 +107,16 @@ def affine_growth_penalty_matrix(
 ) -> np.ndarray:
     """Return normalized displacement residuals under an affine growth field."""
 
-    ref = np.asarray(reference_centroids_xy, dtype=float)
-    meas = np.asarray(measurement_centroids_xy, dtype=float)
+    ref = _as_xy_point_matrix(
+        reference_centroids_xy,
+        name="reference_centroids_xy",
+        peer_values=measurement_centroids_xy,
+    )
+    meas = _as_xy_point_matrix(
+        measurement_centroids_xy,
+        name="measurement_centroids_xy",
+        peer_values=reference_centroids_xy,
+    )
     matrix = np.asarray(affine_xy, dtype=float)
     scale = _positive_float(scale, name="scale")
     if matrix.shape != (2, 3):
@@ -132,8 +157,16 @@ def radial_growth_penalty_matrix(
 ) -> np.ndarray:
     """Return penalty for radial displacement inconsistency."""
 
-    ref = np.asarray(reference_centroids_xy, dtype=float)
-    meas = np.asarray(measurement_centroids_xy, dtype=float)
+    ref = _as_xy_point_matrix(
+        reference_centroids_xy,
+        name="reference_centroids_xy",
+        peer_values=measurement_centroids_xy,
+    )
+    meas = _as_xy_point_matrix(
+        measurement_centroids_xy,
+        name="measurement_centroids_xy",
+        peer_values=reference_centroids_xy,
+    )
     scale = _positive_float(scale, name="scale")
     if center_xy is None:
         center = np.nanmean(ref, axis=0) if ref.size else np.zeros((2,), dtype=float)
@@ -186,9 +219,22 @@ def estimate_growth_from_track_rows(
     """Estimate an affine growth transform from complete links in a track matrix."""
 
     cfg = config or GrowthPriorConfig()
-    rows = np.asarray(track_rows, dtype=int)
-    if target_session < 0:
-        target_session = rows.shape[1] + int(target_session)
+    rows = _integer_track_row_matrix(track_rows)
+    source_session = _normalize_session_column(
+        source_session,
+        name="source_session",
+        num_sessions=rows.shape[1],
+    )
+    target_session = _normalize_session_column(
+        target_session,
+        name="target_session",
+        num_sessions=rows.shape[1],
+    )
+    required_position_tables = max(source_session, target_session) + 1
+    if len(position_tables) < required_position_tables:
+        raise ValueError(
+            "position_tables must contain mappings for source_session and target_session"
+        )
     source_points: list[np.ndarray] = []
     target_points: list[np.ndarray] = []
     for row in rows:
@@ -209,6 +255,90 @@ def estimate_growth_from_track_rows(
         np.vstack(target_points),
         regularization=cfg.regularization,
     )
+
+
+def _as_xy_point_matrix(
+    values: Any,
+    *,
+    name: str,
+    peer_values: Any | None = None,
+) -> np.ndarray:
+    """Normalize xy point arrays from either (n, 2) or coordinate-row (2, n)."""
+
+    points = np.asarray(values, dtype=float)
+    if points.ndim != 2:
+        raise ValueError(f"{name} must have shape (n, 2) or (2, n)")
+    if points.shape == (2, 2):
+        peer_layout = _unambiguous_xy_layout(peer_values)
+        if peer_layout == "point_rows":
+            return np.ascontiguousarray(points, dtype=float)
+        return np.ascontiguousarray(points.T, dtype=float)
+    if points.shape[1] == 2:
+        return np.ascontiguousarray(points, dtype=float)
+    if points.shape[0] == 2:
+        return np.ascontiguousarray(points.T, dtype=float)
+    raise ValueError(f"{name} must have shape (n, 2) or (2, n)")
+
+
+def _unambiguous_xy_layout(values: Any | None) -> str | None:
+    if values is None:
+        return None
+    points = np.asarray(values)
+    if points.ndim != 2:
+        return None
+    if points.shape[1] == 2 and points.shape[0] != 2:
+        return "point_rows"
+    if points.shape[0] == 2 and points.shape[1] != 2:
+        return "coordinate_rows"
+    return None
+
+
+def _integer_track_row_matrix(track_rows: Any) -> np.ndarray:
+    raw_rows = np.asarray(track_rows, dtype=object)
+    if raw_rows.ndim != 2:
+        raise ValueError("track_rows must be a two-dimensional integer matrix")
+    normalized = np.empty(raw_rows.shape, dtype=int)
+    for index, value in np.ndenumerate(raw_rows):
+        normalized[index] = _integer_track_row_entry(value)
+    return normalized
+
+
+def _integer_track_row_entry(value: Any) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("track_rows must contain integer ROI indices or negative missing sentinels")
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(
+                "track_rows must contain integer ROI indices or negative missing sentinels"
+            )
+        return int(numeric_value)
+    try:
+        return int(operator.index(value))
+    except TypeError as exc:
+        raise ValueError(
+            "track_rows must contain integer ROI indices or negative missing sentinels"
+        ) from exc
+
+
+def _normalize_session_column(value: Any, *, name: str, num_sessions: int) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer session column")
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer session column")
+        normalized = int(numeric_value)
+    else:
+        try:
+            normalized = int(operator.index(value))
+        except TypeError as exc:
+            raise ValueError(f"{name} must be an integer session column") from exc
+    if normalized < 0:
+        normalized += num_sessions
+    if normalized < 0 or normalized >= num_sessions:
+        raise IndexError(f"{name} {normalized} out of bounds for {num_sessions} sessions")
+    return normalized
 
 
 def _nonnegative_float(value: Any, *, name: str) -> float:

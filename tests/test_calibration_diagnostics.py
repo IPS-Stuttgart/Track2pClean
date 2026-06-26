@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from bayescatrack.evaluation.calibration_diagnostics import (
+    best_f1_threshold,
     calibration_summary,
     expected_calibration_error,
     maximum_calibration_error,
+    precision_recall_threshold_table,
     reliability_bin_table,
 )
 
@@ -75,3 +78,20 @@ def test_calibration_inputs_are_validated():
 def test_calibration_n_bins_rejects_silent_coercions(n_bins):
     with pytest.raises(ValueError, match="positive integer"):
         expected_calibration_error([0.5], [1], n_bins=n_bins)
+
+
+@pytest.mark.parametrize("threshold", [True, False, np.bool_(True)])
+def test_precision_recall_thresholds_reject_boolean_coercions(threshold):
+    with pytest.raises(ValueError, match="thresholds must be finite numeric"):
+        precision_recall_threshold_table([0.2, 0.8], [0, 1], thresholds=[threshold])
+
+
+@pytest.mark.parametrize("thresholds", [(), [], 0.5, "0.5"])
+def test_precision_recall_thresholds_reject_empty_or_scalar_sequences(thresholds):
+    with pytest.raises(ValueError, match="thresholds must contain at least one"):
+        precision_recall_threshold_table([0.2, 0.8], [0, 1], thresholds=thresholds)
+
+
+def test_best_f1_threshold_rejects_empty_thresholds_with_clear_error():
+    with pytest.raises(ValueError, match="thresholds must contain at least one"):
+        best_f1_threshold([0.2, 0.8], [0, 1], thresholds=())

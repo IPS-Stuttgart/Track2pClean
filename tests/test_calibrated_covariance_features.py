@@ -139,3 +139,28 @@ def test_session_gap_component_requires_positive_gap():
         with_session_gap_component(
             {"centroid_distance": np.zeros((1, 1))}, session_gap=0
         )
+
+
+@pytest.mark.parametrize(
+    "bad_session_gap",
+    [
+        True,
+        False,
+        np.bool_(True),
+        np.bool_(False),
+        1.5,
+        np.float64(2.25),
+        np.nan,
+        np.inf,
+        -np.inf,
+        "",
+    ],
+)
+def test_session_gap_component_rejects_non_discrete_or_non_finite_gap(
+    bad_session_gap,
+):
+    with pytest.raises(ValueError, match="session_gap must be positive"):
+        with_session_gap_component(
+            {"centroid_distance": np.zeros((1, 1))},
+            session_gap=bad_session_gap,
+        )
