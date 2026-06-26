@@ -19,7 +19,9 @@ from typing import Any, Literal, cast
 
 import numpy as np
 
-from bayescatrack.experiments import track2p_policy_suffix_stitch_ranking_audit as rank
+from bayescatrack.experiments import (
+    track2p_policy_suffix_stitch_ranking_audit as rank,
+)
 from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     _load_subject_sessions,
@@ -194,7 +196,9 @@ def _run_subject_exposure_audit(
         "terminal_adjusted_score": float(
             final_selection.get("terminal_adjusted_score", best.score)
         ),
-        "terminal_history_risk": float(final_selection.get("terminal_history_risk", 0.0)),
+        "terminal_history_risk": float(
+            final_selection.get("terminal_history_risk", 0.0)
+        ),
         "terminal_identity_history_risk": float(
             final_selection.get("terminal_identity_history_risk", 0.0)
         ),
@@ -306,7 +310,7 @@ def _write_rows(
     *,
     output_format: Literal["csv", "json"],
 ) -> None:
-    output.parent.mkdir(parents=True, exist_ok=True)
+    output.parent.mkdir(parents=True)
     if output_format == "json":
         output.write_text(json.dumps(list(rows), indent=2) + "\n", encoding="utf-8")
         return
@@ -327,21 +331,44 @@ def _write_rows(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m bayescatrack.experiments.track2p_policy_full_mht_exposure_audit",
-        description="Run a label-free FullMHT exposure audit across Track2p subjects.",
+        prog=(
+            "python -m "
+            "bayescatrack.experiments.track2p_policy_full_mht_exposure_audit"
+        ),
+        description="Run a label-free FullMHT exposure audit.",
     )
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", choices=("auto", "suite2p", "npy"), default="suite2p")
-    parser.add_argument("--threshold-method", choices=("otsu", "min"), default=TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
+    parser.add_argument(
+        "--input-format",
+        choices=("auto", "suite2p", "npy"),
+        default="suite2p",
+    )
+    parser.add_argument(
+        "--threshold-method",
+        choices=("otsu", "min"),
+        default=TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
     parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
-    parser.add_argument("--iou-distance-threshold", type=float, default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD)
-    parser.add_argument("--cell-probability-threshold", type=float, default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD)
+    parser.add_argument(
+        "--iou-distance-threshold",
+        type=float,
+        default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+    )
+    parser.add_argument(
+        "--cell-probability-threshold",
+        type=float,
+        default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
+    )
     parser.add_argument("--seed-session", type=int, default=0)
     parser.add_argument("--beam-width", type=int, default=8)
     parser.add_argument("--scan-hypotheses", type=int, default=8)
     parser.add_argument("--edge-top-k", type=int, default=4)
-    parser.add_argument("--identity-diverse-beam", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--identity-diverse-beam",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument("--miss-cost", type=float, default=2.0)
     parser.add_argument("--full-mht-max-gap", type=int, default=1)
     parser.add_argument("--gap-reactivation-cost", type=float, default=1.0)
@@ -351,9 +378,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--track2p-prior-weight", type=float, default=12.0)
     parser.add_argument("--track2p-non-prior-penalty", type=float, default=2.0)
     parser.add_argument("--track2p-prior-switch-penalty", type=float, default=8.0)
-    parser.add_argument("--track2p-no-prior-successor-penalty", type=float, default=8.0)
+    parser.add_argument(
+        "--track2p-no-prior-successor-penalty",
+        type=float,
+        default=8.0,
+    )
     parser.add_argument("--track2p-prior-miss-penalty", type=float, default=4.0)
-    parser.add_argument("--terminal-incomplete-history-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--terminal-incomplete-history-weight",
+        type=float,
+        default=0.0,
+    )
     parser.add_argument("--terminal-motion-history-weight", type=float, default=0.0)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--format", choices=("csv", "json"), default="csv")
