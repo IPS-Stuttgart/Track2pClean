@@ -89,6 +89,27 @@ local-context likelihood gate so `FullMHTLocalContext000` is a true calibrated
 no-local-context ablation.  The probe asks whether a label-free neighborhood
 coherence term helps independently of the later identity-history bundle.
 
+## Scan-History Pruning Probe
+
+The identity-history candidate is not silently changed by this note.  A separate
+frozen probe asks whether scan-time motion-history pruning should be added to the
+same combined model:
+
+```text
+IdentityHistoryScanPruning025
+IdentityHistoryScanPruning050
+IdentityHistoryScanPruning100
+```
+
+Each row has a matching greedy beam-width-1 row with the same
+`scan_motion_history_weight`.  The add-on can enter the paper-facing method only
+if at least two nearby weights improve complete-track F1 over their matching
+greedy rows, no tested neighbor regresses against its greedy row, and no
+scan-pruning row regresses against `FullMHTIdentityHistory` on any reported
+pairwise or complete-track micro/macro metric.  A single winning weight, a
+pairwise-only gain, or a regression against the central identity-history row is
+exploratory.
+
 ## Complete-History Objective Probe
 
 The identity-history candidate is not silently changed by this note.  A separate
@@ -114,6 +135,7 @@ beside a regressing weight, is treated as exploratory.
 | --- | --- |
 | `benchmarks/full_mht_identity_history_candidate_manifest.json` | canonical comparison against Track2p, prior-only FullMHT, prior-survival, no-prior continuation, no-local-context identity history, and greedy identity history |
 | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | immediate-neighborhood sensitivity around survival weight, no-prior continuation weight, and growth-history weight |
+| `benchmarks/full_mht_identity_history_scan_pruning_manifest.json` | scan-time history-pruning add-on probe with matching greedy rows at every tested weight |
 | `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
 | `benchmarks/full_mht_local_context_probe_manifest.json` | calibrated local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
 | `docs/full_mht_method_invariant_checklist.md` | paper-facing checklist tying method claims to required label-free regressions |
@@ -123,6 +145,7 @@ beside a regressing weight, is treated as exploratory.
 | `test_track2p_policy_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness, including reference-independent path selection |
 | `full_mht_local_context_decision.py` | interprets the local-neighborhood deformation probe |
 | `full_mht_identity_history_decision.py` | interprets the canonical comparison table, including greedy and no-local-context controls |
+| `full_mht_identity_history_scan_pruning_decision.py` | interprets scan-pruning add-on rows against matching greedy and central identity-history baselines |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
 | `full_mht_terminal_completion_decision.py` | interprets the terminal-completion probe, with row-name overrides for identity-history rows |
 | `track2p_policy_full_mht_exposure_audit.py` | runs all Track2p-style subjects without loading references or audit labels |
@@ -140,6 +163,12 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 - The exposure audit reports `bounded_exposure`.
 - Prior-survival, no-prior continuation, and growth-history signals are active but not broad.
 - The no-GT leakage regression passes.
+
+Promote a scan-pruning variant only if the identity-history row itself passes
+those gates and the scan-pruning probe reports
+`scan_pruning_stable_complete_history_gain`, which requires at least two
+non-regressing matching-greedy gains and no regression against the central
+identity-history row.
 
 Promote a terminal-completion variant only if the identity-history row itself
 passes those gates and the completion probe reports `terminal_completion_stable_gain`,
@@ -169,6 +198,8 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_identity_history_candidate_manifest.py \
   tests/test_full_mht_identity_history_sensitivity_manifest.py \
+  tests/test_full_mht_identity_history_scan_pruning_manifest.py \
+  tests/test_full_mht_identity_history_scan_pruning_decision.py \
   tests/test_full_mht_identity_history_completion_manifest.py \
   tests/test_full_mht_identity_history_decision.py \
   tests/test_full_mht_identity_history_promotion_gate.py \
@@ -196,6 +227,17 @@ mkdir -p "$IDH"
 "$PY" -m bayescatrack.experiments.full_mht_identity_history_decision \
   "$IDH/full_mht_identity_history/full_mht_identity_history_comparison.csv" \
   --output "$IDH/full_mht_identity_history_decision.md"
+
+SCAN="$REPO/results/full_mht_identity_history_scan_pruning_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$SCAN"
+"$PY" -m bayescatrack benchmark suite \
+  benchmarks/full_mht_identity_history_scan_pruning_manifest.json \
+  --output-dir "$SCAN" \
+  --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_scan_pruning_decision \
+  "$SCAN/full_mht_identity_history_scan_pruning/full_mht_identity_history_scan_pruning_comparison.csv" \
+  --output "$SCAN/full_mht_identity_history_scan_pruning_decision.md"
 
 LOCAL="$REPO/results/full_mht_local_context_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOCAL"
@@ -286,6 +328,9 @@ mkdir -p "$EXPOSURE"
 | `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection, or the candidate regresses on a required micro/macro control |
 | `not_promotable_sensitivity` | likely knife-edge, single-setting result, or hidden macro regression |
 | `not_promotable_broad_exposure` | model layer fires too broadly on label-free subjects |
+| `scan_pruning_stable_complete_history_gain` | scan-history pruning can be considered only after the central identity-history row passes all gates |
+| `scan_pruning_single_weight_gain` | scan-history pruning is exploratory, not promotable |
+| `scan_pruning_ties_identity_history` | scan-history pruning supports the story but does not improve the row |
 | `history_dynamics_stable_gain` | local context or another dynamics probe shows stable complete-track gain without pairwise loss |
 | `history_dynamics_single_weight_gain` | layer probe is exploratory, not promotable |
 | `terminal_completion_stable_gain` | terminal complete-history objective can be considered only when the tested weight neighborhood has at least two gains and no pairwise or complete-track regression |
