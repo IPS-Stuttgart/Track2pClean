@@ -214,7 +214,7 @@ def _run_subject_exposure_audit(
     }
 
 
-def _history_totals(history: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+def _history_totals(history: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     keys = (
         "assigned_edges",
         "missed_tracks",
@@ -226,7 +226,11 @@ def _history_totals(history: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         "gap_reactivated_tracks",
         "scan_candidates",
     )
-    return {f"history_{key}": _history_int_sum(history, key) for key in keys}
+    totals: dict[str, Any] = {
+        f"history_{key}": _history_int_sum(history, key) for key in keys
+    }
+    totals.update(_history_growth_prediction_totals(history))
+    return totals
 
 
 def _history_int_sum(history: Sequence[Mapping[str, Any]], key: str) -> int:
@@ -237,6 +241,54 @@ def _history_int_sum(history: Sequence[Mapping[str, Any]], key: str) -> int:
         except (TypeError, ValueError):
             continue
     return int(total)
+
+
+def _history_growth_prediction_totals(
+    history: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    evaluated = 0
+    penalized = 0
+    penalty_sum = 0.0
+    weighted_sum = 0.0
+    for item in history:
+        summaries = str(item.get("selected_edge_summaries", ""))
+        if not summaries:
+            continue
+        for summary in summaries.split(";"):
+            values = _summary_key_values(summary)
+            if "growth_pred" not in values and "growth_pred_weighted" not in values:
+                continue
+            evaluated += 1
+            penalty = _summary_float(values.get("growth_pred"), 0.0)
+            weighted = _summary_float(values.get("growth_pred_weighted"), 0.0)
+            if penalty > 0.0 or weighted > 0.0:
+                penalized += 1
+            penalty_sum += max(0.0, penalty)
+            weighted_sum += max(0.0, weighted)
+    return {
+        "history_growth_prediction_evaluated_edges": int(evaluated),
+        "history_growth_prediction_penalized_edges": int(penalized),
+        "history_growth_prediction_penalty": float(penalty_sum),
+        "history_growth_prediction_weighted_penalty": float(weighted_sum),
+    }
+
+
+def _summary_key_values(summary: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for part in str(summary).split("|"):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def _summary_float(value: Any, fallback: float) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return float(fallback)
+    return numeric if np.isfinite(numeric) else float(fallback)
 
 
 def _missing_observation_count(matrix: np.ndarray) -> int:
@@ -289,10 +341,18 @@ def _all_subjects_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "history_no_prior_successor_continuations",
         "history_gap_reactivated_tracks",
         "history_scan_candidates",
+        "history_growth_prediction_evaluated_edges",
+        "history_growth_prediction_penalized_edges",
+    ]
+    float_keys = [
+        "history_growth_prediction_penalty",
+        "history_growth_prediction_weighted_penalty",
     ]
     output: dict[str, Any] = {"subject": "ALL"}
     for key in numeric_keys:
         output[key] = int(sum(int(row.get(key, 0)) for row in rows))
+    for key in float_keys:
+        output[key] = float(sum(float(row.get(key, 0.0)) for row in rows))
     output["max_selected_non_prior_edges_per_subject"] = max(
         (int(row.get("n_selected_non_prior_edges", 0)) for row in rows),
         default=0,
@@ -300,6 +360,17 @@ def _all_subjects_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     output["max_missing_observations_per_subject"] = max(
         (int(row.get("n_missing_observations", 0)) for row in rows),
         default=0,
+    )
+    output["max_growth_prediction_penalized_edges_per_subject"] = max(
+        (int(row.get("history_growth_prediction_penalized_edges", 0)) for row in rows),
+        default=0,
+    )
+    output["max_growth_prediction_weighted_penalty_per_subject"] = max(
+        (
+            float(row.get("history_growth_prediction_weighted_penalty", 0.0))
+            for row in rows
+        ),
+        default=0.0,
     )
     return output
 
@@ -390,6 +461,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=0.0,
     )
     parser.add_argument("--terminal-motion-history-weight", type=float, default=0.0)
+    parser.add_argument("--growth-history-prediction-weight", type=float, default=0.0)
+    parser.add_argument("--growth-history-prediction-scale", type=float, default=1.0)
+    parser.add_argument("--growth-history-prediction-clip", type=float, default=8.0)
+    parser.add_argument("--growth-history-prediction-min-edges", type=int, default=1)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--format", choices=("csv", "json"), default="csv")
     parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=False)
@@ -410,6 +485,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
         install_full_mht_history_dynamics_objective()
+    if float(args.growth_history_prediction_weight) > 0.0:
+        from bayescatrack.experiments.full_mht_growth_history_prediction_integration import (
+            install_full_mht_growth_history_prediction_scoring,
+        )
+
+        install_full_mht_growth_history_prediction_scoring()
 
     benchmark_config = Track2pBenchmarkConfig(
         data=args.data,
@@ -458,6 +539,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         mht_config,
         "terminal_motion_history_weight",
         float(args.terminal_motion_history_weight),
+    )
+    object.__setattr__(
+        mht_config,
+        "growth_history_prediction_weight",
+        float(args.growth_history_prediction_weight),
+    )
+    object.__setattr__(
+        mht_config,
+        "growth_history_prediction_scale",
+        float(args.growth_history_prediction_scale),
+    )
+    object.__setattr__(
+        mht_config,
+        "growth_history_prediction_clip",
+        float(args.growth_history_prediction_clip),
+    )
+    object.__setattr__(
+        mht_config,
+        "growth_history_prediction_min_edges",
+        max(1, int(args.growth_history_prediction_min_edges)),
     )
     result = run_full_mht_exposure_audit(
         benchmark_config,
