@@ -23,6 +23,7 @@ def install_reference_validation(reference_module: ModuleType | None = None) -> 
     _install_curated_only_validation(reference_module)
     _install_session_index_validation(reference_module)
     _install_complete_track_vector_normalization(reference_module)
+    _install_track_label_fill_value_validation(reference_module)
 
 
 def _install_optional_int_parser_validation(reference_module: ModuleType) -> None:
@@ -196,6 +197,47 @@ def _install_complete_track_vector_normalization(reference_module: ModuleType) -
         original_score_complete_tracks,
     )
     reference_module.score_complete_tracks = _score_complete_tracks_with_vector_normalization
+
+
+def _install_track_label_fill_value_validation(reference_module: ModuleType) -> None:
+    reference_cls = reference_module.Track2pReference
+    original_to_session_track_labels = reference_cls.to_session_track_labels
+    if getattr(original_to_session_track_labels, _PATCH_ATTR, False):
+        return
+
+    def _to_session_track_labels_with_fill_value_validation(
+        self: Any,
+        n_rois_per_session: Any = None,
+        *,
+        fill_value: Any = -1,
+        curated_only: Any = False,
+    ) -> list[np.ndarray]:
+        fill_value_int = reference_module._parse_integer_scalar(  # pylint: disable=protected-access
+            fill_value,
+            name="fill_value",
+            allow_negative=True,
+            allow_string=False,
+        )
+        if fill_value_int >= 0:
+            raise ValueError(
+                "fill_value must be negative because track labels are non-negative"
+            )
+        return original_to_session_track_labels(
+            self,
+            n_rois_per_session=n_rois_per_session,
+            fill_value=fill_value_int,
+            curated_only=curated_only,
+        )
+
+    setattr(_to_session_track_labels_with_fill_value_validation, _PATCH_ATTR, True)
+    setattr(
+        _to_session_track_labels_with_fill_value_validation,
+        "_bayescatrack_original",
+        original_to_session_track_labels,
+    )
+    reference_cls.to_session_track_labels = (
+        _to_session_track_labels_with_fill_value_validation
+    )
 
 
 def _normalize_complete_track_matrix(track_matrix: Any) -> Any:

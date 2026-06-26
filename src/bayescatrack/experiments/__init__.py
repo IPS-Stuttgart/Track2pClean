@@ -1,6 +1,7 @@
 """Experiment runners and benchmark CLIs for BayesCaTrack."""
 
 from . import _activity_sweep_defaults as _activity_sweep_defaults
+from . import _assignment_prior_sweep_validation as _assignment_prior_sweep_validation
 from . import _cost_sweep_defaults as _cost_sweep_defaults
 from . import _diag_defaults as _diag_defaults
 from . import _mask_input_sweep_option_validation as _mask_input_sweep_option_validation
@@ -29,6 +30,7 @@ from ._teacher_rescue_repair_preset_manifest_integration import (
 )
 
 _triplet_support_benchmark_integration.install_track2p_benchmark_triplet_support_integration()
+_assignment_prior_sweep_validation.install_assignment_prior_sweep_validation()
 _seed_session_validation.install_seed_session_validation()
 install_benchmark_roi_index_validation()
 install_seed_sensitivity_audit_validation()

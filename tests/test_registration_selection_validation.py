@@ -98,3 +98,17 @@ def test_auto_registration_selector_keeps_finite_scores_for_valid_controls() -> 
     assert result.selected_transform_type == "none"
     assert np.isfinite(result.selected_diagnostics.score)
     assert np.isfinite(result.registered_plane.ops["registration_auto_score"])
+
+
+def test_auto_registration_selector_accepts_single_string_candidate() -> None:
+    reference = _single_roi_plane("reference")
+    moving = _single_roi_plane("moving")
+
+    result = select_registration_transform(
+        reference,
+        moving,
+        candidate_transforms="none",
+    )
+
+    assert result.selected_transform_type == "none"
+    assert tuple(candidate.transform_type for candidate in result.diagnostics) == ("none",)

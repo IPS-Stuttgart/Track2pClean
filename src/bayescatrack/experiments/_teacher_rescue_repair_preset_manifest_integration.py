@@ -10,6 +10,7 @@ existing options before the teacher-adjacent rescue runner is invoked.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from functools import wraps
 from typing import Any
 
 TEACHER_REPAIR_PRESET_FIELD = "teacher_repair_preset"
@@ -35,6 +36,7 @@ def install_teacher_rescue_repair_preset_manifest_integration() -> None:
         manifest._bayescatrack_teacher_repair_preset_integration = True
         return
 
+    @wraps(original_runner)
     def _run_teacher_rows_with_repair_preset(
         config: Any, options: Mapping[str, Any]
     ) -> list[dict[str, Any]]:

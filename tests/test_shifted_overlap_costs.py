@@ -358,3 +358,58 @@ def test_shifted_mask_cosine_can_be_used_as_additive_tie_breaker():
     assert components["mask_cosine_similarity"][0, 0] < 1.0
     assert components["shifted_mask_cosine_similarity"][0, 0] == 1.0
     npt.assert_allclose(cost, np.zeros((1, 1)))
+
+
+def _base_cost_should_not_run(*args, **kwargs):
+    raise AssertionError("validation must run before base cost computation")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"similarity_epsilon": np.nan}, "similarity_epsilon must be a finite positive value"),
+        ({"similarity_epsilon": 0.0}, "similarity_epsilon must be a finite positive value"),
+        ({"large_cost": np.inf}, "large_cost must be a finite positive value"),
+        ({"large_cost": 0.0}, "large_cost must be a finite positive value"),
+        ({"iou_weight": True}, "iou_weight must be a finite non-negative value"),
+        ({"iou_weight": -1.0}, "iou_weight must be a finite non-negative value"),
+        ({"mask_cosine_weight": np.nan}, "mask_cosine_weight must be a finite non-negative value"),
+        ({"mask_cosine_weight": -1.0}, "mask_cosine_weight must be a finite non-negative value"),
+    ],
+)
+def test_shifted_overlap_rejects_invalid_shared_scalar_controls(kwargs, message):
+    reference_plane = CalciumPlaneData(np.array([[[1.0, 0.0, 0.0]]]))
+    measurement_plane = CalciumPlaneData(np.array([[[1.0, 0.0, 0.0]]]))
+    common_kwargs = {
+        "shifted_iou_radius": 1,
+        "use_shifted_iou_for_iou_cost": True,
+    }
+    common_kwargs.update(kwargs)
+
+    with pytest.raises(ValueError, match=message):
+        shifted_iou_pairwise_cost_matrix(
+            _base_cost_should_not_run,
+            reference_plane,
+            measurement_plane,
+            **common_kwargs,
+        )
+
+
+def test_shifted_overlap_keeps_none_additive_weights_as_zero():
+    reference_plane = CalciumPlaneData(np.array([[[1.0, 0.0, 0.0]]]))
+    measurement_plane = CalciumPlaneData(np.array([[[1.0, 0.0, 0.0]]]))
+
+    def original_method(*args, **kwargs):
+        return np.zeros((1, 1), dtype=float)
+
+    cost = shifted_iou_pairwise_cost_matrix(
+        original_method,
+        reference_plane,
+        measurement_plane,
+        shifted_iou_radius=1,
+        use_shifted_iou_for_iou_cost=True,
+        iou_weight=None,
+        mask_cosine_weight=None,
+    )
+
+    npt.assert_allclose(cost, np.zeros((1, 1)))

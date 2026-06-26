@@ -252,6 +252,20 @@ def _resolve_monotone_feature_names(
     return selected
 
 
+def _validated_label_matrix(labels: Any, *, expected_shape: tuple[int, int]) -> np.ndarray:
+    label_array = np.asarray(labels)
+    if label_array.shape != expected_shape:
+        raise ValueError("Pairwise features and labels have incompatible shapes")
+    if label_array.dtype.kind not in {"b", "i", "u", "f"}:
+        raise ValueError("Pairwise labels must be numeric binary 0/1 values")
+    numeric = np.asarray(label_array, dtype=float)
+    if not np.all(np.isfinite(numeric)):
+        raise ValueError("Pairwise labels must be finite binary 0/1 values")
+    if not np.all((numeric == 0.0) | (numeric == 1.0)):
+        raise ValueError("Pairwise labels must be binary 0/1 values")
+    return numeric.astype(int)
+
+
 # pylint: disable=too-many-locals
 def _collect_training_arrays(
     blocks: Sequence[ReferencePairwiseExamples],
@@ -270,9 +284,9 @@ def _collect_training_arrays(
             posinf=1.0e6,
             neginf=-1.0e6,
         )
-        labels = np.asarray(block.labels, dtype=int)
-        if features.ndim != 3 or labels.shape != features.shape[:2]:
+        if features.ndim != 3:
             raise ValueError("Pairwise features and labels have incompatible shapes")
+        labels = _validated_label_matrix(block.labels, expected_shape=features.shape[:2])
         selected = features[..., feature_indices]
         hardness = np.mean(selected, axis=-1)
         for positive_row, positive_col in np.argwhere(labels != 0):
