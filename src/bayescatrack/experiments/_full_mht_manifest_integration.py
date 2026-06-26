@@ -3,8 +3,8 @@
 The full-MHT runner is the first Track2p-cleaning experiment that opens a beam
 over full identity histories instead of selecting post-hoc residual edits.  This
 integration makes the runner executable from JSON benchmark manifests, including
-the proposal-prior, prior-veto, and calibrated prior-survival controls used by
-the current method probe.
+the proposal-prior, prior-veto, calibrated prior-survival, and terminal
+completion controls used by the current method probe.
 """
 
 from __future__ import annotations
@@ -41,6 +41,9 @@ FULL_MHT_PRIOR_SURVIVAL_INT_FIELDS = {
 FULL_MHT_PRIOR_SURVIVAL_FIELDS = (
     FULL_MHT_PRIOR_SURVIVAL_FLOAT_FIELDS | FULL_MHT_PRIOR_SURVIVAL_INT_FIELDS
 )
+FULL_MHT_TERMINAL_COMPLETION_FLOAT_FIELDS = {
+    "terminal_incomplete_history_weight",
+}
 FULL_MHT_FIELDS = {
     "threshold_method",
     "iou_distance_threshold",
@@ -98,6 +101,7 @@ FULL_MHT_FIELDS = {
     "growth_anchor_min_shifted_iou",
     "growth_anchor_min_cell_probability",
     *FULL_MHT_PRIOR_SURVIVAL_FIELDS,
+    *FULL_MHT_TERMINAL_COMPLETION_FLOAT_FIELDS,
 }
 
 
@@ -199,6 +203,12 @@ def _run_track2p_policy_full_mht_rows(
         )
 
         install_full_mht_prior_survival_scoring()
+    if _uses_terminal_completion(options):
+        from bayescatrack.experiments.full_mht_terminal_completion_integration import (
+            install_full_mht_terminal_completion_objective,
+        )
+
+        install_full_mht_terminal_completion_objective()
 
     output = run_track2p_policy_full_mht(
         config,
@@ -220,6 +230,10 @@ def _run_track2p_policy_full_mht_rows(
 
 def _uses_prior_survival(options: Mapping[str, Any]) -> bool:
     return any(key in options for key in FULL_MHT_PRIOR_SURVIVAL_FIELDS)
+
+
+def _uses_terminal_completion(options: Mapping[str, Any]) -> bool:
+    return any(key in options for key in FULL_MHT_TERMINAL_COMPLETION_FLOAT_FIELDS)
 
 
 def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
@@ -463,7 +477,8 @@ def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
             default=defaults.growth_anchor_min_cell_probability,
         ),
     )
-    return _attach_prior_survival_options(config, options)
+    config = _attach_prior_survival_options(config, options)
+    return _attach_terminal_completion_options(config, options)
 
 
 def _attach_prior_survival_options(config: Any, options: Mapping[str, Any]) -> Any:
@@ -482,6 +497,19 @@ def _attach_prior_survival_options(config: Any, options: Mapping[str, Any]) -> A
                 config,
                 key,
                 manifest._positive_int_option(options, key, default=1),
+            )
+    return config
+
+
+def _attach_terminal_completion_options(config: Any, options: Mapping[str, Any]) -> Any:
+    from bayescatrack.experiments import benchmark_manifest as manifest
+
+    for key in sorted(FULL_MHT_TERMINAL_COMPLETION_FLOAT_FIELDS):
+        if key in options:
+            object.__setattr__(
+                config,
+                key,
+                manifest._float_option(options, key, default=0.0),
             )
     return config
 
