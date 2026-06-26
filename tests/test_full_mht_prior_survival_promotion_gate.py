@@ -131,6 +131,21 @@ def test_prior_survival_exposure_requires_scored_edges() -> None:
     assert exposure["exposure_result"] == "prior_survival_not_scored"
 
 
+def test_prior_survival_exposure_requires_active_signal() -> None:
+    exposure = evaluate_prior_survival_exposure(
+        [
+            _exposure_row(
+                history_prior_survival_scored_edges=12,
+                history_prior_survival_positive_edges=0,
+                history_prior_survival_negative_edges=0,
+            )
+        ]
+    )
+
+    assert exposure["status"] == "incomplete"
+    assert exposure["exposure_result"] == "prior_survival_not_active"
+
+
 def test_prior_survival_exposure_rejects_broad_negative_penalties() -> None:
     exposure = evaluate_prior_survival_exposure(
         [
