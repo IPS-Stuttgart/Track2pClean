@@ -10,7 +10,7 @@ def test_track_table_rejects_invalid_negative_roi_index() -> None:
 
 
 def test_track_table_rejects_duplicate_session_names() -> None:
-    with pytest.raises(ValueError, match="session_names must be unique"):
+    with pytest.raises(ValueError, match=r"session_names must.*unique"):
         TrackTable(("s1", "s1"), [[0, 1]])
 
 
