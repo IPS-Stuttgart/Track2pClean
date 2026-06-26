@@ -37,6 +37,9 @@ from ._fov_translation_output_shape_validation import (
 from ._global_cost_preset_validation import (
     install_global_cost_preset_validation as _install_global_cost_preset_validation,
 )
+from ._global_track_row_validation import (
+    install_global_track_row_validation as _install_global_track_row_validation,
+)
 from ._ground_truth_track_validation import (
     install_ground_truth_track_validation as _install_ground_truth_track_validation,
 )
@@ -168,6 +171,7 @@ _install_tracking_start_roi_validation()
 _install_track_row_export_option_validation()
 _install_track_row_fill_value_validation()
 _install_track_table_session_name_validation()
+_install_global_track_row_validation()
 _install_tracking_fill_value_validation()
 _install_tracking_result_matrix_validation()
 _install_return_components_validation(_bridge)
