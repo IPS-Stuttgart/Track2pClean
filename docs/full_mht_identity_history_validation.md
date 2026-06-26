@@ -104,10 +104,11 @@ IdentityHistoryScanPruning100
 Each row has a matching greedy beam-width-1 row with the same
 `scan_motion_history_weight`.  The add-on can enter the paper-facing method only
 if at least two nearby weights improve complete-track F1 over their matching
-greedy rows, no tested neighbor regresses against its greedy row, and no
+greedy rows, no tested neighbor regresses against its greedy row, no
 scan-pruning row regresses against `FullMHTIdentityHistory` on any reported
-pairwise or complete-track micro/macro metric.  A single winning weight, a
-pairwise-only gain, or a regression against the central identity-history row is
+pairwise or complete-track micro/macro metric, and the scan-pruning exposure gate
+reports bounded label-free exposure.  A single winning weight, a pairwise-only
+gain, a regression against the central identity-history row, or broad exposure is
 exploratory.
 
 ## Complete-History Objective Probe
@@ -146,6 +147,7 @@ beside a regressing weight, is treated as exploratory.
 | `full_mht_local_context_decision.py` | interprets the local-neighborhood deformation probe |
 | `full_mht_identity_history_decision.py` | interprets the canonical comparison table, including greedy and no-local-context controls |
 | `full_mht_identity_history_scan_pruning_decision.py` | interprets scan-pruning add-on rows against matching greedy and central identity-history baselines |
+| `full_mht_identity_history_scan_pruning_promotion_gate.py` | combines scan-pruning benchmark decision with label-free scan-history exposure limits |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
 | `full_mht_terminal_completion_decision.py` | interprets the terminal-completion probe, with row-name overrides for identity-history rows |
 | `track2p_policy_full_mht_exposure_audit.py` | runs all Track2p-style subjects without loading references or audit labels |
@@ -165,10 +167,10 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 - The no-GT leakage regression passes.
 
 Promote a scan-pruning variant only if the identity-history row itself passes
-those gates and the scan-pruning probe reports
-`scan_pruning_stable_complete_history_gain`, which requires at least two
-non-regressing matching-greedy gains and no regression against the central
-identity-history row.
+those gates and the scan-pruning promotion gate reports `promotable_after_review`.
+That requires `scan_pruning_stable_complete_history_gain` and `bounded_exposure`
+from the scan-pruning exposure audit.  A scan-pruning benchmark gain without the
+exposure artifact is not promotable.
 
 Promote a terminal-completion variant only if the identity-history row itself
 passes those gates and the completion probe reports `terminal_completion_stable_gain`,
@@ -200,6 +202,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_identity_history_sensitivity_manifest.py \
   tests/test_full_mht_identity_history_scan_pruning_manifest.py \
   tests/test_full_mht_identity_history_scan_pruning_decision.py \
+  tests/test_full_mht_identity_history_scan_pruning_promotion_gate.py \
   tests/test_full_mht_identity_history_completion_manifest.py \
   tests/test_full_mht_identity_history_decision.py \
   tests/test_full_mht_identity_history_promotion_gate.py \
@@ -214,6 +217,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_local_context_decision.py \
   tests/test_full_mht_local_context_integration.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
+  tests/test_full_mht_scan_history_conflict_demo.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_full_mht_exposure_audit.py
 
@@ -318,17 +322,64 @@ mkdir -p "$EXPOSURE"
   "$SENS/full_mht_identity_history_sensitivity/full_mht_identity_history_sensitivity_comparison.csv" \
   "$EXPOSURE/full_mht_identity_history_exposure.csv" \
   --output "$EXPOSURE/full_mht_identity_history_promotion_gate.md"
+
+SCAN_EXPOSURE="$REPO/results/full_mht_identity_history_scan_pruning_exposure_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$SCAN_EXPOSURE"
+"$PY" -m bayescatrack.experiments.track2p_policy_full_mht_exposure_audit \
+  --data "$DATA" \
+  --input-format suite2p \
+  --threshold-method min \
+  --transform-type affine \
+  --iou-distance-threshold 12 \
+  --cell-probability-threshold 0.5 \
+  --seed-session 0 \
+  --beam-width 8 \
+  --scan-hypotheses 8 \
+  --edge-top-k 4 \
+  --identity-diverse-beam \
+  --miss-cost 2.0 \
+  --full-mht-max-gap 1 \
+  --gap-reactivation-cost 1.0 \
+  --min-output-observations 1 \
+  --min-edge-score 0.25 \
+  --association-score-mode calibrated-likelihood \
+  --association-likelihood-weight 1.0 \
+  --association-likelihood-clip 4.0 \
+  --track2p-prior-weight 12.0 \
+  --track2p-non-prior-penalty 2.0 \
+  --track2p-prior-switch-penalty 8.0 \
+  --track2p-no-prior-successor-penalty 0.0 \
+  --track2p-prior-miss-penalty 4.0 \
+  --track2p-prior-survival-weight 1.0 \
+  --track2p-prior-survival-min-examples-per-class 2 \
+  --track2p-prior-survival-score-clip 8.0 \
+  --no-prior-continuation-likelihood-weight 1.0 \
+  --no-prior-continuation-min-examples-per-class 2 \
+  --no-prior-continuation-score-clip 8.0 \
+  --growth-history-prediction-weight 0.5 \
+  --growth-history-prediction-scale 1.0 \
+  --growth-history-prediction-clip 8.0 \
+  --growth-history-prediction-min-edges 1 \
+  --scan-motion-history-weight 0.50 \
+  --output "$SCAN_EXPOSURE/full_mht_identity_history_scan_pruning_exposure_050.csv" \
+  --format csv \
+  --progress
+
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_scan_pruning_promotion_gate \
+  "$SCAN/full_mht_identity_history_scan_pruning/full_mht_identity_history_scan_pruning_comparison.csv" \
+  "$SCAN_EXPOSURE/full_mht_identity_history_scan_pruning_exposure_050.csv" \
+  --output "$SCAN/full_mht_identity_history_scan_pruning_promotion_gate.md"
 ```
 
 ## How To Interpret Outcomes
 
 | gate result | interpretation |
 | --- | --- |
-| `promotable_after_review` | strong candidate for the paper method row, after recording exact directories and all four metric tables |
+| `promotable_after_review` | strong candidate for the paper method row only when emitted by the central identity-history promotion gate, after recording exact directories and all four metric tables |
 | `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection, or the candidate regresses on a required micro/macro control |
 | `not_promotable_sensitivity` | likely knife-edge, single-setting result, or hidden macro regression |
 | `not_promotable_broad_exposure` | model layer fires too broadly on label-free subjects |
-| `scan_pruning_stable_complete_history_gain` | scan-history pruning can be considered only after the central identity-history row passes all gates |
+| `scan_pruning_stable_complete_history_gain` | scan-history pruning can be considered only after the central identity-history row passes all gates and the scan-pruning promotion gate reports bounded exposure |
 | `scan_pruning_single_weight_gain` | scan-history pruning is exploratory, not promotable |
 | `scan_pruning_ties_identity_history` | scan-history pruning supports the story but does not improve the row |
 | `history_dynamics_stable_gain` | local context or another dynamics probe shows stable complete-track gain without pairwise loss |
