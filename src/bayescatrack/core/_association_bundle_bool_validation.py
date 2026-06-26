@@ -3,7 +3,7 @@
 Association-bundle builders use ``weighted_centroids`` to select weighted ROI
 moments and ``return_pairwise_components`` to choose the diagnostic output path.
 Accepting arbitrary truthy/falsy values would let strings or integers silently
-change tracking evidence and diagnostics.  This hook keeps those controls
+change tracking evidence and diagnostics. This hook keeps those controls
 explicit at the public bridge boundary.
 """
 
@@ -16,6 +16,7 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_association_bundle_bool_validation_patch"
 _BOOL_CONTROL_NAMES = ("weighted_centroids", "return_pairwise_components")
+_PAIRWISE_COMPONENT_RETURN_KEY = "return_components"
 
 
 def install_association_bundle_bool_validation(bridge_impl: Any) -> None:
@@ -43,6 +44,15 @@ def _patch_builder(bridge_impl: Any, function_name: str) -> None:
                 normalized_kwargs[control_name] = _strict_bool(
                     kwargs[control_name], name=control_name
                 )
+
+        if "pairwise_cost_kwargs" in kwargs and kwargs["pairwise_cost_kwargs"] is not None:
+            normalized_pairwise_cost_kwargs = dict(kwargs["pairwise_cost_kwargs"])
+            if _PAIRWISE_COMPONENT_RETURN_KEY in normalized_pairwise_cost_kwargs:
+                if normalized_kwargs is None:
+                    normalized_kwargs = dict(kwargs)
+                normalized_pairwise_cost_kwargs.pop(_PAIRWISE_COMPONENT_RETURN_KEY, None)
+                normalized_kwargs["pairwise_cost_kwargs"] = normalized_pairwise_cost_kwargs
+
         if normalized_kwargs is not None:
             kwargs = normalized_kwargs
         return original(*args, **kwargs)
