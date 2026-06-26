@@ -23,6 +23,34 @@ def _plane(
     )
 
 
+@pytest.mark.parametrize(
+    "n_rois",
+    (True, False, np.bool_(True), np.bool_(False), -1, 1.5, float("nan"), ""),
+)
+def test_absence_cost_vector_rejects_invalid_roi_count(n_rois: object) -> None:
+    plane = _plane(0)
+    plane.n_rois = n_rois
+
+    with pytest.raises(ValueError, match=r"plane\.n_rois"):
+        absence_cost_vector(plane)
+
+
+def test_gap_penalty_matrix_rejects_invalid_roi_counts() -> None:
+    reference = _plane(0)
+    reference.n_rois = 1.5
+    measurement = _plane(1)
+
+    with pytest.raises(ValueError, match=r"reference_plane\.n_rois"):
+        gap_penalty_matrix(reference, measurement)
+
+    reference = _plane(1)
+    measurement = _plane(0)
+    measurement.n_rois = True
+
+    with pytest.raises(ValueError, match=r"measurement_plane\.n_rois"):
+        gap_penalty_matrix(reference, measurement)
+
+
 def test_absence_model_config_rejects_nonfinite_discounts() -> None:
     with pytest.raises(ValueError, match="low_cell_probability_discount"):
         AbsenceModelConfig(low_cell_probability_discount=float("nan"))
@@ -156,3 +184,51 @@ def test_apply_absence_adjustment_uses_validated_gap_offset() -> None:
     )
 
     np.testing.assert_allclose(adjusted, np.asarray([[3.0], [3.5]], dtype=float))
+
+
+def test_absence_cost_vector_rejects_cell_probability_length_mismatch() -> None:
+    plane = _plane(2, cell_probabilities=np.asarray([1.0], dtype=float))
+
+    with pytest.raises(ValueError, match="plane.cell_probabilities"):
+        absence_cost_vector(plane)
+
+
+@pytest.mark.parametrize(
+    ("kwarg", "value"),
+    (
+        ("registered_empty_mask", np.asarray([True], dtype=bool)),
+        ("local_density", np.asarray([0.5], dtype=float)),
+    ),
+)
+def test_absence_cost_vector_rejects_optional_cue_length_mismatch(
+    kwarg: str,
+    value: np.ndarray,
+) -> None:
+    plane = _plane(2)
+
+    with pytest.raises(ValueError, match=kwarg):
+        absence_cost_vector(plane, **{kwarg: value})
+
+
+def test_gap_penalty_matrix_rejects_registered_empty_mask_length_mismatch() -> None:
+    reference = _plane(1)
+    measurement = _plane(2)
+
+    with pytest.raises(ValueError, match="registered_empty_mask"):
+        gap_penalty_matrix(
+            reference,
+            measurement,
+            registered_empty_mask=np.asarray([True], dtype=bool),
+        )
+
+
+def test_gap_penalty_matrix_rejects_measurement_density_length_mismatch() -> None:
+    reference = _plane(1)
+    measurement = _plane(2)
+
+    with pytest.raises(ValueError, match="local_density"):
+        gap_penalty_matrix(
+            reference,
+            measurement,
+            measurement_local_density=np.asarray([0.5], dtype=float),
+        )

@@ -15,7 +15,7 @@ from typing import Any
 
 TEACHER_REPAIR_PRESET_FIELD = "teacher_repair_preset"
 TEACHER_RESCUE_RUNNER = "track2p-policy-teacher-adjacent-rescue"
-_RUNNER_PATCH_MARKER = "_bayescatrack_teacher_repair_preset_runner_patch"
+_PATCH_MARKER = "_bayescatrack_teacher_repair_preset_integration"
 
 
 def install_teacher_rescue_repair_preset_manifest_integration() -> None:
@@ -32,7 +32,7 @@ def install_teacher_rescue_repair_preset_manifest_integration() -> None:
     ).add(TEACHER_REPAIR_PRESET_FIELD)
 
     original_runner = base._run_track2p_policy_teacher_adjacent_rows
-    if getattr(original_runner, _RUNNER_PATCH_MARKER, False):
+    if _callable_chain_has_patch(original_runner):
         manifest._bayescatrack_teacher_repair_preset_integration = True
         return
 
@@ -42,12 +42,26 @@ def install_teacher_rescue_repair_preset_manifest_integration() -> None:
     ) -> list[dict[str, Any]]:
         return original_runner(config, _expand_teacher_repair_preset(options))
 
-    setattr(_run_teacher_rows_with_repair_preset, _RUNNER_PATCH_MARKER, True)
+    setattr(_run_teacher_rows_with_repair_preset, _PATCH_MARKER, True)
     setattr(_run_teacher_rows_with_repair_preset, "_bayescatrack_original", original_runner)
     base._run_track2p_policy_teacher_adjacent_rows = (
         _run_teacher_rows_with_repair_preset
     )
     manifest._bayescatrack_teacher_repair_preset_integration = True
+
+
+def _callable_chain_has_patch(function: Any) -> bool:
+    seen: set[int] = set()
+    current: Any = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, _PATCH_MARKER, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _expand_teacher_repair_preset(options: Mapping[str, Any]) -> dict[str, Any]:

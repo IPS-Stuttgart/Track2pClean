@@ -28,6 +28,7 @@ def install_teacher_rescue_edit_cap_manifest_integration() -> None:
     ).add(EDIT_CAP_FIELD)
 
     manifest._bayescatrack_teacher_rescue_edit_cap_integration = True
+    base._install_advanced_workbench_manifest_row()
     _install_advanced_workbench_edit_cap_rows()
 
 

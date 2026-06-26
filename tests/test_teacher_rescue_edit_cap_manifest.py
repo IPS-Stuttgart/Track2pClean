@@ -74,5 +74,26 @@ def test_result_improvement_manifest_reinstalls_edit_caps_after_workbench_reload
     )
 
     run_names = [run["name"] for run in manifest["runs"]]
+    assert "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source" in run_names
     assert "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max1" in run_names
     assert "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max2" in run_names
+
+
+def test_result_improvement_manifest_reinstalls_base_teacher_rows_after_workbench_reload():
+    from bayescatrack.experiments import _teacher_rescue_manifest_integration as integration
+    from bayescatrack.experiments import advanced_improvement_workbench as workbench
+
+    reloaded_workbench = importlib.reload(workbench)
+    integration.install_teacher_rescue_manifest_integration()
+    integration.install_teacher_rescue_manifest_integration()
+
+    manifest = reloaded_workbench.track2p_result_improvement_manifest(
+        data_root="data",
+        reference_root="reference",
+        output_root="results",
+    )
+
+    run_name = "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source"
+    run_names = [run["name"] for run in manifest["runs"]]
+    assert run_name in run_names
+    assert run_names.count(run_name) == 1

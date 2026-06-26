@@ -32,13 +32,11 @@ The workflow writes these files under `benchmark-results/`:
 | `comparison.csv` | Machine-readable aggregate comparison table. |
 | `workflow-summary.md` | Concise GitHub Actions summary assembled from the artifacts and regression gates. |
 
-The prune-only policy row is intentionally opt-in.  It never adds rescue edges;
-it only removes threshold-accepted policy edges with weak threshold margin,
-weak row/column competition margin, and weak area or centroid evidence.
+The prune-only policy row is intentionally opt-in. It never adds rescue edges; it only removes threshold-accepted policy edges with weak threshold margin, weak row/column competition margin, and weak area or centroid evidence.
 
 ## Optional regression gates
 
-Set repository variables or workflow-dispatch inputs to make the job fail when the best BayesCaTrack ablation drops below a configured threshold. Inputs override repository variables for one manual run.
+Set repository variables or workflow-dispatch inputs to make the job fail when the best Track2pClean ablation drops below a configured threshold. Inputs override repository variables for one manual run.
 
 | gate | condition |
 | --- | --- |
