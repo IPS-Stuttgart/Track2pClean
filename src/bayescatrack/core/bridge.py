@@ -6,6 +6,7 @@ from .._exports import BRIDGE_PUBLIC_NAMES
 from . import _bridge_impl
 from . import _association_bundle_bool_validation as _association_bundle_bool_validation
 from . import _cell_probability_validation as _cell_probability_validation
+from . import _core_scalar_validation as _core_scalar_validation
 from . import _export_bool_validation as _export_bool_validation
 from . import _loader_bool_validation as _loader_bool_validation
 from . import _loader_validation as _loader_validation
@@ -37,6 +38,9 @@ _roi_stat_features.install_split_roi_stat_pairwise_features(
     _bridge_impl.CalciumPlaneData
 )
 _local_evidence.install_local_evidence_pairwise_features(_bridge_impl.CalciumPlaneData)
+_core_scalar_validation.install_core_scalar_validation_patches(
+    _bridge_impl.CalciumPlaneData
+)
 
 CalciumPlaneData = _bridge_impl.CalciumPlaneData
 SessionAssociationBundle = _bridge_impl.SessionAssociationBundle
