@@ -140,6 +140,38 @@ def test_full_mht_scan_history_dynamics_probe_manifest_is_frozen() -> None:
         assert runs[name]["track2p_prior_weight"] == runs["FullMHTPrior2"]["track2p_prior_weight"]
 
 
+def test_full_mht_growth_history_prediction_probe_manifest_is_frozen() -> None:
+    manifest_path = (
+        Path(__file__).resolve().parents[1]
+        / "benchmarks"
+        / "full_mht_growth_history_prediction_probe_manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    runs = {run["name"]: run for run in manifest["runs"]}
+
+    assert list(runs) == [
+        "Track2p",
+        "FullMHTPrior2",
+        "FullMHTGrowthHistoryPrediction025",
+        "FullMHTGrowthHistoryPrediction050",
+        "FullMHTGrowthHistoryPrediction100",
+    ]
+    assert runs["FullMHTGrowthHistoryPrediction025"]["growth_history_prediction_weight"] == 0.25
+    assert runs["FullMHTGrowthHistoryPrediction050"]["growth_history_prediction_weight"] == 0.50
+    assert runs["FullMHTGrowthHistoryPrediction100"]["growth_history_prediction_weight"] == 1.00
+    for name in (
+        "FullMHTGrowthHistoryPrediction025",
+        "FullMHTGrowthHistoryPrediction050",
+        "FullMHTGrowthHistoryPrediction100",
+    ):
+        assert runs[name]["runner"] == "track2p-full-mht"
+        assert runs[name]["beam_width"] == runs["FullMHTPrior2"]["beam_width"]
+        assert runs[name]["track2p_prior_weight"] == runs["FullMHTPrior2"]["track2p_prior_weight"]
+        assert runs[name]["growth_history_prediction_scale"] == 1.0
+        assert runs[name]["growth_history_prediction_clip"] == 8.0
+        assert runs[name]["growth_history_prediction_min_edges"] == 1
+
+
 def test_full_mht_manifest_runner_aliases_are_supported() -> None:
     assert bm._runner_name("track2p-policy-full-mht") == "track2p-policy-full-mht"
     assert bm._runner_name("track2p-full-mht") == "track2p-policy-full-mht"
@@ -167,6 +199,10 @@ def test_full_mht_runner_kwargs_keep_mht_gap_separate_from_track2p_config() -> N
             "terminal_incomplete_history_weight": 0.75,
             "terminal_motion_history_weight": 0.50,
             "scan_motion_history_weight": 0.40,
+            "growth_history_prediction_weight": 0.60,
+            "growth_history_prediction_scale": 2.0,
+            "growth_history_prediction_clip": 4.0,
+            "growth_history_prediction_min_edges": 2,
         },
         "track2p-policy-full-mht",
     )
@@ -187,6 +223,10 @@ def test_full_mht_runner_kwargs_keep_mht_gap_separate_from_track2p_config() -> N
     assert kwargs["terminal_incomplete_history_weight"] == 0.75
     assert kwargs["terminal_motion_history_weight"] == 0.50
     assert kwargs["scan_motion_history_weight"] == 0.40
+    assert kwargs["growth_history_prediction_weight"] == 0.60
+    assert kwargs["growth_history_prediction_scale"] == 2.0
+    assert kwargs["growth_history_prediction_clip"] == 4.0
+    assert kwargs["growth_history_prediction_min_edges"] == 2
     assert "cell_probability_threshold" not in kwargs
     assert "max_gap" not in kwargs
 
@@ -283,6 +323,10 @@ def test_full_mht_manifest_dispatches_prior_veto_survival_completion_and_history
                     "terminal_incomplete_history_weight": 0.75,
                     "terminal_motion_history_weight": 0.50,
                     "scan_motion_history_weight": 0.40,
+                    "growth_history_prediction_weight": 0.60,
+                    "growth_history_prediction_scale": 2.0,
+                    "growth_history_prediction_clip": 4.0,
+                    "growth_history_prediction_min_edges": 2,
                 }
             ],
         },
@@ -303,6 +347,7 @@ def test_full_mht_manifest_dispatches_prior_veto_survival_completion_and_history
     assert getattr(full_mht, "_bayescatrack_terminal_completion_objective", False)
     assert getattr(full_mht, "_bayescatrack_history_dynamics_objective", False)
     assert getattr(full_mht, "_bayescatrack_scan_history_dynamics_pruning", False)
+    assert getattr(full_mht, "_bayescatrack_growth_history_prediction_scoring", False)
     mht_config = captured["mht_config"]
     assert mht_config.beam_width == 4
     assert mht_config.scan_hypotheses == 4
@@ -328,3 +373,7 @@ def test_full_mht_manifest_dispatches_prior_veto_survival_completion_and_history
     assert getattr(mht_config, "terminal_incomplete_history_weight") == 0.75
     assert getattr(mht_config, "terminal_motion_history_weight") == 0.50
     assert getattr(mht_config, "scan_motion_history_weight") == 0.40
+    assert getattr(mht_config, "growth_history_prediction_weight") == 0.60
+    assert getattr(mht_config, "growth_history_prediction_scale") == 2.0
+    assert getattr(mht_config, "growth_history_prediction_clip") == 4.0
+    assert getattr(mht_config, "growth_history_prediction_min_edges") == 2
