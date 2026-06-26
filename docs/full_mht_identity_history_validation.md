@@ -54,15 +54,19 @@ mechanical proof-of-behavior for the method claim.  The demo constructs scan
 assignment histories where the locally best edge leads to a later dead end, while
 a slightly weaker edge preserves a complete identity once later evidence arrives.
 
-The focused regression requires two invariants:
+The focused regression requires three invariants:
 
 ```text
 full MHT beam > greedy beam-width-1 on the dead-end conflict
 full MHT beam improves complete-track F1 while greedy remains pairwise-good
+selected greedy and full-MHT paths are unchanged when the evaluation reference is altered
 ```
 
-This witness does not promote the real-data row by itself.  It only protects the
-claim that the MHT beam can be load-bearing when identity histories conflict.
+The last invariant matters because the witness uses a reference matrix only to
+report pairwise and complete-track metrics.  It must not influence which identity
+history either arm selects.  This witness does not promote the real-data row by
+itself; it only protects the claim that the MHT beam can be load-bearing when
+identity histories conflict.
 
 ## Local-Context Probe
 
@@ -110,7 +114,7 @@ is treated as exploratory.
 | `benchmarks/full_mht_local_context_probe_manifest.json` | calibrated local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
 | `full_mht_local_context_integration.py` | gates the calibrated local-context likelihood feature when `local_deformation_weight <= 0` |
 | `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
-| `test_track2p_policy_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness |
+| `test_track2p_policy_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness, including reference-independent path selection |
 | `full_mht_local_context_decision.py` | interprets the local-neighborhood deformation probe |
 | `full_mht_identity_history_decision.py` | interprets the canonical comparison table, including greedy and no-local-context controls |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
