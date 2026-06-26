@@ -81,3 +81,16 @@ def test_association_bundle_builders_accept_numpy_booleans() -> None:
     )
 
     assert bundle.pairwise_components == {}
+
+
+def test_pairwise_cost_return_components_key_cannot_leak_tuple_cost_matrix() -> None:
+    bundle = build_session_pair_association_bundle(
+        _session("2024-01-01"),
+        _session("2024-01-02"),
+        return_pairwise_components=False,
+        pairwise_cost_kwargs={"return_components": True},
+    )
+
+    assert isinstance(bundle.pairwise_cost_matrix, np.ndarray)
+    assert bundle.pairwise_cost_matrix.shape == (1, 1)
+    assert bundle.pairwise_components == {}
