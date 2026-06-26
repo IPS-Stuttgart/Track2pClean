@@ -23,6 +23,7 @@ def test_full_mht_method_protocol_names_required_method_invariants() -> None:
         "test_full_mht_method_layers_do_not_read_gt_or_audit_columns",
         "test_full_mht_no_gt_leakage_scan_covers_all_method_layers",
         "FullMHTIdentityHistoryNoLocalContext",
+        "scan_pruning_stable_complete_history_gain",
         "terminal_completion_stable_gain",
         "bounded_exposure",
         "stable_plateau",
@@ -40,6 +41,7 @@ def test_full_mht_method_protocol_keeps_non_promotion_warnings() -> None:
         "The frozen identity-history manifest has not been run.",
         "The candidate row ties or loses to its matching greedy ablation.",
         "including the no-local-context control",
+        "Scan-history pruning improves only one weight",
         "Deterministic edge gating over the same candidates produces the same behavior",
         "The paper text cannot distinguish the benchmark row from post-hoc growth-veto",
     )
@@ -74,6 +76,7 @@ def test_full_mht_method_protocol_supporting_docs_exist() -> None:
         "docs/full_mht_no_prior_continuation_likelihood.md",
         "docs/full_mht_terminal_completion_objective.md",
         "docs/full_mht_growth_history_prediction.md",
+        "docs/full_mht_identity_history_scan_pruning.md",
         "docs/full_mht_label_free_exposure_audit.md",
         "docs/full_mht_manifest_integration_notes.md",
     )
