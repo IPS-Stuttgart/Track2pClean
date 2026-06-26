@@ -72,18 +72,46 @@ def _handle_benchmark(args: list[str]) -> int:
 
     module = importlib.import_module(command.module)
     command_args = args[1:]
-    if command_args and command_args[0] in {"-h", "--help"} and hasattr(
-        module, "build_arg_parser"
-    ):
-        parser = module.build_arg_parser()
-        parser.prog = f"track2pclean benchmark {requested_command_name}"
-        parser.parse_args(command_args)
-        return 0
-    return _run_with_program_name(
-        f"track2pclean benchmark {requested_command_name}",
-        module.main,
+    program_name = f"track2pclean benchmark {requested_command_name}"
+    legacy_program_name = f"bayescatrack benchmark {command_name}"
+    return _handle_benchmark_module(
         command_args,
+        module=module,
+        program_name=program_name,
+        legacy_program_name=legacy_program_name,
     )
+
+
+def _handle_benchmark_module(
+    args: list[str],
+    *,
+    module: Any,
+    program_name: str,
+    legacy_program_name: str,
+) -> int:
+    original_build_arg_parser = getattr(module, "build_arg_parser", None)
+
+    if not callable(original_build_arg_parser):
+        return _run_with_program_name(program_name, module.main, args)
+
+    def _build_native_arg_parser(
+        *parser_args: Any,
+        **parser_kwargs: Any,
+    ) -> argparse.ArgumentParser:
+        parser = original_build_arg_parser(*parser_args, **parser_kwargs)
+        _retitle_arg_parser(
+            parser,
+            legacy_program_name=legacy_program_name,
+            program_name=program_name,
+        )
+        parser.prog = program_name
+        return parser
+
+    try:
+        setattr(module, "build_arg_parser", _build_native_arg_parser)
+        return _run_with_program_name(program_name, module.main, args)
+    finally:
+        setattr(module, "build_arg_parser", original_build_arg_parser)
 
 
 def _handle_module_command(

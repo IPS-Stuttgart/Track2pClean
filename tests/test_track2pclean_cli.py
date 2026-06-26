@@ -32,6 +32,21 @@ def test_track2pclean_benchmark_subcommand_help_uses_native_program_name():
     assert "usage: track2pclean benchmark track2p" in proc.stdout
 
 
+def test_track2pclean_benchmark_subcommand_inline_help_uses_native_program_name():
+    proc = run_module(
+        "-m",
+        "track2pclean",
+        "benchmark",
+        "track2p",
+        "--data",
+        ".",
+        "--help",
+    )
+
+    assert "usage: track2pclean benchmark track2p" in proc.stdout
+    assert "usage: bayescatrack benchmark track2p" not in proc.stdout
+
+
 def test_track2pclean_benchmark_alias_help_preserves_requested_alias_name():
     proc = run_module(
         "-m",
