@@ -6,6 +6,9 @@ from typing import Any
 
 import numpy as np
 
+from ._advanced_candidate_empty_validation import (
+    install_advanced_candidate_empty_validation as _install_advanced_candidate_empty_validation,
+)
 from ._advanced_pruning_normalization import (
     install_advanced_pruning_normalization as _install_advanced_pruning_normalization,
 )
@@ -44,6 +47,7 @@ def install_advanced_weight_validation() -> None:
     """Install idempotent validation around pairwise-cost kwargs."""
 
     _install_advanced_pruning_normalization()
+    _install_advanced_candidate_empty_validation()
 
     original = CalciumPlaneData.build_pairwise_cost_matrix
     if _pairwise_method_chain_has_patch(
