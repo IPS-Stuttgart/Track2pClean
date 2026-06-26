@@ -151,9 +151,10 @@ The manifest varies only immediate method-neighborhood settings:
 | anchor strictness | default vs stricter anchor overlap/confidence |
 
 The promotion gate requires `stable_plateau`: the central row must pass, at least
-four of the six sensitivity rows must stay at or above `FullMHTPrior2` on
-pairwise and complete-track F1, and at least two of the three weight-neighborhood
-rows must pass. Pairwise collapse in any row keeps the layer exploratory.
+four of the six sensitivity rows must stay at or above `FullMHTPrior2` on all
+reported pairwise and complete-track micro/macro F1 metrics, and at least two of
+the three weight-neighborhood rows must pass. Pairwise collapse in either micro
+or macro F1 keeps the layer exploratory.
 
 ## Non-GT Exposure Audit
 
