@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "src/bayescatrack/**"
+      - "src/track2pclean/**"
       - "benchmarks/**"
       - "tests/**"
       - "pyproject.toml"
@@ -19,6 +20,7 @@ on:
       - main
     paths:
       - "src/bayescatrack/**"
+      - "src/track2pclean/**"
       - "benchmarks/**"
       - "tests/**"
       - "pyproject.toml"
@@ -193,9 +195,12 @@ jobs:
           )
           PY
 
-      - name: Verify module entry point from built package
+      - name: Verify module and console entry points from built package
         run: |
           python -m bayescatrack --help > /dev/null
+          python -m track2pclean --help > /dev/null
+          bayescatrack --help > /dev/null
+          track2pclean --help > /dev/null
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v7

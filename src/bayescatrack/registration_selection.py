@@ -115,23 +115,38 @@ def select_registration_transform(
     must improve FOV correlation by ``min_fov_correlation_gain`` to be selected.
     """
 
-    if min_fov_correlation_gain < 0.0:
-        raise ValueError("min_fov_correlation_gain must be non-negative")
-    if not 0.0 <= max_empty_roi_fraction <= 1.0:
-        raise ValueError("max_empty_roi_fraction must be between 0 and 1")
-    if min_retained_mask_area_fraction < 0.0:
-        raise ValueError("min_retained_mask_area_fraction must be non-negative")
-    if not 0.0 <= min_nonrigid_inverse_warp_valid_fraction <= 1.0:
-        raise ValueError("min_nonrigid_inverse_warp_valid_fraction must lie in [0, 1]")
-    if empty_roi_penalty < 0.0 or retained_area_penalty < 0.0:
-        raise ValueError("selection penalties must be non-negative")
-    if nonrigid_valid_fraction_penalty < 0.0:
-        raise ValueError("nonrigid_valid_fraction_penalty must be non-negative")
+    min_fov_correlation_gain = _validated_finite_non_negative_value(
+        "min_fov_correlation_gain", min_fov_correlation_gain
+    )
+    max_empty_roi_fraction = _validated_finite_fraction(
+        "max_empty_roi_fraction", max_empty_roi_fraction
+    )
+    min_retained_mask_area_fraction = _validated_finite_non_negative_value(
+        "min_retained_mask_area_fraction", min_retained_mask_area_fraction
+    )
+    min_nonrigid_inverse_warp_valid_fraction = _validated_finite_fraction(
+        "min_nonrigid_inverse_warp_valid_fraction",
+        min_nonrigid_inverse_warp_valid_fraction,
+    )
+    empty_roi_penalty = _validated_finite_non_negative_value(
+        "empty_roi_penalty", empty_roi_penalty
+    )
+    retained_area_penalty = _validated_finite_non_negative_value(
+        "retained_area_penalty", retained_area_penalty
+    )
+    nonrigid_valid_fraction_penalty = _validated_finite_non_negative_value(
+        "nonrigid_valid_fraction_penalty", nonrigid_valid_fraction_penalty
+    )
 
     penalties = dict(_DEFAULT_COMPLEXITY_PENALTY)
     if complexity_penalty is not None:
         penalties.update(
-            {key: float(value) for key, value in complexity_penalty.items()}
+            {
+                str(key): _validated_finite_non_negative_value(
+                    f"complexity_penalty[{key!r}]", value
+                )
+                for key, value in complexity_penalty.items()
+            }
         )
 
     diagnostics: list[RegistrationCandidateDiagnostics] = []
@@ -229,6 +244,30 @@ def _unique_candidate_transforms(
     if not candidates:
         raise ValueError("At least one registration candidate is required")
     return tuple(candidates)
+
+
+def _validated_finite_non_negative_value(name: str, raw_value: Any) -> float:
+    if isinstance(raw_value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite non-negative value")
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite non-negative value") from exc
+    if not np.isfinite(value) or value < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return value
+
+
+def _validated_finite_fraction(name: str, raw_value: Any) -> float:
+    if isinstance(raw_value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite value in [0, 1]")
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite value in [0, 1]") from exc
+    if not np.isfinite(value) or not 0.0 <= value <= 1.0:
+        raise ValueError(f"{name} must be a finite value in [0, 1]")
+    return value
 
 
 def _candidate_registered_plane(
