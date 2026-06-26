@@ -10,11 +10,17 @@ from bayescatrack.matching import (
 
 class _Bundle:
     def __init__(
-        self, costs, *, reference_roi_indices=None, measurement_roi_indices=None
+        self,
+        costs,
+        *,
+        reference_roi_indices=None,
+        measurement_roi_indices=None,
+        reference_session_name="s1",
+        measurement_session_name="s2",
     ):
         self.pairwise_cost_matrix = np.asarray(costs, dtype=float)
-        self.reference_session_name = "s1"
-        self.measurement_session_name = "s2"
+        self.reference_session_name = reference_session_name
+        self.measurement_session_name = measurement_session_name
         self.reference_roi_indices = np.asarray(
             [10, 20] if reference_roi_indices is None else reference_roi_indices
         )
@@ -71,6 +77,53 @@ def test_build_track_rows_from_later_seed_session_stitches_both_directions():
         rows,
         np.array([[0, 10, 5], [2, 20, 6], [-1, 30, -1]]),
     )
+
+
+def test_build_track_rows_from_bundles_accepts_consistent_shared_session_roi_indices():
+    first = _Bundle(
+        [[0.0, 10.0], [10.0, 0.0]],
+        reference_roi_indices=[10, 20],
+        measurement_roi_indices=[100, 200],
+        reference_session_name="s1",
+        measurement_session_name="s2",
+    )
+    second = _Bundle(
+        [[0.0, 10.0], [10.0, 0.0]],
+        reference_roi_indices=[100, 200],
+        measurement_roi_indices=[300, 400],
+        reference_session_name="s2",
+        measurement_session_name="s3",
+    )
+
+    session_names, rows, match_results = build_track_rows_from_bundles(
+        [first, second],
+        max_cost=None,
+        start_session_index=1,
+    )
+
+    assert session_names == ("s1", "s2", "s3")
+    assert [result.n_matches for result in match_results] == [2, 2]
+    npt.assert_array_equal(rows, np.array([[10, 100, 300], [20, 200, 400]]))
+
+
+def test_build_track_rows_from_bundles_rejects_inconsistent_shared_session_roi_indices():
+    first = _Bundle(
+        [[0.0, 1.0], [1.0, 0.0]],
+        reference_roi_indices=[10, 20],
+        measurement_roi_indices=[100, 200],
+        reference_session_name="s1",
+        measurement_session_name="s2",
+    )
+    second = _Bundle(
+        [[0.0, 1.0], [1.0, 0.0]],
+        reference_roi_indices=[101, 200],
+        measurement_roi_indices=[300, 400],
+        reference_session_name="s2",
+        measurement_session_name="s3",
+    )
+
+    with pytest.raises(ValueError, match="shared session 's2'"):
+        build_track_rows_from_bundles([first, second], start_session_index=1)
 
 
 @pytest.mark.parametrize(

@@ -16,8 +16,16 @@ class _Bundle:
 @pytest.mark.parametrize(
     ("reference_roi_indices", "measurement_roi_indices", "match"),
     [
-        ([10, 10], [100, 200], r"bundle\.reference_roi_indices must contain unique ROI indices"),
-        ([10, 20], [100, 100], r"bundle\.measurement_roi_indices must contain unique ROI indices"),
+        (
+            [10, 10],
+            [100, 200],
+            r"bundle\.reference_roi_indices must contain unique ROI indices",
+        ),
+        (
+            [10, 20],
+            [100, 100],
+            r"bundle\.measurement_roi_indices must contain unique ROI indices",
+        ),
     ],
 )
 def test_solve_bundle_linear_assignment_rejects_duplicate_bundle_roi_indices(
