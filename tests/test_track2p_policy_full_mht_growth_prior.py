@@ -933,7 +933,12 @@ def test_full_mht_scan_assignment_compacts_murty_target_columns(monkeypatch):
         captured["col_non_assignment_costs"] = np.asarray(
             kwargs["col_non_assignment_costs"], dtype=float
         ).copy()
-        return [{"assignment": np.asarray([0], dtype=int), "cost": float(cost_matrix[0, 0])}]
+        return [
+            {
+                "assignment": np.asarray([0], dtype=int),
+                "cost": float(cost_matrix[0, 0]),
+            }
+        ]
 
     monkeypatch.setattr(full_mht, "_sparse_pair_matrices", fake_sparse_pair_matrices)
     monkeypatch.setattr(full_mht, "_edge_score", fake_edge_score)
@@ -960,7 +965,6 @@ def test_full_mht_scan_assignment_compacts_murty_target_columns(monkeypatch):
     assert np.asarray(captured["col_non_assignment_costs"]).shape == (1,)
     assert output[0].tracks[0, 1] == 20
     assert output[0].history[-1]["scan_candidates"] == 1
-
 
 
 def test_full_mht_scan_assignment_decomposes_independent_components(monkeypatch):
@@ -995,7 +999,12 @@ def test_full_mht_scan_assignment_decomposes_independent_components(monkeypatch)
     def fake_murty(cost_matrix, **_kwargs):
         cost_matrix = np.asarray(cost_matrix, dtype=float)
         captured_shapes.append(tuple(cost_matrix.shape))
-        return [{"assignment": np.asarray([0], dtype=int), "cost": float(cost_matrix[0, 0])}]
+        return [
+            {
+                "assignment": np.asarray([0], dtype=int),
+                "cost": float(cost_matrix[0, 0]),
+            }
+        ]
 
     monkeypatch.setattr(full_mht, "_sparse_pair_matrices", fake_sparse_pair_matrices)
     monkeypatch.setattr(full_mht, "_edge_score", fake_edge_score)
@@ -1018,14 +1027,15 @@ def test_full_mht_scan_assignment_decomposes_independent_components(monkeypatch)
         ),
     )
 
-    assert captured_shapes == [(1, 1), (1, 1)]
+    assert captured_shapes == []
     np.testing.assert_array_equal(output[0].tracks, np.asarray([[5, 20], [6, 40]]))
     assert output[0].history[-1]["scan_candidates"] == 2
     assert output[0].history[-1]["scan_assignment_components"] == 2
     assert output[0].history[-1]["scan_assignment_decomposed"] == 1
-    assert output[0].history[-1]["scan_assignment_solver_calls"] == 2
+    assert output[0].history[-1]["scan_assignment_solver_calls"] == 0
     assert output[0].history[-1]["scan_assignment_largest_component_rows"] == 1
     assert output[0].history[-1]["scan_assignment_largest_component_cols"] == 1
+
 
 def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     active = full_mht._ActiveTrackSource(

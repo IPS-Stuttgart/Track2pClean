@@ -1724,7 +1724,8 @@ def _scan_assignment_solutions(
     component_solution_sets: list[list[dict[str, Any]]] = []
     solver_calls = 0
     for rows, cols in components:
-        solver_calls += 1
+        if len(rows) > 1:
+            solver_calls += 1
         component_solution_sets.append(
             _component_assignment_solutions(
                 costs,
@@ -1793,6 +1794,42 @@ def _assignment_components(
     return components, np.asarray(isolated_rows, dtype=int)
 
 
+def _single_row_component_assignment_solutions(
+    cost_matrix: np.ndarray,
+    *,
+    row: int,
+    cols: np.ndarray,
+    k: int,
+    row_non_assignment_costs: np.ndarray,
+    col_non_assignment_costs: np.ndarray,
+) -> list[dict[str, Any]]:
+    costs = np.asarray(cost_matrix, dtype=float)
+    row_costs = np.asarray(row_non_assignment_costs, dtype=float)
+    col_costs = np.asarray(col_non_assignment_costs, dtype=float)
+    cols = np.asarray(cols, dtype=int)
+    rows = np.asarray([int(row)], dtype=int)
+    column_miss_cost = float(np.sum(col_costs[cols]))
+    solutions: list[dict[str, Any]] = [
+        {
+            "rows": rows,
+            "assignment": np.asarray([-1], dtype=int),
+            "cost": float(row_costs[int(row)] + column_miss_cost),
+        }
+    ]
+    for col in cols:
+        edge_cost = float(costs[int(row), int(col)])
+        if not np.isfinite(edge_cost):
+            continue
+        solutions.append(
+            {
+                "rows": rows,
+                "assignment": np.asarray([int(col)], dtype=int),
+                "cost": float(edge_cost + column_miss_cost - col_costs[int(col)]),
+            }
+        )
+    return sorted(solutions, key=lambda item: float(item["cost"]))[: max(1, int(k))]
+
+
 def _component_assignment_solutions(
     cost_matrix: np.ndarray,
     *,
@@ -1804,6 +1841,15 @@ def _component_assignment_solutions(
 ) -> list[dict[str, Any]]:
     rows = np.asarray(rows, dtype=int)
     cols = np.asarray(cols, dtype=int)
+    if len(rows) == 1:
+        return _single_row_component_assignment_solutions(
+            cost_matrix,
+            row=int(rows[0]),
+            cols=cols,
+            k=max(1, int(k)),
+            row_non_assignment_costs=row_non_assignment_costs,
+            col_non_assignment_costs=col_non_assignment_costs,
+        )
     raw_solutions = murty_k_best_assignments(
         np.asarray(cost_matrix, dtype=float)[np.ix_(rows, cols)],
         k=max(1, int(k)),
