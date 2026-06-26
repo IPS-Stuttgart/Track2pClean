@@ -2,8 +2,8 @@
 
 This helper deliberately sits above the individual decision helpers.  It prevents
 cherry-picking an optional scan-pruning or terminal-completion add-on when the
-central identity-history row has not passed its own manifest, sensitivity, and
-label-free exposure gates.
+central identity-history row has not passed its own manifest, sensitivity,
+subject-support, and label-free exposure gates.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ CORE_ROW = "FullMHTIdentityHistory"
 CORE_MHT_RESULT = "identity_complete_history_advantage"
 CORE_SENSITIVITY_RESULT = "stable_plateau"
 CORE_EXPOSURE_RESULT = "bounded_exposure"
+CORE_SUBJECT_SUPPORT_RESULT = "stable_subject_support"
 
 
 def load_decision(path: Path) -> dict[str, Any]:
@@ -33,6 +34,7 @@ def load_decision(path: Path) -> dict[str, Any]:
 def evaluate_identity_history_bundle(
     identity_promotion: Mapping[str, Any],
     *,
+    subject_support: Mapping[str, Any] | None = None,
     scan_pruning_promotion: Mapping[str, Any] | None = None,
     terminal_completion: Mapping[str, Any] | None = None,
     local_context: Mapping[str, Any] | None = None,
@@ -43,10 +45,13 @@ def evaluate_identity_history_bundle(
     core_mht_result = str(identity_promotion.get("mht_vs_local_result", "incomplete"))
     core_sensitivity_result = str(identity_promotion.get("sensitivity_result", "incomplete"))
     core_exposure_result = str(identity_promotion.get("exposure_result", "incomplete"))
+    subject = _subject_support_block(subject_support)
+    subject_support_ok = subject["result"] == CORE_SUBJECT_SUPPORT_RESULT
     core_evidence_ok = (
         core_mht_result == CORE_MHT_RESULT
         and core_sensitivity_result == CORE_SENSITIVITY_RESULT
         and core_exposure_result == CORE_EXPOSURE_RESULT
+        and subject_support_ok
     )
     core_evidence_result = "complete_core_evidence" if core_evidence_ok else "inconsistent_core_evidence"
     scan = _scan_pruning_block(scan_pruning_promotion)
@@ -57,15 +62,15 @@ def evaluate_identity_history_bundle(
         status = "promotable_core_method"
         paper_row = CORE_ROW
         recommendation = "promote the central identity-history row; treat add-ons as separate variants"
-    elif core_status == "incomplete":
+    elif core_status == "incomplete" or subject["status"] in {"not_evaluated", "incomplete"}:
         status = "incomplete"
         paper_row = ""
-        recommendation = "rerun the central identity-history promotion gate before interpreting add-ons"
+        recommendation = "rerun the central identity-history promotion and subject-support gates before interpreting add-ons"
     else:
         status = "not_promotable_core_method"
         paper_row = ""
         if core_status == "promotable_after_review":
-            recommendation = "rerun or inspect central promotion gate; status and evidence fields disagree"
+            recommendation = "rerun or inspect central promotion gates; status and evidence fields disagree"
         else:
             recommendation = "do not promote optional add-ons because the central identity-history row failed"
 
@@ -90,6 +95,7 @@ def evaluate_identity_history_bundle(
         "core_mht_vs_local_result": core_mht_result,
         "core_sensitivity_result": core_sensitivity_result,
         "core_exposure_result": core_exposure_result,
+        "subject_support": subject,
         "scan_pruning": scan,
         "terminal_completion": terminal,
         "local_context": local,
@@ -98,7 +104,7 @@ def evaluate_identity_history_bundle(
         "guardrail": (
             "optional add-ons are ignored for promotion unless the central "
             "FullMHTIdentityHistory gate is promotable_after_review with complete, "
-            "consistent core evidence"
+            "consistent core and subject-support evidence"
         ),
     }
 
@@ -106,6 +112,7 @@ def evaluate_identity_history_bundle(
 def format_bundle_markdown(decision: Mapping[str, Any]) -> str:
     """Format a compact paper-facing bundle decision note."""
 
+    subject = dict(decision.get("subject_support", {}))
     scan = dict(decision.get("scan_pruning", {}))
     terminal = dict(decision.get("terminal_completion", {}))
     local = dict(decision.get("local_context", {}))
@@ -119,6 +126,7 @@ def format_bundle_markdown(decision: Mapping[str, Any]) -> str:
         f"MHT-vs-local: `{decision.get('core_mht_vs_local_result', '')}`",
         f"Sensitivity: `{decision.get('core_sensitivity_result', '')}`",
         f"Exposure: `{decision.get('core_exposure_result', '')}`",
+        f"Subject support: `{subject.get('result', '')}`",
         f"Recommendation: {decision.get('recommendation', '')}",
         "",
         "| optional evidence | status | result |",
@@ -160,6 +168,24 @@ def write_bundle_decision(
         output.write_text(json.dumps(dict(decision), indent=2) + "\n", encoding="utf-8")
         return
     output.write_text(format_bundle_markdown(decision) + "\n", encoding="utf-8")
+
+
+def _subject_support_block(decision: Mapping[str, Any] | None) -> dict[str, str]:
+    if decision is None:
+        return {"status": "not_evaluated", "result": "not_evaluated"}
+    status = str(decision.get("status", "incomplete"))
+    result = str(decision.get("subject_support_result", "incomplete"))
+    if status != "complete":
+        block_status = "incomplete"
+    elif result == CORE_SUBJECT_SUPPORT_RESULT:
+        block_status = "supporting_component"
+    else:
+        block_status = "exploratory"
+    return {
+        "status": block_status,
+        "result": result,
+        "gate_status": status,
+    }
 
 
 def _scan_pruning_block(decision: Mapping[str, Any] | None) -> dict[str, str]:
@@ -224,6 +250,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         description="Combine FullMHT identity-history promotion and optional add-on decisions.",
     )
     parser.add_argument("identity_promotion_json", type=Path)
+    parser.add_argument("--subject-support-json", type=Path, default=None)
     parser.add_argument("--scan-pruning-promotion-json", type=Path, default=None)
     parser.add_argument("--terminal-completion-json", type=Path, default=None)
     parser.add_argument("--local-context-json", type=Path, default=None)
@@ -236,6 +263,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
     decision = evaluate_identity_history_bundle(
         load_decision(args.identity_promotion_json),
+        subject_support=(
+            None if args.subject_support_json is None else load_decision(args.subject_support_json)
+        ),
         scan_pruning_promotion=(
             None
             if args.scan_pruning_promotion_json is None
