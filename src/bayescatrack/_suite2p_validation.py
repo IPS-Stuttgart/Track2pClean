@@ -90,6 +90,7 @@ def _validate_suite2p_stat_shapes(
         return
 
     iscell = _load_iscell_if_shape_compatible(plane_path / "iscell.npy", stat.shape[0])
+    image_shape = _load_suite2p_ops_image_shape(plane_path / "ops.npy")
     for roi_index, roi_stat in enumerate(stat):
         if not _suite2p_roi_is_selected(
             roi_index,
@@ -101,7 +102,36 @@ def _validate_suite2p_stat_shapes(
         _validate_one_suite2p_roi_stat(
             roi_stat,
             exclude_overlapping_pixels=exclude_overlapping_pixels,
+            image_shape=image_shape,
         )
+
+
+def _load_suite2p_ops_image_shape(path: Path) -> tuple[int, int] | None:
+    if not path.exists():
+        return None
+    ops = np.load(path, allow_pickle=True).item()
+    try:
+        raw_ly = ops["Ly"]
+        raw_lx = ops["Lx"]
+    except (KeyError, TypeError):
+        return None
+    return (
+        _validate_positive_image_dimension(raw_ly, name="Ly"),
+        _validate_positive_image_dimension(raw_lx, name="Lx"),
+    )
+
+
+def _validate_positive_image_dimension(value: Any, *, name: str) -> int:
+    message = f"Suite2p ops {name} must be a positive integer image dimension"
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(message)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if not np.isfinite(numeric) or numeric <= 0.0 or numeric != np.floor(numeric):
+        raise ValueError(message)
+    return int(numeric)
 
 
 def _load_iscell_if_shape_compatible(path: Path, n_rois: int) -> np.ndarray | None:
@@ -143,11 +173,23 @@ def _validate_one_suite2p_roi_stat(
     roi_stat: Any,
     *,
     exclude_overlapping_pixels: bool,
+    image_shape: tuple[int, int] | None,
 ) -> None:
     ypix = _validate_integer_pixel_coordinate_array(roi_stat["ypix"], name="ypix")
     xpix = _validate_integer_pixel_coordinate_array(roi_stat["xpix"], name="xpix")
     if ypix.shape != xpix.shape:
         raise ValueError("Suite2p ROI ypix/xpix arrays must have matching shapes")
+
+    _validate_pixel_coordinate_bounds(
+        ypix,
+        name="ypix",
+        axis_size=None if image_shape is None else image_shape[0],
+    )
+    _validate_pixel_coordinate_bounds(
+        xpix,
+        name="xpix",
+        axis_size=None if image_shape is None else image_shape[1],
+    )
 
     if "lam" in roi_stat:
         lam = np.asarray(roi_stat["lam"])
@@ -158,6 +200,22 @@ def _validate_one_suite2p_roi_stat(
         overlap = np.asarray(roi_stat["overlap"])
         if overlap.shape != ypix.shape:
             raise ValueError("Suite2p ROI overlap shape must match ypix/xpix shape")
+
+
+def _validate_pixel_coordinate_bounds(
+    coordinates: np.ndarray,
+    *,
+    name: str,
+    axis_size: int | None,
+) -> None:
+    if coordinates.size == 0:
+        return
+    if np.any(coordinates < 0):
+        raise ValueError(f"Suite2p ROI {name} pixel coordinates must be non-negative")
+    if axis_size is not None and np.any(coordinates >= axis_size):
+        raise ValueError(
+            f"Suite2p ROI {name} pixel coordinates must be within image bounds"
+        )
 
 
 def _validate_integer_pixel_coordinate_array(value: Any, *, name: str) -> np.ndarray:

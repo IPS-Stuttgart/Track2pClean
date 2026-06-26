@@ -134,6 +134,8 @@ def solve_bundle_linear_assignment(
     )
 
     if max_cost is not None:
+        if isinstance(max_cost, (bool, np.bool_)):
+            raise ValueError("max_cost must be a finite non-negative value")
         max_cost = float(max_cost)
         if not np.isfinite(max_cost) or max_cost < 0.0:
             raise ValueError("max_cost must be a finite non-negative value")
