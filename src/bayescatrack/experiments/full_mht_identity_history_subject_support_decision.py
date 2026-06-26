@@ -47,7 +47,9 @@ def parse_labeled_input(value: str) -> tuple[str, Path]:
     return label, Path(path)
 
 
-def load_labeled_subject_rows(inputs: Sequence[tuple[str, Path]]) -> list[dict[str, str]]:
+def load_labeled_subject_rows(
+    inputs: Sequence[tuple[str, Path]],
+) -> list[dict[str, str]]:
     """Load subject benchmark rows and attach approach labels."""
 
     rows: list[dict[str, str]] = []
@@ -56,11 +58,12 @@ def load_labeled_subject_rows(inputs: Sequence[tuple[str, Path]]) -> list[dict[s
             reader = csv.DictReader(handle)
             if reader.fieldnames is None or "subject" not in reader.fieldnames:
                 raise ValueError(f"Subject CSV {path} is missing a 'subject' column")
-            missing_metrics = [metric for metric in SUBJECT_METRICS if metric not in reader.fieldnames]
+            missing_metrics = [
+                metric for metric in SUBJECT_METRICS if metric not in reader.fieldnames
+            ]
             if missing_metrics:
-                raise ValueError(
-                    f"Subject CSV {path} is missing metric columns: {', '.join(missing_metrics)}"
-                )
+                columns = ", ".join(missing_metrics)
+                raise ValueError(f"Subject CSV {path} is missing metric columns: {columns}")
             for row in reader:
                 rows.append({"approach": label, **row})
     if not rows:
@@ -84,7 +87,9 @@ def evaluate_subject_support(
             "status": "incomplete",
             "subject_support_result": "missing_subject_rows",
             "missing_subject_approaches": missing,
-            "recommendation": "rerun subject-support decision with all frozen identity-history row CSVs",
+            "recommendation": (
+                "rerun subject-support decision with all frozen identity-history row CSVs"
+            ),
         }
 
     subject_blocks = [
@@ -92,22 +97,34 @@ def evaluate_subject_support(
         for subject, subject_rows in sorted(by_subject.items())
     ]
     complete_gain_subjects = [
-        block["subject"] for block in subject_blocks if block["complete_gain_vs_greedy"] == "true"
+        block["subject"]
+        for block in subject_blocks
+        if block["complete_gain_vs_greedy"] == "true"
     ]
     greedy_regression_subjects = [
-        block["subject"] for block in subject_blocks if block["regresses_vs_greedy"] == "true"
+        block["subject"]
+        for block in subject_blocks
+        if block["regresses_vs_greedy"] == "true"
     ]
     control_regression_subjects = [
-        block["subject"] for block in subject_blocks if block["regresses_vs_control"] == "true"
+        block["subject"]
+        for block in subject_blocks
+        if block["regresses_vs_control"] == "true"
     ]
-    regression_subjects = sorted(set(greedy_regression_subjects) | set(control_regression_subjects))
+    regression_subjects = sorted(
+        set(greedy_regression_subjects) | set(control_regression_subjects)
+    )
     worst_complete_delta = min(
-        float(block["candidate_minus_greedy_complete_track_f1"]) for block in subject_blocks
+        float(block["candidate_minus_greedy_complete_track_f1"])
+        for block in subject_blocks
     )
     worst_pairwise_delta = min(
-        float(block["candidate_minus_greedy_pairwise_f1"]) for block in subject_blocks
+        float(block["candidate_minus_greedy_pairwise_f1"])
+        for block in subject_blocks
     )
-    worst_control_delta = min(float(block["worst_control_delta"]) for block in subject_blocks)
+    worst_control_delta = min(
+        float(block["worst_control_delta"]) for block in subject_blocks
+    )
 
     if len(regression_subjects) > int(cfg.max_regressing_subjects):
         result = "subject_metric_regression"
@@ -165,16 +182,23 @@ def format_subject_support_markdown(decision: Mapping[str, Any]) -> str:
         f"Candidate: `{decision.get('candidate', '')}`",
         f"Greedy baseline: `{decision.get('greedy', '')}`",
         "Complete-gain subjects: {subjects}".format(
-            subjects=", ".join(str(item) for item in decision.get("complete_gain_subjects", ()))
+            subjects=", ".join(
+                str(item) for item in decision.get("complete_gain_subjects", ())
+            )
             or "none"
         ),
         "Regression subjects: {subjects}".format(
-            subjects=", ".join(str(item) for item in decision.get("regression_subjects", ()))
+            subjects=", ".join(
+                str(item) for item in decision.get("regression_subjects", ())
+            )
             or "none"
         ),
         f"Recommendation: {decision.get('recommendation', '')}",
         "",
-        "| subject | complete delta vs greedy | pairwise delta vs greedy | worst control delta |",
+        (
+            "| subject | complete delta vs greedy | pairwise delta vs greedy | "
+            "worst control delta |"
+        ),
         "| --- | ---: | ---: | ---: |",
     ]
     for block in decision.get("subject_deltas", ()):  # type: ignore[assignment]
@@ -182,15 +206,21 @@ def format_subject_support_markdown(decision: Mapping[str, Any]) -> str:
         lines.append(
             "| {subject} | {complete:.6g} | {pairwise:.6g} | {control:.6g} |".format(
                 subject=subject_block.get("subject", ""),
-                complete=float(subject_block.get("candidate_minus_greedy_complete_track_f1", 0.0)),
-                pairwise=float(subject_block.get("candidate_minus_greedy_pairwise_f1", 0.0)),
+                complete=float(
+                    subject_block.get("candidate_minus_greedy_complete_track_f1", 0.0)
+                ),
+                pairwise=float(
+                    subject_block.get("candidate_minus_greedy_pairwise_f1", 0.0)
+                ),
                 control=float(subject_block.get("worst_control_delta", 0.0)),
             )
         )
     return "\n".join(lines)
 
 
-def write_subject_support(decision: Mapping[str, Any], output: Path, *, output_format: str) -> None:
+def write_subject_support(
+    decision: Mapping[str, Any], output: Path, *, output_format: str
+) -> None:
     """Write the subject-support decision as Markdown or JSON."""
 
     output = Path(output)
@@ -260,7 +290,9 @@ def _subject_block(
     )
     return {
         "subject": subject,
-        "candidate_minus_greedy_pairwise_f1": float(candidate_minus_greedy["pairwise_f1"]),
+        "candidate_minus_greedy_pairwise_f1": float(
+            candidate_minus_greedy["pairwise_f1"]
+        ),
         "candidate_minus_greedy_complete_track_f1": float(
             candidate_minus_greedy["complete_track_f1"]
         ),
@@ -278,7 +310,9 @@ def _metric(row: Mapping[str, Any], metric: MetricName) -> float:
     except KeyError as exc:
         raise ValueError(f"Subject row is missing metric column {metric!r}") from exc
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"Subject metric {metric!r} is not numeric: {row.get(metric)!r}") from exc
+        raise ValueError(
+            f"Subject metric {metric!r} is not numeric: {row.get(metric)!r}"
+        ) from exc
 
 
 def _format_bool(value: bool) -> str:
@@ -287,7 +321,10 @@ def _format_bool(value: bool) -> str:
 
 def _recommendation(result: str) -> str:
     if result == "stable_subject_support":
-        return "treat subject-level support as compatible with promotion after aggregate gates pass"
+        return (
+            "treat subject-level support as compatible with promotion after "
+            "aggregate gates pass"
+        )
     if result == "weak_subject_support":
         return "keep exploratory; aggregate gain is supported by too few subjects"
     if result == "subject_metric_regression":
@@ -299,7 +336,10 @@ def _recommendation(result: str) -> str:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m bayescatrack.experiments.full_mht_identity_history_subject_support_decision",
+        prog=(
+            "python -m "
+            "bayescatrack.experiments.full_mht_identity_history_subject_support_decision"
+        ),
         description="Evaluate subject-level support for FullMHT identity-history promotion.",
     )
     parser.add_argument(
