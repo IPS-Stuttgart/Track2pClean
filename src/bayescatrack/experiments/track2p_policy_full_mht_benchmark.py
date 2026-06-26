@@ -1484,9 +1484,8 @@ def _expand_hypothesis_scan(
         }
         for source_session, matrices in matrices_by_source_session.items()
     }
-    cost_matrix = np.full(
-        (len(active_sources), len(finite_target_rois)), np.inf, dtype=float
-    )
+    candidate_entries: list[tuple[int, int, float]] = []
+    candidate_target_roi_set: set[int] = set()
     candidate_count = 0
     for row_pos, active_source in enumerate(active_sources):
         source_session = int(active_source.source_session)
@@ -1497,7 +1496,7 @@ def _expand_hypothesis_scan(
         if source_local is None:
             continue
         row_scores: list[tuple[float, int]] = []
-        for compact_col, target_roi in enumerate(finite_target_rois):
+        for target_roi in finite_target_rois:
             target_local = target_lookup.get(int(target_roi))
             if target_local is None:
                 continue
@@ -1515,11 +1514,22 @@ def _expand_hypothesis_scan(
                     active_source.gap_length
                 )
             if score >= float(config.min_edge_score):
-                row_scores.append((float(score), int(compact_col)))
+                row_scores.append((float(score), int(target_roi)))
         row_scores.sort(reverse=True)
-        for score, compact_col in row_scores[: max(1, int(config.edge_top_k))]:
-            cost_matrix[row_pos, compact_col] = -float(score)
+        for score, target_roi in row_scores[: max(1, int(config.edge_top_k))]:
+            candidate_entries.append((int(row_pos), int(target_roi), float(score)))
+            candidate_target_roi_set.add(int(target_roi))
             candidate_count += 1
+
+    candidate_target_rois = sorted(candidate_target_roi_set)
+    candidate_col_by_roi = {
+        int(target_roi): idx for idx, target_roi in enumerate(candidate_target_rois)
+    }
+    cost_matrix = np.full(
+        (len(active_sources), len(candidate_target_rois)), np.inf, dtype=float
+    )
+    for row_pos, target_roi, score in candidate_entries:
+        cost_matrix[int(row_pos), int(candidate_col_by_roi[int(target_roi)])] = -float(score)
 
     if not np.isfinite(cost_matrix).any():
         carried = tracks.copy()
@@ -1553,7 +1563,7 @@ def _expand_hypothesis_scan(
         cost_matrix,
         k=max(1, int(config.scan_hypotheses)),
         row_non_assignment_costs=row_non_assignment_costs,
-        col_non_assignment_costs=np.zeros((len(finite_target_rois),), dtype=float),
+        col_non_assignment_costs=np.zeros((len(candidate_target_rois),), dtype=float),
     )
     output: list[_MHTHypothesis] = []
     for solution in solutions:
@@ -1573,14 +1583,14 @@ def _expand_hypothesis_scan(
             compact_col = int(assignment[int(row_pos)])
             row_index = int(active_source.row_index)
             if compact_col >= 0:
-                updated[row_index, next_session] = int(finite_target_rois[compact_col])
+                updated[row_index, next_session] = int(candidate_target_rois[compact_col])
                 assigned_edges += 1
                 edge_summary = _selected_edge_summary(
                     sessions,
                     matrices_by_source_session[int(active_source.source_session)],
                     active_source=active_source,
                     target_session=next_session,
-                    target_roi=int(finite_target_rois[compact_col]),
+                    target_roi=int(candidate_target_rois[compact_col]),
                     config=config,
                     track2p_prior_edges=prior_edges,
                 )

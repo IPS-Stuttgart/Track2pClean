@@ -902,6 +902,66 @@ def test_full_mht_identity_diverse_beam_uses_full_event_signature():
     )
 
 
+def test_full_mht_scan_assignment_compacts_murty_target_columns(monkeypatch):
+    matrices = full_mht._FullMHTPairMatrices(
+        source_session=0,
+        target_session=1,
+        source_indices=np.asarray([5], dtype=int),
+        target_indices=np.asarray([10, 20, 30], dtype=int),
+        registered_iou=np.asarray([[0.1, 0.9, 0.8]], dtype=float),
+        shifted_iou=np.asarray([[0.1, 0.9, 0.8]], dtype=float),
+        centroid_distance=np.asarray([[10.0, 1.0, 2.0]], dtype=float),
+        area_ratio=np.asarray([[1.0, 1.0, 1.0]], dtype=float),
+        threshold=0.0,
+        growth_residual=np.zeros((1, 3), dtype=float),
+        growth_mahalanobis=np.zeros((1, 3), dtype=float),
+        local_deformation=np.zeros((1, 3), dtype=float),
+        growth_anchor_count=1,
+        growth_model_type="test",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_sparse_pair_matrices(*_args, **_kwargs):
+        return matrices
+
+    def fake_edge_score(_sessions, _matrices, *, target_local, **_kwargs):
+        return {0: 0.1, 1: 2.0, 2: 1.5}[int(target_local)]
+
+    def fake_murty(cost_matrix, **kwargs):
+        captured["cost_shape"] = tuple(np.asarray(cost_matrix).shape)
+        captured["cost_matrix"] = np.asarray(cost_matrix, dtype=float).copy()
+        captured["col_non_assignment_costs"] = np.asarray(
+            kwargs["col_non_assignment_costs"], dtype=float
+        ).copy()
+        return [{"assignment": np.asarray([0], dtype=int), "cost": float(cost_matrix[0, 0])}]
+
+    monkeypatch.setattr(full_mht, "_sparse_pair_matrices", fake_sparse_pair_matrices)
+    monkeypatch.setattr(full_mht, "_edge_score", fake_edge_score)
+    monkeypatch.setattr(full_mht, "murty_k_best_assignments", fake_murty)
+    monkeypatch.setattr(full_mht, "_cell_probability", lambda *_args, **_kwargs: 0.9)
+
+    output = full_mht._expand_hypothesis_scan(
+        full_mht._MHTHypothesis(
+            np.asarray([[5, -1]], dtype=int),
+            score=0.0,
+            history=(),
+        ),
+        sessions=(object(), object()),
+        feature_cache=SimpleNamespace(cell_probability_threshold=0.5),
+        session_index=0,
+        config=full_mht.FullMHTConfig(
+            edge_top_k=1,
+            min_edge_score=0.25,
+            scan_hypotheses=1,
+        ),
+    )
+
+    assert captured["cost_shape"] == (1, 1)
+    assert np.asarray(captured["col_non_assignment_costs"]).shape == (1,)
+    assert output[0].tracks[0, 1] == 20
+    assert output[0].history[-1]["scan_candidates"] == 1
+
+
 def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     active = full_mht._ActiveTrackSource(
         row_index=0, source_session=1, source_roi=5, gap_length=0
