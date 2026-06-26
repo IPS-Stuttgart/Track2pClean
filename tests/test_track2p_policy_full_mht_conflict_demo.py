@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 
@@ -29,6 +30,28 @@ def test_full_mht_conflict_demo_pairwise_good_can_be_complete_bad():
     assert results["greedy"].pairwise_f1 > results["greedy"].complete_track_f1
     assert results["full_mht"].complete_track_f1 > results["greedy"].complete_track_f1
     assert results["full_mht"].pairwise_f1 >= results["greedy"].pairwise_f1
+
+
+def test_full_mht_conflict_demo_selection_is_reference_independent():
+    scenario = demo.build_pairwise_good_complete_bad_scenario(stable_tracks=8)
+    reference_favoring_greedy = np.asarray(scenario.reference, dtype=int).copy()
+    reference_favoring_greedy[0] = np.asarray([1, 20, 31, 41], dtype=int)
+    adversarial = demo.DemoScenario(
+        name="reference-favors-greedy",
+        reference=reference_favoring_greedy,
+        seed_track=scenario.seed_track,
+        edge_scores=scenario.edge_scores,
+    )
+
+    original = {result.arm: result for result in demo.evaluate_demo(scenario=scenario)}
+    adversarial_results = {
+        result.arm: result for result in demo.evaluate_demo(scenario=adversarial)
+    }
+
+    assert original["greedy"].path == adversarial_results["greedy"].path
+    assert original["full_mht"].path == adversarial_results["full_mht"].path
+    assert adversarial_results["greedy"].complete_track_f1 > original["greedy"].complete_track_f1
+    assert adversarial_results["full_mht"].path == (1, 20, 30, 40)
 
 
 def test_full_mht_conflict_demo_csv_rows_are_stable():
