@@ -39,9 +39,24 @@ def _subject_rows(
                 _row("Track2p", subject, 0.960, control_complete),
                 _row("FullMHTPrior2", subject, 0.960, control_complete),
                 _row("FullMHTPriorSurvival", subject, 0.960, control_complete),
-                _row("FullMHTNoPriorContinuation100", subject, 0.960, control_complete),
-                _row("FullMHTIdentityHistoryNoLocalContext", subject, 0.960, control_complete),
-                _row("FullMHTIdentityHistory", subject, candidate_pairwise, candidate_complete),
+                _row(
+                    "FullMHTNoPriorContinuation100",
+                    subject,
+                    0.960,
+                    control_complete,
+                ),
+                _row(
+                    "FullMHTIdentityHistoryNoLocalContext",
+                    subject,
+                    0.960,
+                    control_complete,
+                ),
+                _row(
+                    "FullMHTIdentityHistory",
+                    subject,
+                    candidate_pairwise,
+                    candidate_complete,
+                ),
                 _row("FullMHTGreedyIdentityHistory", subject, 0.966, greedy_complete),
             ]
         )
@@ -63,7 +78,10 @@ def test_subject_support_reports_missing_frozen_rows() -> None:
     rows = [
         row
         for row in _subject_rows()
-        if not (row["subject"] == "jm046" and row["approach"] == "FullMHTPriorSurvival")
+        if not (
+            row["subject"] == "jm046"
+            and row["approach"] == "FullMHTPriorSurvival"
+        )
     ]
 
     decision = evaluate_subject_support(rows)
@@ -86,9 +104,7 @@ def test_subject_support_rejects_single_subject_spike() -> None:
 
 
 def test_subject_support_rejects_subject_regression_vs_greedy() -> None:
-    decision = evaluate_subject_support(
-        _subject_rows(candidate_jm046_pairwise=0.950)
-    )
+    decision = evaluate_subject_support(_subject_rows(candidate_jm046_pairwise=0.950))
 
     assert decision["subject_support_result"] == "subject_metric_regression"
     assert decision["greedy_regression_subjects"] == ["jm046"]
@@ -101,7 +117,11 @@ def test_subject_support_rejects_subject_regression_vs_control() -> None:
     )
 
     assert decision["subject_support_result"] == "subject_metric_regression"
-    assert sorted(decision["control_regression_subjects"]) == ["jm038", "jm039", "jm046"]
+    assert sorted(decision["control_regression_subjects"]) == [
+        "jm038",
+        "jm039",
+        "jm046",
+    ]
     assert decision["worst_candidate_minus_control_metric"] < 0.0
 
 
