@@ -33,9 +33,13 @@ MetricName = Literal[
     "complete_track_f1_macro",
 ]
 
-KEY_METRICS: tuple[MetricName, ...] = (
+PAIRWISE_METRICS: tuple[MetricName, ...] = (
     "pairwise_f1_micro",
+    "pairwise_f1_macro",
+)
+COMPLETE_TRACK_METRICS: tuple[MetricName, ...] = (
     "complete_track_f1_micro",
+    "complete_track_f1_macro",
 )
 REPORT_METRICS: tuple[MetricName, ...] = (
     "pairwise_f1_micro",
@@ -196,8 +200,8 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         f"Prior-survival result: `{decision['prior_survival_result']}`",
         f"Recommendation: {decision['recommendation']}",
         "",
-        "| comparison | pairwise F1 micro delta | complete-track F1 micro delta |",
-        "| --- | ---: | ---: |",
+        "| comparison | pairwise F1 micro delta | complete-track F1 micro delta | pairwise F1 macro delta | complete-track F1 macro delta |",
+        "| --- | ---: | ---: | ---: | ---: |",
     ]
     for prefix in (
         "base_beam_minus_greedy",
@@ -208,10 +212,12 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         "survival_minus_track2p",
     ):
         lines.append(
-            "| {label} | {pairwise:.6g} | {complete:.6g} |".format(
+            "| {label} | {pairwise_micro:.6g} | {complete_micro:.6g} | {pairwise_macro:.6g} | {complete_macro:.6g} |".format(
                 label=prefix.replace("_", " "),
-                pairwise=float(decision[f"{prefix}_pairwise_f1_micro"]),
-                complete=float(decision[f"{prefix}_complete_track_f1_micro"]),
+                pairwise_micro=float(decision[f"{prefix}_pairwise_f1_micro"]),
+                complete_micro=float(decision[f"{prefix}_complete_track_f1_micro"]),
+                pairwise_macro=float(decision[f"{prefix}_pairwise_f1_macro"]),
+                complete_macro=float(decision[f"{prefix}_complete_track_f1_macro"]),
             )
         )
     return "\n".join(lines)
@@ -263,13 +269,17 @@ def _history_result(
     prefix: str,
     tolerance: float,
 ) -> str:
-    pairwise = float(deltas[f"{prefix}_pairwise_f1_micro"])
-    complete = float(deltas[f"{prefix}_complete_track_f1_micro"])
-    if pairwise < -tolerance or complete < -tolerance:
+    pairwise_deltas = [
+        float(deltas[f"{prefix}_{metric}"]) for metric in PAIRWISE_METRICS
+    ]
+    complete_track_deltas = [
+        float(deltas[f"{prefix}_{metric}"]) for metric in COMPLETE_TRACK_METRICS
+    ]
+    if any(delta < -tolerance for delta in pairwise_deltas + complete_track_deltas):
         return "beam_regression_vs_greedy"
-    if complete > tolerance:
+    if float(deltas[f"{prefix}_complete_track_f1_micro"]) > tolerance:
         return "beam_complete_history_advantage"
-    if pairwise > tolerance:
+    if any(delta > tolerance for delta in pairwise_deltas):
         return "beam_pairwise_only_advantage"
     return "beam_ties_greedy"
 
@@ -294,11 +304,11 @@ def _survival_result(
 ) -> str:
     vs_veto = [
         float(survival_vs_veto[f"survival_minus_veto_{metric}"])
-        for metric in KEY_METRICS
+        for metric in REPORT_METRICS
     ]
     vs_track2p = [
         float(survival_vs_track2p[f"survival_minus_track2p_{metric}"])
-        for metric in KEY_METRICS
+        for metric in REPORT_METRICS
     ]
     if all(delta >= -tolerance for delta in vs_veto) and any(
         delta > tolerance for delta in vs_veto

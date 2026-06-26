@@ -163,6 +163,56 @@ def test_full_mht_manifest_decision_rejects_candidate_beam_regression() -> None:
     assert decision["recommendation"].startswith("do not promote FullMHT")
 
 
+def test_full_mht_manifest_decision_rejects_macro_pairwise_regression() -> None:
+    rows = _canonical_rows(
+        veto_pairwise=0.966,
+        veto_complete=0.929,
+        greedy_veto_pairwise=0.966,
+        greedy_veto_complete=0.929,
+        survival_pairwise=0.966,
+        survival_complete=0.934,
+        greedy_survival_pairwise=0.966,
+        greedy_survival_complete=0.931,
+    )
+    for row in rows:
+        if row["approach"] == "FullMHTPriorSurvival":
+            row["pairwise_f1_macro"] = "0.900"
+        if row["approach"] == "FullMHTGreedyPriorSurvival":
+            row["pairwise_f1_macro"] = "0.965"
+
+    decision = evaluate_full_mht_manifest_decision(rows)
+
+    assert decision["prior_survival_history_search_result"] == "beam_regression_vs_greedy"
+    assert decision["history_search_result"] == "candidate_regression_vs_greedy"
+    assert decision["survival_beam_minus_greedy_pairwise_f1_micro"] == 0.0
+    assert decision["survival_beam_minus_greedy_pairwise_f1_macro"] < 0.0
+
+
+def test_full_mht_manifest_decision_rejects_macro_complete_regression() -> None:
+    rows = _canonical_rows(
+        veto_pairwise=0.966,
+        veto_complete=0.929,
+        greedy_veto_pairwise=0.966,
+        greedy_veto_complete=0.929,
+        survival_pairwise=0.966,
+        survival_complete=0.934,
+        greedy_survival_pairwise=0.966,
+        greedy_survival_complete=0.931,
+    )
+    for row in rows:
+        if row["approach"] == "FullMHTPriorSurvival":
+            row["complete_track_f1_macro"] = "0.900"
+        if row["approach"] == "FullMHTGreedyPriorSurvival":
+            row["complete_track_f1_macro"] = "0.931"
+
+    decision = evaluate_full_mht_manifest_decision(rows)
+
+    assert decision["prior_survival_history_search_result"] == "beam_regression_vs_greedy"
+    assert decision["history_search_result"] == "candidate_regression_vs_greedy"
+    assert decision["survival_beam_minus_greedy_complete_track_f1_micro"] > 0.0
+    assert decision["survival_beam_minus_greedy_complete_track_f1_macro"] < 0.0
+
+
 def test_full_mht_manifest_decision_markdown_is_compact() -> None:
     markdown = format_decision_markdown(
         evaluate_full_mht_manifest_decision(_canonical_rows())
@@ -172,4 +222,6 @@ def test_full_mht_manifest_decision_markdown_is_compact() -> None:
     assert "base beam minus greedy" in markdown
     assert "veto beam minus greedy" in markdown
     assert "survival beam minus greedy" in markdown
+    assert "pairwise F1 macro delta" in markdown
+    assert "complete-track F1 macro delta" in markdown
     assert "prior_survival_complete_history_advantage" in markdown

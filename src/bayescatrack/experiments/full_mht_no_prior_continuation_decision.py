@@ -108,17 +108,19 @@ def format_no_prior_continuation_markdown(decision: Mapping[str, Any]) -> str:
         f"Permissive control: `{decision['permissive_control']}`",
         f"Recommendation: {decision['recommendation']}",
         "",
-        "| candidate | decision | pairwise F1 micro delta | complete-track F1 micro delta |",
-        "| --- | --- | ---: | ---: |",
+        "| candidate | decision | pairwise F1 micro delta | complete-track F1 micro delta | pairwise F1 macro delta | complete-track F1 macro delta |",
+        "| --- | --- | ---: | ---: | ---: | ---: |",
     ]
     for block in decision.get("candidate_decisions", ()):  # type: ignore[assignment]
         row = dict(block)
         lines.append(
-            "| {approach} | {decision} | {pairwise:.6g} | {complete:.6g} |".format(
+            "| {approach} | {decision} | {pairwise_micro:.6g} | {complete_micro:.6g} | {pairwise_macro:.6g} | {complete_macro:.6g} |".format(
                 approach=row["approach"],
                 decision=row["decision"],
-                pairwise=float(row["delta_pairwise_f1_micro"]),
-                complete=float(row["delta_complete_track_f1_micro"]),
+                pairwise_micro=float(row["delta_pairwise_f1_micro"]),
+                complete_micro=float(row["delta_complete_track_f1_micro"]),
+                pairwise_macro=float(row["delta_pairwise_f1_macro"]),
+                complete_macro=float(row["delta_complete_track_f1_macro"]),
             )
         )
     lines.extend(

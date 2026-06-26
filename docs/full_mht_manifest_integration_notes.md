@@ -52,9 +52,9 @@ Each greedy row uses the same local scan candidate generator and scoring options
 as its beam counterpart, but sets `beam_width = 1` and disables identity-diverse
 beam retention. If a candidate row ties its greedy ablation on the real benchmark,
 the current data do not yet demonstrate a candidate-specific history-search
-advantage. If the candidate beam wins on complete-track F1 without pairwise loss,
-that is direct evidence that full-history MHT is doing something local greedy
-assignment cannot.
+advantage. If the candidate beam wins on complete-track F1 micro without any
+pairwise or complete-track micro/macro F1 loss, that is direct evidence that
+full-history MHT is doing something local greedy assignment cannot.
 
 The prior-veto row freezes the first positive FullMHT-owned setting:
 
@@ -84,9 +84,11 @@ with:
 ```
 
 This decision artifact reports whether the base beam, fixed-veto beam, and
-calibrated-survival beam beat their matching greedy beam-width-1 ablations, and
-whether calibrated prior-survival improves, ties, or falls below the fixed
-prior-veto hazard.
+calibrated-survival beam beat their matching greedy beam-width-1 ablations. A
+beam win requires complete-track F1 micro improvement and no pairwise or
+complete-track micro/macro F1 regression. The artifact also reports whether
+calibrated prior-survival improves, ties, or falls below the fixed prior-veto
+hazard across the same reported metric set.
 
 ## Sensitivity And Exposure
 

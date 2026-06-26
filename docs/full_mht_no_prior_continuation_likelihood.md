@@ -154,8 +154,8 @@ mkdir -p "$EXPOSURE"
 
 Treat this as a method probe until the manifest shows:
 
-- pairwise F1 does not regress against `FullMHTPrior2`;
-- complete-track F1 improves or at least returns to `FullMHTPrior2`;
+- pairwise F1 micro and macro do not regress against `FullMHTPrior2`;
+- complete-track F1 micro improves at stable weights, with no complete-track F1 macro regression against `FullMHTPrior2`;
 - no-prior continuations are reduced relative to `FullMHTCalibratedNoDeath`;
 - the effect is not limited to a single weight.
 
@@ -165,8 +165,8 @@ The decision helper freezes the metric part of this rule as
 or `no_prior_continuation_complete_regression`. It does not replace the exposure
 audit; the final judgment still has to inspect whether selected no-prior
 continuations remain rare. The promotion gate combines both artifacts and only
-reports `promotable_after_review` when the benchmark result is stable and exposure
-is bounded.
+reports `promotable_after_review` when the benchmark result is stable across the
+reported micro/macro metrics and exposure is bounded.
 
 If it improves complete-track identity across nearby weights, it is stronger
 method evidence than the scalar death penalty. If it collapses to `FullMHTPrior2`,

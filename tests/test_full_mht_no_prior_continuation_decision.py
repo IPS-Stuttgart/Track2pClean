@@ -95,6 +95,40 @@ def test_no_prior_continuation_decision_rejects_complete_regression() -> None:
     assert decision["complete_regression_count"] == 1
 
 
+def test_no_prior_continuation_decision_rejects_macro_pairwise_regression() -> None:
+    rows = [
+        *_base_rows(),
+        _metric_row("FullMHTNoPriorContinuation050", 0.965, 0.933),
+        _metric_row("FullMHTNoPriorContinuation100", 0.965, 0.932),
+        _metric_row("FullMHTNoPriorContinuation150", 0.965, 0.930),
+    ]
+    rows[3]["pairwise_f1_macro"] = "0.900"
+    rows[1]["pairwise_f1_macro"] = "0.965"
+
+    decision = evaluate_no_prior_continuation_decision(rows)
+
+    assert decision["no_prior_continuation_result"] == "no_prior_continuation_pairwise_regression"
+    assert decision["candidate_decisions"][0]["delta_pairwise_f1_micro"] == 0.0
+    assert decision["candidate_decisions"][0]["delta_pairwise_f1_macro"] < 0.0
+
+
+def test_no_prior_continuation_decision_rejects_macro_complete_regression() -> None:
+    rows = [
+        *_base_rows(),
+        _metric_row("FullMHTNoPriorContinuation050", 0.965, 0.933),
+        _metric_row("FullMHTNoPriorContinuation100", 0.965, 0.932),
+        _metric_row("FullMHTNoPriorContinuation150", 0.965, 0.930),
+    ]
+    rows[3]["complete_track_f1_macro"] = "0.900"
+    rows[1]["complete_track_f1_macro"] = "0.930"
+
+    decision = evaluate_no_prior_continuation_decision(rows)
+
+    assert decision["no_prior_continuation_result"] == "no_prior_continuation_complete_regression"
+    assert decision["candidate_decisions"][0]["delta_complete_track_f1_micro"] > 0.0
+    assert decision["candidate_decisions"][0]["delta_complete_track_f1_macro"] < 0.0
+
+
 def test_no_prior_continuation_decision_markdown_is_specific() -> None:
     markdown = format_no_prior_continuation_markdown(
         evaluate_no_prior_continuation_decision(
@@ -110,4 +144,6 @@ def test_no_prior_continuation_decision_markdown_is_specific() -> None:
     assert "# FullMHT No-Prior Continuation Decision" in markdown
     assert "FullMHTNoPriorContinuation100" in markdown
     assert "FullMHTCalibratedNoDeath" in markdown
+    assert "pairwise F1 macro delta" in markdown
+    assert "complete-track F1 macro delta" in markdown
     assert "no_prior_continuation_stable_gain" in markdown
