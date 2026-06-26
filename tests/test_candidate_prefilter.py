@@ -23,6 +23,19 @@ def test_centroid_candidate_mask_supports_distance_and_row_top_k():
     assert mask.tolist() == [[True, False, False], [False, True, False]]
 
 
+def test_centroid_candidate_mask_preserves_ambiguous_point_row_centroids():
+    reference = np.array([[0.0, 0.0], [10.0, 0.0]])
+    measurement = np.array([[0.1, 0.0], [9.8, 0.0], [0.1, 10.0]])
+
+    mask = centroid_candidate_mask(
+        reference,
+        measurement,
+        config=CentroidCandidatePrefilterConfig(max_distance=1.0, row_top_k=1),
+    )
+
+    assert mask.tolist() == [[True, False, False], [False, True, False]]
+
+
 def test_centroid_candidate_mask_can_require_column_top_k_intersection():
     reference = np.array([[0.0, 0.5, 10.0], [0.0, 0.0, 0.0]])
     measurement = np.array([[0.1, 9.9], [0.0, 0.0]])
@@ -45,10 +58,46 @@ def test_apply_candidate_mask_replaces_non_candidates_with_large_cost():
     assert gated.tolist() == [[1.0, 99.0], [99.0, 4.0]]
 
 
+def test_apply_candidate_mask_accepts_binary_numeric_masks():
+    costs = np.array([[1.0, 2.0], [3.0, 4.0]])
+    mask = np.array([[1, 0], [0, 1]])
+
+    gated = apply_candidate_mask(costs, mask, large_cost=99.0)
+
+    assert gated.tolist() == [[1.0, 99.0], [99.0, 4.0]]
+
+
 def test_candidate_edges_from_mask_returns_sparse_coordinates():
     mask = np.array([[True, False, True], [False, True, False]])
 
     assert candidate_edges_from_mask(mask) == ((0, 0), (0, 2), (1, 1))
+
+
+def test_candidate_edges_from_mask_accepts_binary_numeric_masks():
+    mask = np.array([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+
+    assert candidate_edges_from_mask(mask) == ((0, 0), (0, 2), (1, 1))
+
+
+@pytest.mark.parametrize(
+    "bad_mask",
+    [
+        np.array([[0, 2]]),
+        np.array([[True, np.nan]], dtype=object),
+        np.array([["False", "True"]], dtype=object),
+    ],
+)
+def test_candidate_mask_rejects_non_binary_values(bad_mask):
+    with pytest.raises(ValueError, match="candidate_mask"):
+        apply_candidate_mask(np.zeros(bad_mask.shape), bad_mask)
+
+    with pytest.raises(ValueError, match="candidate_mask"):
+        candidate_edges_from_mask(bad_mask)
+
+
+def test_candidate_edges_from_mask_rejects_non_2d_masks():
+    with pytest.raises(ValueError, match="two-dimensional"):
+        candidate_edges_from_mask(np.array([True, False]))
 
 
 def test_candidate_prefilter_rejects_invalid_shapes():

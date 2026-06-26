@@ -58,6 +58,36 @@ def test_tracking_start_roi_restriction_rejects_invalid_seed_indices(
         )
 
 
+@pytest.mark.parametrize("bad_start_session_index", [True, 0.5, np.nan, "0"])
+def test_tracking_start_roi_restriction_rejects_invalid_start_session_index(
+    bad_start_session_index,
+):
+    track_rows = np.asarray([[0, 10], [1, 11]], dtype=int)
+
+    with pytest.raises(ValueError, match="start_session_index"):
+        tracking._restrict_track_rows_to_start_rois(
+            track_rows,
+            start_roi_indices=[0, 1],
+            start_session_index=bad_start_session_index,
+            fill_value=-1,
+        )
+
+
+@pytest.mark.parametrize("bad_start_session_index", [-1, 2])
+def test_tracking_start_roi_restriction_rejects_out_of_bounds_start_session_index(
+    bad_start_session_index,
+):
+    track_rows = np.asarray([[0, 10], [1, 11]], dtype=int)
+
+    with pytest.raises(IndexError, match="start_session_index"):
+        tracking._restrict_track_rows_to_start_rois(
+            track_rows,
+            start_roi_indices=[0, 1],
+            start_session_index=bad_start_session_index,
+            fill_value=-1,
+        )
+
+
 def test_run_registered_subject_tracking_rejects_invalid_single_session_seed_indices(
     tmp_path: Path,
 ):
@@ -71,4 +101,20 @@ def test_run_registered_subject_tracking_rejects_invalid_single_session_seed_ind
             input_format="auto",
             include_behavior=False,
             start_roi_indices=[0, 0],
+        )
+
+
+def test_run_registered_subject_tracking_rejects_fractional_start_session_index(
+    tmp_path: Path,
+):
+    subject_dir = tmp_path / "jm271"
+    _write_single_session_subject(subject_dir)
+
+    with pytest.raises(ValueError, match="start_session_index"):
+        run_registered_subject_tracking(
+            subject_dir,
+            plane_name="plane0",
+            input_format="auto",
+            include_behavior=False,
+            start_session_index=0.5,
         )
