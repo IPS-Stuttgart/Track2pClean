@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.dynamic_edge_priors import (
     DynamicEdgePriorConfig,
     dynamic_edge_prior_config_from_mapping,

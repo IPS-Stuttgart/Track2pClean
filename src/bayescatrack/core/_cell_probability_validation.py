@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from types import ModuleType
-from typing import Any
 
 import numpy as np
 
@@ -13,7 +12,9 @@ _CELL_PROBABILITY_PATCH_ATTR = "_bayescatrack_cell_probability_bounds_patch"
 def install_cell_probability_cost_patch(bridge_impl: ModuleType) -> None:
     """Install an idempotent bounded-probability cost helper."""
 
-    original = bridge_impl._pairwise_cell_probability_cost  # pylint: disable=protected-access
+    original = (
+        bridge_impl._pairwise_cell_probability_cost
+    )  # pylint: disable=protected-access
     if getattr(original, _CELL_PROBABILITY_PATCH_ATTR, False):
         return
 
@@ -31,8 +32,12 @@ def install_cell_probability_cost_patch(bridge_impl: ModuleType) -> None:
         if probabilities_self is None or probabilities_other is None:
             return zero_cost, zero_available
 
-        probabilities_self_array = np.asarray(probabilities_self, dtype=float).reshape(-1)
-        probabilities_other_array = np.asarray(probabilities_other, dtype=float).reshape(-1)
+        probabilities_self_array = np.asarray(probabilities_self, dtype=float).reshape(
+            -1
+        )
+        probabilities_other_array = np.asarray(
+            probabilities_other, dtype=float
+        ).reshape(-1)
         if probabilities_self_array.shape != (cost_shape[0],):
             raise ValueError(
                 "cell_probabilities for the reference plane must have shape (n_roi,)"
@@ -60,7 +65,9 @@ def install_cell_probability_cost_patch(bridge_impl: ModuleType) -> None:
 
     setattr(_pairwise_cell_probability_cost, _CELL_PROBABILITY_PATCH_ATTR, True)
     setattr(_pairwise_cell_probability_cost, "_bayescatrack_original", original)
-    bridge_impl._pairwise_cell_probability_cost = _pairwise_cell_probability_cost  # pylint: disable=protected-access
+    bridge_impl._pairwise_cell_probability_cost = (
+        _pairwise_cell_probability_cost  # pylint: disable=protected-access
+    )
 
 
 def _is_valid_probability_vector(values: np.ndarray) -> np.ndarray:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.growth_priors import (
     GrowthPriorConfig,
     estimate_growth_from_track_rows,
@@ -26,7 +25,9 @@ def test_growth_prior_config_normalizes_numeric_controls() -> None:
 
 
 @pytest.mark.parametrize("field", ["affine_weight", "radial_weight", "regularization"])
-@pytest.mark.parametrize("bad_value", [True, np.bool_(False), -1.0, float("nan"), float("inf")])
+@pytest.mark.parametrize(
+    "bad_value", [True, np.bool_(False), -1.0, float("nan"), float("inf")]
+)
 def test_growth_prior_config_rejects_invalid_nonnegative_controls(
     field: str,
     bad_value: object,
@@ -63,54 +64,53 @@ def test_radial_growth_penalty_rejects_invalid_scale() -> None:
         )
 
 
-def _position_tables() -> list[dict[int, np.ndarray]]:
-    return [
-        {
-            0: np.asarray([0.0, 0.0]),
-            1: np.asarray([1.0, 0.0]),
-            2: np.asarray([0.0, 1.0]),
-        },
-        {
-            0: np.asarray([1.0, 1.0]),
-            1: np.asarray([2.0, 1.0]),
-            2: np.asarray([1.0, 2.0]),
-        },
+def test_estimate_growth_from_track_rows_preserves_integer_links() -> None:
+    track_rows = np.asarray([[0, 10], [1, 11], [2, 12]])
+    position_tables = [
+        {0: [0.0, 0.0], 1: [1.0, 0.0], 2: [0.0, 1.0]},
+        {10: [1.0, 1.0], 11: [2.0, 1.0], 12: [1.0, 2.0]},
     ]
 
-
-def test_estimate_growth_from_track_rows_accepts_integer_like_rows() -> None:
-    rows = np.asarray([[0.0, 0.0], [1, 1], ["2", "2"]], dtype=object)
-
-    transform = estimate_growth_from_track_rows(
-        rows,
-        _position_tables(),
-        target_session=-1,
+    affine = estimate_growth_from_track_rows(
+        track_rows,
+        position_tables,
         config=GrowthPriorConfig(regularization=0.0),
     )
 
-    np.testing.assert_allclose(
-        transform,
-        np.asarray([[1.0, 0.0, 1.0], [0.0, 1.0, 1.0]]),
-        atol=1.0e-12,
-    )
+    np.testing.assert_allclose(affine, np.asarray([[1.0, 0.0, 1.0], [0.0, 1.0, 1.0]]))
 
 
-def test_estimate_growth_from_track_rows_rejects_fractional_roi_ids() -> None:
-    rows = np.asarray([[0, 0], [1, 1.5], [2, 2]], dtype=object)
+@pytest.mark.parametrize(
+    "bad_value",
+    [True, np.bool_(False), 1.25, float("nan"), float("inf"), "2"],
+)
+def test_estimate_growth_from_track_rows_rejects_malformed_row_entries(
+    bad_value: object,
+) -> None:
+    track_rows = np.asarray([[0, 10], [1, 11], [2, 12]], dtype=object)
+    track_rows[0, 0] = bad_value
+    position_tables = [
+        {0: [0.0, 0.0], 1: [1.0, 0.0], 2: [0.0, 1.0]},
+        {10: [1.0, 1.0], 11: [2.0, 1.0], 12: [1.0, 2.0]},
+    ]
 
     with pytest.raises(ValueError, match="track_rows"):
-        estimate_growth_from_track_rows(rows, _position_tables())
+        estimate_growth_from_track_rows(track_rows, position_tables)
 
 
-def test_estimate_growth_from_track_rows_rejects_boolean_roi_ids() -> None:
-    rows = np.asarray([[0, 0], [1, True], [2, 2]], dtype=object)
+@pytest.mark.parametrize("bad_session", [True, np.bool_(False), 1.5, float("nan"), "0"])
+def test_estimate_growth_from_track_rows_rejects_malformed_session_columns(
+    bad_session: object,
+) -> None:
+    track_rows = np.asarray([[0, 10], [1, 11], [2, 12]])
+    position_tables = [
+        {0: [0.0, 0.0], 1: [1.0, 0.0], 2: [0.0, 1.0]},
+        {10: [1.0, 1.0], 11: [2.0, 1.0], 12: [1.0, 2.0]},
+    ]
 
-    with pytest.raises(ValueError, match="track_rows"):
-        estimate_growth_from_track_rows(rows, _position_tables())
-
-
-def test_estimate_growth_from_track_rows_rejects_out_of_range_session_indices() -> None:
-    rows = np.asarray([[0, 0], [1, 1], [2, 2]])
-
-    with pytest.raises(ValueError, match="target_session"):
-        estimate_growth_from_track_rows(rows, _position_tables(), target_session=-3)
+    with pytest.raises(ValueError, match="source_session"):
+        estimate_growth_from_track_rows(
+            track_rows,
+            position_tables,
+            source_session=bad_session,  # type: ignore[arg-type]
+        )

@@ -9,7 +9,9 @@ from bayescatrack.association.ensemble_tracking import (
 )
 
 
-@pytest.mark.parametrize("min_votes", [0, -1, 1.5, np.inf, np.nan, True, np.bool_(True)])
+@pytest.mark.parametrize(
+    "min_votes", [0, -1, 1.5, np.inf, np.nan, True, np.bool_(True)]
+)
 def test_consensus_edge_counter_rejects_invalid_min_votes(min_votes):
     with pytest.raises(ValueError, match="min_votes"):
         consensus_edge_counter([[[0, 1]]], min_votes=min_votes)

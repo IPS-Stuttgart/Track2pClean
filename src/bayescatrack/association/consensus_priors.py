@@ -8,7 +8,11 @@ from typing import Any
 
 import numpy as np
 
-from ._numeric_validation import finite_nonnegative_float, finite_positive_float, positive_integer
+from ._numeric_validation import (
+    finite_nonnegative_float,
+    finite_positive_float,
+    positive_integer,
+)
 
 SessionEdge = tuple[int, int]
 TrackEdge = tuple[int, int, int, int]
@@ -144,7 +148,9 @@ def apply_consensus_edge_priors(
 
 def _normalize_variant_costs(values: Sequence[str] | str) -> tuple[str, ...]:
     if isinstance(values, str):
-        raw_values = tuple(token.strip() for token in values.split(",") if token.strip())
+        raw_values = tuple(
+            token.strip() for token in values.split(",") if token.strip()
+        )
     else:
         try:
             raw_values = tuple(values)

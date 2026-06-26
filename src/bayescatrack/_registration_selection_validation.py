@@ -21,7 +21,9 @@ _PATCH_MARKER = "_bayescatrack_registration_selection_validation_patch"
 def install_registration_selection_validation() -> None:
     """Install idempotent validation around auto-registration selection."""
 
-    from . import registration_selection as _registration_selection  # pylint: disable=import-outside-toplevel
+    from . import (
+        registration_selection as _registration_selection,  # pylint: disable=import-outside-toplevel
+    )
 
     original = _registration_selection.select_registration_transform
     if getattr(original, _PATCH_MARKER, False):
@@ -89,7 +91,11 @@ def install_registration_selection_validation() -> None:
         )
 
     setattr(select_registration_transform_with_validation, _PATCH_MARKER, True)
-    setattr(select_registration_transform_with_validation, "_bayescatrack_original", original)
+    setattr(
+        select_registration_transform_with_validation,
+        "_bayescatrack_original",
+        original,
+    )
     _registration_selection.select_registration_transform = (
         select_registration_transform_with_validation
     )
