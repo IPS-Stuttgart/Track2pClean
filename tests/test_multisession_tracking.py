@@ -12,6 +12,25 @@ from bayescatrack.multisession_tracking import (
 )
 
 
+def _session(name: str, roi_indices: np.ndarray) -> Track2pSession:
+    return Track2pSession(
+        session_dir=Path(name),
+        session_name=name,
+        session_date=None,
+        plane_data=CalciumPlaneData(
+            roi_masks=np.ones((len(roi_indices), 2, 2), dtype=bool),
+            roi_indices=roi_indices,
+        ),
+    )
+
+
+def _two_session_fixture() -> list[Track2pSession]:
+    return [
+        _session("s1", np.array([10, 11])),
+        _session("s2", np.array([20, 21])),
+    ]
+
+
 def test_single_session_multisession_tracking_short_circuits():
     plane = CalciumPlaneData(
         roi_masks=np.ones((1, 2, 2), dtype=bool), roi_indices=np.array([7])
@@ -28,6 +47,54 @@ def test_single_session_multisession_tracking_short_circuits():
     npt.assert_array_equal(result.track_matrix, np.array([[0]]))
     npt.assert_array_equal(result.track_roi_index_matrix, np.array([[7]]))
     assert result.summary()["n_tracks"] == 1
+
+
+def test_multisession_tracking_maps_detection_indices_to_roi_indices():
+    sessions = _two_session_fixture()
+
+    def solver(pairwise_costs, **kwargs):
+        assert (0, 1) in pairwise_costs
+        assert kwargs["session_sizes"] == [2, 2]
+        return {"tracks": [{0: 1, 1: 0}], "total_cost": 1.5}
+
+    result = track_sessions_multisession(sessions, solver=solver)
+
+    npt.assert_array_equal(result.track_matrix, np.array([[1, 0]]))
+    npt.assert_array_equal(result.track_roi_index_matrix, np.array([[11, 20]]))
+    assert result.total_cost == 1.5
+
+
+def test_multisession_tracking_rejects_negative_solver_detection_index():
+    sessions = _two_session_fixture()
+
+    def solver(pairwise_costs, **kwargs):
+        del pairwise_costs, kwargs
+        return {"tracks": [{0: -1, 1: 0}]}
+
+    with pytest.raises(ValueError, match="detection index must be a non-negative integer"):
+        track_sessions_multisession(sessions, solver=solver)
+
+
+def test_multisession_tracking_rejects_out_of_bounds_solver_detection_index():
+    sessions = _two_session_fixture()
+
+    def solver(pairwise_costs, **kwargs):
+        del pairwise_costs, kwargs
+        return {"tracks": [{0: 2, 1: 0}]}
+
+    with pytest.raises(ValueError, match=r"outside 0\.\.1 for session 0"):
+        track_sessions_multisession(sessions, solver=solver)
+
+
+def test_multisession_tracking_rejects_boolean_solver_detection_index():
+    sessions = _two_session_fixture()
+
+    def solver(pairwise_costs, **kwargs):
+        del pairwise_costs, kwargs
+        return {"tracks": [{0: True, 1: 0}]}
+
+    with pytest.raises(ValueError, match="detection index must be a non-negative integer"):
+        track_sessions_multisession(sessions, solver=solver)
 
 
 def test_call_multisession_solver_selects_signature_compatible_aliases():
@@ -109,13 +176,12 @@ def test_coerce_solver_tracks_accepts_integer_like_numpy_indices():
 
 @pytest.mark.parametrize(
     ("bad_track", "message"),
-    [
-        ({True: 0}, "session index"),
-        ({0: True}, "detection index"),
-        ({0: -1}, "detection index"),
-        ({0: 1.5}, "detection index"),
-        ({"0": 0}, "session index"),
-        ({0: "1"}, "detection index"),
+        [
+            ({True: 0}, "session index"),
+            ({0: True}, "detection index"),
+            ({0: 1.5}, "detection index"),
+            ({"0": 0}, "session index"),
+            ({0: "1"}, "detection index"),
         ({0: np.nan}, "detection index"),
     ],
 )

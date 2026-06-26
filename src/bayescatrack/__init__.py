@@ -76,6 +76,9 @@ from ._multisession_config_validation import (
 from ._multisession_solver_track_validation import (
     install_multisession_solver_track_validation as _install_multisession_solver_track_validation,
 )
+from ._multisession_solver_validation import (
+    install_multisession_solver_validation as _install_multisession_solver_validation,
+)
 from ._nonrigid_fov_image_validation import (
     install_nonrigid_fov_image_validation as _install_nonrigid_fov_image_validation,
 )
@@ -210,6 +213,7 @@ _install_empty_registered_roi_mask_validation()
 _install_matching_bundle_roi_index_validation()
 _install_multisession_config_validation()
 _install_multisession_solver_track_validation()
+_install_multisession_solver_validation()
 _install_session_gap_validation()
 _install_calibrated_session_gap_validation()
 _install_session_match_result_validation()
