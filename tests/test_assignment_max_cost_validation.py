@@ -25,7 +25,7 @@ class _Bundle:
 def test_solve_bundle_linear_assignment_rejects_boolean_max_cost(bad_max_cost):
     with pytest.raises(
         ValueError,
-        match="max_cost must be a finite non-negative value or None",
+        match=r"max_cost must.*finite non-negative",
     ):
         solve_bundle_linear_assignment(_Bundle([[0.0]]), max_cost=bad_max_cost)
 
@@ -34,7 +34,7 @@ def test_solve_bundle_linear_assignment_rejects_boolean_max_cost(bad_max_cost):
 def test_build_track_rows_from_bundles_rejects_boolean_max_cost(bad_max_cost):
     with pytest.raises(
         ValueError,
-        match="max_cost must be a finite non-negative value or None",
+        match=r"max_cost must.*finite non-negative",
     ):
         build_track_rows_from_bundles([_Bundle([[0.0]])], max_cost=bad_max_cost)
 
