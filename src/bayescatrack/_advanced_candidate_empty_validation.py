@@ -38,14 +38,13 @@ def install_advanced_candidate_empty_validation() -> None:
             return original_candidate_mask(cost_matrix, *args, **kwargs)
 
         costs = np.asarray(cost_matrix, dtype=float)
-        if costs.ndim != 2 or costs.shape[0] != 0 and costs.shape[1] != 0:
+        if costs.ndim != 2 or 0 not in costs.shape:
             return original_candidate_mask(cost_matrix, *args, **kwargs)
 
-        top_k = advanced._normalize_optional_positive_int(  # pylint: disable=protected-access
+        _ = advanced._normalize_optional_positive_int(  # pylint: disable=protected-access
             kwargs["top_k"],
             name="top_k",
         )
-        _ = top_k
         _ = advanced._normalize_bool(  # pylint: disable=protected-access
             kwargs.get("include_columns", True),
             name="include_columns",
