@@ -76,7 +76,7 @@ without pairwise-F1 regression.  A single winning weight is treated as explorato
 | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | immediate-neighborhood sensitivity around survival weight, no-prior continuation weight, and growth-history weight |
 | `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
 | `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
-| `test_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness |
+| `test_track2p_policy_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness |
 | `full_mht_identity_history_decision.py` | interprets the canonical comparison table |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
 | `full_mht_terminal_completion_decision.py` | interprets the terminal-completion probe, with row-name overrides for identity-history rows |
@@ -124,7 +124,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_identity_history_decision.py \
   tests/test_full_mht_identity_history_promotion_gate.py \
   tests/test_full_mht_terminal_completion_decision.py \
-  tests/test_full_mht_conflict_demo.py \
+  tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_full_mht_exposure_audit.py
 
