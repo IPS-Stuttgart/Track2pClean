@@ -278,6 +278,14 @@ def mht_select(
             candidate_id=residual_mht._candidate_id(row),
             score=float(row["removal_score"]),
             conflict_keys=residual_mht._conflict_keys(row),
+            metadata={
+                "subject": str(row.get("subject", "")),
+                "session_a": int(row.get("session_a", -1)),
+                "session_b": int(row.get("session_b", -1)),
+                "roi_a": int(row.get("roi_a", -1)),
+                "roi_b": int(row.get("roi_b", -1)),
+                "removal_score": float(row.get("removal_score", float("nan"))),
+            },
         )
         for row in candidates
     ]

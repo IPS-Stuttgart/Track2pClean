@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import numpy.testing as npt
 from bayescatrack.association.activity_similarity import (
@@ -96,6 +98,38 @@ def test_activity_tiebreaker_explicitly_flags_missing_optional_sources() -> None
     npt.assert_allclose(components["neuropil_ratio_available"], np.zeros((2, 2)))
     npt.assert_allclose(components["activity_tiebreaker_available"], np.ones((2, 2)))
     npt.assert_allclose(components["activity_tiebreaker_missing"], np.zeros((2, 2)))
+
+
+def test_neuropil_ratio_shape_mismatch_is_marked_unavailable() -> None:
+    traces = np.array(
+        [
+            [0.0, 1.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+        ],
+        dtype=float,
+    )
+    reference = SimpleNamespace(
+        n_rois=2,
+        traces=traces,
+        neuropil_traces=np.array([[0.2, 0.1, 0.2, 0.1]], dtype=float),
+    )
+    measurement = SimpleNamespace(
+        n_rois=2,
+        traces=traces.copy(),
+        neuropil_traces=np.array(
+            [
+                [0.2, 0.1, 0.2, 0.1],
+                [0.0, 0.0, 0.3, 0.3],
+            ],
+            dtype=float,
+        ),
+    )
+
+    components = activity_similarity_components(reference, measurement)
+
+    npt.assert_allclose(components["neuropil_ratio_available"], np.zeros((2, 2)))
+    npt.assert_allclose(components["neuropil_ratio_absdiff"], np.zeros((2, 2)))
+    assert np.all(np.isfinite(components["activity_tiebreaker_cost"]))
 
 
 def test_activity_tiebreaker_features_work_with_calibrated_feature_tensor() -> None:

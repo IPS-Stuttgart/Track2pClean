@@ -8,6 +8,65 @@ from bayescatrack.association.track_refinement import (
 )
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {"residual_z_threshold": np.nan},
+            "residual_z_threshold must be a finite positive value",
+        ),
+        (
+            {"residual_z_threshold": True},
+            "residual_z_threshold must be a finite positive value",
+        ),
+        (
+            {"min_track_detections": 2.5},
+            "min_track_detections must be an integer",
+        ),
+        (
+            {"min_track_detections": True},
+            "min_track_detections must be an integer",
+        ),
+        (
+            {"min_track_detections": 1},
+            "min_track_detections must be at least 2",
+        ),
+        (
+            {"min_edge_residual": np.inf},
+            "min_edge_residual must be a finite non-negative value",
+        ),
+        (
+            {"min_edge_residual": True},
+            "min_edge_residual must be a finite non-negative value",
+        ),
+        ({"split_bad_edges": 1}, "split_bad_edges must be a boolean"),
+        ({"fill_value": 0.5}, "fill_value must be an integer"),
+        ({"fill_value": False}, "fill_value must be an integer"),
+    ],
+)
+def test_track_smoothing_config_rejects_silent_control_coercions(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        TrackSmoothingConfig(**kwargs)
+
+
+def test_track_smoothing_config_normalizes_integer_like_controls() -> None:
+    config = TrackSmoothingConfig(
+        residual_z_threshold="3.5",
+        min_track_detections=np.int64(4),
+        min_edge_residual="0.0",
+        split_bad_edges=np.bool_(False),
+        fill_value="-1",
+    )
+
+    assert config.residual_z_threshold == pytest.approx(3.5)
+    assert config.min_track_detections == 4
+    assert config.min_edge_residual == pytest.approx(0.0)
+    assert config.split_bad_edges is False
+    assert config.fill_value == -1
+
+
 def test_track_geometry_flags_isolated_outlier_when_mad_is_zero() -> None:
     """A single bad detection must not be hidden by the std fallback.
 

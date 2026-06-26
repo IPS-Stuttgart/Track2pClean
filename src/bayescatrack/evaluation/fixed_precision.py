@@ -86,7 +86,8 @@ def _best_operating_point(
     target_precision: float,
 ) -> tuple[int, int, float, float, float]:
     best_rank = (0, 1.0, 0, 0)
-    best_result = (0, 0, 1.0, 0.0, float("inf"))
+    empty_recall = _safe_ratio(0, len(reference))
+    best_result = (0, 0, 1.0, empty_recall, float("inf"))
     for threshold in sorted({score for _, score in predicted}, reverse=True):
         retained = [track for track, score in predicted if score >= threshold]
         retained_unique = set(retained)
@@ -187,7 +188,17 @@ def _score_array_for_track_matrix(
 ) -> np.ndarray:
     if track_scores is None:
         return np.ones((matrix.shape[0],), dtype=float)
-    scores = np.asarray(track_scores, dtype=float)
+    raw_scores = np.asarray(track_scores, dtype=object)
+    if raw_scores.ndim != 1 or raw_scores.shape[0] != matrix.shape[0]:
+        raise ValueError(
+            "track_scores must contain exactly one score per predicted track"
+        )
+    if any(_is_boolean_scalar(score) for score in raw_scores):
+        raise ValueError("track_scores must contain finite real-valued scores")
+    try:
+        scores = np.asarray(raw_scores, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("track_scores must contain finite real-valued scores") from exc
     if scores.ndim != 1 or scores.shape[0] != matrix.shape[0]:
         raise ValueError(
             "track_scores must contain exactly one score per predicted track"
@@ -197,18 +208,29 @@ def _score_array_for_track_matrix(
     return scores
 
 
+def _is_boolean_scalar(value: object) -> bool:
+    array = np.asarray(value, dtype=object)
+    if array.shape != ():
+        return False
+    return isinstance(array.item(), (bool, np.bool_))
+
+
 def _resolve_session_indices(
     num_sessions: int, session_indices: Sequence[int] | None
 ) -> list[int]:
     if session_indices is None:
         return list(range(num_sessions))
     selected: list[int] = []
+    seen: set[int] = set()
     for candidate in session_indices:
         session_idx = _coerce_session_index(candidate)
         if session_idx < 0 or session_idx >= num_sessions:
             raise IndexError(
                 f"session index {session_idx} out of bounds for {num_sessions} sessions"
             )
+        if session_idx in seen:
+            raise ValueError("session_indices must not contain duplicate entries")
+        seen.add(session_idx)
         selected.append(session_idx)
     return selected
 
@@ -245,11 +267,19 @@ def _coerce_session_index(value: object) -> int:
 def _validate_target_precisions(
     target_precisions: Sequence[float],
 ) -> tuple[float, ...]:
-    targets = tuple(float(target_precision) for target_precision in target_precisions)
-    for target_precision in targets:
-        if not 0.0 <= target_precision <= 1.0:
-            raise ValueError("target precisions must be between 0 and 1")
-    return targets
+    targets: list[float] = []
+    for target_precision in target_precisions:
+        if isinstance(target_precision, (bool, np.bool_)):
+            raise ValueError(
+                "target precisions must be finite numeric values between 0 and 1"
+            )
+        target = float(target_precision)
+        if not np.isfinite(target) or not 0.0 <= target <= 1.0:
+            raise ValueError(
+                "target precisions must be finite numeric values between 0 and 1"
+            )
+        targets.append(target)
+    return tuple(targets)
 
 
 def _fixed_precision_metric_suffix(target_precision: float) -> str:

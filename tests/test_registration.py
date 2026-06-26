@@ -5,9 +5,11 @@ import types
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack.registration import (
     build_registered_consecutive_session_association_bundles,
     build_registered_session_pair_association_bundle,
+    warp_roi_masks_into_reference_frame,
 )
 
 
@@ -81,6 +83,41 @@ def _install_fake_point_set_registration(monkeypatch) -> None:
     monkeypatch.setitem(
         sys.modules, "pyrecest.utils.point_set_registration", fake_registration
     )
+
+
+def _minimal_warp_inputs():
+    masks = np.zeros((1, 4, 4), dtype=bool)
+    masks[0, 1:3, 1:3] = True
+    return masks, np.eye(2, dtype=float), np.zeros(2, dtype=float)
+
+
+@pytest.mark.parametrize("bad_binarize", ["false", 0, 1, None])
+def test_warp_roi_masks_rejects_non_boolean_binarize(bad_binarize):
+    masks, matrix, offset = _minimal_warp_inputs()
+
+    with pytest.raises(ValueError, match="binarize"):
+        warp_roi_masks_into_reference_frame(
+            masks,
+            matrix,
+            offset,
+            output_shape=(4, 4),
+            binarize=bad_binarize,
+        )
+
+
+@pytest.mark.parametrize("bad_threshold", [True, np.bool_(False), np.nan, -0.1, 1.1])
+def test_warp_roi_masks_rejects_invalid_binarization_threshold(bad_threshold):
+    masks, matrix, offset = _minimal_warp_inputs()
+
+    with pytest.raises(ValueError, match="threshold"):
+        warp_roi_masks_into_reference_frame(
+            masks,
+            matrix,
+            offset,
+            output_shape=(4, 4),
+            binarize=True,
+            threshold=bad_threshold,
+        )
 
 
 def test_build_registered_session_pair_association_bundle_recovers_translation(

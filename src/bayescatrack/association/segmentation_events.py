@@ -8,6 +8,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative_float
+from ._numeric_validation import nonnegative_integer as _nonnegative_integer
 from ._numeric_validation import positive_integer as _positive_integer
 from ._numeric_validation import probability as _probability
 
@@ -234,7 +235,7 @@ def segmentation_event_rows(
 def event_soft_penalty_matrix(
     pairwise_components: Mapping[str, Any],
     *,
-    config: SegmentationEventConfig | None = None,
+    config: SegmentationEventConfig | Mapping[str, Any] | None = None,
 ) -> np.ndarray:
     """Return a penalty relief matrix for plausible split/merge edges.
 
@@ -244,7 +245,7 @@ def event_soft_penalty_matrix(
     one-to-many events, but this can prevent premature pruning of useful edges.
     """
 
-    cfg = config or SegmentationEventConfig()
+    cfg = _segmentation_event_config_from_mapping(config)
     matrices = _event_matrices(pairwise_components)
     score = matrices["score"]
     relief = np.zeros_like(score, dtype=float)
@@ -254,6 +255,16 @@ def event_soft_penalty_matrix(
     ) & (matrices["area"] <= cfg.max_area_ratio_cost)
     relief[plausible] = -0.25 * np.clip(score[plausible], 0.0, 1.0)
     return relief
+
+
+def _segmentation_event_config_from_mapping(
+    config: SegmentationEventConfig | Mapping[str, Any] | None,
+) -> SegmentationEventConfig:
+    if config is None:
+        return SegmentationEventConfig()
+    if isinstance(config, SegmentationEventConfig):
+        return config
+    return SegmentationEventConfig(**dict(config))
 
 
 def _event_matrices(pairwise_components: Mapping[str, Any]) -> dict[str, np.ndarray]:
@@ -284,10 +295,27 @@ def _candidate_inputs(
 ) -> tuple[SegmentationEventConfig, dict[str, np.ndarray], np.ndarray, np.ndarray]:
     cfg = config or SegmentationEventConfig()
     matrices = _event_matrices(pairwise_components)
-    ref_indices = np.asarray(reference_roi_indices, dtype=int).reshape(-1)
-    meas_indices = np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
+    ref_indices = _normalize_roi_indices(
+        reference_roi_indices,
+        name="reference_roi_indices",
+    )
+    meas_indices = _normalize_roi_indices(
+        measurement_roi_indices,
+        name="measurement_roi_indices",
+    )
     _validate_shape(matrices["score"], ref_indices, meas_indices)
     return cfg, matrices, ref_indices, meas_indices
+
+
+def _normalize_roi_indices(values: Sequence[int], *, name: str) -> np.ndarray:
+    raw_values = np.asarray(values, dtype=object).reshape(-1)
+    return np.asarray(
+        [
+            _nonnegative_integer(value, name=f"{name}[{index}]")
+            for index, value in enumerate(raw_values)
+        ],
+        dtype=int,
+    )
 
 
 def _first_available(

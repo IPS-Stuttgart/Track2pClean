@@ -105,10 +105,19 @@ def _mark_patch(wrapper: Any, original: Any) -> None:
 def _normalize_assignment_max_cost(value: Any) -> float | None:
     if value is None:
         return None
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, str, bytes)):
         raise ValueError("max_cost must be a finite non-negative value or None")
     try:
-        normalized = float(value)
+        value_array = np.asarray(value, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("max_cost must be a finite non-negative value or None") from exc
+    if value_array.shape != ():
+        raise ValueError("max_cost must be a finite non-negative value or None")
+    scalar = value_array.item()
+    if isinstance(scalar, (bool, np.bool_, str, bytes)):
+        raise ValueError("max_cost must be a finite non-negative value or None")
+    try:
+        normalized = float(scalar)
     except (TypeError, ValueError) as exc:
         raise ValueError("max_cost must be a finite non-negative value or None") from exc
     if not np.isfinite(normalized) or normalized < 0.0:

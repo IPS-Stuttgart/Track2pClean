@@ -75,8 +75,15 @@ def activity_similarity_components(
     zero-similarity observation.
     """
 
-    if similarity_epsilon <= 0.0:
-        raise ValueError("similarity_epsilon must be strictly positive")
+    similarity_epsilon = _validate_activity_real_scalar(
+        similarity_epsilon,
+        name="similarity_epsilon",
+        strictly_positive=True,
+    )
+    event_threshold = _validate_activity_real_scalar(
+        event_threshold,
+        name="event_threshold",
+    )
 
     shape = (int(reference_plane.n_rois), int(measurement_plane.n_rois))
     components: dict[str, np.ndarray] = {}
@@ -176,6 +183,32 @@ def activity_similarity_components(
     )
     components.update(_activity_tiebreaker_components(components, shape))
     return components
+
+
+def _validate_activity_real_scalar(
+    value: Any,
+    *,
+    name: str,
+    strictly_positive: bool = False,
+) -> float:
+    array = np.asarray(value)
+    if array.shape != ():
+        raise ValueError(f"{name} must be a finite real scalar")
+
+    scalar = array.item()
+    if isinstance(scalar, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite real scalar")
+
+    try:
+        value_float = float(scalar)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite real scalar") from exc
+
+    if not np.isfinite(value_float):
+        raise ValueError(f"{name} must be finite")
+    if strictly_positive and value_float <= 0.0:
+        raise ValueError(f"{name} must be strictly positive")
+    return value_float
 
 
 def _resolve_trace_arrays(

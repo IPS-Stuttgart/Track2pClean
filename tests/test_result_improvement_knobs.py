@@ -42,6 +42,54 @@ def test_seed_sessions_all_resolves_all_sessions() -> None:
     assert _resolved_seed_sessions(config, n_sessions=4) == (0, 1, 2, 3)
 
 
+@pytest.mark.parametrize(
+    ("config_kwargs", "message"),
+    [
+        ({"seed_session": True}, "seed_session must contain integer session indices"),
+        (
+            {"seed_session": np.bool_(False)},
+            "seed_session must contain integer session indices",
+        ),
+        ({"seed_session": 1.5}, "seed_session must contain integer session indices"),
+        ({"seed_session": np.nan}, "seed_session must contain integer session indices"),
+        (
+            {"seed_sessions": (True,)},
+            "seed_sessions must contain integer session indices",
+        ),
+        (
+            {"seed_sessions": (np.bool_(False),)},
+            "seed_sessions must contain integer session indices",
+        ),
+        (
+            {"seed_sessions": (1.5,)},
+            "seed_sessions must contain integer session indices",
+        ),
+    ],
+)
+def test_seed_session_resolver_rejects_silent_index_coercions(
+    config_kwargs: dict[str, object],
+    message: str,
+) -> None:
+    config = Track2pBenchmarkConfig(
+        data=Path("."),
+        method="track2p-baseline",
+        **config_kwargs,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        _resolved_seed_sessions(config, n_sessions=4)
+
+
+def test_seed_sessions_accept_numpy_integer_array_without_truth_coercion() -> None:
+    config = Track2pBenchmarkConfig(
+        data=Path("."),
+        method="track2p-baseline",
+        seed_sessions=np.asarray([1, 2], dtype=np.int64),
+    )
+
+    assert _resolved_seed_sessions(config, n_sessions=4) == (1, 2)
+
+
 def test_track2p_parser_exposes_result_improvement_knobs() -> None:
     args = build_arg_parser().parse_args(
         [
@@ -174,6 +222,7 @@ def test_track2p_teacher_prior_reliefs_suite2p_edges() -> None:
     ("kwargs", "message"),
     [
         ({"relief": True}, "relief must be finite"),
+        ({"relief": np.bool_(True)}, "relief must be finite"),
         (
             {"teacher_cost_cap": -0.1},
             "teacher_cost_cap must be finite and non-negative",

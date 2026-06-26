@@ -277,9 +277,7 @@ def _write_minimal_suite2p_plane(plane_dir):
         ({"cell_probability_threshold": 1.1}, "cell_probability_threshold"),
     ],
 )
-def test_load_suite2p_plane_rejects_invalid_loader_controls(
-    tmp_path, kwargs, message
-):
+def test_load_suite2p_plane_rejects_invalid_loader_controls(tmp_path, kwargs, message):
     _write_minimal_suite2p_plane(tmp_path)
     base_kwargs = {"load_traces": False, "load_spike_traces": False}
     base_kwargs.update(kwargs)
