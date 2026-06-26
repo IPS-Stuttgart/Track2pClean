@@ -92,6 +92,32 @@ This is the first layer in which MHT can preserve a globally cleaner identity
 history even when its local scan score is slightly lower. It is still label-free:
 it reads no manual-GT references, no benchmark scores, and no audit labels.
 
+## Scan-History Conflict Demo
+
+`full_mht_scan_history_conflict_demo` isolates the scan-pruning claim without any
+benchmark scoring. It presents two complete candidate histories after the same
+scans:
+
+| candidate | local score | history behavior |
+| --- | ---: | --- |
+| `locally_high_score_motion_break` | higher | second edge has abrupt IoU collapse and growth/deformation jumps |
+| `lower_score_motion_coherent` | lower | both selected edges remain internally coherent |
+
+With `scan_motion_history_weight = 0.0`, the scan-history policy is identical to
+local-score pruning and selects the higher raw-score candidate. With the frozen
+demo weight of `1.0`, the label-free history risk flips the decision to the
+coherent complete identity path. This is not real-data benchmark evidence; it is
+an executable method invariant showing what the history-aware beam can do that a
+local score cannot.
+
+Run it with:
+
+```bash
+python -m bayescatrack.experiments.full_mht_scan_history_conflict_demo \
+  --output results/full_mht_scan_history_conflict_selected.csv \
+  --candidate-output results/full_mht_scan_history_conflict_candidates.csv
+```
+
 ## Frozen Probe Manifests
 
 The immediate terminal-weight neighborhood is frozen in:
@@ -140,10 +166,15 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_history_dynamics_integration.py \
   tests/test_full_mht_scan_history_dynamics_integration.py \
+  tests/test_full_mht_scan_history_conflict_demo.py \
   tests/test_full_mht_history_dynamics_decision.py \
   tests/test_full_mht_scan_history_dynamics_decision.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_benchmark_manifest_full_mht_integration.py
+
+"$PY" -m bayescatrack.experiments.full_mht_scan_history_conflict_demo \
+  --output "$REPO/results/full_mht_scan_history_conflict_selected.csv" \
+  --candidate-output "$REPO/results/full_mht_scan_history_conflict_candidates.csv"
 
 TERMINAL_OUT="$REPO/results/full_mht_history_dynamics_probe_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$TERMINAL_OUT"
