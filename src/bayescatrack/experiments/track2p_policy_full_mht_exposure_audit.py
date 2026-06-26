@@ -230,6 +230,7 @@ def _history_totals(history: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         f"history_{key}": _history_int_sum(history, key) for key in keys
     }
     totals.update(_history_growth_prediction_totals(history))
+    totals.update(_history_no_prior_continuation_totals(history))
     return totals
 
 
@@ -270,6 +271,40 @@ def _history_growth_prediction_totals(
         "history_growth_prediction_penalized_edges": int(penalized),
         "history_growth_prediction_penalty": float(penalty_sum),
         "history_growth_prediction_weighted_penalty": float(weighted_sum),
+    }
+
+
+def _history_no_prior_continuation_totals(
+    history: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    scored = 0
+    positive = 0
+    negative = 0
+    score_sum = 0.0
+    weighted_sum = 0.0
+    for item in history:
+        summaries = str(item.get("selected_edge_summaries", ""))
+        if not summaries:
+            continue
+        for summary in summaries.split(";"):
+            values = _summary_key_values(summary)
+            if "no_prior_cont" not in values and "no_prior_cont_weighted" not in values:
+                continue
+            scored += 1
+            score = _summary_float(values.get("no_prior_cont"), 0.0)
+            weighted = _summary_float(values.get("no_prior_cont_weighted"), 0.0)
+            if weighted > 0.0:
+                positive += 1
+            elif weighted < 0.0:
+                negative += 1
+            score_sum += score
+            weighted_sum += weighted
+    return {
+        "history_no_prior_continuation_scored_edges": int(scored),
+        "history_no_prior_continuation_positive_edges": int(positive),
+        "history_no_prior_continuation_negative_edges": int(negative),
+        "history_no_prior_continuation_score": float(score_sum),
+        "history_no_prior_continuation_weighted_score": float(weighted_sum),
     }
 
 
@@ -343,10 +378,15 @@ def _all_subjects_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "history_scan_candidates",
         "history_growth_prediction_evaluated_edges",
         "history_growth_prediction_penalized_edges",
+        "history_no_prior_continuation_scored_edges",
+        "history_no_prior_continuation_positive_edges",
+        "history_no_prior_continuation_negative_edges",
     ]
     float_keys = [
         "history_growth_prediction_penalty",
         "history_growth_prediction_weighted_penalty",
+        "history_no_prior_continuation_score",
+        "history_no_prior_continuation_weighted_score",
     ]
     output: dict[str, Any] = {"subject": "ALL"}
     for key in numeric_keys:
@@ -368,6 +408,27 @@ def _all_subjects_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     output["max_growth_prediction_weighted_penalty_per_subject"] = max(
         (
             float(row.get("history_growth_prediction_weighted_penalty", 0.0))
+            for row in rows
+        ),
+        default=0.0,
+    )
+    output["max_no_prior_continuation_scored_edges_per_subject"] = max(
+        (
+            int(row.get("history_no_prior_continuation_scored_edges", 0))
+            for row in rows
+        ),
+        default=0,
+    )
+    output["max_no_prior_continuation_positive_edges_per_subject"] = max(
+        (
+            int(row.get("history_no_prior_continuation_positive_edges", 0))
+            for row in rows
+        ),
+        default=0,
+    )
+    output["max_no_prior_continuation_abs_weighted_score_per_subject"] = max(
+        (
+            abs(float(row.get("history_no_prior_continuation_weighted_score", 0.0)))
             for row in rows
         ),
         default=0.0,
@@ -446,6 +507,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-output-observations", type=int, default=1)
     parser.add_argument("--min-edge-score", type=float, default=0.25)
     parser.add_argument("--max-seed-tracks", type=int, default=None)
+    parser.add_argument(
+        "--association-score-mode",
+        choices=("heuristic", "calibrated-likelihood"),
+        default="heuristic",
+    )
+    parser.add_argument("--association-likelihood-weight", type=float, default=1.0)
+    parser.add_argument("--association-likelihood-clip", type=float, default=4.0)
     parser.add_argument("--track2p-prior-weight", type=float, default=12.0)
     parser.add_argument("--track2p-non-prior-penalty", type=float, default=2.0)
     parser.add_argument("--track2p-prior-switch-penalty", type=float, default=8.0)
@@ -465,6 +533,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--growth-history-prediction-scale", type=float, default=1.0)
     parser.add_argument("--growth-history-prediction-clip", type=float, default=8.0)
     parser.add_argument("--growth-history-prediction-min-edges", type=int, default=1)
+    parser.add_argument(
+        "--no-prior-continuation-likelihood-weight",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--no-prior-continuation-min-examples-per-class",
+        type=int,
+        default=2,
+    )
+    parser.add_argument("--no-prior-continuation-score-clip", type=float, default=8.0)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--format", choices=("csv", "json"), default="csv")
     parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=False)
@@ -491,6 +570,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
         install_full_mht_growth_history_prediction_scoring()
+    if float(args.no_prior_continuation_likelihood_weight) > 0.0:
+        from bayescatrack.experiments.full_mht_no_prior_continuation_integration import (
+            install_full_mht_no_prior_continuation_scoring,
+        )
+
+        install_full_mht_no_prior_continuation_scoring()
 
     benchmark_config = Track2pBenchmarkConfig(
         data=args.data,
@@ -522,6 +607,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         min_edge_score=float(args.min_edge_score),
         seed_source="track2p-output",
         max_seed_tracks=args.max_seed_tracks,
+        association_score_mode=cast(Any, args.association_score_mode),
+        association_likelihood_weight=float(args.association_likelihood_weight),
+        association_likelihood_clip=float(args.association_likelihood_clip),
         track2p_prior_weight=float(args.track2p_prior_weight),
         track2p_non_prior_penalty=float(args.track2p_non_prior_penalty),
         track2p_prior_switch_penalty=float(args.track2p_prior_switch_penalty),
@@ -559,6 +647,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         mht_config,
         "growth_history_prediction_min_edges",
         max(1, int(args.growth_history_prediction_min_edges)),
+    )
+    object.__setattr__(
+        mht_config,
+        "no_prior_continuation_likelihood_weight",
+        float(args.no_prior_continuation_likelihood_weight),
+    )
+    object.__setattr__(
+        mht_config,
+        "no_prior_continuation_min_examples_per_class",
+        max(1, int(args.no_prior_continuation_min_examples_per_class)),
+    )
+    object.__setattr__(
+        mht_config,
+        "no_prior_continuation_score_clip",
+        float(args.no_prior_continuation_score_clip),
     )
     result = run_full_mht_exposure_audit(
         benchmark_config,
