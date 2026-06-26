@@ -9,6 +9,11 @@ def test_track_table_rejects_invalid_negative_roi_index() -> None:
         TrackTable(("s1", "s2"), [[0, -2]])
 
 
+def test_track_table_rejects_duplicate_session_names() -> None:
+    with pytest.raises(ValueError, match=r"session_names must.*unique"):
+        TrackTable(("s1", "s1"), [[0, 1]])
+
+
 def test_wide_ground_truth_csv_rejects_invalid_negative_roi_index(tmp_path) -> None:
     csv_path = tmp_path / "tracks.csv"
     csv_path.write_text("track_id,s1,s2\ntrack_a,0,-2\n", encoding="utf-8")

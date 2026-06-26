@@ -10,6 +10,7 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_ground_truth_track_validation_patch"
 _ROI_ERROR = "ROI index must be a non-negative integer or -1 missing sentinel"
+_SESSION_NAME_ERROR = "session_names must be unique"
 _MISSING_VALUE_STRINGS = {"", "na", "nan", "none", "null", "-"}
 
 
@@ -35,6 +36,7 @@ def install_ground_truth_track_validation() -> None:
             )
         if len(session_names) == 0:
             raise ValueError("session_names must not be empty")
+        _validate_unique_session_names(session_names)
         object.__setattr__(self, "session_names", session_names)
         object.__setattr__(self, "tracks", tracks)
 
@@ -51,6 +53,11 @@ def install_ground_truth_track_validation() -> None:
 def _mark_patch(wrapper: Any, original: Any) -> None:
     setattr(wrapper, _PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
+
+
+def _validate_unique_session_names(session_names: tuple[str, ...]) -> None:
+    if len(set(session_names)) != len(session_names):
+        raise ValueError(_SESSION_NAME_ERROR)
 
 
 def _normalize_track_matrix(tracks: Any) -> np.ndarray:
