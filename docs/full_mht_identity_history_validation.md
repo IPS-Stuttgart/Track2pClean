@@ -141,6 +141,7 @@ beside a regressing weight, is treated as exploratory.
 | `benchmarks/full_mht_local_context_probe_manifest.json` | calibrated local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
 | `docs/full_mht_method_invariant_checklist.md` | paper-facing checklist tying method claims to required label-free regressions |
 | `test_full_mht_identity_history_bundle_contract.py` | cross-manifest contract proving the central identity-history row is identical across candidate, sensitivity, scan-pruning, and completion bundles |
+| `test_full_mht_identity_history_bundle_decision.py` | regression for the paper-facing bundle decision and add-on promotion guardrail |
 | `test_full_mht_method_protocol.py` | regression that keeps the method protocol and invariant checklist from drifting |
 | `full_mht_local_context_integration.py` | gates the calibrated local-context likelihood feature when `local_deformation_weight <= 0` |
 | `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
@@ -150,6 +151,7 @@ beside a regressing weight, is treated as exploratory.
 | `full_mht_identity_history_scan_pruning_decision.py` | interprets scan-pruning add-on rows against matching greedy and central identity-history baselines |
 | `full_mht_identity_history_scan_pruning_promotion_gate.py` | combines scan-pruning benchmark decision with label-free scan-history exposure limits |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
+| `full_mht_identity_history_bundle_decision.py` | combines the central promotion gate and optional add-on decisions into one paper-facing recommendation |
 | `full_mht_terminal_completion_decision.py` | interprets the terminal-completion probe, with row-name overrides for identity-history rows |
 | `track2p_policy_full_mht_exposure_audit.py` | runs all Track2p-style subjects without loading references or audit labels |
 
@@ -167,6 +169,7 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 - The exposure audit reports `bounded_exposure`.
 - Prior-survival, no-prior continuation, and growth-history signals are active but not broad.
 - The no-GT leakage regression passes.
+- The bundle decision reports `promotable_core_method`, so optional add-ons cannot rescue a failed central row.
 
 Promote a scan-pruning variant only if the identity-history row itself passes
 those gates and the scan-pruning promotion gate reports `promotable_after_review`.
@@ -201,6 +204,7 @@ export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
   tests/test_full_mht_identity_history_bundle_contract.py \
+  tests/test_full_mht_identity_history_bundle_decision.py \
   tests/test_full_mht_identity_history_candidate_manifest.py \
   tests/test_full_mht_identity_history_sensitivity_manifest.py \
   tests/test_full_mht_identity_history_scan_pruning_manifest.py \
@@ -257,6 +261,11 @@ mkdir -p "$LOCAL"
   "$LOCAL/full_mht_local_context/full_mht_local_context_comparison.csv" \
   --output "$LOCAL/full_mht_local_context_decision.md"
 
+"$PY" -m bayescatrack.experiments.full_mht_local_context_decision \
+  "$LOCAL/full_mht_local_context/full_mht_local_context_comparison.csv" \
+  --output "$LOCAL/full_mht_local_context_decision.json" \
+  --format json
+
 SENS="$REPO/results/full_mht_identity_history_sensitivity_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$SENS"
 "$PY" -m bayescatrack benchmark suite \
@@ -278,6 +287,15 @@ mkdir -p "$COMP"
   --candidate FullMHTIdentityHistoryCompletion050 \
   --candidate FullMHTIdentityHistoryCompletion100 \
   --output "$COMP/full_mht_identity_history_completion_decision.md"
+
+"$PY" -m bayescatrack.experiments.full_mht_terminal_completion_decision \
+  "$COMP/full_mht_identity_history_completion/full_mht_identity_history_completion_comparison.csv" \
+  --baseline FullMHTIdentityHistory \
+  --candidate FullMHTIdentityHistoryCompletion025 \
+  --candidate FullMHTIdentityHistoryCompletion050 \
+  --candidate FullMHTIdentityHistoryCompletion100 \
+  --output "$COMP/full_mht_identity_history_completion_decision.json" \
+  --format json
 
 EXPOSURE="$REPO/results/full_mht_identity_history_exposure_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$EXPOSURE"
@@ -326,6 +344,13 @@ mkdir -p "$EXPOSURE"
   "$EXPOSURE/full_mht_identity_history_exposure.csv" \
   --output "$EXPOSURE/full_mht_identity_history_promotion_gate.md"
 
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_promotion_gate \
+  "$IDH/full_mht_identity_history/full_mht_identity_history_comparison.csv" \
+  "$SENS/full_mht_identity_history_sensitivity/full_mht_identity_history_sensitivity_comparison.csv" \
+  "$EXPOSURE/full_mht_identity_history_exposure.csv" \
+  --output "$EXPOSURE/full_mht_identity_history_promotion_gate.json" \
+  --format json
+
 SCAN_EXPOSURE="$REPO/results/full_mht_identity_history_scan_pruning_exposure_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$SCAN_EXPOSURE"
 "$PY" -m bayescatrack.experiments.track2p_policy_full_mht_exposure_audit \
@@ -372,12 +397,35 @@ mkdir -p "$SCAN_EXPOSURE"
   "$SCAN/full_mht_identity_history_scan_pruning/full_mht_identity_history_scan_pruning_comparison.csv" \
   "$SCAN_EXPOSURE/full_mht_identity_history_scan_pruning_exposure_050.csv" \
   --output "$SCAN/full_mht_identity_history_scan_pruning_promotion_gate.md"
+
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_scan_pruning_promotion_gate \
+  "$SCAN/full_mht_identity_history_scan_pruning/full_mht_identity_history_scan_pruning_comparison.csv" \
+  "$SCAN_EXPOSURE/full_mht_identity_history_scan_pruning_exposure_050.csv" \
+  --output "$SCAN/full_mht_identity_history_scan_pruning_promotion_gate.json" \
+  --format json
+
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_bundle_decision \
+  "$EXPOSURE/full_mht_identity_history_promotion_gate.json" \
+  --scan-pruning-promotion-json "$SCAN/full_mht_identity_history_scan_pruning_promotion_gate.json" \
+  --terminal-completion-json "$COMP/full_mht_identity_history_completion_decision.json" \
+  --local-context-json "$LOCAL/full_mht_local_context_decision.json" \
+  --output "$EXPOSURE/full_mht_identity_history_bundle_decision.md"
+
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_bundle_decision \
+  "$EXPOSURE/full_mht_identity_history_promotion_gate.json" \
+  --scan-pruning-promotion-json "$SCAN/full_mht_identity_history_scan_pruning_promotion_gate.json" \
+  --terminal-completion-json "$COMP/full_mht_identity_history_completion_decision.json" \
+  --local-context-json "$LOCAL/full_mht_local_context_decision.json" \
+  --output "$EXPOSURE/full_mht_identity_history_bundle_decision.json" \
+  --format json
 ```
 
 ## How To Interpret Outcomes
 
 | gate result | interpretation |
 | --- | --- |
+| `promotable_core_method` | bundle-level approval of the central `FullMHTIdentityHistory` paper row; optional add-ons remain separate variants |
+| `not_promotable_core_method` | the central row failed, so scan-pruning or terminal-completion add-ons cannot rescue the paper row |
 | `promotable_after_review` | strong candidate for the paper method row only when emitted by the central identity-history promotion gate, after recording exact directories and all four metric tables |
 | `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection, or the candidate regresses on a required micro/macro control |
 | `not_promotable_sensitivity` | likely knife-edge, single-setting result, or hidden macro regression |
