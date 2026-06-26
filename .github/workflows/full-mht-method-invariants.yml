@@ -70,6 +70,8 @@ jobs:
             tests/test_full_mht_identity_history_completion_manifest.py \
             tests/test_full_mht_identity_history_decision.py \
             tests/test_full_mht_identity_history_promotion_gate.py \
+            tests/test_full_mht_identity_history_scan_pruning_decision.py \
+            tests/test_full_mht_identity_history_scan_pruning_manifest.py \
             tests/test_full_mht_identity_history_sensitivity_manifest.py \
             tests/test_full_mht_local_context_decision.py \
             tests/test_full_mht_local_context_integration.py \
