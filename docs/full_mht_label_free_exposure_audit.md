@@ -34,7 +34,8 @@ git reset --hard origin/codex/full-mht-prototype
 export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
-  tests/test_full_mht_no_gt_leakage.py
+  tests/test_full_mht_no_gt_leakage.py \
+  tests/test_full_mht_exposure_audit.py
 
 OUT="$REPO/results/full_mht_label_free_exposure_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUT"
