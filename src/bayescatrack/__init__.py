@@ -64,6 +64,9 @@ from ._integer_translation_validation import (
 from ._matching_bundle_roi_index_validation import (
     install_matching_bundle_roi_index_validation as _install_matching_bundle_roi_index_validation,
 )
+from ._matching_control_validation import (
+    install_matching_control_validation as _install_matching_control_validation,
+)
 from ._matching_max_cost_validation import (
     install_matching_max_cost_validation as _install_matching_max_cost_validation,
 )
@@ -211,6 +214,7 @@ _strict_config_validation._positive_int = _candidate_prefilter._positive_int
 _install_empty_candidate_gate_margin_fix()
 _install_empty_registered_roi_mask_validation()
 _install_matching_bundle_roi_index_validation()
+_install_matching_control_validation()
 _install_multisession_config_validation()
 _install_multisession_solver_track_validation()
 _install_multisession_solver_validation()
