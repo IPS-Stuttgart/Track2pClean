@@ -3,8 +3,8 @@
 The history-dynamics objective asks whether terminal MHT hypotheses contain an
 edge that is an outlier relative to the rest of the same identity history.  This
 module keeps the interpretation frozen: a candidate is interesting only if it
-improves complete-track F1 without pairwise-F1 loss across more than one nearby
-motion-history weight.
+improves complete-track F1 micro without any reported pairwise/complete-track
+micro or macro F1 loss across more than one nearby motion-history weight.
 """
 
 from __future__ import annotations
@@ -28,6 +28,14 @@ REPORT_METRICS: tuple[MetricName, ...] = (
     "pairwise_f1_micro",
     "complete_track_f1_micro",
     "pairwise_f1_macro",
+    "complete_track_f1_macro",
+)
+PAIRWISE_METRICS: tuple[MetricName, ...] = (
+    "pairwise_f1_micro",
+    "pairwise_f1_macro",
+)
+COMPLETE_TRACK_METRICS: tuple[MetricName, ...] = (
+    "complete_track_f1_micro",
     "complete_track_f1_macro",
 )
 
@@ -98,7 +106,9 @@ def evaluate_history_dynamics_decision(
         candidate_blocks,
         key=lambda block: (
             float(block["delta_complete_track_f1_micro"]),
+            float(block["delta_complete_track_f1_macro"]),
             float(block["delta_pairwise_f1_micro"]),
+            float(block["delta_pairwise_f1_macro"]),
         ),
     )
     result = _history_dynamics_result(
@@ -167,17 +177,19 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         f"Best candidate: `{decision['best_candidate']}`",
         f"Recommendation: {decision['recommendation']}",
         "",
-        "| candidate | decision | pairwise F1 micro delta | complete-track F1 micro delta |",
-        "| --- | --- | ---: | ---: |",
+        "| candidate | decision | pairwise F1 micro delta | complete-track F1 micro delta | pairwise F1 macro delta | complete-track F1 macro delta |",
+        "| --- | --- | ---: | ---: | ---: | ---: |",
     ]
     for block in decision.get("candidate_decisions", ()):  # type: ignore[assignment]
         row = dict(block)
         lines.append(
-            "| {approach} | {decision} | {pairwise:.6g} | {complete:.6g} |".format(
+            "| {approach} | {decision} | {pairwise_micro:.6g} | {complete_micro:.6g} | {pairwise_macro:.6g} | {complete_macro:.6g} |".format(
                 approach=row["approach"],
                 decision=row["decision"],
-                pairwise=float(row["delta_pairwise_f1_micro"]),
-                complete=float(row["delta_complete_track_f1_micro"]),
+                pairwise_micro=float(row["delta_pairwise_f1_micro"]),
+                complete_micro=float(row["delta_complete_track_f1_micro"]),
+                pairwise_macro=float(row["delta_pairwise_f1_macro"]),
+                complete_macro=float(row["delta_complete_track_f1_macro"]),
             )
         )
     return "\n".join(lines)
@@ -214,13 +226,14 @@ def _candidate_block(
 ) -> dict[str, Any]:
     block: dict[str, Any] = {"approach": approach}
     block.update(_delta_block(candidate, baseline, prefix="delta"))
-    pairwise_delta = float(block["delta_pairwise_f1_micro"])
-    complete_delta = float(block["delta_complete_track_f1_micro"])
-    if pairwise_delta < -float(tolerance):
+    pairwise_deltas = [float(block[f"delta_{metric}"]) for metric in PAIRWISE_METRICS]
+    complete_deltas = [float(block[f"delta_{metric}"]) for metric in COMPLETE_TRACK_METRICS]
+    complete_micro_delta = float(block["delta_complete_track_f1_micro"])
+    if any(delta < -float(tolerance) for delta in pairwise_deltas):
         decision = "pairwise_regression"
-    elif complete_delta < -float(tolerance):
+    elif any(delta < -float(tolerance) for delta in complete_deltas):
         decision = "complete_regression"
-    elif complete_delta > float(tolerance):
+    elif complete_micro_delta > float(tolerance):
         decision = "viable_gain"
     else:
         decision = "tie"
@@ -243,7 +256,7 @@ def _metric(row: Mapping[str, Any], metric: MetricName) -> float:
     except KeyError as exc:
         raise ValueError(f"Comparison row is missing metric column {metric!r}") from exc
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"Comparison metric {metric!r} is not numeric: {row[metric]!r}") from exc
+        raise ValueError(f"Comparison metric {metric!r} is not numeric: {row.get(metric)!r}") from exc
 
 
 def _history_dynamics_result(
@@ -254,16 +267,16 @@ def _history_dynamics_result(
     n_complete_regressions: int,
     n_candidates: int,
 ) -> str:
+    if n_pairwise_regressions > 0:
+        return "history_dynamics_pairwise_regression"
+    if n_complete_regressions > 0:
+        return "history_dynamics_complete_regression"
     if n_viable >= 2:
         return "history_dynamics_stable_gain"
     if n_viable == 1:
         return "history_dynamics_single_weight_gain"
     if n_ties == n_candidates:
         return "history_dynamics_ties_baseline"
-    if n_pairwise_regressions > 0:
-        return "history_dynamics_pairwise_regression"
-    if n_complete_regressions > 0:
-        return "history_dynamics_complete_regression"
     return "history_dynamics_not_promotable"
 
 
