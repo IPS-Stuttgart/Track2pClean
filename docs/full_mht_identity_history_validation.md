@@ -55,6 +55,13 @@ manifest.  It requires complete-track gain over the matching greedy row in at
 least two subjects and no subject-level pairwise or complete-track regression
 against the greedy row or required controls.
 
+The method lock is frozen in
+`benchmarks/full_mht_identity_history_method_lock.json`.  It fixes the central
+identity-history row, matching greedy ablation, no-local-context control,
+sensitivity axes, scan-pruning weights, and terminal-completion weights.  The
+paper-facing bundle must pass `test_full_mht_identity_history_method_lock.py` so
+renamed outputs or added probes cannot quietly change the candidate method.
+
 ## Constructed Conflict Witness
 
 The branch also keeps a small label-free conflict witness in
@@ -143,10 +150,12 @@ beside a regressing weight, is treated as exploratory.
 | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | immediate-neighborhood sensitivity around survival weight, no-prior continuation weight, and growth-history weight |
 | `benchmarks/full_mht_identity_history_scan_pruning_manifest.json` | scan-time history-pruning add-on probe with matching greedy rows at every tested weight |
 | `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
+| `benchmarks/full_mht_identity_history_method_lock.json` | frozen method-lock for the central row, greedy ablation, no-local-context control, sensitivity axes, and add-on weights |
 | `benchmarks/full_mht_local_context_probe_manifest.json` | calibrated local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
 | `docs/full_mht_method_invariant_checklist.md` | paper-facing checklist tying method claims to required label-free regressions |
 | `test_full_mht_identity_history_bundle_contract.py` | cross-manifest contract proving the central identity-history row is identical across candidate, sensitivity, scan-pruning, and completion bundles |
 | `test_full_mht_identity_history_bundle_decision.py` | regression for the paper-facing bundle decision and add-on promotion guardrail |
+| `test_full_mht_identity_history_method_lock.py` | regression proving paper-facing manifests still match the frozen method lock |
 | `test_full_mht_identity_history_subject_support_decision.py` | regression for the subject-level support gate |
 | `test_full_mht_method_protocol.py` | regression that keeps the method protocol and invariant checklist from drifting |
 | `full_mht_local_context_integration.py` | gates the calibrated local-context likelihood feature when `local_deformation_weight <= 0` |
@@ -170,6 +179,7 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 - It does not fall below `FullMHTIdentityHistoryNoLocalContext` on any reported pairwise or complete-track micro/macro metric.
 - It does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on any reported pairwise or complete-track micro/macro metric.
 - The subject-support decision reports `stable_subject_support`.
+- The method-lock regression passes, proving the central row, controls, sensitivity axes, and add-on probes still match the frozen configuration.
 - The identity-history bundle contract regression passes, proving all add-on probes start from the same frozen central row.
 - The constructed conflict witness regression passes.
 - The method-invariant checklist regression passes.
@@ -213,6 +223,7 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_identity_history_bundle_contract.py \
   tests/test_full_mht_identity_history_bundle_decision.py \
+  tests/test_full_mht_identity_history_method_lock.py \
   tests/test_full_mht_identity_history_subject_support_decision.py \
   tests/test_full_mht_identity_history_candidate_manifest.py \
   tests/test_full_mht_identity_history_sensitivity_manifest.py \
@@ -456,6 +467,7 @@ mkdir -p "$SCAN_EXPOSURE"
 
 | gate result | interpretation |
 | --- | --- |
+| `full_mht_identity_history_method_lock_v1` | expected schema for the frozen identity-history method lock |
 | `promotable_core_method` | bundle-level approval of the central `FullMHTIdentityHistory` paper row; optional add-ons remain separate variants |
 | `complete_core_evidence` | central manifest, sensitivity, exposure, and subject-support evidence agree |
 | `inconsistent_core_evidence` | at least one central evidence field disagrees with promotion and the bundle must not be promoted |
@@ -475,7 +487,7 @@ mkdir -p "$SCAN_EXPOSURE"
 | `terminal_completion_stable_gain` | terminal complete-history objective can be considered only when the tested weight neighborhood has at least two gains and no pairwise or complete-track regression |
 | `terminal_completion_single_weight_gain` | terminal objective is exploratory, not promotable |
 | `terminal_completion_ties_baseline` | terminal objective supports the story but does not improve the row |
-| `incomplete` | rerun the missing manifest, sensitivity, exposure, subject-support, or no-GT test artifact |
+| `incomplete` | rerun the missing method-lock, manifest, sensitivity, exposure, subject-support, or no-GT test artifact |
 
 The branch should not claim an original FullMHT method row until this bundle has
 been run and recorded.
