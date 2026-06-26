@@ -265,6 +265,21 @@ def test_growth_priors_prefer_affine_consistent_matches() -> None:
     assert np.argmin(penalties, axis=1).tolist() == [0, 1, 2]
 
 
+def test_growth_priors_accept_coordinate_row_centroid_matrices() -> None:
+    source = np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+    target = source + np.asarray([2.0, 3.0])
+    source_centroids = source.T
+    target_centroids = target.T
+
+    affine = estimate_affine_growth_field(source_centroids, target_centroids)
+    residuals = affine_growth_residuals(source_centroids, target_centroids, affine=affine)
+    penalties = growth_penalty_matrix(source_centroids, target_centroids, affine=affine)
+
+    np.testing.assert_allclose(residuals, np.zeros(3), atol=1.0e-10)
+    assert penalties.shape == (3, 3)
+    assert np.argmin(penalties, axis=1).tolist() == [0, 1, 2]
+
+
 def test_multiplane_quality_penalty_and_session_offset() -> None:
     qualities = (
         PlaneRegistrationQuality("plane0", registration_rmse=0.0, valid_fraction=1.0),

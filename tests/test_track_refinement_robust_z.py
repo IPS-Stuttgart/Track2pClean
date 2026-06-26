@@ -40,8 +40,8 @@ from bayescatrack.association.track_refinement import (
             "min_edge_residual must be a finite non-negative value",
         ),
         ({"split_bad_edges": 1}, "split_bad_edges must be a boolean"),
-        ({"fill_value": 0.5}, "fill_value must be an integer"),
-        ({"fill_value": False}, "fill_value must be an integer"),
+        ({"fill_value": 0.5}, "fill_value must be a negative integer sentinel"),
+        ({"fill_value": False}, "fill_value must be a negative integer sentinel"),
     ],
 )
 def test_track_smoothing_config_rejects_silent_control_coercions(
@@ -57,7 +57,7 @@ def test_track_smoothing_config_normalizes_integer_like_controls() -> None:
         min_track_detections=np.int64(4),
         min_edge_residual="0.0",
         split_bad_edges=np.bool_(False),
-        fill_value="-1",
+        fill_value=np.int64(-1),
     )
 
     assert config.residual_z_threshold == pytest.approx(3.5)
