@@ -28,6 +28,7 @@ METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/full_mht_prior_survival_model.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_integration.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_promotion_gate.py",
+    "src/bayescatrack/experiments/full_mht_identity_history_bundle_decision.py",
     "src/bayescatrack/experiments/full_mht_identity_history_decision.py",
     "src/bayescatrack/experiments/full_mht_identity_history_promotion_gate.py",
     "src/bayescatrack/experiments/full_mht_identity_history_scan_pruning_decision.py",
