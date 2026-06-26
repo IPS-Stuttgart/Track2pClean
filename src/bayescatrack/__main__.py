@@ -8,4 +8,5 @@ if __package__ in {None, ""}:  # pragma: no cover
 
 from bayescatrack.cli import main
 
-raise SystemExit(main())
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
