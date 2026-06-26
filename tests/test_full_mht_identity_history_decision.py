@@ -49,7 +49,12 @@ def test_identity_history_decision_detects_complete_history_advantage() -> None:
     decision = evaluate_identity_history_decision(_rows())
 
     assert decision["status"] == "complete"
+    assert decision["mht_candidate"] == "FullMHTIdentityHistory"
+    assert decision["local_choice_baseline"] == "FullMHTGreedyIdentityHistory"
+    assert decision["mht_vs_local_result"] == "identity_complete_history_advantage"
     assert decision["history_search_result"] == "identity_complete_history_advantage"
+    assert decision["mht_minus_local_pairwise_f1_micro"] == 0.0
+    assert decision["mht_minus_local_complete_track_f1_micro"] > 0.0
     assert decision["prior_control_result"] == "identity_improves_prior"
     assert decision["track2p_control_result"] == "identity_improves_track2p"
     assert decision["layer_combination_result"] == "combined_layer_gain"
@@ -61,6 +66,7 @@ def test_identity_history_decision_rejects_greedy_tie() -> None:
         _rows(identity_complete=0.931, greedy_complete=0.931)
     )
 
+    assert decision["mht_vs_local_result"] == "identity_ties_greedy"
     assert decision["history_search_result"] == "identity_ties_greedy"
     assert decision["recommendation"].startswith("keep exploratory")
 
@@ -75,6 +81,7 @@ def test_identity_history_decision_rejects_pairwise_only_gain() -> None:
         )
     )
 
+    assert decision["mht_vs_local_result"] == "identity_pairwise_only_advantage"
     assert decision["history_search_result"] == "identity_pairwise_only_advantage"
     assert "not complete-track advantage" in decision["recommendation"]
 
@@ -118,5 +125,6 @@ def test_identity_history_decision_markdown_is_compact() -> None:
     markdown = format_decision_markdown(evaluate_identity_history_decision(_rows()))
 
     assert "# FullMHT Identity-History Decision" in markdown
+    assert "MHT-vs-local result" in markdown
     assert "identity_complete_history_advantage" in markdown
-    assert "identity minus greedy" in markdown
+    assert "MHT minus local greedy" in markdown
