@@ -92,15 +92,24 @@ mkdir -p "$OUT"
 ## Frozen Decision Rule
 
 The decision helper does not tune the method. It only interprets the frozen
-comparison table:
+comparison table. A stable terminal-completion gain now requires two things:
+
+```text
+at least two nearby weights improve complete-track F1 without pairwise loss
+and no tested neighboring weight regresses pairwise or complete-track F1
+```
+
+That second clause is important: if a nearby weight causes regression, the
+complete-history pressure is treated as too fragile for promotion even when two
+other weights look attractive.
 
 | result | meaning |
 | --- | --- |
-| `terminal_completion_stable_gain` | at least two nearby weights improve complete-track F1 without pairwise regression |
+| `terminal_completion_stable_gain` | at least two nearby weights improve complete-track F1 and the full tested neighborhood has no pairwise or complete-track regression |
 | `terminal_completion_single_weight_gain` | only one weight improves complete-track F1, so treat it as knife-edge |
 | `terminal_completion_ties_baseline` | complete-history objective validates the story but does not improve metrics |
-| `terminal_completion_pairwise_regression` | do not promote; complete history pressure damages pairwise tracking |
-| `terminal_completion_complete_regression` | do not promote; complete-track identity is worse |
+| `terminal_completion_pairwise_regression` | do not promote; complete history pressure damages pairwise tracking in the tested neighborhood |
+| `terminal_completion_complete_regression` | do not promote; complete-track identity is worse for at least one tested neighboring weight |
 
 Promotion still requires the broader no-GT, exposure, and sensitivity gates.
 
@@ -156,13 +165,15 @@ Positive evidence would be:
 - complete-track F1 improves over `FullMHTPrior2` or the greedy beam row;
 - diagnostics show reranking toward complete histories without broad non-prior
   continuations or prior switches;
-- at least two nearby weights are stable, not a single exact spike.
+- at least two nearby weights are stable, not a single exact spike;
+- no tested neighboring weight regresses pairwise or complete-track F1.
 
 Negative evidence would be:
 
 - the term simply rewards over-linking and damages pairwise F1;
 - it has no effect because the beam never preserves the relevant alternatives;
-- it only works at one fragile weight.
+- it only works at one fragile weight;
+- an adjacent tested weight improves one metric while damaging another.
 
 If promising, add only the stable terminal-completion row to the canonical
 manifest after recording the probe output directory and comparison table.
