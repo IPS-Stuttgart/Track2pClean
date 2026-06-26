@@ -217,6 +217,76 @@ def test_full_mht_manifest_runner_aliases_are_supported() -> None:
     assert bm._runner_name("track2p-pyrecest-full-mht") == "track2p-policy-full-mht"
 
 
+def test_full_mht_defaults_do_not_leak_into_track2p_control_row(tmp_path) -> None:
+    manifest_path = tmp_path / "full_mht_with_track2p_control.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "reference": "reference",
+                "reference_kind": "manual-gt",
+                "input_format": "suite2p",
+                "threshold_method": "min",
+                "iou_distance_threshold": 12.0,
+                "cell_probability_threshold": 0.5,
+            },
+            "runs": [
+                {
+                    "name": "Track2p",
+                    "runner": "track2p",
+                    "method": "track2p-baseline",
+                    "output": "track2p.csv",
+                },
+                {
+                    "name": "FullMHT",
+                    "runner": "track2p-full-mht",
+                    "method": "track2p-policy-full-mht",
+                    "output": "full_mht.csv",
+                    "beam_width": 4,
+                },
+            ],
+        },
+    )
+
+    manifest = load_benchmark_manifest(manifest_path)
+    track2p, full_mht = manifest.runs
+
+    assert track2p.runner == "track2p"
+    assert not track2p.runner_kwargs
+    assert full_mht.runner == "track2p-policy-full-mht"
+    assert full_mht.runner_kwargs["threshold_method"] == "min"
+    assert full_mht.runner_kwargs["iou_distance_threshold"] == 12.0
+    assert full_mht.runner_kwargs["beam_width"] == 4
+
+
+def test_full_mht_manifest_still_rejects_explicit_track2p_policy_keys(tmp_path) -> None:
+    manifest_path = tmp_path / "bad_track2p_control.json"
+    _write_manifest(
+        manifest_path,
+        {
+            "defaults": {
+                "data": "data",
+                "reference": "reference",
+                "reference_kind": "manual-gt",
+                "input_format": "suite2p",
+            },
+            "runs": [
+                {
+                    "name": "Track2p",
+                    "runner": "track2p",
+                    "method": "track2p-baseline",
+                    "threshold_method": "min",
+                    "output": "track2p.csv",
+                },
+            ],
+        },
+    )
+
+    with pytest.raises(ValueError, match="Runner 'track2p' does not support"):
+        load_benchmark_manifest(manifest_path)
+
+
 def test_full_mht_runner_kwargs_keep_mht_gap_separate_from_track2p_config() -> None:
     kwargs = bm._runner_kwargs(
         {

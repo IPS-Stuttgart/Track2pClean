@@ -716,8 +716,8 @@ def _parse_run_spec(
         raise ValueError("Each manifest run must be a JSON object")
     _reject_unknown_keys(raw_run, RUN_SPEC_FIELDS, location="runs[]")
 
-    run_data = {**defaults, **raw_run}
-    runner = _runner_name(run_data.get("runner", DEFAULT_RUNNER))
+    runner = _runner_name(raw_run.get("runner", defaults.get("runner", DEFAULT_RUNNER)))
+    run_data = _merge_compatible_run_defaults(defaults, raw_run, runner=runner)
     _reject_incompatible_runner_keys(run_data, runner)
     name = str(run_data.get("name", _default_run_name(run_data)))
     output_format = _output_format(run_data.get("format", "csv"))
@@ -842,6 +842,18 @@ def _runner_name(value: Any) -> BenchmarkRunner:
             "Manifest run runner must be one of: " + ", ".join(sorted(RUNNER_CHOICES))
         )
     return cast(BenchmarkRunner, RUNNER_ALIASES[runner])
+
+
+def _merge_compatible_run_defaults(
+    defaults: ManifestObject, raw_run: Mapping[str, Any], *, runner: str
+) -> dict[str, Any]:
+    """Merge defaults while ignoring runner-specific defaults for other runners."""
+
+    allowed = RUNNER_CONFIG_FIELDS[runner] | RUN_METADATA_FIELDS
+    compatible_defaults = {
+        key: value for key, value in defaults.items() if key in allowed or key not in RUNNER_SPECIFIC_FIELDS
+    }
+    return {**compatible_defaults, **raw_run}
 
 
 def _reject_incompatible_runner_keys(run_data: ManifestObject, runner: str) -> None:
