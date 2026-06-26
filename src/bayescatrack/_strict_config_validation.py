@@ -51,7 +51,7 @@ class CandidatePruningConfig:
         object.__setattr__(
             self,
             "large_cost",
-            _finite_positive_float(self.large_cost, name="large_cost"),
+            _positive_finite_float(self.large_cost, name="large_cost"),
         )
 
 
@@ -233,6 +233,14 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
     message = f"{name} must be a finite non-negative value"
     numeric_value = _strict_float_scalar(value, message=message)
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(message)
+    return numeric_value
+
+
+def _positive_finite_float(value: Any, *, name: str) -> float:
+    message = f"{name} must be a positive finite value"
+    numeric_value = _strict_float_scalar(value, message=message)
+    if not np.isfinite(numeric_value) or numeric_value <= 0.0:
         raise ValueError(message)
     return numeric_value
 
