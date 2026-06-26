@@ -6,14 +6,24 @@ from .._exports import BRIDGE_PUBLIC_NAMES
 from . import _bridge_impl
 from . import _cell_probability_validation as _cell_probability_validation
 from . import _core_scalar_validation as _core_scalar_validation
+from . import _loader_bool_validation as _loader_bool_validation
 from . import _loader_validation as _loader_validation
 from . import _local_evidence as _local_evidence
 from . import _mahalanobis as _mahalanobis
 from . import _roi_index_validation as _roi_index_validation
 from . import _roi_stat_features as _roi_stat_features
+from . import (
+    _suite2p_coordinate_value_validation as _suite2p_coordinate_value_validation,
+)
+from . import _suite2p_overlap_value_validation as _suite2p_overlap_value_validation
 
 _cell_probability_validation.install_cell_probability_cost_patch(_bridge_impl)
+_loader_bool_validation.install_numpy_bool_loader_validation()
 _loader_validation.install_loader_validation_patches(_bridge_impl)
+_suite2p_coordinate_value_validation.install_suite2p_coordinate_value_validation(
+    _bridge_impl
+)
+_suite2p_overlap_value_validation.install_suite2p_overlap_value_validation(_bridge_impl)
 _roi_index_validation.install_calcium_plane_roi_index_validation(
     _bridge_impl.CalciumPlaneData
 )
@@ -22,7 +32,9 @@ _roi_stat_features.install_split_roi_stat_pairwise_features(
     _bridge_impl.CalciumPlaneData
 )
 _local_evidence.install_local_evidence_pairwise_features(_bridge_impl.CalciumPlaneData)
-_core_scalar_validation.install_core_scalar_validation_patches(_bridge_impl.CalciumPlaneData)
+_core_scalar_validation.install_core_scalar_validation_patches(
+    _bridge_impl.CalciumPlaneData
+)
 
 CalciumPlaneData = _bridge_impl.CalciumPlaneData
 SessionAssociationBundle = _bridge_impl.SessionAssociationBundle

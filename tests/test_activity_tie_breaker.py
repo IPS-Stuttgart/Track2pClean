@@ -40,6 +40,24 @@ def test_activity_tie_breaker_masks_unavailable_activity_pairs() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "bad_weight",
+    [
+        True,
+        -0.1,
+        np.nan,
+        np.inf,
+        "0.1",
+        [0.1],
+    ],
+)
+def test_activity_tie_breaker_rejects_malformed_weight(bad_weight) -> None:
+    components = {"activity_tiebreaker_cost": np.zeros((2, 2), dtype=float)}
+
+    with pytest.raises(ValueError, match="weight"):
+        activity_tie_breaker_cost_matrix(components, weight=bad_weight)
+
+
 def test_activity_tie_breaker_keeps_legacy_behavior_without_availability() -> None:
     components = {"custom_cost": np.array([[np.nan, np.inf, -np.inf]], dtype=float)}
 

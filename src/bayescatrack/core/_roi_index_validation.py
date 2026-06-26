@@ -50,6 +50,10 @@ def _validate_roi_indices(roi_indices: Any, roi_masks: Any) -> None:
             raise ValueError(
                 f"roi_indices must contain integer ROI indices, got boolean at {index}"
             )
+        if isinstance(value, (str, np.str_)):
+            raise ValueError(
+                f"roi_indices must contain integer ROI indices, got text at {index}"
+            )
         if isinstance(value, (float, np.floating)) and (
             not np.isfinite(value) or not float(value).is_integer()
         ):

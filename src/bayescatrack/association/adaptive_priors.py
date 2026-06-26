@@ -82,6 +82,8 @@ def apply_adaptive_edge_priors(
                 f"Duplicate pairwise cost matrix for session edge {normalized_edge!r}"
             )
         copied[normalized_edge] = np.asarray(matrix, dtype=float).copy()
+    for edge, matrix in copied.items():
+        _validate_edge_cost_matrix(edge, matrix, sessions)
     if not resolved.enabled:
         return copied
 
@@ -89,16 +91,6 @@ def apply_adaptive_edge_priors(
     adjusted: dict[SessionEdge, np.ndarray] = {}
     for edge, matrix in copied.items():
         source, target = edge
-        if source < 0 or target <= source or target >= len(sessions):
-            raise ValueError(f"Invalid session edge {edge!r}")
-        if matrix.shape != (
-            sessions[source].plane_data.n_rois,
-            sessions[target].plane_data.n_rois,
-        ):
-            raise ValueError(
-                f"Pairwise cost matrix for edge {edge!r} has shape {matrix.shape}, "
-                "which does not match the loaded session ROI counts"
-            )
         edge_cost = matrix.copy()
         admissible = np.isfinite(edge_cost) & (edge_cost < resolved.large_cost)
         gap = int(target - source)
@@ -222,6 +214,25 @@ def _validate_session_edge_key(edge: Any) -> SessionEdge:
         _nonnegative_int(values[0], name="session edge source"),
         _nonnegative_int(values[1], name="session edge target"),
     )
+
+
+def _validate_edge_cost_matrix(
+    edge: SessionEdge,
+    matrix: np.ndarray,
+    sessions: Sequence[Track2pSession],
+) -> None:
+    source, target = edge
+    if source < 0 or target <= source or target >= len(sessions):
+        raise ValueError(f"Invalid session edge {edge!r}")
+    expected_shape = (
+        sessions[source].plane_data.n_rois,
+        sessions[target].plane_data.n_rois,
+    )
+    if matrix.shape != expected_shape:
+        raise ValueError(
+            f"Pairwise cost matrix for edge {edge!r} has shape {matrix.shape}, "
+            "which does not match the loaded session ROI counts"
+        )
 
 
 def _nonnegative_int(value: Any, *, name: str) -> int:

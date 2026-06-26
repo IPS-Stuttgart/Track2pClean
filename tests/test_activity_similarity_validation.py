@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -18,6 +20,16 @@ def _activity_plane() -> CalciumPlaneData:
         ]
     )
     return CalciumPlaneData(roi_masks=masks, traces=traces, spike_traces=traces)
+
+
+def _count_plane(n_rois: object) -> SimpleNamespace:
+    traces = np.zeros((1, 3), dtype=float)
+    return SimpleNamespace(
+        n_rois=n_rois,
+        traces=traces,
+        spike_traces=traces,
+        neuropil_traces=None,
+    )
 
 
 @pytest.mark.parametrize(
@@ -51,4 +63,29 @@ def test_activity_similarity_rejects_invalid_event_threshold(
             plane,
             plane,
             event_threshold=event_threshold,
+        )
+
+
+@pytest.mark.parametrize(
+    ("plane_name", "reference_n_rois", "measurement_n_rois"),
+    [
+        ("reference_plane", True, 1),
+        ("reference_plane", 1.5, 1),
+        ("reference_plane", -1, 1),
+        ("reference_plane", float("nan"), 1),
+        ("measurement_plane", 1, False),
+        ("measurement_plane", 1, 2.5),
+        ("measurement_plane", 1, -1),
+        ("measurement_plane", 1, float("inf")),
+    ],
+)
+def test_activity_similarity_rejects_invalid_plane_roi_counts(
+    plane_name: str,
+    reference_n_rois: object,
+    measurement_n_rois: object,
+) -> None:
+    with pytest.raises(ValueError, match=rf"{plane_name}\.n_rois"):
+        activity_similarity_components(
+            _count_plane(reference_n_rois),
+            _count_plane(measurement_n_rois),
         )

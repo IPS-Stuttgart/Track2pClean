@@ -170,6 +170,38 @@ def test_multi_hypothesis_four_session_python_track_matrix_is_not_edge_set() -> 
     ("factory", "message"),
     [
         (
+            lambda: top_k_edge_candidates([[1.0]], edge=(1, 0)),
+            "point forward",
+        ),
+        (
+            lambda: consensus_edges((((1, 0, 0, 1),),), min_votes=1),
+            "point forward",
+        ),
+        (
+            lambda: edge_union_costs(({(1, 0, 0, 1): 1},)),
+            "point forward",
+        ),
+        (
+            lambda: edge_union_costs(({(0, 1, -1, 1): 1},)),
+            "edge source_roi must be a non-negative integer",
+        ),
+        (
+            lambda: edge_union_costs(({(0, 1, 0): 1},)),
+            "four-item consensus edge",
+        ),
+    ],
+)
+def test_multi_hypothesis_rejects_malformed_consensus_edges(
+    factory, message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        factory()
+
+
+@pytest.mark.parametrize(
+    ("factory", "message"),
+    [
+        (
             lambda: HypothesisConfig(edge_top_k=1.5),
             "edge_top_k must be a positive integer",
         ),

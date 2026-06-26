@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 
 from bayescatrack.experiments.advanced_improvement_workbench import (
@@ -57,3 +58,42 @@ def test_result_improvement_manifest_includes_edit_capped_teacher_rows():
     runs_by_name = {run["name"]: run for run in manifest["runs"]}
     assert runs_by_name[max1]["max_applied_edits"] == 1
     assert runs_by_name[max2]["max_applied_edits"] == 2
+
+
+def test_result_improvement_manifest_reinstalls_edit_caps_after_workbench_reload():
+    from bayescatrack.experiments import _teacher_rescue_edit_cap_manifest_integration as integration
+    from bayescatrack.experiments import advanced_improvement_workbench as workbench
+
+    reloaded_workbench = importlib.reload(workbench)
+    integration.install_teacher_rescue_edit_cap_manifest_integration()
+
+    manifest = reloaded_workbench.track2p_result_improvement_manifest(
+        data_root="data",
+        reference_root="reference",
+        output_root="results",
+    )
+
+    run_names = [run["name"] for run in manifest["runs"]]
+    assert "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source" in run_names
+    assert "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max1" in run_names
+    assert "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-max2" in run_names
+
+
+def test_result_improvement_manifest_reinstalls_base_teacher_rows_after_workbench_reload():
+    from bayescatrack.experiments import _teacher_rescue_manifest_integration as integration
+    from bayescatrack.experiments import advanced_improvement_workbench as workbench
+
+    reloaded_workbench = importlib.reload(workbench)
+    integration.install_teacher_rescue_manifest_integration()
+    integration.install_teacher_rescue_manifest_integration()
+
+    manifest = reloaded_workbench.track2p_result_improvement_manifest(
+        data_root="data",
+        reference_root="reference",
+        output_root="results",
+    )
+
+    run_name = "track2p-policy-teacher-adjacent-rescue-dynamic-confidence-seed-source"
+    run_names = [run["name"] for run in manifest["runs"]]
+    assert run_name in run_names
+    assert run_names.count(run_name) == 1
