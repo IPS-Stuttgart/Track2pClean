@@ -330,6 +330,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_no_prior_continuation_model.py \
   tests/test_full_mht_no_prior_continuation_integration.py \
   tests/test_full_mht_no_prior_continuation_manifest_integration.py \
+  tests/test_full_mht_no_prior_continuation_decision.py \
   tests/test_full_mht_terminal_completion_integration.py \
   tests/test_full_mht_scan_history_dynamics_integration.py \
   tests/test_full_mht_scan_history_conflict_demo.py \
@@ -368,6 +369,10 @@ mkdir -p "$NOPRIOR"
   benchmarks/full_mht_no_prior_continuation_probe_manifest.json \
   --output-dir "$NOPRIOR" \
   --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_no_prior_continuation_decision \
+  "$NOPRIOR/full_mht_no_prior_continuation/full_mht_no_prior_continuation_comparison.csv" \
+  --output "$NOPRIOR/full_mht_no_prior_continuation_decision.md"
 
 COMP="$REPO/results/full_mht_terminal_completion_probe_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$COMP"
