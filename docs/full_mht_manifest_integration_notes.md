@@ -32,8 +32,16 @@ which is named `full_mht_max_gap` in JSON manifests.
 | --- | --- |
 | `Track2p` | original proposal baseline |
 | `FullMHTPrior2` | full scan-assignment MHT with strong Track2p proposal prior |
+| `FullMHTGreedyPrior2` | greedy beam-width-1 ablation over the same scan candidates and proposal-prior settings |
 | `FullMHTPriorVetoScaled` | FullMHT with the fixed label-free prior-edge survival hazard |
 | `FullMHTPriorSurvival` | FullMHT with calibrated label-free prior-edge survival likelihood |
+
+The greedy row uses the same local scan candidate generator as `FullMHTPrior2`,
+but sets `beam_width = 1`. It cannot preserve competing identity histories across
+scans. If it ties the beam row on the real benchmark, the current data do not yet
+demonstrate a history-search advantage. If it loses to the beam row, that is
+direct evidence that full-history MHT is doing something local greedy assignment
+cannot.
 
 The prior-veto row freezes the first positive FullMHT-owned setting:
 
@@ -89,6 +97,7 @@ export PYTHONPATH="$PWD/src"
   tests/test_benchmark_manifest_full_mht_integration.py \
   tests/test_full_mht_prior_survival_model.py \
   tests/test_full_mht_prior_survival_integration.py \
+  tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
 ```
 
