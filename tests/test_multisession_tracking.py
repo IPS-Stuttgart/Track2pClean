@@ -8,6 +8,7 @@ from bayescatrack.multisession_tracking import (
     MultisessionTrackingConfig,
     _call_multisession_solver,
     _coerce_solver_tracks,
+    _track_matrix_to_roi_index_matrix,
     track_sessions_multisession,
 )
 
@@ -95,6 +96,34 @@ def test_multisession_tracking_rejects_boolean_solver_detection_index():
 
     with pytest.raises(ValueError, match="detection index must be a non-negative integer"):
         track_sessions_multisession(sessions, solver=solver)
+
+
+def test_track_matrix_to_roi_index_matrix_accepts_integer_like_float_indices():
+    result = _track_matrix_to_roi_index_matrix(
+        np.array([[1.0, -1.0]]),
+        _two_session_fixture(),
+    )
+
+    npt.assert_array_equal(result, np.array([[11, -1]]))
+
+
+@pytest.mark.parametrize(
+    "bad_matrix",
+    [
+        np.array([[0.5, -1.0]]),
+        np.array([[np.nan, -1.0]]),
+        np.array([[True, False]]),
+        np.array([["0", "-1"]], dtype=object),
+    ],
+)
+def test_track_matrix_to_roi_index_matrix_rejects_ambiguous_detection_indices(
+    bad_matrix,
+):
+    with pytest.raises(
+        ValueError,
+        match="track_matrix must contain integer detection indices",
+    ):
+        _track_matrix_to_roi_index_matrix(bad_matrix, _two_session_fixture())
 
 
 def test_call_multisession_solver_selects_signature_compatible_aliases():
