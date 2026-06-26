@@ -88,7 +88,7 @@ def test_pairwise_mahalanobis_centroid_distances_use_roi_covariances() -> None:
     np.testing.assert_allclose(distances[0, 0], np.sqrt(2.0))
 
 
-@pytest.mark.parametrize("regularization", [True, np.nan, np.inf, -1.0])
+@pytest.mark.parametrize("regularization", [True, np.nan, np.inf, -1.0, None, "bad", [0.0]])
 def test_pairwise_mahalanobis_distances_reject_invalid_regularization(
     regularization: Any,
 ) -> None:
@@ -167,6 +167,10 @@ def test_mahalanobis_weight_contributes_to_pairwise_cost() -> None:
             "mahalanobis_weight must be a finite non-negative value",
         ),
         (
+            {"mahalanobis_weight": "bad"},
+            "mahalanobis_weight must be a finite non-negative value",
+        ),
+        (
             {"mahalanobis_regularization": True},
             "mahalanobis_regularization must be a finite non-negative value",
         ),
@@ -176,6 +180,14 @@ def test_mahalanobis_weight_contributes_to_pairwise_cost() -> None:
         ),
         (
             {"mahalanobis_regularization": -1.0},
+            "mahalanobis_regularization must be a finite non-negative value",
+        ),
+        (
+            {"mahalanobis_regularization": None},
+            "mahalanobis_regularization must be a finite non-negative value",
+        ),
+        (
+            {"mahalanobis_regularization": [0.0]},
             "mahalanobis_regularization must be a finite non-negative value",
         ),
     ],
