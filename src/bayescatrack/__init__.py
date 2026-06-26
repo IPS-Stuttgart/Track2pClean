@@ -16,6 +16,9 @@ from ._advanced_weight_validation import (
 from ._assignment_bundle_validation import (
     install_assignment_bundle_validation as _install_assignment_bundle_validation,
 )
+from ._calibrated_session_gap_validation import (
+    install_calibrated_session_gap_validation as _install_calibrated_session_gap_validation,
+)
 from ._candidate_centroid_validation import (
     install_candidate_centroid_validation as _install_candidate_centroid_validation,
 )
@@ -208,6 +211,7 @@ _install_matching_bundle_roi_index_validation()
 _install_multisession_config_validation()
 _install_multisession_solver_track_validation()
 _install_session_gap_validation()
+_install_calibrated_session_gap_validation()
 _install_session_match_result_validation()
 _install_roi_cue_length_validation(_absence_model)
 _install_supervised_mask_validation(_calibrated_costs)

@@ -135,7 +135,7 @@ def test_pairwise_feature_schema_uses_named_schema_with_domain_transforms():
 
 
 def test_session_gap_component_requires_positive_gap():
-    with pytest.raises(ValueError, match="session_gap must be positive"):
+    with pytest.raises(ValueError, match=r"session_gap must.*positive"):
         with_session_gap_component(
             {"centroid_distance": np.zeros((1, 1))}, session_gap=0
         )
@@ -159,7 +159,7 @@ def test_session_gap_component_requires_positive_gap():
 def test_session_gap_component_rejects_non_discrete_or_non_finite_gap(
     bad_session_gap,
 ):
-    with pytest.raises(ValueError, match="session_gap must be positive"):
+    with pytest.raises(ValueError, match=r"session_gap must.*positive"):
         with_session_gap_component(
             {"centroid_distance": np.zeros((1, 1))},
             session_gap=bad_session_gap,
