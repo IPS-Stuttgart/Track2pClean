@@ -35,3 +35,12 @@ def test_suite2p_loader_rejects_invalid_iscell_values(tmp_path, iscell):
 
     with pytest.raises(ValueError, match="iscell.npy .*finite numbers"):
         load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)
+
+
+@pytest.mark.parametrize("flag_value", [0.2, 0.5, 0.999])
+def test_suite2p_loader_rejects_fractional_2d_cell_flags(tmp_path, flag_value):
+    _write_minimal_suite2p_stat(tmp_path)
+    np.save(tmp_path / "iscell.npy", np.asarray([[flag_value, 0.9]], dtype=float))
+
+    with pytest.raises(ValueError, match="cell-flag column.*binary"):
+        load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)
