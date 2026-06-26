@@ -73,13 +73,20 @@ scan_motion_history_weight
 
 This hook patches FullMHT beam pruning. After each scan, it parses the
 label-free selected-edge summaries already produced by the FullMHT runner,
-groups those edges back into partial identity histories, and subtracts a robust
-within-history outlier risk from the pruning score:
+groups those edges back into partial identity histories, and subtracts a
+within-history motion risk from the pruning score:
 
 ```text
 beam_pruning_score = original_beam_pruning_score
                      - scan_motion_history_weight * partial_history_motion_risk
 ```
+
+The risk includes both robust within-row outlier penalties and immediate
+successive-edge deterioration penalties. The latter is important for short
+partial histories: with only two selected edges, a median-only outlier score can
+understate a bad second continuation, so the scan-time term also penalizes abrupt
+IoU drops and abrupt growth/deformation residual jumps relative to the previous
+edge.
 
 This is the first layer in which MHT can preserve a globally cleaner identity
 history even when its local scan score is slightly lower. It is still label-free:
