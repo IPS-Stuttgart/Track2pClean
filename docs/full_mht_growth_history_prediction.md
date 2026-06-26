@@ -75,6 +75,7 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_growth_history_prediction_integration.py \
   tests/test_full_mht_growth_history_prediction_decision.py \
+  tests/test_full_mht_exposure_audit.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_benchmark_manifest_full_mht_integration.py
 
@@ -89,6 +90,60 @@ mkdir -p "$OUT"
   "$OUT/full_mht_growth_history_prediction/full_mht_growth_history_prediction_comparison.csv" \
   --output "$OUT/full_mht_growth_history_prediction_decision.md"
 ```
+
+## Exposure Audit
+
+Benchmark metrics alone are not enough for this hook. After the manifest run,
+record a label-free exposure table for the selected weight, starting with the
+middle frozen setting:
+
+```bash
+EXPOSURE="$REPO/results/full_mht_growth_history_prediction_exposure_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$EXPOSURE"
+
+"$PY" -m bayescatrack.experiments.track2p_policy_full_mht_exposure_audit \
+  --data "$REPO/results/policy_dp/data_lightweight" \
+  --input-format suite2p \
+  --threshold-method min \
+  --transform-type affine \
+  --iou-distance-threshold 12 \
+  --cell-probability-threshold 0.5 \
+  --seed-session 0 \
+  --beam-width 8 \
+  --scan-hypotheses 8 \
+  --edge-top-k 4 \
+  --identity-diverse-beam \
+  --miss-cost 2.0 \
+  --full-mht-max-gap 1 \
+  --gap-reactivation-cost 1.0 \
+  --min-output-observations 1 \
+  --min-edge-score 0.25 \
+  --track2p-prior-weight 12.0 \
+  --track2p-non-prior-penalty 2.0 \
+  --track2p-prior-switch-penalty 8.0 \
+  --track2p-no-prior-successor-penalty 8.0 \
+  --track2p-prior-miss-penalty 4.0 \
+  --growth-history-prediction-weight 0.50 \
+  --growth-history-prediction-scale 1.0 \
+  --growth-history-prediction-clip 8.0 \
+  --growth-history-prediction-min-edges 1 \
+  --output "$EXPOSURE/full_mht_growth_history_prediction_exposure.csv" \
+  --format csv \
+  --progress
+```
+
+Inspect the `ALL` row fields:
+
+```text
+history_growth_prediction_evaluated_edges
+history_growth_prediction_penalized_edges
+history_growth_prediction_weighted_penalty
+max_growth_prediction_penalized_edges_per_subject
+max_growth_prediction_weighted_penalty_per_subject
+```
+
+A credible result should show bounded exposure: the penalty should be rare and
+localized rather than suppressing many continuations across many subjects.
 
 ## Decision Rule
 
