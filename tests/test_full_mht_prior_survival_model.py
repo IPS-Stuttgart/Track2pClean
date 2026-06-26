@@ -109,7 +109,9 @@ def test_prior_edge_survival_model_separates_anchor_and_hazard_edges() -> None:
     assert model.enabled
     assert scores[0] > 0.0
     assert scores[1] < 0.0
-    assert score_prior_edge_survival(diagnostics[0], model) == pytest.approx(scores[0])
+    assert score_prior_edge_survival(diagnostics[0], model) == pytest.approx(
+        scores[0]
+    )
 
 
 def test_prior_edge_survival_pseudo_masks_are_label_free() -> None:
