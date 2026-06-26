@@ -127,6 +127,36 @@ def test_prior_survival_scoring_rewards_anchors_and_penalizes_hazards(
     assert anchor_delta > hazard_delta
 
 
+def test_prior_survival_selected_edge_summary_exposes_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_cell_probabilities(monkeypatch)
+    matrices = _prior_matrix()
+    install_full_mht_prior_survival_scoring()
+    config = full_mht.FullMHTConfig(track2p_prior_weight=0.0)
+    object.__setattr__(config, "track2p_prior_survival_weight", 1.0)
+
+    summary = full_mht._selected_edge_summary(
+        (object(), object()),
+        matrices,
+        active_source=full_mht._ActiveTrackSource(
+            row_index=2,
+            source_session=0,
+            source_roi=30,
+            gap_length=0,
+        ),
+        target_session=1,
+        target_roi=31,
+        config=config,
+        track2p_prior_edges=_prior_edges(),
+    )
+
+    assert summary["track2p_prior_survival_score"] < 0.0
+    assert summary["track2p_prior_survival_weighted_score"] < 0.0
+    assert "|survival=" in summary["summary"]
+    assert "|survival_weighted=" in summary["summary"]
+
+
 def test_prior_survival_scoring_is_disabled_without_weight(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
