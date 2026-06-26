@@ -22,8 +22,9 @@ A defensible FullMHT method should combine four label-free terms:
 3. **Identity dynamics**: missed detections, no-prior continuations, prior
    switches, gap reactivations, and growth-history prediction are explicit
    history events with costs or likelihoods.
-4. **Complete-history objective**: terminal selection may prefer a lower local
-   scan score when the complete identity history is more plausible.
+4. **Complete-history objective**: terminal selection or scan-time pruning may
+   prefer a lower local scan score when the complete identity history is more
+   plausible.
 
 The branch now implements hooks for all four terms.  The remaining question is
 not whether the code can express a method; it is whether the frozen benchmark and
@@ -45,6 +46,7 @@ exposure artifacts prove that the method does something useful and stable.
 | Terminal complete-history objective | implemented | `benchmarks/full_mht_terminal_completion_probe_manifest.json` | run as complete-objective probe |
 | Combined identity-history row | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_candidate_manifest.json` | current paper-facing candidate |
 | Combined identity-history sensitivity | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | required before promotion |
+| Combined scan-history pruning add-on | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_scan_pruning_manifest.json` | can enter only if full beam beats matching greedy at multiple nearby weights |
 | Combined terminal-completion add-on | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_completion_manifest.json` | can enter only if stable and non-regressing |
 | Label-free exposure audit | implemented | `track2p_policy_full_mht_exposure_audit.py` | required before promotion |
 | No-GT leakage guard | implemented and widened | `tests/test_full_mht_no_gt_leakage.py` | required before promotion |
@@ -92,6 +94,24 @@ The candidate must not fall below this control on any reported pairwise or
 complete-track micro/macro metric; otherwise the local-neighborhood term has not
 earned its place in the method.
 
+A separate probe tests whether scan-time history pruning should be added to the
+combined method:
+
+```text
+IdentityHistoryScanPruning025
+IdentityHistoryScanPruning050
+IdentityHistoryScanPruning100
+```
+
+Each row has a matching greedy row with the same `scan_motion_history_weight`.
+The add-on can enter the paper-facing method only if at least two nearby weights
+improve complete-track F1 over their matching greedy rows, no tested neighboring
+weight regresses against its greedy row, and no scan-pruning row regresses against
+`FullMHTIdentityHistory` on any reported pairwise or complete-track micro/macro
+metric.  This is the real-data counterpart of the scan-history conflict witness:
+it asks whether MHT preserves better partial identity histories during beam
+survival, not only at terminal reranking time.
+
 A separate probe tests whether the terminal complete-history objective should be
 added to the combined method:
 
@@ -116,8 +136,9 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | Manifest comparison | `FullMHTIdentityHistory` beats `FullMHTGreedyIdentityHistory` on complete-track F1 micro with no regression in pairwise or complete-track micro/macro F1 |
 | Required controls | `FullMHTIdentityHistory` does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, `FullMHTNoPriorContinuation100`, or `FullMHTIdentityHistoryNoLocalContext` on any reported pairwise or complete-track micro/macro metric |
 | Conflict witness | constructed FullMHT-vs-greedy witness passes and selected paths remain unchanged when only the evaluation reference is altered |
-| Method-layer invariants | calibrated likelihood changes scan assignment from local-overlap-only behavior; no-prior continuation likelihood can choose continuation over death; growth-history prediction can flip a scan assignment to a coherent history |
+| Method-layer invariants | calibrated likelihood changes scan assignment from local-overlap-only behavior; no-prior continuation likelihood can choose continuation over death; growth-history prediction can flip a scan assignment to a coherent history; scan-history pruning rejects a locally attractive but history-incoherent continuation |
 | Sensitivity | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` reports `stable_plateau`, with each passing variant non-regressing on all reported micro/macro metrics |
+| Scan-history pruning add-on | optional scan-pruning variant reports `scan_pruning_stable_complete_history_gain`, with at least two matching-greedy gains and no regression against greedy or the central identity-history row |
 | Exposure | label-free exposure audit reports `bounded_exposure` with active but rare prior-survival, no-prior-continuation, and growth-history signals |
 | No-GT leakage | tests confirm method layers do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
 | Terminal objective | optional completion variant reports `terminal_completion_stable_gain`, meaning at least two gains and no regressing neighbor in the tested weight neighborhood |
@@ -140,6 +161,9 @@ Do not present FullMHT as a final method if any of the following remain true:
   regression.
 - The exposure audit shows broad non-prior continuations, broad prior-survival
   penalties, broad growth-history penalties, or many prior switches.
+- Scan-history pruning improves only one weight, improves only pairwise F1, loses
+  to the matching greedy row, or regresses against the central identity-history
+  row.
 - The terminal complete-history objective improves only at one fragile weight,
   damages pairwise F1, or damages complete-track F1 at a neighboring tested
   weight.
@@ -166,10 +190,13 @@ docs/full_mht_prior_survival_validation.md
 docs/full_mht_no_prior_continuation_likelihood.md
 docs/full_mht_terminal_completion_objective.md
 docs/full_mht_growth_history_prediction.md
+docs/full_mht_identity_history_scan_pruning.md
 docs/full_mht_label_free_exposure_audit.md
 docs/full_mht_manifest_integration_notes.md
 ```
 
 Run the identity-history bundle first.  It is the only bundle that currently asks
 the paper-critical question directly: does full MHT identity-history search beat
-an equivalent greedy local history under frozen, label-free settings?
+an equivalent greedy local history under frozen, label-free settings?  Run the
+scan-pruning add-on afterward; it can strengthen the method only if the central
+identity-history row already passes its own gates.
