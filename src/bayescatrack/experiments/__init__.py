@@ -19,6 +19,9 @@ from ._teacher_rescue_manifest_integration import (
 from ._teacher_rescue_repair_preset_manifest_integration import (
     install_teacher_rescue_repair_preset_manifest_integration,
 )
+from .full_mht_history_consistency_manifest_integration import (
+    install_full_mht_history_consistency_manifest_integration,
+)
 from .full_mht_no_prior_continuation_manifest_integration import (
     install_full_mht_no_prior_continuation_manifest_integration,
 )
@@ -29,6 +32,7 @@ install_teacher_rescue_manifest_integration()
 install_teacher_rescue_edit_cap_manifest_integration()
 install_teacher_rescue_repair_preset_manifest_integration()
 install_full_mht_manifest_integration()
+install_full_mht_history_consistency_manifest_integration()
 install_full_mht_no_prior_continuation_manifest_integration()
 _cost_sweep_defaults.install_cost_sweep_suite2p_defaults()
 _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
