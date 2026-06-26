@@ -27,7 +27,8 @@ A defensible FullMHT method should combine four label-free terms:
 
 The current branch implements all four hooks. The first positive benchmark row is
 still the fixed prior-veto hazard, but the branch now also has a calibrated
-prior-edge survival likelihood row ready for manifest-level evaluation.
+prior-edge survival likelihood row and an opt-in terminal completion objective
+ready for manifest-level evaluation.
 
 ## Current Evidence Map
 
@@ -39,6 +40,7 @@ prior-edge survival likelihood row ready for manifest-level evaluation.
 | Calibrated association likelihood | implemented, benchmark-negative | `docs/full_mht_calibrated_likelihood_notes.md` | keep as architecture, not row |
 | Identity dynamics penalties | implemented, mostly collapse to proposal solution | `track2p_prior_*` diagnostics | keep |
 | Identity-diverse beam | implemented, exposes cleaner alternatives | calibrated-likelihood notes | keep |
+| Terminal completion objective | implemented, not yet benchmarked | `benchmarks/full_mht_terminal_completion_probe_manifest.json`, `docs/full_mht_terminal_completion_objective.md` | run as method probe |
 | Fixed prior-veto hazard | first positive FullMHT-owned result | `docs/full_mht_prior_risk_notes.md` | freeze and validate |
 | Calibrated prior-edge survival | integrated, not yet benchmarked | `full_mht_prior_survival_model.py`, `FullMHTPriorSurvival` manifest row | run on server |
 | Manifest-level reproduction | manifest + adapter committed | `benchmarks/full_mht_prior_veto_manifest.json` | run on server |
@@ -82,6 +84,27 @@ This row uses the same proposal-prior settings and scan candidate generator as
 the conflict demo. If it ties the beam row, the benchmark still does not prove a
 history-search advantage. If it loses to the beam row, the method has direct
 real-data evidence that preserving alternate identity histories matters.
+
+## Terminal Completion Probe
+
+The branch now has an opt-in complete-history terminal objective:
+
+```text
+terminal_incomplete_history_weight
+```
+
+The objective penalizes missing observations in non-empty terminal histories. It
+is label-free and acts only during beam pruning / final hypothesis selection after
+candidate histories exist. The frozen probe manifest is:
+
+```text
+benchmarks/full_mht_terminal_completion_probe_manifest.json
+```
+
+It tests weights `0.25`, `0.50`, and `1.00` against `Track2p` and
+`FullMHTPrior2`. This should be treated as a method probe, not a promoted row,
+until it improves complete-track F1 without damaging pairwise F1 and behaves
+stably across at least two nearby weights.
 
 ## Current Positive Row
 
@@ -131,6 +154,8 @@ Do not present FullMHT as a final method if any of the following remain true:
   complete-track loss.
 - `FullMHTGreedyPrior2` ties the beam row and no constructed or real-data case
   demonstrates a history-level advantage.
+- The terminal completion objective improves only at a single fragile weight or
+  damages pairwise F1 by rewarding over-linking.
 - Deterministic edge gating over the same candidates produces exactly the same
   behavior without any history-level conflict or history-level benefit.
 - The paper text cannot distinguish the benchmark row from post-hoc growth-veto
@@ -145,7 +170,7 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | Manifest reproduction | `bayescatrack benchmark suite benchmarks/full_mht_prior_veto_manifest.json` reproduces Track2p, FullMHTPrior2, FullMHTGreedyPrior2, FullMHTPriorVetoScaled, and FullMHTPriorSurvival rows |
 | No-GT leakage | tests confirm scoring functions do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
 | Exposure audit | all Track2p-style subjects report rare prior-veto/survival hazards and no subject receives a broad set of missed prior successors |
-| Sensitivity | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json` shows nearby survival weights/clips/pseudo-label settings do not collapse pairwise or complete-track metrics |
+| Sensitivity | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json` and `benchmarks/full_mht_terminal_completion_probe_manifest.json` show nearby settings do not collapse pairwise or complete-track metrics |
 | Greedy ablation | `FullMHTGreedyPrior2` is compared against the beam rows; a tie is reported honestly as no real-data history-search advantage yet |
 | Conflict demonstration | at least the constructed conflict demo, and ideally one real benchmark subject, shows a locally better edge loses to a better complete history |
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants where relevant |
@@ -153,11 +178,12 @@ FullMHT can be promoted as a paper method only after these gates pass:
 ## Implemented Method Jump
 
 The fixed prior-veto row is promising but still too close to a gated hazard. The
-branch now implements the next method jump: a calibrated survival probability for
-Track2p prior edges:
+branch now implements two method jumps: a calibrated survival probability for
+Track2p prior edges and a terminal complete-history objective:
 
 ```text
 log p(edge survives | label-free diagnostics)
+terminal penalty for incomplete seed-anchored histories
 ```
 
 Candidate features include:
@@ -169,6 +195,7 @@ Candidate features include:
 - row/column assignment ranks
 - terminal-edge and complete-component indicators
 - local-neighbor deformation consistency
+- terminal missing-observation counts in non-empty identity histories
 
 The MHT score can now combine:
 
@@ -178,8 +205,8 @@ proposal prior + association likelihood + prior-edge survival likelihood
 ```
 
 This reduces the current hand-gated prior-veto pocket to a calibrated model layer
-when `FullMHTPriorSurvival` is enabled, making MHT responsible for full
-identity-history selection rather than for validating a single cleanup edit.
+when `FullMHTPriorSurvival` is enabled, and it gives the terminal beam an explicit
+complete-history objective when `terminal_incomplete_history_weight` is enabled.
 
 ## Server Commands To Run Next
 
@@ -188,6 +215,7 @@ recipe lives in:
 
 ```text
 docs/full_mht_prior_survival_validation.md
+docs/full_mht_terminal_completion_objective.md
 ```
 
 Minimum command bundle:
@@ -203,8 +231,10 @@ export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
   tests/test_benchmark_manifest_full_mht_integration.py \
+  tests/test_full_mht_manifest_decision.py \
   tests/test_full_mht_prior_survival_model.py \
   tests/test_full_mht_prior_survival_integration.py \
+  tests/test_full_mht_terminal_completion_integration.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
 
@@ -221,8 +251,16 @@ mkdir -p "$SENS"
   benchmarks/full_mht_prior_survival_sensitivity_manifest.json \
   --output-dir "$SENS" \
   --summary-format table
+
+COMP="$REPO/results/full_mht_terminal_completion_probe_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$COMP"
+"$PY" -m bayescatrack benchmark suite \
+  benchmarks/full_mht_terminal_completion_probe_manifest.json \
+  --output-dir "$COMP" \
+  --summary-format table
 ```
 
 Record the output directories, comparison tables, and promote/keep-exploratory
-judgment in `docs/full_mht_prior_survival_validation.md` and
+judgment in `docs/full_mht_prior_survival_validation.md`,
+`docs/full_mht_terminal_completion_objective.md`, and
 `docs/full_mht_manifest_integration_notes.md` after the run.
