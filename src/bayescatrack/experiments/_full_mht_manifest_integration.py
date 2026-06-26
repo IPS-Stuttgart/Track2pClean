@@ -4,7 +4,8 @@ The full-MHT runner is the first Track2p-cleaning experiment that opens a beam
 over full identity histories instead of selecting post-hoc residual edits.  This
 integration makes the runner executable from JSON benchmark manifests, including
 the proposal-prior, prior-veto, calibrated prior-survival, terminal completion,
-and history-dynamics controls used by the current method probe.
+growth-history prediction, and history-dynamics controls used by the current
+method probe.
 """
 
 from __future__ import annotations
@@ -50,6 +51,18 @@ FULL_MHT_HISTORY_DYNAMICS_FLOAT_FIELDS = {
 FULL_MHT_SCAN_HISTORY_DYNAMICS_FLOAT_FIELDS = {
     "scan_motion_history_weight",
 }
+FULL_MHT_GROWTH_HISTORY_PREDICTION_FLOAT_FIELDS = {
+    "growth_history_prediction_weight",
+    "growth_history_prediction_scale",
+    "growth_history_prediction_clip",
+}
+FULL_MHT_GROWTH_HISTORY_PREDICTION_INT_FIELDS = {
+    "growth_history_prediction_min_edges",
+}
+FULL_MHT_GROWTH_HISTORY_PREDICTION_FIELDS = (
+    FULL_MHT_GROWTH_HISTORY_PREDICTION_FLOAT_FIELDS
+    | FULL_MHT_GROWTH_HISTORY_PREDICTION_INT_FIELDS
+)
 FULL_MHT_FIELDS = {
     "threshold_method",
     "iou_distance_threshold",
@@ -110,6 +123,7 @@ FULL_MHT_FIELDS = {
     *FULL_MHT_TERMINAL_COMPLETION_FLOAT_FIELDS,
     *FULL_MHT_HISTORY_DYNAMICS_FLOAT_FIELDS,
     *FULL_MHT_SCAN_HISTORY_DYNAMICS_FLOAT_FIELDS,
+    *FULL_MHT_GROWTH_HISTORY_PREDICTION_FIELDS,
 }
 
 
@@ -229,6 +243,12 @@ def _run_track2p_policy_full_mht_rows(
         )
 
         install_full_mht_scan_history_dynamics_pruning()
+    if _uses_growth_history_prediction(options):
+        from bayescatrack.experiments.full_mht_growth_history_prediction_integration import (
+            install_full_mht_growth_history_prediction_scoring,
+        )
+
+        install_full_mht_growth_history_prediction_scoring()
 
     output = run_track2p_policy_full_mht(
         config,
@@ -262,6 +282,10 @@ def _uses_history_dynamics(options: Mapping[str, Any]) -> bool:
 
 def _uses_scan_history_dynamics(options: Mapping[str, Any]) -> bool:
     return any(key in options for key in FULL_MHT_SCAN_HISTORY_DYNAMICS_FLOAT_FIELDS)
+
+
+def _uses_growth_history_prediction(options: Mapping[str, Any]) -> bool:
+    return any(key in options for key in FULL_MHT_GROWTH_HISTORY_PREDICTION_FIELDS)
 
 
 def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
@@ -508,7 +532,8 @@ def _full_mht_config_from_options(options: Mapping[str, Any]) -> Any:
     config = _attach_prior_survival_options(config, options)
     config = _attach_terminal_completion_options(config, options)
     config = _attach_history_dynamics_options(config, options)
-    return _attach_scan_history_dynamics_options(config, options)
+    config = _attach_scan_history_dynamics_options(config, options)
+    return _attach_growth_history_prediction_options(config, options)
 
 
 def _attach_prior_survival_options(config: Any, options: Mapping[str, Any]) -> Any:
@@ -566,6 +591,26 @@ def _attach_scan_history_dynamics_options(config: Any, options: Mapping[str, Any
                 config,
                 key,
                 manifest._float_option(options, key, default=0.0),
+            )
+    return config
+
+
+def _attach_growth_history_prediction_options(config: Any, options: Mapping[str, Any]) -> Any:
+    from bayescatrack.experiments import benchmark_manifest as manifest
+
+    for key in sorted(FULL_MHT_GROWTH_HISTORY_PREDICTION_FLOAT_FIELDS):
+        if key in options:
+            object.__setattr__(
+                config,
+                key,
+                manifest._float_option(options, key, default=0.0),
+            )
+    for key in sorted(FULL_MHT_GROWTH_HISTORY_PREDICTION_INT_FIELDS):
+        if key in options:
+            object.__setattr__(
+                config,
+                key,
+                manifest._positive_int_option(options, key, default=1),
             )
     return config
 
