@@ -101,6 +101,7 @@ def test_teacher_repair_preset_reinstalls_after_base_reload(monkeypatch, tmp_pat
         config,
         {
             "teacher_repair_preset": "missing-seed-high-confidence",
+            "allow_source_backfill": False,
             "max_applied_edits": 1,
         },
     )
@@ -108,9 +109,9 @@ def test_teacher_repair_preset_reinstalls_after_base_reload(monkeypatch, tmp_pat
     assert rows == [{"subject": "dummy"}]
     assert captured["teacher_edge_order"] == "dynamic-seed-confidence"
     assert captured["teacher_feature_preset"] == "seed-source-high-confidence"
-    assert captured["allow_source_backfill"] is False
     assert captured["allow_seed_source_backfill"] is True
     assert captured["allow_completing_seed_source_backfill"] is True
+    assert captured["allow_source_backfill"] is False
     assert captured["min_component_observations"] == 2
     assert captured["max_applied_edits"] == 1
 

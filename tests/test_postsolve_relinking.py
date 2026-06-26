@@ -78,6 +78,8 @@ def test_relink_can_disable_outgoing_edge_evidence_for_legacy_behavior():
         ("min_cost_improvement", -0.1),
         ("enforce_unique_session_rois", 1),
         ("fill_value", True),
+        ("fill_value", 0),
+        ("fill_value", np.int64(0)),
         ("fill_value", 1.5),
         ("bidirectional_next_weight", True),
         ("bidirectional_next_weight", float("nan")),
@@ -90,3 +92,7 @@ def test_postsolve_relinking_config_rejects_invalid_controls(
 ) -> None:
     with pytest.raises(ValueError, match=field):
         PostSolveRelinkingConfig(**{field: value})
+
+
+def test_postsolve_relinking_accepts_negative_fill_sentinel() -> None:
+    assert PostSolveRelinkingConfig(fill_value=-2).fill_value == -2
