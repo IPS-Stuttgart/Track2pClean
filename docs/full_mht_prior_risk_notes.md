@@ -115,3 +115,89 @@ Decision: terminal history reranking is a useful architectural hook, but scalar
 Mahalanobis prior-edge risk is still not selective enough. The next method layer
 should replace this scalar risk with a calibrated association likelihood or a
 component-level objective that explicitly models complete-track breakage.
+
+## Prior-Edge Survival Hazard Probe
+
+The next implementation added an opt-in Track2p prior-edge survival hazard:
+
+```text
+--track2p-prior-veto-penalty
+```
+
+With the default penalty of zero, existing full-MHT behavior is unchanged. When
+enabled, the hazard applies only to Track2p prior edges that satisfy a strict,
+label-free pocket: terminal edge, last-session edge, complete prior component,
+high growth residual, bounded registered/shifted overlap, weak endpoint cap, and
+row/column rank 1. This moves the successful residual cleanup idea into the full
+scan-assignment MHT objective: suspicious prior edges receive low survival
+likelihood during assignment rather than being edited after tracking.
+
+Fresh server clone at commit `ce3b206d26c304c718509a9e5a8c98047c6c7088`:
+
+```text
+42 passed in 0.51s
+```
+
+Output directories:
+
+`/home/florianpfaff/codex-runs/BayesCaTrack/results/full_mht_prior_veto_hazard_probe_20260626_020723`
+
+`/home/florianpfaff/codex-runs/BayesCaTrack/results/full_mht_prior_veto_scaled_probe_20260626_022258`
+
+### Strict Residual Scale
+
+Using the original residual-MHT growth-veto Mahalanobis threshold (`20`) did not
+activate inside FullMHT, because FullMHT's growth Mahalanobis values are on a
+different scale. The known edge `jm046 5:2309->6:1210` had:
+
+```text
+reg=0.3636
+shift=0.7647
+growth=2.907
+mahal=2.699
+veto=growth_residual_mahalanobis_below_gate
+```
+
+The strict run therefore tied the Track2p/FullMHTPrior2 control:
+
+| row | pairwise F1 micro | complete-track F1 micro |
+| --- | ---: | ---: |
+| Track2p | 0.965116 | 0.924370 |
+| FullMHTPrior2 | 0.965116 | 0.924370 |
+| FullMHTPriorVeto20 | 0.965116 | 0.924370 |
+
+### FullMHT-Scale Strict Pocket
+
+The scale-aligned probe changed only the FullMHT-scale gates:
+
+```text
+--track2p-prior-veto-penalty 20
+--track2p-prior-veto-min-growth-residual-mahalanobis 2.5
+--track2p-prior-veto-min-registered-iou 0.35
+--track2p-prior-veto-max-registered-iou 0.40
+```
+
+All structural guards remained active. This selected a single missed prior
+successor in `jm046` and did not introduce non-prior continuations or prior
+switches:
+
+```text
+scan_selected_prior_edges=598
+scan_selected_non_prior_edges=0
+scan_missed_prior_successors=1
+scan_switched_prior_successors=0
+scan_no_prior_successor_continuations=0
+```
+
+| row | pairwise F1 micro | complete-track F1 micro |
+| --- | ---: | ---: |
+| Track2p | 0.965116 | 0.924370 |
+| FullMHTPrior2 | 0.965116 | 0.924370 |
+| FullMHTPriorVetoScaled | 0.965919 | 0.932203 |
+
+Decision: this is the first positive full-MHT result, and it is conceptually more
+interesting than a post-hoc cleanup: the MHT model keeps the Track2p proposal as
+a strong prior but gives low survival likelihood to a narrowly defined suspicious
+prior edge. Do not call it final yet. The scale-aligned gate was informed by the
+same benchmark ledger, so it needs a reproducibility bundle, no-GT-leakage test,
+non-GT exposure audit, and a small threshold stability table before promotion.
