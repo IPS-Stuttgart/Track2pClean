@@ -37,6 +37,7 @@ def pairwise_components_from_bundle(
 ) -> dict[str, np.ndarray]:
     """Return calibrated components with Mahalanobis and session-gap features guaranteed present."""
 
+    covariance_epsilon = _finite_positive_covariance_epsilon(covariance_epsilon)
     components = _ORIGINAL_PAIRWISE_COMPONENTS_FROM_BUNDLE(
         bundle,
         covariance_epsilon=covariance_epsilon,
@@ -153,8 +154,7 @@ def _pairwise_covariance_shape_components(
         raise ValueError("covariances_self must have shape (2, 2, n_roi)")
     if covariances_other.ndim != 3 or covariances_other.shape[:2] != (2, 2):
         raise ValueError("covariances_other must have shape (2, 2, n_roi)")
-    if epsilon <= 0.0:
-        raise ValueError("epsilon must be strictly positive")
+    epsilon = _finite_positive_covariance_epsilon(epsilon)
     n_self = covariances_self.shape[2]
     n_other = covariances_other.shape[2]
     if n_self == 0 or n_other == 0:
@@ -188,6 +188,18 @@ def _pairwise_covariance_shape_components(
             neginf=0.0,
         ),
     )
+
+
+def _finite_positive_covariance_epsilon(value: Any) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("covariance_epsilon must be finite and strictly positive")
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("covariance_epsilon must be finite and strictly positive") from exc
+    if not np.isfinite(numeric) or numeric <= 0.0:
+        raise ValueError("covariance_epsilon must be finite and strictly positive")
+    return numeric
 
 
 _calibrated_costs._pairwise_covariance_shape_components = (  # pylint: disable=protected-access
