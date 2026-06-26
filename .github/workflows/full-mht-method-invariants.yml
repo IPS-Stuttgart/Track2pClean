@@ -67,6 +67,7 @@ jobs:
             tests/test_full_mht_history_dynamics_integration.py \
             tests/test_full_mht_history_dynamics_promotion_gate.py \
             tests/test_full_mht_identity_history_bundle_contract.py \
+            tests/test_full_mht_identity_history_bundle_decision.py \
             tests/test_full_mht_identity_history_candidate_manifest.py \
             tests/test_full_mht_identity_history_completion_manifest.py \
             tests/test_full_mht_identity_history_decision.py \
