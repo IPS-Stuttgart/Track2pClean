@@ -51,6 +51,24 @@ full MHT beam improves complete-track F1 while greedy remains pairwise-good
 This witness does not promote the real-data row by itself.  It only protects the
 claim that the MHT beam can be load-bearing when identity histories conflict.
 
+## Local-Context Probe
+
+The branch now includes a frozen local-neighborhood deformation probe:
+
+```text
+FullMHTLocalContext000
+FullMHTLocalContext025
+FullMHTLocalContext050
+FullMHTLocalContext100
+```
+
+These rows keep the same FullMHT prior setup and sweep only
+`local_deformation_weight`.  The probe asks whether a label-free neighborhood
+coherence term helps independently of the later calibrated identity-history
+bundle.  Treat it as a model-layer probe, not as a promotion gate for
+`FullMHTIdentityHistory` until the calibrated-likelihood path also exposes a true
+zero-local-context ablation.
+
 ## Complete-History Objective Probe
 
 The identity-history candidate is not silently changed by this note.  A separate
@@ -75,8 +93,10 @@ without pairwise-F1 regression.  A single winning weight is treated as explorato
 | `benchmarks/full_mht_identity_history_candidate_manifest.json` | canonical comparison against Track2p, prior-only FullMHT, prior-survival, no-prior continuation, and greedy identity-history |
 | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | immediate-neighborhood sensitivity around survival weight, no-prior continuation weight, and growth-history weight |
 | `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
+| `benchmarks/full_mht_local_context_probe_manifest.json` | local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
 | `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
 | `test_track2p_policy_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness |
+| `full_mht_local_context_decision.py` | interprets the local-neighborhood deformation probe |
 | `full_mht_identity_history_decision.py` | interprets the canonical comparison table |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
 | `full_mht_terminal_completion_decision.py` | interprets the terminal-completion probe, with row-name overrides for identity-history rows |
@@ -124,6 +144,8 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_identity_history_decision.py \
   tests/test_full_mht_identity_history_promotion_gate.py \
   tests/test_full_mht_terminal_completion_decision.py \
+  tests/test_full_mht_local_context_manifest.py \
+  tests/test_full_mht_local_context_decision.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_full_mht_exposure_audit.py
@@ -138,6 +160,17 @@ mkdir -p "$IDH"
 "$PY" -m bayescatrack.experiments.full_mht_identity_history_decision \
   "$IDH/full_mht_identity_history/full_mht_identity_history_comparison.csv" \
   --output "$IDH/full_mht_identity_history_decision.md"
+
+LOCAL="$REPO/results/full_mht_local_context_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$LOCAL"
+"$PY" -m bayescatrack benchmark suite \
+  benchmarks/full_mht_local_context_probe_manifest.json \
+  --output-dir "$LOCAL" \
+  --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_local_context_decision \
+  "$LOCAL/full_mht_local_context/full_mht_local_context_comparison.csv" \
+  --output "$LOCAL/full_mht_local_context_decision.md"
 
 SENS="$REPO/results/full_mht_identity_history_sensitivity_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$SENS"
@@ -217,6 +250,8 @@ mkdir -p "$EXPOSURE"
 | `not_promotable_manifest` | no real-data proof that MHT history search beats greedy local selection |
 | `not_promotable_sensitivity` | likely knife-edge or single-setting result |
 | `not_promotable_broad_exposure` | model layer fires too broadly on label-free subjects |
+| `history_dynamics_stable_gain` | local context or another dynamics probe shows stable complete-track gain without pairwise loss |
+| `history_dynamics_single_weight_gain` | layer probe is exploratory, not promotable |
 | `terminal_completion_stable_gain` | terminal complete-history objective can be considered for the combined row |
 | `terminal_completion_single_weight_gain` | terminal objective is exploratory, not promotable |
 | `terminal_completion_ties_baseline` | terminal objective supports the story but does not improve the row |
