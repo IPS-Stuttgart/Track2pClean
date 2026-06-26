@@ -1,9 +1,11 @@
 """Decision helper for FullMHT manifest comparison outputs.
 
-The FullMHT method story depends on two separate questions:
+The FullMHT method story depends on three separate questions:
 
-* does the full beam beat the greedy beam-width-1 ablation on complete-track F1
-  with no pairwise-F1 loss, showing a real identity-history search advantage?
+* does a full beam beat the matching greedy beam-width-1 ablation on complete-track
+  F1 with no pairwise-F1 loss, showing a real identity-history search advantage?
+* does the fixed prior-veto row remain a positive FullMHT-owned scan-assignment
+  result when compared with its own greedy ablation?
 * does the calibrated prior-survival row match or improve the fixed prior-veto
   hazard, making the row less hand-gated?
 
@@ -51,7 +53,9 @@ class FullMHTDecisionConfig:
     beam: str = "FullMHTPrior2"
     greedy: str = "FullMHTGreedyPrior2"
     prior_veto: str = "FullMHTPriorVetoScaled"
+    greedy_prior_veto: str = "FullMHTGreedyPriorVetoScaled"
     prior_survival: str = "FullMHTPriorSurvival"
+    greedy_prior_survival: str = "FullMHTGreedyPriorSurvival"
     tolerance: float = 1e-12
 
 
@@ -76,7 +80,15 @@ def evaluate_full_mht_manifest_decision(
 
     cfg = config or FullMHTDecisionConfig()
     by_approach = _rows_by_approach(rows)
-    required = (cfg.track2p, cfg.beam, cfg.greedy, cfg.prior_veto, cfg.prior_survival)
+    required = (
+        cfg.track2p,
+        cfg.beam,
+        cfg.greedy,
+        cfg.prior_veto,
+        cfg.greedy_prior_veto,
+        cfg.prior_survival,
+        cfg.greedy_prior_survival,
+    )
     missing = [name for name in required if name not in by_approach]
     if missing:
         return {
@@ -85,8 +97,18 @@ def evaluate_full_mht_manifest_decision(
             "recommendation": "rerun manifest with all canonical FullMHT rows",
         }
 
-    beam_vs_greedy = _delta_block(
-        by_approach[cfg.beam], by_approach[cfg.greedy], prefix="beam_minus_greedy"
+    base_beam_vs_greedy = _delta_block(
+        by_approach[cfg.beam], by_approach[cfg.greedy], prefix="base_beam_minus_greedy"
+    )
+    veto_beam_vs_greedy = _delta_block(
+        by_approach[cfg.prior_veto],
+        by_approach[cfg.greedy_prior_veto],
+        prefix="veto_beam_minus_greedy",
+    )
+    survival_beam_vs_greedy = _delta_block(
+        by_approach[cfg.prior_survival],
+        by_approach[cfg.greedy_prior_survival],
+        prefix="survival_beam_minus_greedy",
     )
     veto_vs_beam = _delta_block(
         by_approach[cfg.prior_veto], by_approach[cfg.beam], prefix="veto_minus_beam"
@@ -102,20 +124,47 @@ def evaluate_full_mht_manifest_decision(
         prefix="survival_minus_track2p",
     )
 
-    history_result = _history_result(beam_vs_greedy, tolerance=float(cfg.tolerance))
+    base_history_result = _history_result(
+        base_beam_vs_greedy,
+        prefix="base_beam_minus_greedy",
+        tolerance=float(cfg.tolerance),
+    )
+    veto_history_result = _history_result(
+        veto_beam_vs_greedy,
+        prefix="veto_beam_minus_greedy",
+        tolerance=float(cfg.tolerance),
+    )
+    survival_history_result = _history_result(
+        survival_beam_vs_greedy,
+        prefix="survival_beam_minus_greedy",
+        tolerance=float(cfg.tolerance),
+    )
+    candidate_history_result = _candidate_history_result(
+        veto_history_result,
+        survival_history_result,
+    )
     survival_result = _survival_result(
         survival_vs_veto,
         survival_vs_track2p,
         tolerance=float(cfg.tolerance),
     )
-    recommendation = _recommendation(history_result, survival_result)
+    recommendation = _recommendation(
+        candidate_history_result,
+        survival_result,
+        veto_history_result,
+    )
     return {
         "status": "complete",
         "rows": list(required),
-        "history_search_result": history_result,
+        "history_search_result": candidate_history_result,
+        "base_history_search_result": base_history_result,
+        "prior_veto_history_search_result": veto_history_result,
+        "prior_survival_history_search_result": survival_history_result,
         "prior_survival_result": survival_result,
         "recommendation": recommendation,
-        **beam_vs_greedy,
+        **base_beam_vs_greedy,
+        **veto_beam_vs_greedy,
+        **survival_beam_vs_greedy,
         **veto_vs_beam,
         **survival_vs_veto,
         **survival_vs_track2p,
@@ -141,6 +190,9 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         "# FullMHT Manifest Decision",
         "",
         f"History-search result: `{decision['history_search_result']}`",
+        f"Base history-search result: `{decision['base_history_search_result']}`",
+        f"Prior-veto history-search result: `{decision['prior_veto_history_search_result']}`",
+        f"Prior-survival history-search result: `{decision['prior_survival_history_search_result']}`",
         f"Prior-survival result: `{decision['prior_survival_result']}`",
         f"Recommendation: {decision['recommendation']}",
         "",
@@ -148,7 +200,9 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         "| --- | ---: | ---: |",
     ]
     for prefix in (
-        "beam_minus_greedy",
+        "base_beam_minus_greedy",
+        "veto_beam_minus_greedy",
+        "survival_beam_minus_greedy",
         "veto_minus_beam",
         "survival_minus_veto",
         "survival_minus_track2p",
@@ -203,9 +257,14 @@ def _metric(row: Mapping[str, Any], metric: MetricName) -> float:
         raise ValueError(f"Comparison metric {metric!r} is not numeric: {row[metric]!r}") from exc
 
 
-def _history_result(deltas: Mapping[str, float], *, tolerance: float) -> str:
-    pairwise = float(deltas["beam_minus_greedy_pairwise_f1_micro"])
-    complete = float(deltas["beam_minus_greedy_complete_track_f1_micro"])
+def _history_result(
+    deltas: Mapping[str, float],
+    *,
+    prefix: str,
+    tolerance: float,
+) -> str:
+    pairwise = float(deltas[f"{prefix}_pairwise_f1_micro"])
+    complete = float(deltas[f"{prefix}_complete_track_f1_micro"])
     if pairwise < -tolerance or complete < -tolerance:
         return "beam_regression_vs_greedy"
     if complete > tolerance:
@@ -213,6 +272,18 @@ def _history_result(deltas: Mapping[str, float], *, tolerance: float) -> str:
     if pairwise > tolerance:
         return "beam_pairwise_only_advantage"
     return "beam_ties_greedy"
+
+
+def _candidate_history_result(veto_result: str, survival_result: str) -> str:
+    if survival_result == "beam_complete_history_advantage":
+        return "prior_survival_complete_history_advantage"
+    if veto_result == "beam_complete_history_advantage":
+        return "fixed_veto_complete_history_advantage"
+    if "beam_regression_vs_greedy" in {veto_result, survival_result}:
+        return "candidate_regression_vs_greedy"
+    if "beam_pairwise_only_advantage" in {veto_result, survival_result}:
+        return "candidate_pairwise_only_advantage"
+    return "candidate_ties_greedy"
 
 
 def _survival_result(
@@ -240,25 +311,31 @@ def _survival_result(
     return "survival_not_promotable"
 
 
-def _recommendation(history_result: str, survival_result: str) -> str:
-    if history_result == "beam_regression_vs_greedy":
-        return "do not promote FullMHT; investigate beam scoring regression"
-    if history_result == "beam_ties_greedy":
-        return "keep FullMHT exploratory unless another real-data history conflict is found"
-    if history_result == "beam_pairwise_only_advantage":
-        return "keep FullMHT exploratory; beam gain is not a complete-history advantage"
+def _recommendation(
+    candidate_history_result: str,
+    survival_result: str,
+    veto_history_result: str,
+) -> str:
+    if candidate_history_result == "candidate_regression_vs_greedy":
+        return "do not promote FullMHT; investigate candidate beam scoring regression"
+    if candidate_history_result == "candidate_ties_greedy":
+        return "keep FullMHT exploratory; candidate rows do not beat greedy history search"
+    if candidate_history_result == "candidate_pairwise_only_advantage":
+        return "keep FullMHT exploratory; candidate beam gain is not complete-history advantage"
     if survival_result in {
         "survival_improves_fixed_veto",
         "survival_ties_fixed_veto",
-    }:
-        return "promote candidate only after no-GT, exposure, and sensitivity gates pass"
-    return "keep prior-survival exploratory; fixed prior-veto remains the positive FullMHT row"
+    } and candidate_history_result == "prior_survival_complete_history_advantage":
+        return "promote prior-survival candidate only after no-GT, exposure, and sensitivity gates pass"
+    if veto_history_result == "beam_complete_history_advantage":
+        return "keep prior-survival exploratory; fixed prior-veto is the current FullMHT history-search row"
+    return "keep FullMHT exploratory until a candidate row shows complete-history beam advantage"
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m bayescatrack.experiments.full_mht_manifest_decision",
-        description="Summarize FullMHT manifest comparison rows into promotion decisions.",
+        description="Summarize canonical FullMHT manifest comparison rows.",
     )
     parser.add_argument("comparison_csv", type=Path)
     parser.add_argument("--output", type=Path, default=None)
