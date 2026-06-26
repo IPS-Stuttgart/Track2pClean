@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from bayescatrack.experiments.full_mht_terminal_completion_decision import (
+    TerminalCompletionDecisionConfig,
+    build_arg_parser,
     evaluate_terminal_completion_decision,
     format_decision_markdown,
 )
@@ -92,11 +94,61 @@ def test_terminal_completion_decision_rejects_pairwise_regression() -> None:
     assert decision["candidate_decisions"][0]["decision"] == "pairwise_regression"
 
 
+def test_terminal_completion_decision_accepts_custom_identity_history_rows() -> None:
+    rows = [
+        _row("Track2p", pairwise_micro=0.962, complete_micro=0.920),
+        _row("FullMHTIdentityHistory", pairwise_micro=0.965, complete_micro=0.932),
+        _row("FullMHTIdentityHistoryCompletion025", pairwise_micro=0.965, complete_micro=0.933),
+        _row("FullMHTIdentityHistoryCompletion050", pairwise_micro=0.965, complete_micro=0.934),
+        _row("FullMHTIdentityHistoryCompletion100", pairwise_micro=0.965, complete_micro=0.932),
+    ]
+
+    decision = evaluate_terminal_completion_decision(
+        rows,
+        config=TerminalCompletionDecisionConfig(
+            baseline="FullMHTIdentityHistory",
+            candidates=(
+                "FullMHTIdentityHistoryCompletion025",
+                "FullMHTIdentityHistoryCompletion050",
+                "FullMHTIdentityHistoryCompletion100",
+            ),
+        ),
+    )
+
+    assert decision["baseline"] == "FullMHTIdentityHistory"
+    assert decision["terminal_completion_result"] == "terminal_completion_stable_gain"
+    assert decision["best_candidate"] == "FullMHTIdentityHistoryCompletion050"
+
+
+def test_terminal_completion_decision_parser_accepts_row_overrides() -> None:
+    args = build_arg_parser().parse_args(
+        [
+            "comparison.csv",
+            "--baseline",
+            "FullMHTIdentityHistory",
+            "--candidate",
+            "FullMHTIdentityHistoryCompletion025",
+            "--candidate",
+            "FullMHTIdentityHistoryCompletion050",
+            "--candidate",
+            "FullMHTIdentityHistoryCompletion100",
+        ]
+    )
+
+    assert args.baseline == "FullMHTIdentityHistory"
+    assert args.candidates == [
+        "FullMHTIdentityHistoryCompletion025",
+        "FullMHTIdentityHistoryCompletion050",
+        "FullMHTIdentityHistoryCompletion100",
+    ]
+
+
 def test_terminal_completion_decision_markdown_is_compact() -> None:
     markdown = format_decision_markdown(
         evaluate_terminal_completion_decision(_probe_rows())
     )
 
     assert "# FullMHT Terminal Completion Decision" in markdown
+    assert "Baseline: `FullMHTPrior2`" in markdown
     assert "FullMHTTerminalCompletion050" in markdown
     assert "terminal_completion_stable_gain" in markdown
