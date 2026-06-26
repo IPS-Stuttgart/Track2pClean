@@ -71,6 +71,7 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_identity_history_scan_pruning_manifest.py \
   tests/test_full_mht_identity_history_scan_pruning_decision.py \
+  tests/test_full_mht_identity_history_scan_pruning_promotion_gate.py \
   tests/test_full_mht_scan_history_conflict_demo.py \
   tests/test_full_mht_scan_history_dynamics_integration.py \
   tests/test_full_mht_exposure_audit.py \
@@ -139,9 +140,14 @@ mkdir -p "$EXPOSURE"
   --output "$EXPOSURE/full_mht_identity_history_scan_pruning_exposure_050.csv" \
   --format csv \
   --progress
+
+"$PY" -m bayescatrack.experiments.full_mht_identity_history_scan_pruning_promotion_gate \
+  "$OUT/full_mht_identity_history_scan_pruning/full_mht_identity_history_scan_pruning_comparison.csv" \
+  "$EXPOSURE/full_mht_identity_history_scan_pruning_exposure_050.csv" \
+  --output "$OUT/full_mht_identity_history_scan_pruning_promotion_gate.md"
 ```
 
-Inspect the `ALL` row fields:
+Inspect the promotion gate first, then the exposure `ALL` row fields if it fails:
 
 ```text
 history_scan_motion_history_risk
@@ -159,11 +165,12 @@ benchmark point improves.
 
 | result | meaning |
 | --- | --- |
-| `scan_pruning_stable_complete_history_gain` | candidate for integration into the paper-facing identity-history row, after the main identity-history promotion gates and exposure audit pass |
+| `scan_pruning_stable_complete_history_gain` with `bounded_exposure` | candidate for integration into the paper-facing identity-history row, after the main identity-history promotion gates pass |
 | `scan_pruning_single_weight_gain` | exploratory; the effect is too knife-edge |
 | `scan_pruning_ties_identity_history` | useful method validation, not a better row |
 | `scan_pruning_pairwise_only_gain` | not a complete-history result |
 | `scan_pruning_regression_vs_identity_history` | do not promote; the add-on hurts the central row |
 | `scan_pruning_beam_regression_vs_greedy` | do not promote; the full beam is worse than its matching greedy row |
+| `broad_exposure` | do not promote; the add-on fires too broadly without labels |
 
 This probe is deliberately separate from the current central candidate. It lets the method become more history-aware without silently moving the target after seeing a benchmark table.
