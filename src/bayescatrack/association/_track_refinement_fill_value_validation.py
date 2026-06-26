@@ -1,9 +1,14 @@
-"""Strict validation for track-refinement missing-value sentinels.
+"""Strict validation for track-refinement missing-value sentinels and issue indices.
 
 Track-refinement helpers use ``fill_value`` as a missing-track sentinel while
 walking ROI rows and while materializing split fragments.  Non-negative sentinels
 collide with Suite2p ROI identifiers, and permissive ``int(...)`` coercions can
 turn booleans, strings, or fractional floats into misleading missing values.
+
+The split helper also consumes externally supplied ``TrackGeometryIssue`` objects.
+Their track/session fields select cut points, so malformed values must be rejected
+before the underlying implementation can silently coerce them with ``int(...)`` or
+ignore out-of-range entries.
 """
 
 from __future__ import annotations
@@ -70,10 +75,17 @@ def install_track_refinement_fill_value_validation() -> None:
             *,
             fill_value: Any = -1,
         ) -> Any:
-            return original_split(
-                track_rows,
+            normalized_fill_value = _normalize_fill_value(fill_value)
+            rows = module._validated_track_row_matrix(track_rows)  # pylint: disable=protected-access
+            issue_tuple = _validated_issue_tuple(
                 issues,
-                fill_value=_normalize_fill_value(fill_value),
+                n_tracks=rows.shape[0],
+                n_sessions=rows.shape[1],
+            )
+            return original_split(
+                rows,
+                issue_tuple,
+                fill_value=normalized_fill_value,
             )
 
         setattr(split_tracks_at_issues_with_fill_value_validation, _PATCH_MARKER, True)
@@ -83,6 +95,75 @@ def install_track_refinement_fill_value_validation() -> None:
             original_split,
         )
         module.split_tracks_at_issues = split_tracks_at_issues_with_fill_value_validation
+
+
+def _validated_issue_tuple(
+    issues: Any,
+    *,
+    n_tracks: int,
+    n_sessions: int,
+) -> tuple[Any, ...]:
+    try:
+        issue_tuple = tuple(issues)
+    except TypeError as exc:
+        raise ValueError("issues must be an iterable of TrackGeometryIssue entries") from exc
+
+    for issue in issue_tuple:
+        _normalize_bounded_issue_index(
+            _issue_field(issue, "track_index"),
+            name="issue.track_index",
+            upper_bound=n_tracks,
+            axis_name="tracks",
+        )
+        _normalize_bounded_issue_index(
+            _issue_field(issue, "session_index"),
+            name="issue.session_index",
+            upper_bound=n_sessions,
+            axis_name="sessions",
+        )
+    return issue_tuple
+
+
+def _issue_field(issue: Any, field_name: str) -> Any:
+    try:
+        return getattr(issue, field_name)
+    except AttributeError as exc:
+        raise ValueError(
+            "issues must contain track_index and session_index fields"
+        ) from exc
+
+
+def _normalize_bounded_issue_index(
+    value: Any,
+    *,
+    name: str,
+    upper_bound: int,
+    axis_name: str,
+) -> int:
+    integer_value = _normalize_issue_index(value, name=name)
+    if integer_value < 0 or integer_value >= upper_bound:
+        raise IndexError(
+            f"{name} {integer_value} out of bounds for {upper_bound} {axis_name}"
+        )
+    return integer_value
+
+
+def _normalize_issue_index(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (str, bytes, np.bytes_)):
+        raise ValueError(f"{name} must be an integer")
+
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        return int(numeric_value)
+
+    try:
+        return int(operator.index(value))
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
 
 
 def _normalize_fill_value(value: Any) -> int:

@@ -321,11 +321,12 @@ def build_track_rows_from_bundles(
         num_sessions=len(bundles) + 1,
     )
 
+    session_names = _session_names_from_bundles(bundles)
+    _validate_shared_session_roi_indices(bundles, session_names=session_names)
     match_results = solve_consecutive_bundle_linear_assignments(
         bundles,
         max_cost=max_cost,
     )
-    session_names = _session_names_from_bundles(bundles)
     if start_roi_indices is None:
         start_roi_indices = _bundle_roi_indices_for_session(
             bundles, start_session_index
@@ -385,6 +386,43 @@ def _session_names_from_bundles(bundles: Sequence[Any]) -> tuple[str, ...]:
             raise ValueError("bundles must refer to consecutive sessions in order")
         session_names.append(measurement_session_name)
     return tuple(session_names)
+
+
+def _validate_shared_session_roi_indices(
+    bundles: Sequence[Any],
+    *,
+    session_names: Sequence[str],
+) -> None:
+    """Ensure adjacent bundles agree on each shared session's ROI identities."""
+
+    for session_index, (left_bundle, right_bundle) in enumerate(
+        zip(bundles[:-1], bundles[1:], strict=True),
+        start=1,
+    ):
+        left_cost_matrix = _normalize_bundle_cost_matrix(left_bundle)
+        right_cost_matrix = _normalize_bundle_cost_matrix(right_bundle)
+        left_roi_indices = _normalize_bundle_roi_indices(
+            left_bundle.measurement_roi_indices,
+            "measurement_roi_indices",
+            expected_length=left_cost_matrix.shape[1],
+        )
+        right_roi_indices = _normalize_bundle_roi_indices(
+            right_bundle.reference_roi_indices,
+            "reference_roi_indices",
+            expected_length=right_cost_matrix.shape[0],
+        )
+        if not np.array_equal(np.sort(left_roi_indices), np.sort(right_roi_indices)):
+            raise ValueError(
+                "consecutive bundles disagree on ROI indices for shared session "
+                f"{session_names[session_index]!r}"
+            )
+
+
+def _normalize_bundle_cost_matrix(bundle: Any) -> np.ndarray:
+    cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
+    if cost_matrix.ndim != 2:
+        raise ValueError("bundle.pairwise_cost_matrix must be two-dimensional")
+    return cost_matrix
 
 
 def _bundle_roi_indices_for_session(
