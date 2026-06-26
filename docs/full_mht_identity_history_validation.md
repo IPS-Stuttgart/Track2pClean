@@ -96,7 +96,9 @@ FullMHTIdentityHistoryCompletion100
 These rows are identical to `FullMHTIdentityHistory` except for
 `terminal_incomplete_history_weight`.  The terminal objective can enter the
 paper-facing method only if at least two nearby weights improve complete-track F1
-without pairwise-F1 regression.  A single winning weight is treated as exploratory.
+without pairwise-F1 loss and no tested neighboring weight regresses pairwise or
+complete-track F1.  A single winning weight, or a win beside a regressing weight,
+is treated as exploratory.
 
 ## Frozen Artifacts
 
@@ -129,11 +131,12 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 - The no-GT leakage regression passes.
 
 Promote a terminal-completion variant only if the identity-history row itself
-passes those gates and the completion probe reports `terminal_completion_stable_gain`.
-If any gate fails, keep the row exploratory.  A tie against greedy means the
-benchmark still does not prove that MHT history search, rather than local scoring,
-is responsible for the result.  A loss against the no-local-context control means
-the calibrated local-neighborhood layer should be removed or kept exploratory.
+passes those gates and the completion probe reports `terminal_completion_stable_gain`,
+which requires a non-regressing immediate weight neighborhood.  If any gate fails,
+keep the row exploratory.  A tie against greedy means the benchmark still does
+not prove that MHT history search, rather than local scoring, is responsible for
+the result.  A loss against the no-local-context control means the calibrated
+local-neighborhood layer should be removed or kept exploratory.
 
 ## Server Bundle
 
@@ -268,7 +271,7 @@ mkdir -p "$EXPOSURE"
 | `not_promotable_broad_exposure` | model layer fires too broadly on label-free subjects |
 | `history_dynamics_stable_gain` | local context or another dynamics probe shows stable complete-track gain without pairwise loss |
 | `history_dynamics_single_weight_gain` | layer probe is exploratory, not promotable |
-| `terminal_completion_stable_gain` | terminal complete-history objective can be considered for the combined row |
+| `terminal_completion_stable_gain` | terminal complete-history objective can be considered only when the tested weight neighborhood has at least two gains and no pairwise or complete-track regression |
 | `terminal_completion_single_weight_gain` | terminal objective is exploratory, not promotable |
 | `terminal_completion_ties_baseline` | terminal objective supports the story but does not improve the row |
 | `incomplete` | rerun the missing manifest, sensitivity, exposure, or no-GT test artifact |
