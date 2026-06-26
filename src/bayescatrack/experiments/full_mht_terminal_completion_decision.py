@@ -259,16 +259,16 @@ def _terminal_result(
     n_complete_regressions: int,
     n_candidates: int,
 ) -> str:
+    if n_pairwise_regressions > 0:
+        return "terminal_completion_pairwise_regression"
+    if n_complete_regressions > 0:
+        return "terminal_completion_complete_regression"
     if n_viable >= 2:
         return "terminal_completion_stable_gain"
     if n_viable == 1:
         return "terminal_completion_single_weight_gain"
     if n_ties == n_candidates:
         return "terminal_completion_ties_baseline"
-    if n_pairwise_regressions > 0:
-        return "terminal_completion_pairwise_regression"
-    if n_complete_regressions > 0:
-        return "terminal_completion_complete_regression"
     return "terminal_completion_not_promotable"
 
 
