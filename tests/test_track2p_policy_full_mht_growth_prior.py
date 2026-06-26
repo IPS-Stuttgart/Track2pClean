@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import inspect
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
-from types import SimpleNamespace
 
 
 pytest.importorskip("pyrecest")
@@ -563,6 +565,28 @@ def test_full_mht_edge_score_applies_prior_veto_penalty(monkeypatch):
     )
 
     assert with_prior == pytest.approx(without_prior + 12.0 - 20.0)
+
+
+def test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns():
+    forbidden = {
+        "edge_status_against_gt",
+        "pairwise_delta_if_removed",
+        "complete_delta_if_removed",
+        "manual_gt",
+        "manual-gt",
+        "GROUND_TRUTH",
+    }
+    scoring_functions = (
+        full_mht._edge_score,
+        full_mht._track2p_prior_edge_risk,
+        full_mht._track2p_prior_veto_reason,
+        full_mht._selected_edge_summary,
+    )
+
+    source = "\n".join(inspect.getsource(function) for function in scoring_functions)
+
+    for token in forbidden:
+        assert token not in source
 
 
 def test_full_mht_calibrated_likelihood_rewards_anchor_like_edges():

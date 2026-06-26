@@ -201,3 +201,46 @@ a strong prior but gives low survival likelihood to a narrowly defined suspiciou
 prior edge. Do not call it final yet. The scale-aligned gate was informed by the
 same benchmark ledger, so it needs a reproducibility bundle, no-GT-leakage test,
 non-GT exposure audit, and a small threshold stability table before promotion.
+
+### Sensitivity and No-GT Check
+
+The prior-veto scoring path now has a no-GT-leakage regression:
+
+```text
+test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
+```
+
+It guards the FullMHT scoring helpers against audit-only fields such as
+`edge_status_against_gt`, `pairwise_delta_if_removed`, and
+`complete_delta_if_removed`. A clean server clone plus the patch passed the
+focused Python 3.12 check:
+
+```text
+2 passed in 0.49s
+```
+
+Output directory:
+
+`/home/florianpfaff/codex-runs/BayesCaTrack/results/full_mht_prior_veto_sensitivity_20260626_023423`
+
+The small sensitivity bundle reused the Track2p and FullMHTPrior2 controls and
+tested immediate threshold neighbors around the scale-aligned prior-veto pocket:
+
+| row | changed gate | missed prior successors | non-prior continuations | pairwise F1 micro | complete-track F1 micro |
+| --- | --- | ---: | ---: | ---: | ---: |
+| VetoM25Reg035040Cell065 | baseline scaled pocket | 1 | 0 | 0.965919 | 0.932203 |
+| VetoM20Reg035040Cell065 | Mahalanobis min 2.0 | 1 | 0 | 0.965919 | 0.932203 |
+| VetoM30Reg035040Cell065 | Mahalanobis min 3.0 | 0 | 0 | 0.965116 | 0.924370 |
+| VetoM25Reg033042Cell065 | registered IoU 0.33..0.42 | 1 | 0 | 0.965919 | 0.932203 |
+| VetoM25Reg035040Cell070 | weak-endpoint cap 0.70 | 1 | 0 | 0.965919 | 0.932203 |
+
+All positive neighbors missed only one prior successor in `jm046`; none selected
+non-prior continuations or switched away from a Track2p prior successor. The
+too-strict Mahalanobis threshold turned the hazard off and returned exactly to
+the Track2p/FullMHTPrior2 control.
+
+Interpretation: the result is not a single exact-threshold spike, but the plateau
+is still small and tied to the FullMHT growth-residual scale. This is promising
+enough to keep developing as the first "FullMHT-owned" method row, but promotion
+still requires exposure on all Track2p-style subjects and a manifest-level
+comparison against the residual-MHT and teacher-assisted rows.
