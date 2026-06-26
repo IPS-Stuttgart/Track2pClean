@@ -46,6 +46,7 @@ exposure artifacts prove that the method does something useful and stable.
 | Terminal complete-history objective | implemented | `benchmarks/full_mht_terminal_completion_probe_manifest.json` | run as complete-objective probe |
 | Combined identity-history row | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_candidate_manifest.json` | current paper-facing candidate |
 | Combined identity-history sensitivity | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | required before promotion |
+| Subject-support gate | implemented | `full_mht_identity_history_subject_support_decision.py` | requires `stable_subject_support`; `weak_subject_support` blocks promotion |
 | Combined scan-history pruning add-on | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_scan_pruning_manifest.json` | can enter only if full beam beats matching greedy at multiple nearby weights |
 | Combined terminal-completion add-on | frozen, not yet benchmarked | `benchmarks/full_mht_identity_history_completion_manifest.json` | can enter only if stable and non-regressing |
 | Bundle decision guardrail | implemented | `full_mht_identity_history_bundle_decision.py` | requires `promotable_core_method` with `complete_core_evidence`; `inconsistent_core_evidence` blocks promotion |
@@ -95,6 +96,12 @@ The candidate must not fall below this control on any reported pairwise or
 complete-track micro/macro metric; otherwise the local-neighborhood term has not
 earned its place in the method.
 
+The subject-support decision then checks the raw subject-level rows from the same
+manifest.  Promotion requires complete-track gain over the matching greedy row in
+at least two subjects, with no subject-level pairwise or complete-track
+regression against the greedy row or required controls.  This prevents a single
+subject from carrying an aggregate gain while another subject silently loses.
+
 A separate probe tests whether scan-time history pruning should be added to the
 combined method:
 
@@ -136,6 +143,7 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | --- | --- |
 | Manifest comparison | `FullMHTIdentityHistory` beats `FullMHTGreedyIdentityHistory` on complete-track F1 micro with no regression in pairwise or complete-track micro/macro F1 |
 | Required controls | `FullMHTIdentityHistory` does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, `FullMHTNoPriorContinuation100`, or `FullMHTIdentityHistoryNoLocalContext` on any reported pairwise or complete-track micro/macro metric |
+| Subject support | `full_mht_identity_history_subject_support_decision.py` reports `stable_subject_support`, not `weak_subject_support` or `subject_metric_regression` |
 | Conflict witness | constructed FullMHT-vs-greedy witness passes and selected paths remain unchanged when only the evaluation reference is altered |
 | Method-layer invariants | calibrated likelihood changes scan assignment from local-overlap-only behavior; no-prior continuation likelihood can choose continuation over death; growth-history prediction can flip a scan assignment to a coherent history; scan-history pruning rejects a locally attractive but history-incoherent continuation |
 | Sensitivity | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` reports `stable_plateau`, with each passing variant non-regressing on all reported micro/macro metrics |
@@ -147,9 +155,10 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants |
 
 If the identity-history beam ties its greedy row, regresses on any reported
-metric, or improves only pairwise F1, the benchmark does not yet prove a
-complete-history search advantage.  In that case FullMHT remains an architecture
-and constructed-conflict story, not the headline real-data method row.
+metric, improves only pairwise F1, or is supported by only one subject, the
+benchmark does not yet prove a complete-history search advantage.  In that case
+FullMHT remains an architecture and constructed-conflict story, not the headline
+real-data method row.
 
 ## Non-Promotion Conditions
 
@@ -159,6 +168,8 @@ Do not present FullMHT as a final method if any of the following remain true:
 - The candidate row ties or loses to its matching greedy ablation.
 - The candidate row is worse than a required control on any reported pairwise or
   complete-track micro/macro F1 metric, including the no-local-context control.
+- The subject-support decision reports `weak_subject_support`,
+  `subject_metric_regression`, or `no_subject_complete_gain`.
 - The sensitivity neighborhood is a single-weight spike or hides a macro-metric
   regression.
 - The exposure audit shows broad non-prior continuations, broad prior-survival
