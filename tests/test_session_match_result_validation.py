@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.matching import SessionMatchResult
 
 
@@ -33,6 +32,25 @@ def test_session_match_result_rejects_boolean_positions():
 def test_session_match_result_rejects_nonfinite_costs():
     with pytest.raises(ValueError, match="costs"):
         _valid_match_result(costs=np.asarray([np.nan], dtype=float))
+
+
+@pytest.mark.parametrize(
+    "costs",
+    [
+        [True],
+        [np.bool_(False)],
+        np.asarray([True], dtype=bool),
+        np.asarray([np.bool_(False)], dtype=object),
+    ],
+)
+def test_session_match_result_rejects_boolean_costs(costs):
+    with pytest.raises(ValueError, match="finite numeric assignment costs"):
+        _valid_match_result(costs=costs)
+
+
+def test_session_match_result_accepts_numeric_cost_strings():
+    result = _valid_match_result(costs=["1.25"])
+    np.testing.assert_allclose(result.costs, np.asarray([1.25]))
 
 
 def test_session_match_result_normalizes_integer_like_arrays():

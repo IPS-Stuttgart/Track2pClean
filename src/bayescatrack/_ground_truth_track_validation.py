@@ -30,7 +30,9 @@ def install_ground_truth_track_validation() -> None:
         if tracks.ndim != 2:
             raise ValueError("tracks must have shape (n_tracks, n_sessions)")
         if tracks.shape[1] != len(session_names):
-            raise ValueError("tracks second dimension must equal the number of session names")
+            raise ValueError(
+                "tracks second dimension must equal the number of session names"
+            )
         if len(session_names) == 0:
             raise ValueError("session_names must not be empty")
         object.__setattr__(self, "session_names", session_names)

@@ -9,7 +9,9 @@ from bayescatrack.matching import (
 
 
 class _Bundle:
-    def __init__(self, costs, *, reference_roi_indices=None, measurement_roi_indices=None):
+    def __init__(
+        self, costs, *, reference_roi_indices=None, measurement_roi_indices=None
+    ):
         self.pairwise_cost_matrix = np.asarray(costs, dtype=float)
         self.reference_session_name = "s1"
         self.measurement_session_name = "s2"

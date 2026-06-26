@@ -18,6 +18,7 @@ components for calibration, error taxonomy and ablations.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import operator
 from typing import Any
 
 import numpy as np
@@ -35,14 +36,10 @@ class CandidatePruningConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        if self.top_k_per_roi is not None and int(self.top_k_per_roi) <= 0:
-            raise ValueError("top_k_per_roi must be positive or None")
-        if self.gate_margin is not None:
-            margin = float(self.gate_margin)
-            if not np.isfinite(margin) or margin < 0.0:
-                raise ValueError("gate_margin must be a finite non-negative value")
-        if not np.isfinite(self.large_cost) or self.large_cost <= 0.0:
-            raise ValueError("large_cost must be a positive finite value")
+        _normalize_optional_positive_int(self.top_k_per_roi, name="top_k_per_roi")
+        _normalize_bool(self.include_column_top_k, name="include_column_top_k")
+        _normalize_optional_nonnegative_float(self.gate_margin, name="gate_margin")
+        _normalize_positive_float(self.large_cost, name="large_cost")
 
 
 def install_advanced_roi_components() -> None:
@@ -90,7 +87,7 @@ def install_advanced_roi_components() -> None:
         large_cost = float(kwargs.get("large_cost", 1.0e6))
         pruning = CandidatePruningConfig(
             top_k_per_roi=candidate_top_k_per_roi,
-            include_column_top_k=bool(candidate_include_column_top_k),
+            include_column_top_k=candidate_include_column_top_k,
             gate_margin=candidate_gate_margin,
             large_cost=large_cost,
         )
@@ -438,14 +435,16 @@ def candidate_mask_from_cost_matrix(
 ) -> np.ndarray:
     """Return a sparse candidate mask using row/column top-k and optional margins."""
 
+    top_k = _normalize_optional_positive_int(top_k, name="top_k")
+    include_columns = _normalize_bool(include_columns, name="include_columns")
+    gate_margin = _normalize_optional_nonnegative_float(gate_margin, name="gate_margin")
+    large_cost = _normalize_positive_float(large_cost, name="large_cost")
+
     costs = np.asarray(cost_matrix, dtype=float)
     if costs.ndim != 2:
         raise ValueError("cost_matrix must be two-dimensional")
     admitted = np.isfinite(costs) & (costs < large_cost)
     if top_k is not None:
-        top_k = int(top_k)
-        if top_k <= 0:
-            raise ValueError("top_k must be positive or None")
         top_mask = np.zeros(costs.shape, dtype=bool)
         for row_index in range(costs.shape[0]):
             candidates = np.flatnonzero(admitted[row_index])
@@ -460,9 +459,6 @@ def candidate_mask_from_cost_matrix(
                     top_mask[candidates[order[:top_k]], column_index] = True
         admitted &= top_mask
     if gate_margin is not None:
-        gate_margin = float(gate_margin)
-        if gate_margin < 0.0:
-            raise ValueError("gate_margin must be non-negative")
         safe = np.where(np.isfinite(costs), costs, large_cost)
         row_best = np.min(safe, axis=1, keepdims=True)
         col_best = np.min(safe, axis=0, keepdims=True)
@@ -512,6 +508,70 @@ def _finite_nonnegative(values: np.ndarray) -> np.ndarray:
         ),
         0.0,
     )
+
+
+def _normalize_optional_positive_int(value: Any, *, name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, (bool, np.bool_, str, bytes)):
+        raise ValueError(f"{name} must be a positive integer or None")
+    try:
+        normalized = operator.index(value)
+    except TypeError:
+        if not isinstance(value, (float, np.floating)):
+            raise ValueError(f"{name} must be a positive integer or None") from None
+        numeric = float(value)
+        if not np.isfinite(numeric) or not numeric.is_integer():
+            raise ValueError(f"{name} must be a positive integer or None")
+        normalized = int(numeric)
+    normalized = int(normalized)
+    if normalized <= 0:
+        raise ValueError(f"{name} must be a positive integer or None")
+    return normalized
+
+
+def _normalize_optional_nonnegative_float(value: Any, *, name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (bool, np.bool_, str, bytes)):
+        raise ValueError(f"{name} must be a finite non-negative value or None")
+    try:
+        array = np.asarray(value, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite non-negative value or None") from exc
+    if array.shape != ():
+        raise ValueError(f"{name} must be a finite non-negative value or None")
+    try:
+        normalized = float(array.item())
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite non-negative value or None") from exc
+    if not np.isfinite(normalized) or normalized < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value or None")
+    return normalized
+
+
+def _normalize_positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_, str, bytes)):
+        raise ValueError(f"{name} must be a positive finite value")
+    try:
+        array = np.asarray(value, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a positive finite value") from exc
+    if array.shape != ():
+        raise ValueError(f"{name} must be a positive finite value")
+    try:
+        normalized = float(array.item())
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a positive finite value") from exc
+    if not np.isfinite(normalized) or normalized <= 0.0:
+        raise ValueError(f"{name} must be a positive finite value")
+    return normalized
+
+
+def _normalize_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
 
 
 __all__ = [
