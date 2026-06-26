@@ -4,7 +4,7 @@ This module centralizes integer-like and finite-float validation for optional
 configuration paths that are often exercised from YAML/CLI sweeps. The
 validation is installed from :mod:`bayescatrack.__init__` so existing imports keep
 using the public advanced-component module while rejecting ambiguous values such
-as booleans, strings, fractional top-k counts, NaN and infinity.
+as booleans, fractional top-k counts, NaN and infinity.
 """
 
 from __future__ import annotations
@@ -16,6 +16,10 @@ from typing import Any, Callable
 import numpy as np
 
 from . import advanced_roi_components as _advanced_roi_components
+
+_PATCH_MARKER = "_bayescatrack_strict_config_validation_patch"
+_WRAPPER_MARKER = "_bayescatrack_strict_config_validation_wrapper"
+_ORIGINAL_ATTR = "_bayescatrack_strict_config_original"
 
 
 @dataclass(frozen=True)
@@ -55,35 +59,25 @@ class CandidatePruningConfig:
 def install_strict_config_validation() -> None:
     """Install idempotent strict validation hooks for advanced components."""
 
-    if getattr(
-        _advanced_roi_components,
-        "_bayescatrack_strict_config_validation_patch",
-        False,
-    ):
+    if getattr(_advanced_roi_components, _PATCH_MARKER, False) and _strict_hooks_active():
         return
-    original_candidate_mask = _advanced_roi_components.candidate_mask_from_cost_matrix
-    original_mask_shape_descriptors = _advanced_roi_components.mask_shape_descriptors
-    setattr(
-        candidate_mask_from_cost_matrix,
-        "_bayescatrack_strict_config_original",
-        original_candidate_mask,
+    original_candidate_mask = _current_original(
+        _advanced_roi_components.candidate_mask_from_cost_matrix
     )
-    setattr(
-        mask_shape_descriptors,
-        "_bayescatrack_strict_config_original",
-        original_mask_shape_descriptors,
+    original_mask_shape_descriptors = _current_original(
+        _advanced_roi_components.mask_shape_descriptors
     )
+    setattr(candidate_mask_from_cost_matrix, _ORIGINAL_ATTR, original_candidate_mask)
+    setattr(candidate_mask_from_cost_matrix, _WRAPPER_MARKER, True)
+    setattr(mask_shape_descriptors, _ORIGINAL_ATTR, original_mask_shape_descriptors)
+    setattr(mask_shape_descriptors, _WRAPPER_MARKER, True)
 
     _advanced_roi_components.CandidatePruningConfig = CandidatePruningConfig
     _advanced_roi_components.candidate_mask_from_cost_matrix = (
         candidate_mask_from_cost_matrix
     )
     _advanced_roi_components.mask_shape_descriptors = mask_shape_descriptors
-    setattr(
-        _advanced_roi_components,
-        "_bayescatrack_strict_config_validation_patch",
-        True,
-    )
+    setattr(_advanced_roi_components, _PATCH_MARKER, True)
 
 
 def candidate_mask_from_cost_matrix(
@@ -125,8 +119,31 @@ def mask_shape_descriptors(
     return original(masks, radial_bins=radial_bins)
 
 
+def _strict_hooks_active() -> bool:
+    return (
+        _advanced_roi_components.CandidatePruningConfig is CandidatePruningConfig
+        and getattr(
+            _advanced_roi_components.candidate_mask_from_cost_matrix,
+            _WRAPPER_MARKER,
+            False,
+        )
+        and getattr(
+            _advanced_roi_components.mask_shape_descriptors,
+            _WRAPPER_MARKER,
+            False,
+        )
+    )
+
+
+def _current_original(function: Callable[..., Any]) -> Callable[..., Any]:
+    original = getattr(function, _ORIGINAL_ATTR, None)
+    if original is None:
+        return function
+    return original
+
+
 def _original_function(wrapper: Callable[..., Any], name: str) -> Callable[..., Any]:
-    original = getattr(wrapper, "_bayescatrack_strict_config_original", None)
+    original = getattr(wrapper, _ORIGINAL_ATTR, None)
     if original is None:
         raise RuntimeError(
             f"strict config validation wrapper '{name}' is not installed"
