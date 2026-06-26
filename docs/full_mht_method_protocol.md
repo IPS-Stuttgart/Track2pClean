@@ -43,6 +43,31 @@ prior-edge survival likelihood row ready for manifest-level evaluation.
 | Manifest-level reproduction | manifest + adapter committed | `benchmarks/full_mht_prior_veto_manifest.json` | run on server |
 | Sensitivity/exposure bundle | committed, not yet run | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json`, `docs/full_mht_prior_survival_validation.md` | run on server |
 
+## Conflict Demonstrations
+
+`track2p-policy-full-mht-conflict-demo` now provides two controlled ablations:
+
+- `local-edge-dead-end`: a locally stronger first edge leads to a missed final
+  observation, while the MHT beam preserves the weaker first edge until the later
+  continuation makes the complete history win.
+- `pairwise-good-complete-bad`: the same principle is embedded among many stable
+  tracks, so the greedy result remains pairwise-good but creates a wrong complete
+  identity. FullMHT keeps the alternative middle edge alive and recovers the
+  complete path.
+
+The second scenario is the method-story invariant: pairwise-good local assignment
+can still be complete-track-bad, and a history beam can fix the identity history
+without reading GT labels. It is not benchmark evidence; it is the executable
+ablation that shows what the full MHT architecture can do that deterministic
+local selection cannot.
+
+Run it with:
+
+```bash
+python -m bayescatrack.experiments.track2p_policy_full_mht_conflict_demo \
+  --scenario pairwise-good-complete-bad
+```
+
 ## Current Positive Row
 
 The current positive non-teacher FullMHT row is:
