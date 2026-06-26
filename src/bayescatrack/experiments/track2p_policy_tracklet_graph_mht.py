@@ -71,7 +71,7 @@ class TrackletGraphConfig:
     join_min_area_ratio: float = 0.55
     join_max_centroid_distance: float = 14.0
     join_max_growth_residual: float = 8.0
-    join_score_frontier_min_edge_score: float = 0.0
+    join_score_frontier_min_edge_score: float = 0.35
     join_score_frontier_min_registered_iou: float = 0.30
     join_score_frontier_min_shifted_iou: float = 0.50
     join_score_frontier_min_area_ratio: float = 0.65
@@ -976,23 +976,35 @@ def _enumerate_paths(
     graph_config: TrackletGraphConfig,
 ) -> tuple[_PathHypothesis, ...]:
     completed: list[_PathHypothesis] = []
-    stack = [_PathHypothesis((int(start_id),), tuple(), 0.0)]
-    while stack:
-        path = stack.pop()
-        completed.append(path)
-        last_id = int(path.tracklet_ids[-1])
-        outgoing_edges = list(outgoing.get(last_id, ()))
-        for edge in outgoing_edges[: max(1, int(graph_config.edge_top_k))]:
-            target_id = int(edge.target_id)
-            if target_id in path.tracklet_ids:
-                continue
-            stack.append(
-                _PathHypothesis(
-                    tracklet_ids=path.tracklet_ids + (target_id,),
-                    edge_ids=path.edge_ids + ((int(edge.source_id), target_id),),
-                    score=float(path.score) + float(edge.score),
+    frontier = [_PathHypothesis((int(start_id),), tuple(), 0.0)]
+    beam_limit = max(1, int(graph_config.path_hypotheses)) * max(
+        1, int(graph_config.edge_top_k)
+    )
+    while frontier:
+        next_frontier: list[_PathHypothesis] = []
+        completed.extend(frontier)
+        for path in frontier:
+            last_id = int(path.tracklet_ids[-1])
+            outgoing_edges = list(outgoing.get(last_id, ()))
+            for edge in outgoing_edges[: max(1, int(graph_config.edge_top_k))]:
+                target_id = int(edge.target_id)
+                if target_id in path.tracklet_ids:
+                    continue
+                next_frontier.append(
+                    _PathHypothesis(
+                        tracklet_ids=path.tracklet_ids + (target_id,),
+                        edge_ids=path.edge_ids + ((int(edge.source_id), target_id),),
+                        score=float(path.score) + float(edge.score),
+                    )
                 )
+        next_frontier.sort(
+            key=lambda path: (
+                -float(path.score),
+                -int(len(path.tracklet_ids)),
+                tuple(int(tracklet_id) for tracklet_id in path.tracklet_ids),
             )
+        )
+        frontier = next_frontier[:beam_limit]
     completed.sort(
         key=lambda path: (
             -float(path.score),
@@ -1937,7 +1949,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--join-min-area-ratio", type=float, default=0.55)
     parser.add_argument("--join-max-centroid-distance", type=float, default=14.0)
     parser.add_argument("--join-max-growth-residual", type=float, default=8.0)
-    parser.add_argument("--join-score-frontier-min-edge-score", type=float, default=0.0)
+    parser.add_argument(
+        "--join-score-frontier-min-edge-score", type=float, default=0.35
+    )
     parser.add_argument(
         "--join-score-frontier-min-registered-iou", type=float, default=0.30
     )
