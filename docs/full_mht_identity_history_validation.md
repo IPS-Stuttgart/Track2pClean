@@ -53,7 +53,7 @@ claim that the MHT beam can be load-bearing when identity histories conflict.
 
 ## Local-Context Probe
 
-The branch now includes a frozen local-neighborhood deformation probe:
+The branch now includes a frozen calibrated local-neighborhood deformation probe:
 
 ```text
 FullMHTLocalContext000
@@ -62,12 +62,11 @@ FullMHTLocalContext050
 FullMHTLocalContext100
 ```
 
-These rows keep the same FullMHT prior setup and sweep only
-`local_deformation_weight`.  The probe asks whether a label-free neighborhood
-coherence term helps independently of the later calibrated identity-history
-bundle.  Treat it as a model-layer probe, not as a promotion gate for
-`FullMHTIdentityHistory` until the calibrated-likelihood path also exposes a true
-zero-local-context ablation.
+These rows keep the same FullMHT prior setup and calibrated association
+likelihood, sweeping only `local_deformation_weight`.  The manifest installs a
+local-context likelihood gate so `FullMHTLocalContext000` is a true calibrated
+no-local-context ablation.  The probe asks whether a label-free neighborhood
+coherence term helps independently of the later identity-history bundle.
 
 ## Complete-History Objective Probe
 
@@ -93,7 +92,8 @@ without pairwise-F1 regression.  A single winning weight is treated as explorato
 | `benchmarks/full_mht_identity_history_candidate_manifest.json` | canonical comparison against Track2p, prior-only FullMHT, prior-survival, no-prior continuation, and greedy identity-history |
 | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | immediate-neighborhood sensitivity around survival weight, no-prior continuation weight, and growth-history weight |
 | `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
-| `benchmarks/full_mht_local_context_probe_manifest.json` | local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
+| `benchmarks/full_mht_local_context_probe_manifest.json` | calibrated local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
+| `full_mht_local_context_integration.py` | gates the calibrated local-context likelihood feature when `local_deformation_weight <= 0` |
 | `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
 | `test_track2p_policy_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness |
 | `full_mht_local_context_decision.py` | interprets the local-neighborhood deformation probe |
@@ -146,6 +146,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_terminal_completion_decision.py \
   tests/test_full_mht_local_context_manifest.py \
   tests/test_full_mht_local_context_decision.py \
+  tests/test_full_mht_local_context_integration.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_full_mht_exposure_audit.py
