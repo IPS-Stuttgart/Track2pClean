@@ -81,6 +81,7 @@ def test_prior_survival_sensitivity_accepts_stable_plateau() -> None:
     assert sensitivity["sensitivity_result"] == "stable_plateau"
     assert sensitivity["n_passing_variants"] >= 4
     assert sensitivity["n_passing_weight_variants"] >= 2
+    assert "complete_track_f1_macro_delta_vs_base" in sensitivity["deltas"]["SurvivalW10Clip8"]
 
 
 def test_prior_survival_sensitivity_reports_missing_rows() -> None:
@@ -109,6 +110,34 @@ def test_prior_survival_sensitivity_rejects_pairwise_collapse() -> None:
 
     assert sensitivity["sensitivity_result"] == "pairwise_collapse"
     assert "SurvivalW10Clip8" in sensitivity["pairwise_collapse_variants"]
+
+
+def test_prior_survival_sensitivity_rejects_macro_pairwise_collapse() -> None:
+    rows = _sensitivity_rows()
+    for row in rows:
+        if row["approach"] == "SurvivalW10Clip8":
+            row["pairwise_f1_macro"] = "0.940"
+
+    sensitivity = evaluate_prior_survival_sensitivity(rows)
+
+    assert sensitivity["sensitivity_result"] == "pairwise_collapse"
+    assert "SurvivalW10Clip8" in sensitivity["pairwise_collapse_variants"]
+    assert sensitivity["deltas"]["SurvivalW10Clip8"]["pairwise_f1_micro_delta_vs_base"] == 0.0
+    assert sensitivity["deltas"]["SurvivalW10Clip8"]["pairwise_f1_macro_delta_vs_base"] < -0.01
+
+
+def test_prior_survival_sensitivity_rejects_macro_complete_regression() -> None:
+    rows = _sensitivity_rows()
+    for row in rows:
+        if row["approach"] == "SurvivalW10Clip8":
+            row["complete_track_f1_macro"] = "0.920"
+
+    sensitivity = evaluate_prior_survival_sensitivity(rows)
+
+    assert sensitivity["sensitivity_result"] == "central_candidate_not_stable"
+    assert "SurvivalW10Clip8" not in sensitivity["passing_variants"]
+    assert sensitivity["deltas"]["SurvivalW10Clip8"]["complete_track_f1_micro_delta_vs_base"] > 0.0
+    assert sensitivity["deltas"]["SurvivalW10Clip8"]["complete_track_f1_macro_delta_vs_base"] < 0.0
 
 
 def test_prior_survival_exposure_requires_survival_columns() -> None:
