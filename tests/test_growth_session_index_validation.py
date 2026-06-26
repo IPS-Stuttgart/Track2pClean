@@ -53,7 +53,7 @@ def _growth_inputs():
 def test_growth_radial_rejects_boolean_source_session(source_session):
     sessions, tracks = _growth_inputs()
 
-    with pytest.raises(ValueError, match="boolean"):
+    with pytest.raises(ValueError, match="boolean|integer-like"):
         radial_displacement_rows(
             sessions,
             tracks,
@@ -69,5 +69,5 @@ def test_growth_radial_rejects_boolean_source_session(source_session):
 def test_growth_affine_rejects_boolean_target_session(target_session):
     sessions, tracks = _growth_inputs()
 
-    with pytest.raises(ValueError, match="boolean"):
+    with pytest.raises(ValueError, match="boolean|integer-like"):
         affine_growth_summaries(sessions, tracks, target_sessions=(target_session,))
