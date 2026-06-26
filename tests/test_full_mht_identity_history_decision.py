@@ -60,6 +60,8 @@ def test_identity_history_decision_detects_complete_history_advantage() -> None:
     assert decision["history_search_result"] == "identity_complete_history_advantage"
     assert decision["mht_minus_local_pairwise_f1_micro"] == 0.0
     assert decision["mht_minus_local_complete_track_f1_micro"] > 0.0
+    assert decision["mht_minus_local_pairwise_f1_macro"] == 0.0
+    assert decision["mht_minus_local_complete_track_f1_macro"] > 0.0
     assert decision["prior_control_result"] == "identity_improves_prior"
     assert decision["track2p_control_result"] == "identity_improves_track2p"
     assert decision["no_local_context_control_result"] == "identity_improves_no_local_context"
@@ -92,6 +94,24 @@ def test_identity_history_decision_rejects_pairwise_only_gain() -> None:
     assert "not complete-track advantage" in decision["recommendation"]
 
 
+def test_identity_history_decision_rejects_macro_regression_against_greedy() -> None:
+    rows = _rows(identity_complete=0.934, greedy_complete=0.931)
+    for row in rows:
+        if row["approach"] == "FullMHTIdentityHistory":
+            row["complete_track_f1_macro"] = "0.900"
+        elif row["approach"] == "FullMHTGreedyIdentityHistory":
+            row["complete_track_f1_macro"] = "0.931"
+
+    decision = evaluate_identity_history_decision(rows)
+
+    assert decision["mht_minus_local_complete_track_f1_micro"] > 0.0
+    assert decision["mht_minus_local_complete_track_f1_macro"] < 0.0
+    assert decision["mht_vs_local_result"] == "identity_regression_vs_greedy"
+    assert decision["recommendation"] == (
+        "do not promote; identity-history beam regresses against matching greedy ablation"
+    )
+
+
 def test_identity_history_decision_rejects_required_control_regression() -> None:
     decision = evaluate_identity_history_decision(
         _rows(
@@ -106,6 +126,24 @@ def test_identity_history_decision_rejects_required_control_regression() -> None
 
     assert decision["history_search_result"] == "identity_complete_history_advantage"
     assert decision["prior_control_result"] == "identity_below_prior"
+    assert decision["recommendation"] == (
+        "keep exploratory; identity-history row loses to a required control"
+    )
+
+
+def test_identity_history_decision_rejects_macro_regression_against_control() -> None:
+    rows = _rows(identity_pairwise=0.966, identity_complete=0.934)
+    for row in rows:
+        if row["approach"] == "FullMHTIdentityHistory":
+            row["pairwise_f1_macro"] = "0.900"
+        elif row["approach"] == "Track2p":
+            row["pairwise_f1_macro"] = "0.965"
+
+    decision = evaluate_identity_history_decision(rows)
+
+    assert decision["identity_minus_track2p_pairwise_f1_micro"] > 0.0
+    assert decision["identity_minus_track2p_pairwise_f1_macro"] < 0.0
+    assert decision["track2p_control_result"] == "identity_below_track2p"
     assert decision["recommendation"] == (
         "keep exploratory; identity-history row loses to a required control"
     )
@@ -143,7 +181,7 @@ def test_identity_history_decision_rejects_no_local_context_regression() -> None
     )
 
 
-def test_identity_history_decision_markdown_is_compact() -> None:
+def test_identity_history_decision_markdown_reports_all_four_metrics() -> None:
     markdown = format_decision_markdown(evaluate_identity_history_decision(_rows()))
 
     assert "# FullMHT Identity-History Decision" in markdown
@@ -152,3 +190,5 @@ def test_identity_history_decision_markdown_is_compact() -> None:
     assert "identity_complete_history_advantage" in markdown
     assert "MHT minus local greedy" in markdown
     assert "identity minus no-local context" in markdown
+    assert "pairwise F1 macro delta" in markdown
+    assert "complete-track F1 macro delta" in markdown
