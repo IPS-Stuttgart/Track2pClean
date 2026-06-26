@@ -7,7 +7,7 @@ from bayescatrack.experiments import (
 )
 
 
-def test_prior_survival_runner_splits_survival_args_from_base_full_mht_args() -> None:
+def test_prior_survival_runner_splits_survival_args() -> None:
     base_argv, attrs = runner._split_survival_args(
         [
             "--data",
@@ -28,7 +28,7 @@ def test_prior_survival_runner_splits_survival_args_from_base_full_mht_args() ->
     assert attrs["track2p_prior_survival_min_examples_per_class"] == 3
 
 
-def test_prior_survival_runner_defaults_enable_canonical_survival_row() -> None:
+def test_prior_survival_runner_defaults_enable_canonical_row() -> None:
     base_argv, attrs = runner._split_survival_args(
         ["--data", "data-root", "--output", "out.csv"]
     )
