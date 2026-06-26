@@ -12,6 +12,7 @@ from bayescatrack.experiments import track2p_policy_full_mht_benchmark as base
 from bayescatrack.experiments import (
     track2p_policy_full_mht_history_consistency_benchmark as wrapper,
 )
+from bayescatrack.experiments import _full_mht_manifest_integration as full_mht_manifest
 from bayescatrack.experiments.benchmark_manifest import load_benchmark_manifest
 
 
@@ -51,6 +52,7 @@ def test_full_mht_history_consistency_manifest_fields_are_forwarded(tmp_path) ->
                     "runner": "track2p-full-mht-history-consistency",
                     "output": "history.csv",
                     "beam_width": 4,
+                    "no_prior_continuation_likelihood_weight": 0.5,
                     "history_consistency_weight": 1.25,
                     "history_consistency_min_history_edges": 3,
                     "history_consistency_joint_margin": 0.75,
@@ -66,6 +68,7 @@ def test_full_mht_history_consistency_manifest_fields_are_forwarded(tmp_path) ->
     assert run.runner_kwargs["threshold_method"] == "min"
     assert run.runner_kwargs["iou_distance_threshold"] == 12.0
     assert run.runner_kwargs["beam_width"] == 4
+    assert run.runner_kwargs["no_prior_continuation_likelihood_weight"] == 0.5
     assert run.runner_kwargs["history_consistency_weight"] == 1.25
     assert run.runner_kwargs["history_consistency_min_history_edges"] == 3
     assert run.runner_kwargs["history_consistency_joint_margin"] == 0.75
@@ -85,7 +88,7 @@ def test_full_mht_history_consistency_manifest_run_uses_patch_context(
         return [{"subject": "synthetic", "method": base.METHOD}]
 
     monkeypatch.setattr(
-        integration,
+        full_mht_manifest,
         "_run_track2p_policy_full_mht_rows",
         fake_full_mht_rows,
     )
