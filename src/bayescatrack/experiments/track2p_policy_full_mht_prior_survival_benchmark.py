@@ -10,6 +10,7 @@ normal command-line options.
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Sequence
 from typing import Any
 
@@ -171,7 +172,7 @@ def _attach_survival_attrs(config: Any, attrs: dict[str, float | int]) -> Any:
 def main(argv: list[str] | None = None) -> int:
     """Run FullMHT with calibrated prior-edge survival scoring enabled."""
 
-    raw_argv = list(argv or [])
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
     if any(arg in {"-h", "--help"} for arg in raw_argv):
         build_arg_parser().parse_args(raw_argv)
         return 0
