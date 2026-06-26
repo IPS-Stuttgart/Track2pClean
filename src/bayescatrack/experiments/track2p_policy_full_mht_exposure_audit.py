@@ -46,6 +46,10 @@ from bayescatrack.experiments.track2p_policy_full_mht_benchmark import (
     _track2p_prediction_for_subject,
     _track_edges,
 )
+from bayescatrack.experiments.track2p_policy_full_mht_prior_survival_benchmark import (
+    _SURVIVAL_FLOAT_OPTIONS,
+    _SURVIVAL_INT_OPTIONS,
+)
 
 METHOD = "track2p-policy-full-mht-exposure-audit"
 
@@ -231,6 +235,7 @@ def _history_totals(history: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
     totals.update(_history_growth_prediction_totals(history))
     totals.update(_history_no_prior_continuation_totals(history))
+    totals.update(_history_prior_survival_totals(history))
     return totals
 
 
@@ -308,6 +313,40 @@ def _history_no_prior_continuation_totals(
     }
 
 
+def _history_prior_survival_totals(
+    history: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    scored = 0
+    positive = 0
+    negative = 0
+    score_sum = 0.0
+    weighted_sum = 0.0
+    for item in history:
+        summaries = str(item.get("selected_edge_summaries", ""))
+        if not summaries:
+            continue
+        for summary in summaries.split(";"):
+            values = _summary_key_values(summary)
+            if "survival" not in values and "survival_weighted" not in values:
+                continue
+            scored += 1
+            score = _summary_float(values.get("survival"), 0.0)
+            weighted = _summary_float(values.get("survival_weighted"), 0.0)
+            if weighted > 0.0:
+                positive += 1
+            elif weighted < 0.0:
+                negative += 1
+            score_sum += score
+            weighted_sum += weighted
+    return {
+        "history_prior_survival_scored_edges": int(scored),
+        "history_prior_survival_positive_edges": int(positive),
+        "history_prior_survival_negative_edges": int(negative),
+        "history_prior_survival_score": float(score_sum),
+        "history_prior_survival_weighted_score": float(weighted_sum),
+    }
+
+
 def _summary_key_values(summary: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for part in str(summary).split("|"):
@@ -381,12 +420,17 @@ def _all_subjects_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "history_no_prior_continuation_scored_edges",
         "history_no_prior_continuation_positive_edges",
         "history_no_prior_continuation_negative_edges",
+        "history_prior_survival_scored_edges",
+        "history_prior_survival_positive_edges",
+        "history_prior_survival_negative_edges",
     ]
     float_keys = [
         "history_growth_prediction_penalty",
         "history_growth_prediction_weighted_penalty",
         "history_no_prior_continuation_score",
         "history_no_prior_continuation_weighted_score",
+        "history_prior_survival_score",
+        "history_prior_survival_weighted_score",
     ]
     output: dict[str, Any] = {"subject": "ALL"}
     for key in numeric_keys:
@@ -429,6 +473,20 @@ def _all_subjects_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     output["max_no_prior_continuation_abs_weighted_score_per_subject"] = max(
         (
             abs(float(row.get("history_no_prior_continuation_weighted_score", 0.0)))
+            for row in rows
+        ),
+        default=0.0,
+    )
+    output["max_prior_survival_negative_edges_per_subject"] = max(
+        (
+            int(row.get("history_prior_survival_negative_edges", 0))
+            for row in rows
+        ),
+        default=0,
+    )
+    output["max_prior_survival_abs_weighted_score_per_subject"] = max(
+        (
+            abs(float(row.get("history_prior_survival_weighted_score", 0.0)))
             for row in rows
         ),
         default=0.0,
@@ -523,6 +581,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=8.0,
     )
     parser.add_argument("--track2p-prior-miss-penalty", type=float, default=4.0)
+    for dest, flag, default, help_text in _SURVIVAL_FLOAT_OPTIONS:
+        parser.add_argument(
+            flag,
+            dest=dest,
+            type=float,
+            default=0.0 if dest == "track2p_prior_survival_weight" else default,
+            help=help_text,
+        )
+    for dest, flag, default, help_text in _SURVIVAL_INT_OPTIONS:
+        parser.add_argument(flag, dest=dest, type=int, default=default, help=help_text)
     parser.add_argument(
         "--terminal-incomplete-history-weight",
         type=float,
@@ -552,6 +620,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    if float(args.track2p_prior_survival_weight) > 0.0:
+        from bayescatrack.experiments.full_mht_prior_survival_integration import (
+            install_full_mht_prior_survival_scoring,
+        )
+
+        install_full_mht_prior_survival_scoring()
     if float(args.terminal_incomplete_history_weight) > 0.0:
         from bayescatrack.experiments.full_mht_terminal_completion_integration import (
             install_full_mht_terminal_completion_objective,
@@ -618,6 +692,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
         track2p_prior_miss_penalty=float(args.track2p_prior_miss_penalty),
     )
+    for dest, _flag, _default, _help in _SURVIVAL_FLOAT_OPTIONS:
+        object.__setattr__(mht_config, dest, float(getattr(args, dest)))
+    for dest, _flag, _default, _help in _SURVIVAL_INT_OPTIONS:
+        object.__setattr__(mht_config, dest, int(getattr(args, dest)))
     object.__setattr__(
         mht_config,
         "terminal_incomplete_history_weight",
