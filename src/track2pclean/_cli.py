@@ -58,8 +58,9 @@ def _handle_benchmark(args: list[str]) -> int:
         _build_benchmark_help_parser().parse_args(args)
         return 0
 
+    requested_command_name = args[0]
     command_name = _legacy_cli._BENCHMARK_ALIASES.get(  # pylint: disable=protected-access
-        args[0], args[0]
+        requested_command_name, requested_command_name
     )
     command = _legacy_cli._BENCHMARK_COMMANDS.get(  # pylint: disable=protected-access
         command_name
@@ -75,11 +76,11 @@ def _handle_benchmark(args: list[str]) -> int:
         module, "build_arg_parser"
     ):
         parser = module.build_arg_parser()
-        parser.prog = f"track2pclean benchmark {command_name}"
+        parser.prog = f"track2pclean benchmark {requested_command_name}"
         parser.parse_args(command_args)
         return 0
     return _run_with_program_name(
-        f"track2pclean benchmark {command_name}",
+        f"track2pclean benchmark {requested_command_name}",
         module.main,
         command_args,
     )
