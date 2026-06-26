@@ -1,19 +1,18 @@
 # FullMHT History Dynamics Objective, 2026-06-26
 
-The FullMHT prototype now has an opt-in terminal history-dynamics objective. It
-is not a residual cleanup rule. It asks whether a final seed-anchored identity
-history contains an edge that is an outlier relative to the other edges in the
-same history.
+The FullMHT prototype now has two opt-in history-dynamics objectives. They are
+not residual cleanup rules. They ask whether a seed-anchored identity history is
+internally coherent under label-free registration, growth, and local-deformation
+diagnostics.
 
 ## Motivation
 
 Pairwise-good tracking can still be complete-track-bad. A single locally
 plausible continuation can preserve pairwise scores while corrupting the full
-identity history. This objective gives FullMHT a label-free terminal reranking
-term for that failure mode: prefer the hypothesis whose whole history is more
-internally coherent.
+identity history. FullMHT should therefore reason over histories, not just over
+individual links.
 
-## Mechanism
+## Terminal Reranking
 
 Install hook:
 
@@ -42,9 +41,7 @@ computed by FullMHT:
 - growth Mahalanobis residual;
 - local-neighborhood deformation.
 
-The risk is a robust within-history outlier penalty. Low IoU outliers, high
-growth-residual outliers, high Mahalanobis outliers, high local-deformation
-outliers, and missing edge diagnostics increase risk. The terminal selector uses:
+The terminal selector uses:
 
 ```text
 adjusted_score = scan_assignment_score
@@ -55,9 +52,42 @@ adjusted_score = scan_assignment_score
 
 With the default weight of `0.0`, base FullMHT behavior is unchanged.
 
+## Scan-Time Beam Pruning
+
+Terminal reranking is useful, but it can only choose among histories that survive
+the beam. The stronger method layer is therefore scan-time pruning:
+
+```python
+from bayescatrack.experiments.full_mht_scan_history_dynamics_integration import (
+    install_full_mht_scan_history_dynamics_pruning,
+)
+
+install_full_mht_scan_history_dynamics_pruning()
+```
+
+Configuration attribute:
+
+```text
+scan_motion_history_weight
+```
+
+This hook patches FullMHT beam pruning. After each scan, it parses the
+label-free selected-edge summaries already produced by the FullMHT runner,
+groups those edges back into partial identity histories, and subtracts a robust
+within-history outlier risk from the pruning score:
+
+```text
+beam_pruning_score = original_beam_pruning_score
+                     - scan_motion_history_weight * partial_history_motion_risk
+```
+
+This is the first layer in which MHT can preserve a globally cleaner identity
+history even when its local scan score is slightly lower. It is still label-free:
+it reads no manual-GT references, no benchmark scores, and no audit labels.
+
 ## Frozen Probe Manifest
 
-The immediate weight neighborhood is frozen in:
+The immediate terminal-weight neighborhood is frozen in:
 
 ```text
 benchmarks/full_mht_history_dynamics_probe_manifest.json
@@ -69,9 +99,9 @@ Rows:
 | --- | --- |
 | `Track2p` | original proposal baseline |
 | `FullMHTPrior2` | proposal-prior FullMHT control |
-| `FullMHTHistoryDynamics025` | motion-history weight `0.25` |
-| `FullMHTHistoryDynamics050` | motion-history weight `0.50` |
-| `FullMHTHistoryDynamics100` | motion-history weight `1.00` |
+| `FullMHTHistoryDynamics025` | terminal motion-history weight `0.25` |
+| `FullMHTHistoryDynamics050` | terminal motion-history weight `0.50` |
+| `FullMHTHistoryDynamics100` | terminal motion-history weight `1.00` |
 
 Run it with:
 
@@ -86,6 +116,7 @@ export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
   tests/test_full_mht_history_dynamics_integration.py \
+  tests/test_full_mht_scan_history_dynamics_integration.py \
   tests/test_full_mht_history_dynamics_decision.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_benchmark_manifest_full_mht_integration.py
