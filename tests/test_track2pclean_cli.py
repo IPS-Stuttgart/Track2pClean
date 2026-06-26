@@ -1,3 +1,4 @@
+import importlib
 import importlib.resources
 
 from tests._support import run_module
@@ -65,3 +66,9 @@ def test_track2pclean_is_marked_as_typed_package():
     marker = importlib.resources.files("track2pclean") / "py.typed"
 
     assert marker.is_file()
+
+
+def test_bayescatrack_main_module_import_has_no_exit_side_effect():
+    module = importlib.import_module("bayescatrack.__main__")
+
+    assert module.main is not None
