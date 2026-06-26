@@ -12,7 +12,9 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any, Sequence
 
-from ._reference_session_name_validation import install_reference_session_name_validation
+from ._reference_session_name_validation import (
+    install_reference_session_name_validation,
+)
 
 _PATCH_MARKER = "_bayescatrack_track_table_session_name_validation_patch"
 
@@ -20,9 +22,9 @@ _PATCH_MARKER = "_bayescatrack_track_table_session_name_validation_patch"
 def install_track_table_session_name_validation() -> None:
     """Install idempotent validation around session-name-bearing helpers."""
 
-    from . import ground_truth_eval as _ground_truth_eval  # pylint: disable=import-outside-toplevel
+    from . import ground_truth_eval  # pylint: disable=import-outside-toplevel
 
-    _install_track_table_session_name_validation(_ground_truth_eval.TrackTable)
+    _install_track_table_session_name_validation(ground_truth_eval.TrackTable)
     install_reference_session_name_validation()
 
 
@@ -72,9 +74,11 @@ def _normalize_unique_session_names(
         seen.add(session_name)
     if duplicates:
         duplicate_summary = ", ".join(repr(name) for name in duplicates)
-        raise ValueError(
-            f"{field_name} must contain unique session names; duplicate values: {duplicate_summary}"
+        message = (
+            f"{field_name} must contain unique session names; "
+            f"duplicate values: {duplicate_summary}"
         )
+        raise ValueError(message)
     return normalized_session_names
 
 
