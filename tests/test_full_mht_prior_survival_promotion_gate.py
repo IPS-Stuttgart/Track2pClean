@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from bayescatrack.experiments.full_mht_prior_survival_promotion_gate import (
+    evaluate_prior_survival_exposure,
     evaluate_prior_survival_promotion,
     evaluate_prior_survival_sensitivity,
     format_prior_survival_promotion_markdown,
@@ -62,6 +63,12 @@ def _exposure_row(**overrides: object) -> dict[str, str]:
         "history_switched_prior_successors": "0",
         "history_no_prior_successor_continuations": "4",
         "history_gap_reactivated_tracks": "0",
+        "history_prior_survival_scored_edges": "12",
+        "history_prior_survival_positive_edges": "10",
+        "history_prior_survival_negative_edges": "2",
+        "history_prior_survival_weighted_score": "3.0",
+        "max_prior_survival_negative_edges_per_subject": "2",
+        "max_prior_survival_abs_weighted_score_per_subject": "3.0",
     }
     row.update({key: str(value) for key, value in overrides.items()})
     return row
@@ -102,6 +109,42 @@ def test_prior_survival_sensitivity_rejects_pairwise_collapse() -> None:
 
     assert sensitivity["sensitivity_result"] == "pairwise_collapse"
     assert "SurvivalW10Clip8" in sensitivity["pairwise_collapse_variants"]
+
+
+def test_prior_survival_exposure_requires_survival_columns() -> None:
+    stale_row = _exposure_row()
+    del stale_row["history_prior_survival_scored_edges"]
+
+    exposure = evaluate_prior_survival_exposure([stale_row])
+
+    assert exposure["status"] == "incomplete"
+    assert exposure["exposure_result"] == "missing_prior_survival_exposure_columns"
+    assert "history_prior_survival_scored_edges" in exposure["missing_columns"]
+
+
+def test_prior_survival_exposure_requires_scored_edges() -> None:
+    exposure = evaluate_prior_survival_exposure(
+        [_exposure_row(history_prior_survival_scored_edges=0)]
+    )
+
+    assert exposure["status"] == "incomplete"
+    assert exposure["exposure_result"] == "prior_survival_not_scored"
+
+
+def test_prior_survival_exposure_rejects_broad_negative_penalties() -> None:
+    exposure = evaluate_prior_survival_exposure(
+        [
+            _exposure_row(
+                history_prior_survival_negative_edges=12,
+                max_prior_survival_negative_edges_per_subject=5,
+            )
+        ]
+    )
+
+    assert exposure["status"] == "complete"
+    assert exposure["exposure_result"] == "broad_exposure"
+    assert "history_prior_survival_negative_edges" in exposure["failed_limits"]
+    assert "max_prior_survival_negative_edges_per_subject" in exposure["failed_limits"]
 
 
 def test_prior_survival_promotion_requires_all_gates() -> None:
@@ -163,3 +206,4 @@ def test_prior_survival_promotion_markdown_reports_three_gates() -> None:
     assert "prior_survival_complete_history_advantage" in markdown
     assert "stable_plateau" in markdown
     assert "bounded_exposure" in markdown
+    assert "history_prior_survival_negative_edges" in markdown
