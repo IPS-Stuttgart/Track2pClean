@@ -19,6 +19,9 @@ def install_empty_candidate_gate_margin_fix() -> None:
     if getattr(_advanced_roi_components, _PATCH_MARKER, False):
         return
     original = _advanced_roi_components.candidate_mask_from_cost_matrix
+    if _candidate_mask_chain_has_empty_margin_fix(original):
+        setattr(_advanced_roi_components, _PATCH_MARKER, True)
+        return
     setattr(candidate_mask_from_cost_matrix, _ORIGINAL_ATTR, original)
     _advanced_roi_components.candidate_mask_from_cost_matrix = (
         candidate_mask_from_cost_matrix
@@ -63,6 +66,22 @@ def _original_candidate_mask() -> Callable[..., np.ndarray]:
     if original is None:
         raise RuntimeError("empty candidate-margin guard is not installed")
     return original
+
+
+def _candidate_mask_chain_has_empty_margin_fix(
+    function: Callable[..., np.ndarray],
+) -> bool:
+    seen: set[int] = set()
+    current: Callable[..., np.ndarray] | None = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return True
+        seen.add(current_id)
+        if getattr(current, _ORIGINAL_ATTR, None) is not None:
+            return True
+        current = getattr(current, "_bayescatrack_strict_config_original", None)
+    return False
 
 
 __all__ = [
