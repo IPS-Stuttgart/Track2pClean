@@ -45,6 +45,11 @@ continuations and negative score to weak no-prior continuations. The hook is
 installed through manifest support only when a `no_prior_continuation_*` option is
 present.
 
+This is a scan-assignment dynamics term, not a post-hoc filter. The regression
+`test_no_prior_continuation_likelihood_opens_scan_assignment_over_death` verifies
+that the likelihood can make Murty scan assignment choose a label-free
+continuation where the local score alone would leave the seed row missed/dead.
+
 ## Frozen Probe
 
 The immediate weight neighborhood is frozen in:
