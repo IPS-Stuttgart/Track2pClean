@@ -167,6 +167,7 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
     lines = [
         "# FullMHT Terminal Completion Decision",
         "",
+        f"Baseline: `{decision['baseline']}`",
         f"Result: `{decision['terminal_completion_result']}`",
         f"Best candidate: `{decision['best_candidate']}`",
         f"Recommendation: {decision['recommendation']}",
@@ -289,13 +290,30 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("comparison_csv", type=Path)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
+    parser.add_argument("--baseline", default=TerminalCompletionDecisionConfig.baseline)
+    parser.add_argument(
+        "--candidate",
+        dest="candidates",
+        action="append",
+        default=None,
+        help="Candidate row name. May be repeated; defaults to the frozen terminal-completion probe rows.",
+    )
+    parser.add_argument("--track2p", default=TerminalCompletionDecisionConfig.track2p)
+    parser.add_argument("--tolerance", type=float, default=TerminalCompletionDecisionConfig.tolerance)
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    cfg = TerminalCompletionDecisionConfig(
+        baseline=str(args.baseline),
+        candidates=tuple(args.candidates or TerminalCompletionDecisionConfig.candidates),
+        track2p=str(args.track2p),
+        tolerance=max(0.0, float(args.tolerance)),
+    )
     decision = evaluate_terminal_completion_decision(
-        load_comparison_rows(args.comparison_csv)
+        load_comparison_rows(args.comparison_csv),
+        config=cfg,
     )
     if args.output is not None:
         write_decision(decision, args.output, output_format=str(args.format))
