@@ -67,11 +67,11 @@ def test_global_assignment_validates_and_normalizes_edge_metadata(
 
     run = assignment.solve_global_assignment_from_pairwise_costs(
         {
-            (0.0, "1"): np.zeros((2, 3)),
+            (0.0, np.int64(1)): np.zeros((2, 3)),
             (1, 2): np.ones((3, 1)),
         },
-        session_sizes=[2.0, "3", 1],
-        session_edges=[(0, 1), (1.0, "2")],
+        session_sizes=[2.0, np.int64(3), 1],
+        session_edges=[(0, 1), (1.0, np.int64(2))],
         start_cost=2.5,
         end_cost=3.5,
         gap_penalty=0.25,
@@ -90,38 +90,42 @@ def test_global_assignment_validates_and_normalizes_edge_metadata(
 
 
 @pytest.mark.parametrize(
-    ("field", "bad_value"),
+    ("keyword", "value"),
     [
         ("start_cost", True),
-        ("end_cost", np.bool_(False)),
-        ("gap_penalty", -0.1),
+        ("start_cost", -0.1),
+        ("end_cost", "nan"),
+        ("gap_penalty", float("inf")),
+        ("cost_threshold", np.bool_(False)),
         ("cost_threshold", -1.0),
-        ("start_cost", float("nan")),
-        ("end_cost", float("inf")),
-        ("gap_penalty", "not-a-number"),
     ],
 )
-def test_global_assignment_rejects_invalid_solver_controls(
-    field: str,
-    bad_value: object,
+def test_global_assignment_rejects_invalid_solver_scalars(
+    monkeypatch: pytest.MonkeyPatch,
+    keyword: str,
+    value: object,
 ) -> None:
-    kwargs: dict[str, object] = {
-        "start_cost": 1.0,
-        "end_cost": 1.0,
-        "gap_penalty": 0.0,
-        "cost_threshold": None,
-    }
-    kwargs[field] = bad_value
+    def forbidden_solver(*_args: object, **_kwargs: object) -> _DummySolverResult:
+        raise AssertionError("solver should not be called for invalid scalar inputs")
 
-    with pytest.raises(ValueError, match=field):
+    monkeypatch.setattr(
+        assignment,
+        "_load_pyrecest_multisession_solver",
+        lambda: forbidden_solver,
+    )
+
+    kwargs = {keyword: value}
+    with pytest.raises(ValueError, match=keyword):
         assignment.solve_global_assignment_from_pairwise_costs(
-            {(0, 1): np.zeros((2, 3))},
-            session_sizes=(2, 3),
+            {(0, 1): np.zeros((1, 1))},
+            session_sizes=(1, 1),
             **kwargs,
         )
 
 
-def test_global_assignment_accepts_zero_solver_controls(monkeypatch: pytest.MonkeyPatch):
+def test_global_assignment_accepts_zero_solver_controls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: dict[str, Any] = {}
 
     def fake_solver(
@@ -163,6 +167,28 @@ def test_global_assignment_accepts_zero_solver_controls(monkeypatch: pytest.Monk
         "gap_penalty": 0.0,
         "cost_threshold": 0.0,
     }
+
+
+@pytest.mark.parametrize(
+    ("pairwise_costs", "session_sizes", "session_edges", "match"),
+    [
+        ({(0, "1"): np.zeros((2, 3))}, (2, 3), None, "pairwise_costs target"),
+        ({(0, 1): np.zeros((2, 3))}, (2, "3"), None, "session_sizes"),
+        ({(0, 1): np.zeros((2, 3))}, (2, 3), ((0, "1"),), "session_edges target"),
+    ],
+)
+def test_global_assignment_rejects_string_integer_metadata(
+    pairwise_costs: dict[Any, np.ndarray],
+    session_sizes: tuple[Any, ...],
+    session_edges: tuple[Any, ...] | None,
+    match: str,
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        assignment.solve_global_assignment_from_pairwise_costs(
+            pairwise_costs,
+            session_sizes=session_sizes,
+            session_edges=session_edges,
+        )
 
 
 def test_global_assignment_rejects_stale_session_edges():

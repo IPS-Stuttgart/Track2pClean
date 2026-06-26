@@ -1,4 +1,4 @@
-"""Strict input validation for global assignment edge metadata.
+"""Strict input validation for global assignment solver inputs.
 
 PyRecEst's global assignment solver consumes a mapping of pairwise cost matrices.
 BayesCaTrack additionally stores ``session_edges`` metadata in ``GlobalAssignmentRun``
@@ -6,7 +6,8 @@ for diagnostics, exports, and downstream benchmark analysis. If that metadata
 advertises edges not present in the actual cost mapping, later diagnostics can
 report empty or shifted link-cost columns for edges that were never solved. This
 module installs an idempotent wrapper that keeps the solver inputs and returned
-metadata synchronized.
+metadata synchronized and rejects malformed scalar penalties before they reach
+the backend solver.
 """
 
 from __future__ import annotations
@@ -53,21 +54,17 @@ def install_global_assignment_input_validation() -> None:
             session_edges=session_edges,
             session_count=len(sizes),
         )
-        normalized_start_cost = _coerce_nonnegative_float(
-            start_cost,
-            context="start_cost",
+        normalized_start_cost = _finite_nonnegative_float(
+            start_cost, context="start_cost"
         )
-        normalized_end_cost = _coerce_nonnegative_float(
-            end_cost,
-            context="end_cost",
+        normalized_end_cost = _finite_nonnegative_float(end_cost, context="end_cost")
+        normalized_gap_penalty = _finite_nonnegative_float(
+            gap_penalty, context="gap_penalty"
         )
-        normalized_gap_penalty = _coerce_nonnegative_float(
-            gap_penalty,
-            context="gap_penalty",
-        )
-        normalized_cost_threshold = _coerce_optional_nonnegative_float(
-            cost_threshold,
-            context="cost_threshold",
+        normalized_cost_threshold = (
+            None
+            if cost_threshold is None
+            else _finite_nonnegative_float(cost_threshold, context="cost_threshold")
         )
         return original(
             normalized_costs,
@@ -167,12 +164,26 @@ def _normalize_session_sizes(session_sizes: Sequence[Any]) -> tuple[int, ...]:
     )
 
 
+def _finite_nonnegative_float(value: Any, *, context: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{context} must be a finite non-negative value")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{context} must be a finite non-negative value") from exc
+    if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(f"{context} must be a finite non-negative value")
+    return float(numeric_value)
+
+
 def _normalize_session_edge(
     edge: Any,
     *,
     session_count: int,
     context: str,
 ) -> SessionEdge:
+    if isinstance(edge, (str, bytes, bytearray)):
+        raise ValueError(f"{context} entries must be (source, target) pairs")
     try:
         source_raw, target_raw = edge
     except (TypeError, ValueError) as exc:
@@ -202,23 +213,14 @@ def _normalize_session_edge(
 def _coerce_integer_like(value: Any, *, context: str, allow_zero: bool) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{context} must be an integer")
+    if isinstance(value, (str, bytes, bytearray)):
+        raise ValueError(f"{context} must be an integer")
     if isinstance(value, (int, np.integer)):
         integer_value = int(value)
     elif isinstance(value, (float, np.floating)):
         if not np.isfinite(value) or not float(value).is_integer():
             raise ValueError(f"{context} must be an integer")
         integer_value = int(value)
-    elif isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError(f"{context} must be an integer")
-        try:
-            numeric_value = float(stripped)
-        except ValueError as exc:
-            raise ValueError(f"{context} must be an integer") from exc
-        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-            raise ValueError(f"{context} must be an integer")
-        integer_value = int(numeric_value)
     else:
         try:
             integer_value = operator.index(value)
@@ -229,28 +231,6 @@ def _coerce_integer_like(value: Any, *, context: str, allow_zero: bool) -> int:
     if integer_value < minimum:
         raise ValueError(f"{context} must be at least {minimum}")
     return int(integer_value)
-
-
-def _coerce_optional_nonnegative_float(
-    value: Any,
-    *,
-    context: str,
-) -> float | None:
-    if value is None:
-        return None
-    return _coerce_nonnegative_float(value, context=context)
-
-
-def _coerce_nonnegative_float(value: Any, *, context: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{context} must be numeric, not boolean")
-    try:
-        numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{context} must be numeric") from exc
-    if not np.isfinite(numeric_value) or numeric_value < 0.0:
-        raise ValueError(f"{context} must be a non-negative finite number")
-    return numeric_value
 
 
 __all__ = ["install_global_assignment_input_validation"]
