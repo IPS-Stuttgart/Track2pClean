@@ -67,6 +67,9 @@ from ._multisession_config_validation import (
 from ._multisession_solver_track_validation import (
     install_multisession_solver_track_validation as _install_multisession_solver_track_validation,
 )
+from ._nonrigid_fov_image_validation import (
+    install_nonrigid_fov_image_validation as _install_nonrigid_fov_image_validation,
+)
 from ._nonrigid_registration_control_validation import (
     install_nonrigid_registration_control_validation as _install_nonrigid_registration_control_validation,
 )
@@ -183,6 +186,7 @@ _install_reference_validation()
 _install_fov_affine_estimator_validation()
 _install_fov_affine_warp_validation()
 _install_fov_translation_output_shape_validation()
+_install_nonrigid_fov_image_validation()
 _install_nonrigid_registration_control_validation()
 _install_ground_truth_track_validation()
 _install_growth_optional_roi_validation()
