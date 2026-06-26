@@ -108,3 +108,27 @@ def test_shifted_overlap_direct_wrapper_uses_same_scalar_validation() -> None:
             shifted_iou_radius=1,
             use_shifted_iou_for_iou_cost="false",
         )
+
+
+@pytest.mark.parametrize("return_components", ["false", 1, None])
+def test_shifted_overlap_direct_wrapper_rejects_ambiguous_return_components(
+    return_components: object,
+) -> None:
+    reference_plane, measurement_plane = _planes()
+
+    def original_method(
+        _self: CalciumPlaneData,
+        _other: CalciumPlaneData,
+        **_kwargs: object,
+    ) -> np.ndarray:
+        raise AssertionError("validation must run before base cost computation")
+
+    with pytest.raises(ValueError, match="return_components must be a boolean"):
+        shifted_iou_pairwise_cost_matrix(
+            original_method,
+            reference_plane,
+            measurement_plane,
+            shifted_iou_radius=1,
+            use_shifted_iou_for_iou_cost=True,
+            return_components=return_components,
+        )

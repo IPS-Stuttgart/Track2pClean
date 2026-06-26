@@ -123,6 +123,52 @@ def test_global_assignment_rejects_invalid_solver_scalars(
         )
 
 
+def test_global_assignment_accepts_zero_solver_controls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, Any] = {}
+
+    def fake_solver(
+        costs: dict[tuple[int, int], np.ndarray],
+        *,
+        session_sizes: tuple[int, ...],
+        start_cost: float,
+        end_cost: float,
+        gap_penalty: float,
+        cost_threshold: float | None,
+    ) -> _DummySolverResult:
+        del costs, session_sizes
+        calls.update(
+            start_cost=start_cost,
+            end_cost=end_cost,
+            gap_penalty=gap_penalty,
+            cost_threshold=cost_threshold,
+        )
+        return _DummySolverResult()
+
+    monkeypatch.setattr(
+        assignment,
+        "_load_pyrecest_multisession_solver",
+        lambda: fake_solver,
+    )
+
+    assignment.solve_global_assignment_from_pairwise_costs(
+        {(0, 1): np.zeros((2, 3))},
+        session_sizes=(2, 3),
+        start_cost=0,
+        end_cost=0.0,
+        gap_penalty="0",
+        cost_threshold=0,
+    )
+
+    assert calls == {
+        "start_cost": 0.0,
+        "end_cost": 0.0,
+        "gap_penalty": 0.0,
+        "cost_threshold": 0.0,
+    }
+
+
 @pytest.mark.parametrize(
     ("pairwise_costs", "session_sizes", "session_edges", "match"),
     [

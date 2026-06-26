@@ -8,6 +8,7 @@ from bayescatrack.association.track_refinement import (
     TrackSmoothingConfig,
     smoothed_track_positions,
     split_tracks_at_issues,
+    track_geometry_issues,
 )
 
 
@@ -23,6 +24,30 @@ def test_smoothed_track_positions_rejects_non_negative_fill_value():
 
     with pytest.raises(ValueError, match="negative integer sentinel"):
         smoothed_track_positions(track_rows, position_tables, fill_value=0)
+
+
+@pytest.mark.parametrize(
+    "bad_position",
+    [np.array([np.nan, 0.0]), np.array([np.inf, 0.0]), np.array([0.0]), "bad"],
+)
+def test_smoothed_track_positions_rejects_malformed_position_table_entries(bad_position):
+    track_rows = np.array([[0, 1]], dtype=int)
+    position_tables = ({0: np.array([0.0, 0.0])}, {1: bad_position})
+
+    with pytest.raises(ValueError, match="position_tables"):
+        smoothed_track_positions(track_rows, position_tables)
+
+
+def test_track_geometry_issues_rejects_nonfinite_position_table_entries():
+    track_rows = np.array([[0, 1, 2]], dtype=int)
+    position_tables = (
+        {0: np.array([0.0, 0.0])},
+        {1: np.array([np.nan, 1.0])},
+        {2: np.array([2.0, 2.0])},
+    )
+
+    with pytest.raises(ValueError, match="position_tables"):
+        track_geometry_issues(track_rows, position_tables)
 
 
 def test_split_tracks_at_issues_rejects_non_negative_fill_value():
