@@ -90,7 +90,7 @@ class CalibratedPairwiseAssociationModel:
                 self.model.predict_proba(sample_features),
                 dtype=float,
             )
-            if probabilities.ndim >= 1 and probabilities.shape[-1] == 2:
+            if probabilities.ndim >= 2 and probabilities.shape[-1] == 2:
                 probabilities = probabilities[..., 1]
             probabilities = _restore_pairwise_probability_shape(
                 probabilities,
