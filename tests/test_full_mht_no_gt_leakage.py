@@ -4,24 +4,31 @@ from pathlib import Path
 
 METHOD_LAYER_MODULES = (
     "src/bayescatrack/experiments/_full_mht_manifest_integration.py",
+    "src/bayescatrack/experiments/full_mht_history_dynamics_decision.py",
     "src/bayescatrack/experiments/full_mht_history_dynamics_integration.py",
+    "src/bayescatrack/experiments/full_mht_history_dynamics_promotion_gate.py",
+    "src/bayescatrack/experiments/full_mht_scan_history_dynamics_decision.py",
     "src/bayescatrack/experiments/full_mht_scan_history_dynamics_integration.py",
     "src/bayescatrack/experiments/full_mht_scan_history_conflict_demo.py",
+    "src/bayescatrack/experiments/full_mht_growth_history_prediction_decision.py",
     "src/bayescatrack/experiments/full_mht_growth_history_prediction_integration.py",
     "src/bayescatrack/experiments/full_mht_growth_history_prediction_promotion_gate.py",
     "src/bayescatrack/experiments/full_mht_local_context_integration.py",
     "src/bayescatrack/experiments/full_mht_local_context_decision.py",
+    "src/bayescatrack/experiments/full_mht_manifest_decision.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_model.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_integration.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_manifest_integration.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_decision.py",
     "src/bayescatrack/experiments/full_mht_no_prior_continuation_promotion_gate.py",
     "src/bayescatrack/experiments/full_mht_terminal_completion_integration.py",
+    "src/bayescatrack/experiments/full_mht_terminal_completion_decision.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_model.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_integration.py",
     "src/bayescatrack/experiments/full_mht_prior_survival_promotion_gate.py",
     "src/bayescatrack/experiments/full_mht_identity_history_decision.py",
     "src/bayescatrack/experiments/full_mht_identity_history_promotion_gate.py",
+    "src/bayescatrack/experiments/track2p_policy_full_mht_terminal_completion_benchmark.py",
     "src/bayescatrack/experiments/track2p_policy_full_mht_exposure_audit.py",
 )
 
@@ -46,18 +53,23 @@ def test_full_mht_method_layers_do_not_read_gt_or_audit_columns() -> None:
             assert token not in text, f"{relative_path} contains forbidden token {token!r}"
 
 
-def test_full_mht_no_gt_leakage_scan_covers_all_integration_layers() -> None:
+def test_full_mht_no_gt_leakage_scan_covers_all_method_layers() -> None:
     root = Path(__file__).resolve().parents[1]
     experiments = root / "src" / "bayescatrack" / "experiments"
     expected = {
         str(path.relative_to(root))
         for pattern in (
             "_full_mht_manifest_integration.py",
+            "full_mht_*_decision.py",
             "full_mht_*_integration.py",
             "full_mht_*_model.py",
+            "full_mht_*_promotion_gate.py",
             "track2p_policy_full_mht_exposure_audit.py",
         )
         for path in experiments.glob(pattern)
     }
+    expected.add(
+        "src/bayescatrack/experiments/track2p_policy_full_mht_terminal_completion_benchmark.py"
+    )
 
     assert expected <= set(METHOD_LAYER_MODULES)
