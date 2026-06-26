@@ -282,7 +282,7 @@ def _normalize_thresholds(thresholds: Sequence[float] | None) -> tuple[float, ..
 def _validate_probability_label_inputs(
     probabilities: Any, labels: Any
 ) -> tuple[np.ndarray, np.ndarray]:
-    probability_array = np.asarray(probabilities, dtype=float).reshape(-1)
+    probability_array = _as_probability_vector(probabilities)
     label_array = np.asarray(labels).reshape(-1)
     if probability_array.shape[0] == 0:
         raise ValueError("At least one probability is required")
@@ -299,6 +299,19 @@ def _validate_probability_label_inputs(
     if not np.all(np.isin(unique_labels, [0, 1, False, True])):
         raise ValueError("labels must be binary values 0/1 or False/True")
     return probability_array, label_array.astype(float)
+
+
+def _as_probability_vector(probabilities: Any) -> np.ndarray:
+    try:
+        raw_probabilities = np.asarray(probabilities, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("probabilities must be numeric") from exc
+    if any(isinstance(value, (bool, np.bool_)) for value in raw_probabilities.flat):
+        raise ValueError("probabilities must be numeric, not boolean")
+    try:
+        return np.asarray(raw_probabilities, dtype=float).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("probabilities must be numeric") from exc
 
 
 def _validate_probability_threshold(threshold: Any) -> float:
