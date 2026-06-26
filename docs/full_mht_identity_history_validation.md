@@ -140,6 +140,7 @@ beside a regressing weight, is treated as exploratory.
 | `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
 | `benchmarks/full_mht_local_context_probe_manifest.json` | calibrated local-neighborhood deformation probe against a no-local-context FullMHT prior baseline |
 | `docs/full_mht_method_invariant_checklist.md` | paper-facing checklist tying method claims to required label-free regressions |
+| `test_full_mht_identity_history_bundle_contract.py` | cross-manifest contract proving the central identity-history row is identical across candidate, sensitivity, scan-pruning, and completion bundles |
 | `test_full_mht_method_protocol.py` | regression that keeps the method protocol and invariant checklist from drifting |
 | `full_mht_local_context_integration.py` | gates the calibrated local-context likelihood feature when `local_deformation_weight <= 0` |
 | `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
@@ -159,6 +160,7 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 - `FullMHTIdentityHistory` has complete-track F1 micro advantage over `FullMHTGreedyIdentityHistory` with no pairwise/complete micro or macro F1 loss.
 - It does not fall below `FullMHTIdentityHistoryNoLocalContext` on any reported pairwise or complete-track micro/macro metric.
 - It does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on any reported pairwise or complete-track micro/macro metric.
+- The identity-history bundle contract regression passes, proving all add-on probes start from the same frozen central row.
 - The constructed conflict witness regression passes.
 - The method-invariant checklist regression passes.
 - The sensitivity manifest reports `stable_plateau`, with passing variants non-regressing on all reported metrics.
@@ -198,6 +200,7 @@ git reset --hard origin/codex/full-mht-prototype
 export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
+  tests/test_full_mht_identity_history_bundle_contract.py \
   tests/test_full_mht_identity_history_candidate_manifest.py \
   tests/test_full_mht_identity_history_sensitivity_manifest.py \
   tests/test_full_mht_identity_history_scan_pruning_manifest.py \
