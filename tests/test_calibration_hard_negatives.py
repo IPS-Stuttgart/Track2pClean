@@ -93,11 +93,19 @@ def test_candidate_limited_hard_negatives_ignore_unsupervised_pairs():
             "negative_to_positive_ratio must be finite",
         ),
         (
+            {"negative_to_positive_ratio": np.bool_(True)},
+            "negative_to_positive_ratio must be finite",
+        ),
+        (
             {"candidate_top_k_per_anchor": 1.5},
             "candidate_top_k_per_anchor must be positive or None",
         ),
         (
             {"candidate_top_k_per_anchor": True},
+            "candidate_top_k_per_anchor must be positive or None",
+        ),
+        (
+            {"candidate_top_k_per_anchor": np.bool_(True)},
             "candidate_top_k_per_anchor must be positive or None",
         ),
         (
@@ -111,6 +119,12 @@ def test_hard_negative_options_reject_silent_candidate_knob_coercions(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         CandidateHardNegativeOptions(**kwargs)
+
+
+def test_hard_negative_options_accept_numpy_boolean_column_flag() -> None:
+    options = CandidateHardNegativeOptions(include_column_candidates=np.bool_(False))
+
+    assert options.include_column_candidates is False
 
 
 def test_balanced_binary_sample_weights_are_inverse_frequency():
