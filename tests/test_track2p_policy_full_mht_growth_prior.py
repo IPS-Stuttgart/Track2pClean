@@ -847,6 +847,61 @@ def test_full_mht_identity_diverse_beam_keeps_lower_risk_bucket():
     assert diverse == [high_score_risky, lower_score_clean]
 
 
+def test_full_mht_identity_diverse_beam_uses_full_event_signature():
+    high_score_switch = full_mht._MHTHypothesis(
+        np.asarray([[5, 9]], dtype=int),
+        score=10.0,
+        history=(
+            {
+                "no_prior_successor_continuations": 0,
+                "switched_prior_successors": 2,
+                "missed_prior_successors": 0,
+                "missed_tracks": 0,
+            },
+        ),
+    )
+    next_score_switch = full_mht._MHTHypothesis(
+        np.asarray([[5, 10]], dtype=int),
+        score=9.0,
+        history=(
+            {
+                "no_prior_successor_continuations": 0,
+                "switched_prior_successors": 2,
+                "missed_prior_successors": 0,
+                "missed_tracks": 0,
+            },
+        ),
+    )
+    lower_score_clean = full_mht._MHTHypothesis(
+        np.asarray([[5, 11]], dtype=int),
+        score=8.0,
+        history=(
+            {
+                "no_prior_successor_continuations": 0,
+                "switched_prior_successors": 0,
+                "missed_prior_successors": 0,
+                "missed_tracks": 0,
+            },
+        ),
+    )
+    hypotheses = (high_score_switch, next_score_switch, lower_score_clean)
+
+    default = full_mht._prune_beam(
+        hypotheses,
+        config=full_mht.FullMHTConfig(beam_width=2),
+    )
+    diverse = full_mht._prune_beam(
+        hypotheses,
+        config=full_mht.FullMHTConfig(beam_width=2, identity_diverse_beam=True),
+    )
+
+    assert default == [high_score_switch, next_score_switch]
+    assert diverse == [high_score_switch, lower_score_clean]
+    assert full_mht._identity_diversity_bucket(high_score_switch) != (
+        full_mht._identity_diversity_bucket(lower_score_clean)
+    )
+
+
 def test_full_mht_miss_cost_penalizes_missing_track2p_prior_successor():
     active = full_mht._ActiveTrackSource(
         row_index=0, source_session=1, source_roi=5, gap_length=0

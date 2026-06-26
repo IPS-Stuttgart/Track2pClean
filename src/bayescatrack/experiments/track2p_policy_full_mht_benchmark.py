@@ -1672,7 +1672,7 @@ def _prune_beam(
         selected_ids.add(id(hypothesis))
 
     add(ranked[0])
-    best_by_bucket: dict[int, _MHTHypothesis] = {}
+    best_by_bucket: dict[tuple[int, ...], _MHTHypothesis] = {}
     for hypothesis in ranked:
         bucket = _identity_diversity_bucket(hypothesis)
         best_by_bucket.setdefault(bucket, hypothesis)
@@ -1683,12 +1683,33 @@ def _prune_beam(
     return selected
 
 
-def _identity_diversity_bucket(hypothesis: _MHTHypothesis) -> int:
-    return int(
-        sum(
-            int(_finite_float(scan.get("no_prior_successor_continuations", 0), 0.0))
-            for scan in hypothesis.history
+def _identity_diversity_bucket(hypothesis: _MHTHypothesis) -> tuple[int, ...]:
+    """Return a label-free identity-history event signature for beam diversity."""
+
+    tracks = np.asarray(hypothesis.tracks, dtype=int)
+    if tracks.ndim == 2 and tracks.size:
+        row_has_observation = np.any(tracks >= 0, axis=1)
+        nonempty_rows = int(np.sum(row_has_observation))
+        terminal_missing_observations = int(
+            np.sum(row_has_observation & np.any(tracks < 0, axis=1))
         )
+    else:
+        nonempty_rows = 0
+        terminal_missing_observations = 0
+    return (
+        _scan_history_event_count(hypothesis, "no_prior_successor_continuations"),
+        _scan_history_event_count(hypothesis, "switched_prior_successors"),
+        _scan_history_event_count(hypothesis, "missed_prior_successors"),
+        _scan_history_event_count(hypothesis, "missed_tracks"),
+        _scan_history_event_count(hypothesis, "gap_reactivated_tracks"),
+        int(terminal_missing_observations),
+        int(nonempty_rows),
+    )
+
+
+def _scan_history_event_count(hypothesis: _MHTHypothesis, key: str) -> int:
+    return int(
+        sum(int(_finite_float(scan.get(key, 0), 0.0)) for scan in hypothesis.history)
     )
 
 

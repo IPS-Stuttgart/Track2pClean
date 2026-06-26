@@ -30,7 +30,10 @@ FullMHTGreedyIdentityHistory
 ```
 
 It uses the same scan candidates and scoring terms, but sets `beam_width = 1` and
-turns off identity-diverse beam retention.  Promotion requires the full beam to
+turns off identity-diverse beam retention.  The full beam keeps alternative
+histories using a label-free scan-history event signature: no-prior
+continuations, prior-successor switches, missed prior successors, missed tracks,
+gap reactivations, and terminal missingness.  Promotion requires the full beam to
 beat this greedy row on complete-track F1 micro without loss on any reported
 pairwise or complete-track micro/macro metric.
 

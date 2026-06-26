@@ -74,8 +74,11 @@ FullMHTGreedyIdentityHistory
 ```
 
 It uses the same scan candidates and scoring terms, but sets `beam_width = 1`
-and disables identity-diverse beam retention.  The full beam must beat this row
-on complete-track F1 micro without any pairwise/complete micro or macro F1 loss
+and disables identity-diverse beam retention.  Full-beam retention is label-free
+and preserves distinct scan-history event signatures: no-prior continuations,
+prior-successor switches, missed prior successors, missed tracks, gap
+reactivations, and terminal missingness.  The full beam must beat this row on
+complete-track F1 micro without any pairwise/complete micro or macro F1 loss
 before the benchmark can claim that MHT history search matters on real data.
 
 The canonical manifest also includes:
