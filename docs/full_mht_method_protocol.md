@@ -38,13 +38,13 @@ objective ready for manifest-level evaluation.
 | Full scan-assignment beam | implemented | `track2p-policy-full-mht` | keep |
 | Greedy-vs-MHT conflict | constructed positive | `track2p-policy-full-mht-conflict-demo` | use as method intuition |
 | Scan-history conflict | constructed positive | `full_mht_scan_history_conflict_demo` | use as method invariant |
-| Real-data greedy beam ablation | frozen, not yet run | `FullMHTGreedyPrior2` in `benchmarks/full_mht_prior_veto_manifest.json` | run on server |
+| Real-data greedy beam ablation | frozen, not yet run | `FullMHTGreedyPrior2` in `benchmarks/full_mht_prior_veto_manifest.json` | require complete-track beam advantage |
 | Calibrated association likelihood | implemented, benchmark-negative | `docs/full_mht_calibrated_likelihood_notes.md` | keep as architecture, not row |
 | Identity dynamics penalties | implemented, mostly collapse to proposal solution | `track2p_prior_*` diagnostics | keep |
 | Identity-diverse beam | implemented, exposes cleaner alternatives | calibrated-likelihood notes | keep |
 | Terminal completion objective | implemented, not yet benchmarked | `benchmarks/full_mht_terminal_completion_probe_manifest.json`, `docs/full_mht_terminal_completion_objective.md` | run as method probe |
 | Scan-time history pruning | implemented, not yet benchmarked | `benchmarks/full_mht_scan_history_dynamics_probe_manifest.json`, `docs/full_mht_history_dynamics_objective.md` | run as method probe |
-| Growth-history prediction | implemented, not yet benchmarked | `benchmarks/full_mht_growth_history_prediction_probe_manifest.json`, `docs/full_mht_growth_history_prediction.md` | run as method probe |
+| Growth-history prediction | implemented, not yet benchmarked | `benchmarks/full_mht_growth_history_prediction_probe_manifest.json`, `docs/full_mht_growth_history_prediction.md` | run benchmark plus exposure promotion gate |
 | Fixed prior-veto hazard | first positive FullMHT-owned result | `docs/full_mht_prior_risk_notes.md` | freeze and validate |
 | Calibrated prior-edge survival | integrated, not yet benchmarked | `full_mht_prior_survival_model.py`, `FullMHTPriorSurvival` manifest row | run on server |
 | Manifest-level reproduction | manifest + adapter committed | `benchmarks/full_mht_prior_veto_manifest.json` | run on server |
@@ -96,9 +96,15 @@ FullMHTGreedyPrior2
 
 This row uses the same proposal-prior settings and scan candidate generator as
 `FullMHTPrior2`, but fixes `beam_width = 1`. It is the real-data counterpart of
-the conflict demo. If it ties the beam row, the benchmark still does not prove a
-history-search advantage. If it loses to the beam row, the method has direct
-real-data evidence that preserving alternate identity histories matters.
+the conflict demo. The paper-facing decision is deliberately stricter than "beam
+beats greedy somewhere": `full_mht_manifest_decision.py` promotes a history-search
+advantage only when the full beam improves complete-track F1 over the greedy row
+without pairwise-F1 loss.
+
+If the beam ties greedy, regresses, or improves only pairwise F1, the benchmark
+still does not prove a complete-history search advantage. In that case FullMHT can
+remain an architecture layer or constructed-conflict story, but not the headline
+real-data method row.
 
 ## Terminal Completion Probe
 
@@ -141,7 +147,8 @@ benchmarks/full_mht_growth_history_prediction_probe_manifest.json
 It tests weights `0.25`, `0.50`, and `1.00` against `Track2p` and
 `FullMHTPrior2`. This is closer to a tracking dynamics model than terminal
 reranking because it can change the scan-assignment candidate set and therefore
-which histories survive the beam.
+which histories survive the beam. Promotion additionally requires the label-free
+exposure gate in `full_mht_growth_history_prediction_promotion_gate.py`.
 
 ## Current Positive Row
 
@@ -189,8 +196,8 @@ Do not present FullMHT as a final method if any of the following remain true:
   non-GT Track2p-style subjects.
 - A nearby threshold perturbation selects true-positive removals or causes
   complete-track loss.
-- `FullMHTGreedyPrior2` ties the beam row and no constructed or real-data case
-  demonstrates a history-level advantage.
+- `FullMHTGreedyPrior2` ties the beam row, the beam regresses, or the beam gain
+  is pairwise-only rather than a complete-track advantage.
 - The terminal completion objective improves only at a single fragile weight or
   damages pairwise F1 by rewarding over-linking.
 - The scan-history pruning objective improves only at a single fragile weight or
@@ -212,7 +219,7 @@ FullMHT can be promoted as a paper method only after these gates pass:
 | No-GT leakage | tests confirm scoring functions do not read `edge_status_against_gt`, `pairwise_delta_if_removed`, `complete_delta_if_removed`, reference identity, or manual-GT status |
 | Exposure audit | all Track2p-style subjects report rare prior-veto/survival hazards and no subject receives a broad set of missed prior successors |
 | Sensitivity | `benchmarks/full_mht_prior_survival_sensitivity_manifest.json`, `benchmarks/full_mht_terminal_completion_probe_manifest.json`, `benchmarks/full_mht_scan_history_dynamics_probe_manifest.json`, and `benchmarks/full_mht_growth_history_prediction_probe_manifest.json` show nearby settings do not collapse pairwise or complete-track metrics |
-| Greedy ablation | `FullMHTGreedyPrior2` is compared against the beam rows; a tie is reported honestly as no real-data history-search advantage yet |
+| Greedy ablation | `full_mht_manifest_decision.py` reports `history_search_result = beam_complete_history_advantage`; ties, regressions, and pairwise-only beam gains are exploratory |
 | Conflict demonstration | constructed demos, and ideally one real benchmark subject, show a locally better edge loses to a better complete history |
 | Reporting | complete-track and pairwise metrics are reported together, with micro/macro variants where relevant |
 
@@ -288,6 +295,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_scan_history_conflict_demo.py \
   tests/test_full_mht_growth_history_prediction_integration.py \
   tests/test_full_mht_growth_history_prediction_decision.py \
+  tests/test_full_mht_growth_history_prediction_promotion_gate.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
@@ -302,6 +310,10 @@ mkdir -p "$OUT"
   benchmarks/full_mht_prior_veto_manifest.json \
   --output-dir "$OUT" \
   --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_manifest_decision \
+  "$OUT/full_mht_prior_veto/full_mht_prior_veto_comparison.csv" \
+  --output "$OUT/full_mht_manifest_decision.md"
 
 SENS="$REPO/results/full_mht_prior_survival_sensitivity_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$SENS"
