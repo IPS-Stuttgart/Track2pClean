@@ -21,10 +21,10 @@ Risk is charged only when both groups agree: weak overlap/cell evidence and high
 
 ## Experimental Runner
 
-This is currently a module-level wrapper around the base runner:
+The registered benchmark command is:
 
 ```bash
-python -m bayescatrack.experiments.track2p_policy_full_mht_history_consistency_benchmark \
+bayescatrack benchmark track2p-policy-full-mht-history-consistency \
   --history-consistency-weight 1.0 \
   --history-consistency-min-history-edges 2 \
   --history-consistency-joint-margin 1.0 \
