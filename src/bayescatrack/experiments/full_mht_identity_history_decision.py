@@ -4,7 +4,7 @@ The identity-history candidate combines calibrated association likelihood,
 calibrated prior-edge survival, no-prior continuation likelihood, and scan-time
 growth-history prediction.  This helper keeps the interpretation narrow: the row
 is interesting only if the full beam beats its matching greedy beam-width-1
-ablation on complete-track F1 without pairwise-F1 loss.
+local-choice ablation on complete-track F1 without pairwise-F1 loss.
 """
 
 from __future__ import annotations
@@ -148,11 +148,15 @@ def evaluate_identity_history_decision(
     return {
         "status": status,
         "rows": list(required),
+        "mht_candidate": cfg.identity_history,
+        "local_choice_baseline": cfg.greedy_identity_history,
+        "mht_vs_local_result": history_result,
         "history_search_result": history_result,
         "prior_control_result": prior_result,
         "track2p_control_result": track2p_result,
         "layer_combination_result": layer_result,
         "recommendation": recommendation,
+        **_mht_vs_local_aliases(identity_vs_greedy),
         **identity_vs_greedy,
         **identity_vs_prior,
         **identity_vs_track2p,
@@ -179,6 +183,8 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
     lines = [
         "# FullMHT Identity-History Decision",
         "",
+        f"MHT-vs-local result: `{decision.get('mht_vs_local_result', decision['history_search_result'])}`",
+        f"Local-choice baseline: `{decision.get('local_choice_baseline', '')}`",
         f"History-search result: `{decision['history_search_result']}`",
         f"Prior-control result: `{decision['prior_control_result']}`",
         f"Track2p-control result: `{decision['track2p_control_result']}`",
@@ -188,16 +194,16 @@ def format_decision_markdown(decision: Mapping[str, Any]) -> str:
         "| comparison | pairwise F1 micro delta | complete-track F1 micro delta |",
         "| --- | ---: | ---: |",
     ]
-    for prefix in (
-        "identity_minus_greedy",
-        "identity_minus_prior",
-        "identity_minus_track2p",
-        "identity_minus_prior_survival",
-        "identity_minus_no_prior_continuation",
+    for label, prefix in (
+        ("MHT minus local greedy", "mht_minus_local"),
+        ("identity minus prior", "identity_minus_prior"),
+        ("identity minus Track2p", "identity_minus_track2p"),
+        ("identity minus prior survival", "identity_minus_prior_survival"),
+        ("identity minus no-prior continuation", "identity_minus_no_prior_continuation"),
     ):
         lines.append(
             "| {label} | {pairwise:.6g} | {complete:.6g} |".format(
-                label=prefix.replace("_", " "),
+                label=label,
                 pairwise=float(decision[f"{prefix}_pairwise_f1_micro"]),
                 complete=float(decision[f"{prefix}_complete_track_f1_micro"]),
             )
@@ -232,6 +238,15 @@ def _delta_block(
 ) -> dict[str, float]:
     return {
         f"{prefix}_{metric}": _metric(candidate, metric) - _metric(reference, metric)
+        for metric in REPORT_METRICS
+    }
+
+
+def _mht_vs_local_aliases(identity_vs_greedy: Mapping[str, float]) -> dict[str, float]:
+    return {
+        f"mht_minus_local_{metric}": float(
+            identity_vs_greedy[f"identity_minus_greedy_{metric}"]
+        )
         for metric in REPORT_METRICS
     }
 
