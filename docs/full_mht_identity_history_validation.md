@@ -33,6 +33,24 @@ It uses the same scan candidates and scoring terms, but sets `beam_width = 1` an
 turns off identity-diverse beam retention.  Promotion requires the full beam to
 beat this greedy row on complete-track F1 without pairwise-F1 loss.
 
+## Constructed Conflict Witness
+
+The branch also keeps a small label-free conflict witness in
+`track2p-policy-full-mht-conflict-demo`.  It is not a benchmark result; it is a
+mechanical proof-of-behavior for the method claim.  The demo constructs scan
+assignment histories where the locally best edge leads to a later dead end, while
+a slightly weaker edge preserves a complete identity once later evidence arrives.
+
+The focused regression requires two invariants:
+
+```text
+full MHT beam > greedy beam-width-1 on the dead-end conflict
+full MHT beam improves complete-track F1 while greedy remains pairwise-good
+```
+
+This witness does not promote the real-data row by itself.  It only protects the
+claim that the MHT beam can be load-bearing when identity histories conflict.
+
 ## Complete-History Objective Probe
 
 The identity-history candidate is not silently changed by this note.  A separate
@@ -57,6 +75,8 @@ without pairwise-F1 regression.  A single winning weight is treated as explorato
 | `benchmarks/full_mht_identity_history_candidate_manifest.json` | canonical comparison against Track2p, prior-only FullMHT, prior-survival, no-prior continuation, and greedy identity-history |
 | `benchmarks/full_mht_identity_history_sensitivity_manifest.json` | immediate-neighborhood sensitivity around survival weight, no-prior continuation weight, and growth-history weight |
 | `benchmarks/full_mht_identity_history_completion_manifest.json` | complete-history terminal objective probe on top of the combined identity-history row |
+| `track2p_policy_full_mht_conflict_demo.py` | constructed witness that full-history beam search can beat greedy local assignment in an identity-history conflict |
+| `test_full_mht_conflict_demo.py` | regression for the constructed MHT-vs-greedy conflict witness |
 | `full_mht_identity_history_decision.py` | interprets the canonical comparison table |
 | `full_mht_identity_history_promotion_gate.py` | combines canonical decision, sensitivity, and label-free exposure audit |
 | `full_mht_terminal_completion_decision.py` | interprets the terminal-completion probe, with row-name overrides for identity-history rows |
@@ -68,6 +88,7 @@ Promote `FullMHTIdentityHistory` only if all of these are true:
 
 - `FullMHTIdentityHistory` has complete-track advantage over `FullMHTGreedyIdentityHistory` with no pairwise-F1 loss.
 - It does not fall below `Track2p`, `FullMHTPrior2`, `FullMHTPriorSurvival`, or `FullMHTNoPriorContinuation100` on the required micro metrics.
+- The constructed conflict witness regression passes.
 - The sensitivity manifest reports `stable_plateau`.
 - The exposure audit reports `bounded_exposure`.
 - Prior-survival, no-prior continuation, and growth-history signals are active but not broad.
@@ -103,6 +124,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_identity_history_decision.py \
   tests/test_full_mht_identity_history_promotion_gate.py \
   tests/test_full_mht_terminal_completion_decision.py \
+  tests/test_full_mht_conflict_demo.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_full_mht_exposure_audit.py
 
