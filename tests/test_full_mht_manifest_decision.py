@@ -152,6 +152,10 @@ def test_full_mht_manifest_decision_rejects_candidate_beam_regression() -> None:
             veto_complete=0.928,
             greedy_veto_pairwise=0.966,
             greedy_veto_complete=0.929,
+            survival_pairwise=0.965,
+            survival_complete=0.928,
+            greedy_survival_pairwise=0.966,
+            greedy_survival_complete=0.929,
         )
     )
 
