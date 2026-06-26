@@ -31,6 +31,7 @@ export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
   tests/test_benchmark_manifest_full_mht_integration.py \
+  tests/test_full_mht_manifest_decision.py \
   tests/test_full_mht_prior_survival_model.py \
   tests/test_full_mht_prior_survival_integration.py \
   tests/test_full_mht_prior_survival_runner.py \
@@ -43,6 +44,10 @@ mkdir -p "$OUT"
   benchmarks/full_mht_prior_veto_manifest.json \
   --output-dir "$OUT" \
   --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_manifest_decision \
+  "$OUT/full_mht_prior_veto/full_mht_prior_veto_comparison.csv" \
+  --output "$OUT/full_mht_manifest_decision.md"
 ```
 
 Required rows:
@@ -51,6 +56,7 @@ Required rows:
 | --- | --- |
 | `Track2p` | original proposal baseline |
 | `FullMHTPrior2` | FullMHT with strong Track2p proposal prior |
+| `FullMHTGreedyPrior2` | greedy beam-width-1 ablation over the same scan candidates |
 | `FullMHTPriorVetoScaled` | fixed hand-gated prior-survival hazard |
 | `FullMHTPriorSurvival` | calibrated label-free prior-survival likelihood |
 
@@ -58,6 +64,13 @@ Promotion requires `FullMHTPriorSurvival` to match or improve
 `FullMHTPriorVetoScaled` on complete-track F1 without losing pairwise F1 beyond a
 single-edge-scale fluctuation. If it ties `FullMHTPrior2`, keep it as an
 implemented model layer but not the headline row.
+
+The decision artifact reports:
+
+- whether the beam row beats or ties `FullMHTGreedyPrior2`;
+- whether `FullMHTPriorSurvival` improves, ties, or falls below
+  `FullMHTPriorVetoScaled`;
+- the pairwise/complete-track micro deltas used for the decision.
 
 ## Direct Reproduction With Diagnostics
 
@@ -199,6 +212,7 @@ After the server runs, update this document and
 - output directories;
 - focused pytest result;
 - canonical comparison table;
+- `full_mht_manifest_decision.md`;
 - direct diagnostic run summary;
 - sensitivity table;
 - exposure counts table from `summary.csv`;
