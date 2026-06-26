@@ -85,3 +85,43 @@ def test_tracks_to_suite2p_index_matrix_rejects_malformed_solver_tracks(
 
     with pytest.raises((TypeError, ValueError), match=message):
         assignment.tracks_to_suite2p_index_matrix(tracks, _sessions())
+
+
+@pytest.mark.parametrize(
+    "size",
+    [
+        True,
+        np.bool_(False),
+        1.5,
+        np.nan,
+        np.inf,
+        "2",
+        b"2",
+        -1,
+        np.asarray(2),
+        object(),
+    ],
+)
+def test_tracks_to_suite2p_index_matrix_rejects_malformed_session_sizes(
+    monkeypatch: pytest.MonkeyPatch,
+    size: object,
+) -> None:
+    def forbidden_tracks_to_index_matrix(*_args: object, **_kwargs: object) -> np.ndarray:
+        raise AssertionError("converter should not be called for malformed session sizes")
+
+    monkeypatch.setattr(
+        assignment,
+        "_load_pyrecest_tracks_to_index_matrix",
+        lambda: forbidden_tracks_to_index_matrix,
+    )
+    malformed_sessions = (
+        SimpleNamespace(
+            plane_data=SimpleNamespace(
+                n_rois=size,
+                roi_indices=np.asarray([], dtype=int),
+            )
+        ),
+    )
+
+    with pytest.raises(ValueError, match="plane_data.n_rois"):
+        assignment.tracks_to_suite2p_index_matrix(({0: 0},), malformed_sessions)
