@@ -85,7 +85,7 @@ This is the first layer in which MHT can preserve a globally cleaner identity
 history even when its local scan score is slightly lower. It is still label-free:
 it reads no manual-GT references, no benchmark scores, and no audit labels.
 
-## Frozen Probe Manifest
+## Frozen Probe Manifests
 
 The immediate terminal-weight neighborhood is frozen in:
 
@@ -103,7 +103,23 @@ Rows:
 | `FullMHTHistoryDynamics050` | terminal motion-history weight `0.50` |
 | `FullMHTHistoryDynamics100` | terminal motion-history weight `1.00` |
 
-Run it with:
+The immediate scan-pruning neighborhood is frozen in:
+
+```text
+benchmarks/full_mht_scan_history_dynamics_probe_manifest.json
+```
+
+Rows:
+
+| row | purpose |
+| --- | --- |
+| `Track2p` | original proposal baseline |
+| `FullMHTPrior2` | proposal-prior FullMHT control |
+| `FullMHTScanHistoryDynamics025` | scan motion-history weight `0.25` |
+| `FullMHTScanHistoryDynamics050` | scan motion-history weight `0.50` |
+| `FullMHTScanHistoryDynamics100` | scan motion-history weight `1.00` |
+
+Run both probes with:
 
 ```bash
 REPO=/home/florianpfaff/codex-runs/BayesCaTrack
@@ -121,16 +137,23 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_benchmark_manifest_full_mht_integration.py
 
-OUT="$REPO/results/full_mht_history_dynamics_probe_$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$OUT"
+TERMINAL_OUT="$REPO/results/full_mht_history_dynamics_probe_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$TERMINAL_OUT"
 "$PY" -m bayescatrack benchmark suite \
   benchmarks/full_mht_history_dynamics_probe_manifest.json \
-  --output-dir "$OUT" \
+  --output-dir "$TERMINAL_OUT" \
+  --summary-format table
+
+SCAN_OUT="$REPO/results/full_mht_scan_history_dynamics_probe_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$SCAN_OUT"
+"$PY" -m bayescatrack benchmark suite \
+  benchmarks/full_mht_scan_history_dynamics_probe_manifest.json \
+  --output-dir "$SCAN_OUT" \
   --summary-format table
 
 "$PY" -m bayescatrack.experiments.full_mht_history_dynamics_decision \
-  "$OUT/full_mht_history_dynamics/full_mht_history_dynamics_comparison.csv" \
-  --output "$OUT/full_mht_history_dynamics_decision.md"
+  "$TERMINAL_OUT/full_mht_history_dynamics/full_mht_history_dynamics_comparison.csv" \
+  --output "$TERMINAL_OUT/full_mht_history_dynamics_decision.md"
 ```
 
 ## No-GT Leakage Guard
