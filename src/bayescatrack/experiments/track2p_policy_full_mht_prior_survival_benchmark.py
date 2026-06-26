@@ -126,7 +126,9 @@ _SURVIVAL_INT_OPTIONS: tuple[tuple[str, str, int, str], ...] = (
 def build_arg_parser() -> argparse.ArgumentParser:
     """Build the prior-survival FullMHT benchmark parser."""
 
-    from bayescatrack.experiments import track2p_policy_full_mht_benchmark as full_mht
+    from bayescatrack.experiments import (
+        track2p_policy_full_mht_benchmark as full_mht,
+    )
 
     parser = full_mht.build_arg_parser()
     parser.prog = f"bayescatrack benchmark {METHOD}"
@@ -163,7 +165,9 @@ def _add_prior_survival_arguments(parser: argparse.ArgumentParser) -> None:
         )
 
 
-def _split_survival_args(argv: Sequence[str]) -> tuple[list[str], dict[str, float | int]]:
+def _split_survival_args(
+    argv: Sequence[str],
+) -> tuple[list[str], dict[str, float | int]]:
     """Return base FullMHT argv plus dynamic survival config attributes."""
 
     namespace, base_argv = _survival_only_parser().parse_known_args(list(argv))
@@ -189,7 +193,9 @@ def main(argv: list[str] | None = None) -> int:
         build_arg_parser().parse_args(raw_argv)
         return 0
 
-    from bayescatrack.experiments import track2p_policy_full_mht_benchmark as full_mht
+    from bayescatrack.experiments import (
+        track2p_policy_full_mht_benchmark as full_mht,
+    )
     from bayescatrack.experiments.full_mht_prior_survival_integration import (
         install_full_mht_prior_survival_scoring,
     )
