@@ -94,6 +94,24 @@ def test_row_scan_motion_history_risk_penalizes_outlier_edges() -> None:
     assert risk > 6.0
 
 
+def test_row_scan_motion_history_risk_penalizes_bad_second_edge() -> None:
+    risk = row_scan_motion_history_risk(
+        [
+            _feature(edge=(0, 1, 1, 20)),
+            _feature(
+                edge=(1, 2, 20, 41),
+                registered_iou=0.20,
+                shifted_iou=0.20,
+                growth_residual=9.0,
+                growth_mahalanobis=9.0,
+                local_deformation=1.30,
+            ),
+        ]
+    )
+
+    assert risk > 10.0
+
+
 def test_scan_motion_history_risk_groups_edges_by_identity_row() -> None:
     hypothesis = SimpleNamespace(
         tracks=np.asarray([[1, 20, 30], [2, 21, 31]], dtype=int),
