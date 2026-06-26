@@ -89,6 +89,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_no_prior_continuation_model.py \
   tests/test_full_mht_no_prior_continuation_integration.py \
   tests/test_full_mht_no_prior_continuation_manifest_integration.py \
+  tests/test_full_mht_no_prior_continuation_decision.py \
   tests/test_full_mht_no_gt_leakage.py
 
 OUT="$REPO/results/full_mht_no_prior_continuation_probe_$(date +%Y%m%d_%H%M%S)"
@@ -97,6 +98,10 @@ mkdir -p "$OUT"
   benchmarks/full_mht_no_prior_continuation_probe_manifest.json \
   --output-dir "$OUT" \
   --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_no_prior_continuation_decision \
+  "$OUT/full_mht_no_prior_continuation/full_mht_no_prior_continuation_comparison.csv" \
+  --output "$OUT/full_mht_no_prior_continuation_decision.md"
 ```
 
 ## Decision Rule
@@ -107,6 +112,13 @@ Treat this as a method probe until the manifest shows:
 - complete-track F1 improves or at least returns to `FullMHTPrior2`;
 - no-prior continuations are reduced relative to `FullMHTCalibratedNoDeath`;
 - the effect is not limited to a single weight.
+
+The decision helper freezes the metric part of this rule as
+`no_prior_continuation_stable_gain`, `no_prior_continuation_single_weight_gain`,
+`no_prior_continuation_ties_baseline`, `no_prior_continuation_pairwise_regression`,
+or `no_prior_continuation_complete_regression`. It does not replace the exposure
+audit; the final judgment still has to inspect whether selected no-prior
+continuations remain rare.
 
 If it improves complete-track identity across nearby weights, it is stronger
 method evidence than the scalar death penalty. If it collapses to `FullMHTPrior2`,
