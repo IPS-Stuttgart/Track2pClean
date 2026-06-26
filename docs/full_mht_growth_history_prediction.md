@@ -75,6 +75,7 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_growth_history_prediction_integration.py \
   tests/test_full_mht_growth_history_prediction_decision.py \
+  tests/test_full_mht_growth_history_prediction_promotion_gate.py \
   tests/test_full_mht_exposure_audit.py \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_benchmark_manifest_full_mht_integration.py
@@ -145,6 +146,30 @@ max_growth_prediction_weighted_penalty_per_subject
 A credible result should show bounded exposure: the penalty should be rare and
 localized rather than suppressing many continuations across many subjects.
 
+## Promotion Gate
+
+The promotion gate combines the frozen benchmark comparison with the label-free
+exposure table. It refuses promotion when the benchmark gain is single-weight, the
+exposure audit was run without growth-history prediction enabled, or the penalty
+fires broadly.
+
+```bash
+"$PY" -m bayescatrack.experiments.full_mht_growth_history_prediction_promotion_gate \
+  "$OUT/full_mht_growth_history_prediction/full_mht_growth_history_prediction_comparison.csv" \
+  "$EXPOSURE/full_mht_growth_history_prediction_exposure.csv" \
+  --output "$EXPOSURE/full_mht_growth_history_prediction_promotion_gate.md"
+```
+
+Promotion requires:
+
+```text
+benchmark_result = history_dynamics_stable_gain
+exposure_result  = bounded_exposure
+```
+
+If either condition fails, record the growth-history prediction layer as an
+exploratory FullMHT component rather than a paper-facing benchmark row.
+
 ## Decision Rule
 
 Treat this as a method probe, not a promoted row, until the manifest shows:
@@ -158,6 +183,8 @@ Treat this as a method probe, not a promoted row, until the manifest shows:
 The frozen helper `full_mht_growth_history_prediction_decision.py` classifies the
 probe as stable gain, single-weight gain, tie, pairwise regression, or complete
 regression using the same no-tuning rule as the other FullMHT dynamics probes.
+The promotion gate adds the required exposure check before any paper-facing row
+can be promoted.
 
 If it improves complete-track identity at more than one nearby weight, it becomes
 a stronger FullMHT method component than a fixed prior-veto pocket. If it ties,
