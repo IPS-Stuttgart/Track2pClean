@@ -21,6 +21,7 @@ reports label-free quantities only:
 - gap reactivations;
 - missing observations in selected histories;
 - terminal identity and motion-history risks when those hooks are enabled;
+- scan-time motion-history risk and weighted risk when scan-pruning is enabled;
 - growth-history prediction evaluated and penalized edge counts when that hook
   is enabled;
 - total and per-subject growth-history prediction penalty mass;
@@ -41,6 +42,7 @@ export PYTHONPATH="$REPO/src"
 "$PY" -m pytest -q \
   tests/test_full_mht_no_gt_leakage.py \
   tests/test_full_mht_exposure_audit.py \
+  tests/test_full_mht_scan_history_dynamics_integration.py \
   tests/test_full_mht_history_dynamics_promotion_gate.py \
   tests/test_full_mht_no_prior_continuation_promotion_gate.py
 
@@ -155,6 +157,59 @@ and records how often it actually penalizes selected continuations.
   --progress
 ```
 
+## Identity-History Scan-Pruning Exposure Variant
+
+Run this variant when evaluating
+`benchmarks/full_mht_identity_history_scan_pruning_manifest.json`. It mirrors the
+central identity-history configuration and then enables one frozen scan-history
+weight, so the audit reports the actual add-on exposure rather than a separate
+history-dynamics toy row.
+
+```bash
+"$PY" -m bayescatrack.experiments.track2p_policy_full_mht_exposure_audit \
+  --data "$REPO/results/policy_dp/data_lightweight" \
+  --input-format suite2p \
+  --threshold-method min \
+  --transform-type affine \
+  --iou-distance-threshold 12 \
+  --cell-probability-threshold 0.5 \
+  --seed-session 0 \
+  --beam-width 8 \
+  --scan-hypotheses 8 \
+  --edge-top-k 4 \
+  --identity-diverse-beam \
+  --miss-cost 2.0 \
+  --full-mht-max-gap 1 \
+  --gap-reactivation-cost 1.0 \
+  --min-output-observations 1 \
+  --min-edge-score 0.25 \
+  --association-score-mode calibrated-likelihood \
+  --association-likelihood-weight 1.0 \
+  --association-likelihood-clip 4.0 \
+  --track2p-prior-weight 12.0 \
+  --track2p-non-prior-penalty 2.0 \
+  --track2p-prior-switch-penalty 8.0 \
+  --track2p-no-prior-successor-penalty 0.0 \
+  --track2p-prior-miss-penalty 4.0 \
+  --track2p-prior-survival-weight 1.0 \
+  --track2p-prior-survival-min-examples-per-class 2 \
+  --track2p-prior-survival-score-clip 8.0 \
+  --no-prior-continuation-likelihood-weight 1.0 \
+  --no-prior-continuation-min-examples-per-class 2 \
+  --no-prior-continuation-score-clip 8.0 \
+  --growth-history-prediction-weight 0.50 \
+  --growth-history-prediction-scale 1.0 \
+  --growth-history-prediction-clip 8.0 \
+  --growth-history-prediction-min-edges 1 \
+  --scan-motion-history-weight 0.50 \
+  --output "$OUT/full_mht_identity_history_scan_pruning_exposure_050.csv" \
+  --format csv \
+  --progress
+```
+
+Repeat only for `0.25` and `1.00` if the manifest decision helper reports a
+candidate scan-pruning gain at those weights.
+
 ## Combined Gates
 
 After running `benchmarks/full_mht_history_dynamics_probe_manifest.json`, combine
@@ -181,10 +236,14 @@ NOPRIOR="$REPO/results/full_mht_no_prior_continuation_probe_YYYYMMDD_HHMMSS"
   --output "$OUT/full_mht_no_prior_continuation_promotion_gate.md"
 ```
 
+For scan-pruning, pair the decision helper output with the exposure CSV. A
+candidate scan-pruning row is not paper-facing unless the decision helper reports
+stable complete-history gain and the exposure `ALL` row remains bounded.
+
 Promotion requires:
 
 ```text
-benchmark_result = history_dynamics_stable_gain or no_prior_continuation_stable_gain
+benchmark_result = history_dynamics_stable_gain or no_prior_continuation_stable_gain or scan_pruning_stable_complete_history_gain
 exposure_result  = bounded_exposure
 ```
 
@@ -201,6 +260,10 @@ history_switched_prior_successors
 history_no_prior_successor_continuations
 history_gap_reactivated_tracks
 max_missing_observations_per_subject
+history_scan_motion_history_risk
+history_scan_motion_history_weighted_risk
+max_scan_motion_history_risk_per_subject
+max_scan_motion_history_weighted_risk_per_subject
 history_growth_prediction_evaluated_edges
 history_growth_prediction_penalized_edges
 history_growth_prediction_weighted_penalty
@@ -216,9 +279,10 @@ max_no_prior_continuation_abs_weighted_score_per_subject
 ```
 
 Healthy exposure means changes remain rare and no subject receives a large number
-of non-prior continuations, switches, growth-history penalties, or no-prior
-continuation likelihood boosts. If the audit shows broad firing, keep the method
-layer exploratory even if a manual-GT benchmark row improves.
+of non-prior continuations, switches, scan-history penalties, growth-history
+penalties, or no-prior continuation likelihood boosts. If the audit shows broad
+firing, keep the method layer exploratory even if a manual-GT benchmark row
+improves.
 
 ## Leakage Guard
 
