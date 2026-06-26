@@ -74,6 +74,7 @@ export PYTHONPATH="$REPO/src"
 
 "$PY" -m pytest -q \
   tests/test_full_mht_terminal_completion_integration.py \
+  tests/test_full_mht_terminal_completion_decision.py \
   tests/test_benchmark_manifest_full_mht_integration.py
 
 OUT="$REPO/results/full_mht_terminal_completion_probe_$(date +%Y%m%d_%H%M%S)"
@@ -82,7 +83,26 @@ mkdir -p "$OUT"
   benchmarks/full_mht_terminal_completion_probe_manifest.json \
   --output-dir "$OUT" \
   --summary-format table
+
+"$PY" -m bayescatrack.experiments.full_mht_terminal_completion_decision \
+  "$OUT/full_mht_terminal_completion/full_mht_terminal_completion_comparison.csv" \
+  --output "$OUT/full_mht_terminal_completion_decision.md"
 ```
+
+## Frozen Decision Rule
+
+The decision helper does not tune the method. It only interprets the frozen
+comparison table:
+
+| result | meaning |
+| --- | --- |
+| `terminal_completion_stable_gain` | at least two nearby weights improve complete-track F1 without pairwise regression |
+| `terminal_completion_single_weight_gain` | only one weight improves complete-track F1, so treat it as knife-edge |
+| `terminal_completion_ties_baseline` | complete-history objective validates the story but does not improve metrics |
+| `terminal_completion_pairwise_regression` | do not promote; complete history pressure damages pairwise tracking |
+| `terminal_completion_complete_regression` | do not promote; complete-track identity is worse |
+
+Promotion still requires the broader no-GT, exposure, and sensitivity gates.
 
 ## Direct Probe Runner
 
