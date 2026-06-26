@@ -165,6 +165,11 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_identity_history_completion_manifest.py \
   tests/test_full_mht_identity_history_decision.py \
   tests/test_full_mht_identity_history_promotion_gate.py \
+  tests/test_full_mht_prior_survival_model.py \
+  tests/test_full_mht_prior_survival_integration.py \
+  tests/test_full_mht_no_prior_continuation_model.py \
+  tests/test_full_mht_no_prior_continuation_integration.py \
+  tests/test_full_mht_growth_history_prediction_integration.py \
   tests/test_full_mht_terminal_completion_decision.py \
   tests/test_full_mht_local_context_manifest.py \
   tests/test_full_mht_local_context_decision.py \
