@@ -9,20 +9,26 @@ from typing import Any
 import numpy as np
 
 _INSTALLED_FLAG = "_bayescatrack_multisession_solver_validation_installed"
+_ERROR_SUFFIX = "must be a non-negative integer"
 
 
 def _coerce_solver_track_index(value: Any, field_name: str) -> int:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{field_name} must be an integer, got boolean {value!r}")
+    if isinstance(value, (bool, np.bool_)) or isinstance(value, np.ndarray):
+        raise ValueError(f"{field_name} {_ERROR_SUFFIX}")
     if isinstance(value, (float, np.floating)):
-        if not np.isfinite(value) or not float(value).is_integer():
-            raise ValueError(f"{field_name} must be integer-like, got {value!r}")
-        return int(value)
-    try:
-        normalized = operator.index(value)
-    except TypeError as exc:
-        raise ValueError(f"{field_name} must be integer-like, got {value!r}") from exc
-    return int(normalized)
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{field_name} {_ERROR_SUFFIX}")
+        normalized = int(numeric_value)
+    else:
+        try:
+            normalized = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{field_name} {_ERROR_SUFFIX}") from exc
+    normalized = int(normalized)
+    if normalized < 0:
+        raise ValueError(f"{field_name} {_ERROR_SUFFIX}")
+    return normalized
 
 
 def install_multisession_solver_validation(module: Any | None = None) -> None:
@@ -50,15 +56,21 @@ def install_multisession_solver_validation(module: Any | None = None) -> None:
             raise ValueError("Solver result does not contain tracks")
 
         normalized_tracks: list[dict[int, int]] = []
-        for track in tracks:
+        for track_number, track in enumerate(tracks):
             if isinstance(track, Mapping):
                 normalized_track: dict[int, int] = {}
                 for session_index, detection_index in track.items():
-                    normalized_track[
-                        _coerce_solver_track_index(session_index, "session index")
-                    ] = _coerce_solver_track_index(
+                    normalized_session_index = _coerce_solver_track_index(
+                        session_index,
+                        f"multisession solver track {track_number} session index",
+                    )
+                    if normalized_session_index in normalized_track:
+                        raise ValueError(
+                            "multisession solver tracks must not contain duplicate session indices after normalization"
+                        )
+                    normalized_track[normalized_session_index] = _coerce_solver_track_index(
                         detection_index,
-                        "detection index",
+                        f"multisession solver track {track_number} detection index",
                     )
                 normalized_tracks.append(normalized_track)
                 continue

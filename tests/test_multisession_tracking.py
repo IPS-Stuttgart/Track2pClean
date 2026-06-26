@@ -176,12 +176,13 @@ def test_coerce_solver_tracks_accepts_integer_like_numpy_indices():
 
 @pytest.mark.parametrize(
     ("bad_track", "message"),
-        [
-            ({True: 0}, "session index"),
-            ({0: True}, "detection index"),
-            ({0: 1.5}, "detection index"),
-            ({"0": 0}, "session index"),
-            ({0: "1"}, "detection index"),
+    [
+        ({True: 0}, "session index"),
+        ({0: True}, "detection index"),
+        ({0: -1}, "detection index"),
+        ({0: 1.5}, "detection index"),
+        ({"0": 0}, "session index"),
+        ({0: "1"}, "detection index"),
         ({0: np.nan}, "detection index"),
     ],
 )
