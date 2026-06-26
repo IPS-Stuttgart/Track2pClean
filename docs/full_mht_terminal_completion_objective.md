@@ -1,7 +1,8 @@
 # FullMHT Terminal Completion Objective, 2026-06-26
 
 The FullMHT prototype now has an opt-in complete-history terminal objective. It
-is deliberately not enabled in the frozen rows by default.
+is deliberately not enabled in the canonical prior-veto/prior-survival rows by
+default.
 
 ## Motivation
 
@@ -42,19 +43,55 @@ history risk, so it can affect both beam pruning and final hypothesis selection
 once installed. With the default weight of `0.0`, base FullMHT behavior is
 unchanged.
 
-## Direct Probe Runner
+## Frozen Probe Manifest
 
-The wrapper below delegates to the base FullMHT runner and only adds the terminal
-completion attribute:
+The immediate weight neighborhood is frozen in:
+
+```text
+benchmarks/full_mht_terminal_completion_probe_manifest.json
+```
+
+Rows:
+
+| row | purpose |
+| --- | --- |
+| `Track2p` | original proposal baseline |
+| `FullMHTPrior2` | proposal-prior FullMHT control |
+| `FullMHTTerminalCompletion025` | terminal completion weight `0.25` |
+| `FullMHTTerminalCompletion050` | terminal completion weight `0.50` |
+| `FullMHTTerminalCompletion100` | terminal completion weight `1.00` |
+
+Run it with:
 
 ```bash
 REPO=/home/florianpfaff/codex-runs/BayesCaTrack
 PY="$REPO/.venv312/bin/python"
 cd "$REPO"
+git fetch origin
+git checkout codex/full-mht-prototype
+git reset --hard origin/codex/full-mht-prototype
 export PYTHONPATH="$REPO/src"
 
-OUT="$REPO/results/full_mht_terminal_completion_$(date +%Y%m%d_%H%M%S)"
+"$PY" -m pytest -q \
+  tests/test_full_mht_terminal_completion_integration.py \
+  tests/test_benchmark_manifest_full_mht_integration.py
+
+OUT="$REPO/results/full_mht_terminal_completion_probe_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUT"
+"$PY" -m bayescatrack benchmark suite \
+  benchmarks/full_mht_terminal_completion_probe_manifest.json \
+  --output-dir "$OUT" \
+  --summary-format table
+```
+
+## Direct Probe Runner
+
+The wrapper below delegates to the base FullMHT runner and only adds the terminal
+completion attribute. Use it when diagnostics or a one-off weight are needed:
+
+```bash
+DIRECT="$REPO/results/full_mht_terminal_completion_direct_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$DIRECT"
 
 "$PY" -m bayescatrack.experiments.track2p_policy_full_mht_terminal_completion_benchmark \
   --data "$REPO/results/policy_dp/data_lightweight" \
@@ -81,11 +118,11 @@ mkdir -p "$OUT"
   --track2p-no-prior-successor-penalty 8.0 \
   --track2p-prior-miss-penalty 4.0 \
   --terminal-incomplete-history-weight 0.5 \
-  --output "$OUT/full_mht_terminal_completion.csv" \
+  --output "$DIRECT/full_mht_terminal_completion.csv" \
   --format csv \
-  --diagnostics-output "$OUT/diagnostics.csv" \
+  --diagnostics-output "$DIRECT/diagnostics.csv" \
   --diagnostics-format csv \
-  --summary-output "$OUT/summary.csv" \
+  --summary-output "$DIRECT/summary.csv" \
   --progress
 ```
 
@@ -98,7 +135,8 @@ Positive evidence would be:
 - pairwise F1 stays close to `FullMHTPrior2`;
 - complete-track F1 improves over `FullMHTPrior2` or the greedy beam row;
 - diagnostics show reranking toward complete histories without broad non-prior
-  continuations or prior switches.
+  continuations or prior switches;
+- at least two nearby weights are stable, not a single exact spike.
 
 Negative evidence would be:
 
@@ -106,5 +144,5 @@ Negative evidence would be:
 - it has no effect because the beam never preserves the relevant alternatives;
 - it only works at one fragile weight.
 
-If promising, freeze a tiny sensitivity table over weights such as `0.25`,
-`0.5`, and `1.0`, then add a manifest row only after the behavior is stable.
+If promising, add only the stable terminal-completion row to the canonical
+manifest after recording the probe output directory and comparison table.
