@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -50,6 +52,34 @@ def test_history_totals_sums_scan_history() -> None:
     assert totals["history_missed_tracks"] == 1
     assert totals["history_selected_non_prior_edges"] == 3
     assert totals["history_scan_candidates"] == 15
+
+
+def test_scan_motion_history_exposure_weights_risk() -> None:
+    audit = _audit_module()
+
+    hypothesis = SimpleNamespace(
+        tracks=np.asarray([[1, 20, 41]], dtype=int),
+        history=(
+            {
+                "selected_edge_summaries": (
+                    "0:1->1:20|reg=0.90|shift=0.90|growth=1.0|mahal=1.0|local=0.05"
+                )
+            },
+            {
+                "selected_edge_summaries": (
+                    "1:20->2:41|reg=0.20|shift=0.20|growth=9.0|mahal=9.0|local=1.30"
+                )
+            },
+        ),
+    )
+    config = SimpleNamespace(scan_motion_history_weight=0.5)
+
+    exposure = audit._scan_motion_history_exposure(hypothesis, config)
+
+    assert exposure["history_scan_motion_history_risk"] > 0.0
+    assert exposure["history_scan_motion_history_weighted_risk"] == pytest.approx(
+        0.5 * exposure["history_scan_motion_history_risk"]
+    )
 
 
 def test_history_totals_reports_growth_prediction_exposure() -> None:
@@ -140,6 +170,8 @@ def test_all_subjects_row_reports_exposure_maxima() -> None:
                 "history_no_prior_successor_continuations": 1,
                 "history_gap_reactivated_tracks": 0,
                 "history_scan_candidates": 120,
+                "history_scan_motion_history_risk": 1.5,
+                "history_scan_motion_history_weighted_risk": 0.75,
                 "history_growth_prediction_evaluated_edges": 10,
                 "history_growth_prediction_penalized_edges": 1,
                 "history_growth_prediction_penalty": 1.25,
@@ -173,6 +205,8 @@ def test_all_subjects_row_reports_exposure_maxima() -> None:
                 "history_no_prior_successor_continuations": 2,
                 "history_gap_reactivated_tracks": 1,
                 "history_scan_candidates": 140,
+                "history_scan_motion_history_risk": 3.0,
+                "history_scan_motion_history_weighted_risk": 1.25,
                 "history_growth_prediction_evaluated_edges": 12,
                 "history_growth_prediction_penalized_edges": 3,
                 "history_growth_prediction_penalty": 2.0,
@@ -195,6 +229,8 @@ def test_all_subjects_row_reports_exposure_maxima() -> None:
     assert all_row["n_seed_tracks"] == 22
     assert all_row["n_selected_non_prior_edges"] == 4
     assert all_row["history_scan_candidates"] == 260
+    assert all_row["history_scan_motion_history_risk"] == pytest.approx(4.5)
+    assert all_row["history_scan_motion_history_weighted_risk"] == pytest.approx(2.0)
     assert all_row["history_growth_prediction_evaluated_edges"] == 22
     assert all_row["history_growth_prediction_penalized_edges"] == 4
     assert all_row["history_growth_prediction_penalty"] == pytest.approx(3.25)
@@ -211,6 +247,8 @@ def test_all_subjects_row_reports_exposure_maxima() -> None:
     assert all_row["history_prior_survival_weighted_score"] == pytest.approx(2.0)
     assert all_row["max_selected_non_prior_edges_per_subject"] == 3
     assert all_row["max_missing_observations_per_subject"] == 5
+    assert all_row["max_scan_motion_history_risk_per_subject"] == pytest.approx(3.0)
+    assert all_row["max_scan_motion_history_weighted_risk_per_subject"] == pytest.approx(1.25)
     assert all_row["max_growth_prediction_penalized_edges_per_subject"] == 3
     assert all_row["max_growth_prediction_weighted_penalty_per_subject"] == pytest.approx(1.25)
     assert all_row["max_no_prior_continuation_scored_edges_per_subject"] == 4
@@ -218,6 +256,23 @@ def test_all_subjects_row_reports_exposure_maxima() -> None:
     assert all_row["max_no_prior_continuation_abs_weighted_score_per_subject"] == pytest.approx(1.5)
     assert all_row["max_prior_survival_negative_edges_per_subject"] == 3
     assert all_row["max_prior_survival_abs_weighted_score_per_subject"] == pytest.approx(4.0)
+
+
+def test_parser_accepts_scan_motion_history_exposure_flag() -> None:
+    audit = _audit_module()
+
+    args = audit.build_arg_parser().parse_args(
+        [
+            "--data",
+            "/tmp/example",
+            "--scan-motion-history-weight",
+            "0.50",
+            "--output",
+            "/tmp/out.csv",
+        ]
+    )
+
+    assert args.scan_motion_history_weight == pytest.approx(0.5)
 
 
 def test_parser_accepts_no_prior_continuation_exposure_flags() -> None:
