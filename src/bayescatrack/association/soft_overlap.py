@@ -84,7 +84,9 @@ def soft_iou_pairwise_cost_matrix(
     similarity_epsilon = _finite_positive_float(
         kwargs.get("similarity_epsilon", 1.0e-6), name="similarity_epsilon"
     )
-    large_cost = _finite_positive_float(kwargs.get("large_cost", 1.0e6), name="large_cost")
+    large_cost = _finite_positive_float(
+        kwargs.get("large_cost", 1.0e6), name="large_cost"
+    )
     raw_iou_weight = kwargs.get("iou_weight", 6.0)
     if raw_iou_weight is None:
         raw_iou_weight = 0.0

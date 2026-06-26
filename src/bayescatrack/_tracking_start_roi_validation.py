@@ -1,4 +1,4 @@
-"""Strict validation for tracking seed ROI indices.
+"""Strict validation for tracking seed ROI controls.
 
 The registered subject tracker accepts optional ``start_roi_indices`` to restrict
 reported tracks to seed ROIs in a selected session.  The global and single-session
@@ -21,12 +21,14 @@ _PATCH_MARKER = "_bayescatrack_start_roi_validation_patch"
 
 
 def install_tracking_start_roi_validation() -> None:
-    """Install idempotent validation around tracking ``start_roi_indices``."""
+    """Install idempotent validation around tracking seed controls."""
 
     from . import tracking as _tracking  # pylint: disable=import-outside-toplevel
 
     original_run = _tracking.run_registered_subject_tracking
-    original_restrict = _tracking._restrict_track_rows_to_start_rois  # pylint: disable=protected-access
+    original_restrict = (
+        _tracking._restrict_track_rows_to_start_rois
+    )  # pylint: disable=protected-access
 
     if getattr(original_run, _PATCH_MARKER, False) and getattr(
         original_restrict,
@@ -40,14 +42,17 @@ def install_tracking_start_roi_validation() -> None:
         subject_dir: Any,
         *args: Any,
         start_roi_indices: Any | None = None,
+        start_session_index: Any = 0,
         **kwargs: Any,
     ) -> Any:
         if start_roi_indices is not None:
             start_roi_indices = _normalize_start_roi_indices(start_roi_indices)
+        start_session_index = _normalize_start_session_index(start_session_index)
         return original_run(
             subject_dir,
             *args,
             start_roi_indices=start_roi_indices,
+            start_session_index=start_session_index,
             **kwargs,
         )
 
@@ -56,13 +61,17 @@ def install_tracking_start_roi_validation() -> None:
         track_rows: Any,
         *,
         start_roi_indices: Any,
-        start_session_index: int,
+        start_session_index: Any,
         fill_value: int,
     ) -> np.ndarray:
+        num_sessions = _infer_track_row_session_count(track_rows)
         return original_restrict(
             track_rows,
             start_roi_indices=_normalize_start_roi_indices(start_roi_indices),
-            start_session_index=start_session_index,
+            start_session_index=_normalize_start_session_index(
+                start_session_index,
+                num_sessions=num_sessions,
+            ),
             fill_value=fill_value,
         )
 
@@ -119,6 +128,46 @@ def _normalize_start_roi_index(value: Any) -> int:
     if integer_value < 0:
         raise ValueError("start_roi_indices must contain non-negative ROI indices")
     return integer_value
+
+
+def _infer_track_row_session_count(track_rows: Any) -> int | None:
+    try:
+        array = np.asarray(track_rows)
+    except ValueError:
+        return None
+    if array.ndim != 2:
+        return None
+    return int(array.shape[1])
+
+
+def _normalize_start_session_index(
+    value: Any,
+    *,
+    num_sessions: int | None = None,
+) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError("start_session_index must be an integer session index")
+
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError("start_session_index must be an integer session index")
+        normalized = int(numeric_value)
+    else:
+        try:
+            normalized = int(operator.index(value))
+        except TypeError as exc:
+            raise ValueError(
+                "start_session_index must be an integer session index"
+            ) from exc
+
+    if normalized < 0:
+        raise IndexError(f"start_session_index {normalized} out of bounds")
+    if num_sessions is not None and normalized >= num_sessions:
+        raise IndexError(
+            f"start_session_index {normalized} out of bounds for {num_sessions} sessions"
+        )
+    return normalized
 
 
 __all__ = ["install_tracking_start_roi_validation"]

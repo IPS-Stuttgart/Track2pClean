@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.association.segmentation_events import event_soft_penalty_matrix
 
 

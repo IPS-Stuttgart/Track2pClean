@@ -24,7 +24,9 @@ def _parse_args(tmp_path: Path, *, diagnostics_format: str = "csv"):
     )
 
 
-def test_summary_output_uses_diagnostics_format_not_benchmark_format(tmp_path: Path) -> None:
+def test_summary_output_uses_diagnostics_format_not_benchmark_format(
+    tmp_path: Path,
+) -> None:
     args = _parse_args(tmp_path, diagnostics_format="csv")
 
     veto.write_rows(

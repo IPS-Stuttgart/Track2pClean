@@ -84,7 +84,9 @@ def _normalize_roi_index_array(values: Any, field_name: str) -> np.ndarray:
     if array.ndim != 1:
         raise ValueError(f"{field_name} must be a one-dimensional ROI-index array")
 
-    normalized = tuple(_normalize_roi_index(value, field_name) for value in array.tolist())
+    normalized = tuple(
+        _normalize_roi_index(value, field_name) for value in array.tolist()
+    )
     return np.asarray(normalized, dtype=int)
 
 

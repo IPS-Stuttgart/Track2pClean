@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -19,12 +20,35 @@ class TrackSmoothingConfig:
     fill_value: int = -1
 
     def __post_init__(self) -> None:
-        if self.residual_z_threshold <= 0.0:
-            raise ValueError("residual_z_threshold must be positive")
-        if self.min_track_detections < 2:
-            raise ValueError("min_track_detections must be at least two")
-        if self.min_edge_residual < 0.0:
-            raise ValueError("min_edge_residual must be non-negative")
+        object.__setattr__(
+            self,
+            "residual_z_threshold",
+            _finite_positive_float(
+                self.residual_z_threshold, name="residual_z_threshold"
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_track_detections",
+            _integer_at_least(
+                self.min_track_detections, name="min_track_detections", minimum=2
+            ),
+        )
+        object.__setattr__(
+            self,
+            "min_edge_residual",
+            _finite_nonnegative_float(self.min_edge_residual, name="min_edge_residual"),
+        )
+        object.__setattr__(
+            self,
+            "split_bad_edges",
+            _strict_bool(self.split_bad_edges, name="split_bad_edges"),
+        )
+        object.__setattr__(
+            self,
+            "fill_value",
+            _negative_integer_sentinel(self.fill_value, name="fill_value"),
+        )
 
 
 @dataclass(frozen=True)
@@ -75,11 +99,7 @@ def track_geometry_issues(
     """Flag detections whose position is inconsistent with the full track."""
 
     cfg = config or TrackSmoothingConfig()
-    rows = np.asarray(track_rows, dtype=int)
-    if rows.ndim != 2:
-        raise ValueError("track_rows must be two-dimensional")
-    if rows.shape[1] != len(position_tables):
-        raise ValueError("position_tables must contain one table per session")
+    rows = _validated_track_rows_and_position_tables(track_rows, position_tables)
 
     issues: list[TrackGeometryIssue] = []
     for track_index, row in enumerate(rows):
@@ -118,7 +138,8 @@ def smoothed_track_positions(
 ) -> dict[int, dict[int, np.ndarray]]:
     """Return fitted per-track positions for present detections."""
 
-    rows = np.asarray(track_rows, dtype=int)
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
+    rows = _validated_track_rows_and_position_tables(track_rows, position_tables)
     output: dict[int, dict[int, np.ndarray]] = {}
     for track_index, row in enumerate(rows):
         session_indices, positions, _roi_indices = _track_positions(
@@ -149,9 +170,8 @@ def split_tracks_at_issues(
     to determine whether avoiding a false continuation improves F1.
     """
 
-    rows = np.asarray(track_rows, dtype=int)
-    if rows.ndim != 2:
-        raise ValueError("track_rows must be two-dimensional")
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
+    rows = _validated_track_row_matrix(track_rows)
     issue_map: dict[int, list[int]] = {}
     for issue in issues:
         issue_map.setdefault(int(issue.track_index), []).append(
@@ -198,12 +218,51 @@ def geometry_issue_rows(
     ]
 
 
+def _validated_track_rows_and_position_tables(
+    track_rows: Any,
+    position_tables: Sequence[Mapping[int, Any]],
+) -> np.ndarray:
+    rows = _validated_track_row_matrix(track_rows)
+    if rows.shape[1] != len(position_tables):
+        raise ValueError("position_tables must contain one table per session")
+    return rows
+
+
+def _validated_track_row_matrix(track_rows: Any) -> np.ndarray:
+    rows = np.asarray(track_rows)
+    if rows.ndim != 2:
+        raise ValueError("track_rows must be two-dimensional")
+    if _contains_ambiguous_track_row_tokens(rows):
+        raise ValueError("track_rows must contain finite integer ROI indices")
+    if np.issubdtype(rows.dtype, np.integer):
+        return rows.astype(int, copy=False)
+
+    try:
+        numeric_rows = np.asarray(rows, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("track_rows must contain finite integer ROI indices") from exc
+    if not np.all(np.isfinite(numeric_rows)) or not np.all(
+        numeric_rows == np.floor(numeric_rows)
+    ):
+        raise ValueError("track_rows must contain finite integer ROI indices")
+    return numeric_rows.astype(int, copy=False)
+
+
+def _contains_ambiguous_track_row_tokens(rows: np.ndarray) -> bool:
+    if np.issubdtype(rows.dtype, np.bool_) or rows.dtype.kind in {"S", "U"}:
+        return True
+    if rows.dtype != object:
+        return False
+    return any(isinstance(value, (bool, np.bool_, str, bytes)) for value in rows.ravel())
+
+
 def _track_positions(
     row: np.ndarray,
     position_tables: Sequence[Mapping[int, Any]],
     *,
     fill_value: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    fill_value = _negative_integer_sentinel(fill_value, name="fill_value")
     session_indices: list[int] = []
     positions: list[np.ndarray] = []
     roi_indices: list[int] = []
@@ -253,3 +312,65 @@ def _robust_z_scores(values: np.ndarray) -> np.ndarray:
     z_scores[non_median] = np.inf
     z_scores[~np.isfinite(deviations)] = np.inf
     return z_scores
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite positive value")
+    numeric_value = float(value)
+    if not np.isfinite(numeric_value) or numeric_value <= 0.0:
+        raise ValueError(f"{name} must be a finite positive value")
+    return numeric_value
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite non-negative value")
+    numeric_value = float(value)
+    if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return numeric_value
+
+
+def _integer_at_least(value: Any, *, name: str, minimum: int) -> int:
+    integer_value = _integer_value(value, name=name)
+    if integer_value < minimum:
+        raise ValueError(f"{name} must be at least {minimum}")
+    return integer_value
+
+
+def _negative_integer_sentinel(value: Any, *, name: str) -> int:
+    integer_value = _integer_value(value, name=name)
+    if integer_value >= 0:
+        raise ValueError(f"{name} must be a negative integer sentinel")
+    return integer_value
+
+
+def _integer_value(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (float, np.floating)):
+        if not np.isfinite(value) or not float(value).is_integer():
+            raise ValueError(f"{name} must be an integer")
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(f"{name} must be an integer")
+        try:
+            numeric_value = float(stripped)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        return int(numeric_value)
+    try:
+        return int(operator.index(value))
+    except TypeError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)

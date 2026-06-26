@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bayescatrack.ground_truth_eval import TrackTable, load_track_table_csv
 
 
