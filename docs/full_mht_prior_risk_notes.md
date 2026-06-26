@@ -244,3 +244,35 @@ is still small and tied to the FullMHT growth-residual scale. This is promising
 enough to keep developing as the first "FullMHT-owned" method row, but promotion
 still requires exposure on all Track2p-style subjects and a manifest-level
 comparison against the residual-MHT and teacher-assisted rows.
+
+## Frozen Manifest, 2026-06-26
+
+The intended reproducibility bundle is now frozen in:
+
+`benchmarks/full_mht_prior_veto_manifest.json`
+
+It contains three rows:
+
+| row | purpose |
+| --- | --- |
+| Track2p | original Track2p proposal baseline |
+| FullMHTPrior2 | full scan-assignment MHT constrained by the Track2p proposal prior |
+| FullMHTPriorVetoScaled | FullMHT with the label-free prior-edge survival hazard enabled |
+
+The manifest intentionally records the scale-aligned prior-veto gates that
+produced the first positive FullMHT-owned row:
+
+```text
+track2p_prior_veto_penalty = 20.0
+track2p_prior_veto_min_growth_residual_mahalanobis = 2.5
+track2p_prior_veto_min_registered_iou = 0.35
+track2p_prior_veto_max_registered_iou = 0.40
+track2p_prior_veto_max_min_cell_probability = 0.65
+```
+
+Status: frozen but not yet canonical. The benchmark-suite manifest adapter still
+needs to register `track2p-policy-full-mht` / `track2p-full-mht` and translate
+these JSON fields into `FullMHTConfig` before this file can be executed with
+`bayescatrack benchmark suite`. Until that adapter is merged, use the existing CLI
+commands as the authoritative execution path and treat this manifest as the
+pre-registered target bundle.
