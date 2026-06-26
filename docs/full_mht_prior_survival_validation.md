@@ -5,6 +5,17 @@ hand-gated prior-veto pocket with a calibrated, label-free prior-edge survival
 likelihood. It should not be promoted from candidate row to paper method until it
 passes the checks below.
 
+The row can be run either through the benchmark manifest or directly with:
+
+```bash
+"$PY" -m bayescatrack.experiments.track2p_policy_full_mht_prior_survival_benchmark \
+  --help
+```
+
+The direct runner delegates to the base FullMHT implementation, installs the
+calibrated survival scorer, and exposes `--track2p-prior-survival-*` knobs as
+normal command-line flags.
+
 ## Frozen Reproduction
 
 Run the canonical manifest first:
@@ -22,6 +33,7 @@ export PYTHONPATH="$REPO/src"
   tests/test_benchmark_manifest_full_mht_integration.py \
   tests/test_full_mht_prior_survival_model.py \
   tests/test_full_mht_prior_survival_integration.py \
+  tests/test_full_mht_prior_survival_runner.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
 
@@ -46,6 +58,50 @@ Promotion requires `FullMHTPriorSurvival` to match or improve
 `FullMHTPriorVetoScaled` on complete-track F1 without losing pairwise F1 beyond a
 single-edge-scale fluctuation. If it ties `FullMHTPrior2`, keep it as an
 implemented model layer but not the headline row.
+
+## Direct Reproduction With Diagnostics
+
+Use the explicit runner when diagnostics or summaries are needed for the survival
+row itself:
+
+```bash
+DIRECT="$REPO/results/full_mht_prior_survival_direct_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$DIRECT"
+
+"$PY" -m bayescatrack.experiments.track2p_policy_full_mht_prior_survival_benchmark \
+  --data "$REPO/results/policy_dp/data_lightweight" \
+  --reference "$REPO/results/policy_dp/data_lightweight" \
+  --reference-kind manual-gt \
+  --input-format suite2p \
+  --threshold-method min \
+  --transform-type affine \
+  --iou-distance-threshold 12 \
+  --cell-probability-threshold 0.5 \
+  --seed-source reference \
+  --beam-width 8 \
+  --scan-hypotheses 8 \
+  --edge-top-k 4 \
+  --identity-diverse-beam \
+  --miss-cost 2.0 \
+  --max-gap 1 \
+  --gap-reactivation-cost 1.0 \
+  --min-output-observations 1 \
+  --min-edge-score 0.25 \
+  --track2p-prior-weight 12.0 \
+  --track2p-non-prior-penalty 2.0 \
+  --track2p-prior-switch-penalty 8.0 \
+  --track2p-no-prior-successor-penalty 8.0 \
+  --track2p-prior-miss-penalty 4.0 \
+  --track2p-prior-survival-weight 1.0 \
+  --track2p-prior-survival-min-examples-per-class 2 \
+  --track2p-prior-survival-score-clip 8.0 \
+  --output "$DIRECT/full_mht_prior_survival.csv" \
+  --format csv \
+  --diagnostics-output "$DIRECT/diagnostics.csv" \
+  --diagnostics-format csv \
+  --summary-output "$DIRECT/summary.csv" \
+  --progress
+```
 
 ## Sensitivity Table
 
@@ -90,121 +146,40 @@ the point.
 AUDIT="$REPO/results/full_mht_prior_survival_exposure_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$AUDIT"
 
-"$PY" - <<'PY' "$REPO" "$AUDIT"
-from __future__ import annotations
-
-import csv
-import sys
-from pathlib import Path
-
-from bayescatrack.experiments.full_mht_prior_survival_integration import (
-    install_full_mht_prior_survival_scoring,
-)
-from bayescatrack.experiments.track2p_benchmark import Track2pBenchmarkConfig
-from bayescatrack.experiments.track2p_policy_full_mht_benchmark import (
-    FullMHTConfig,
-    _write_rows,
-    run_track2p_policy_full_mht,
-)
-
-repo = Path(sys.argv[1])
-out = Path(sys.argv[2])
-data = repo / "results" / "policy_dp" / "data_lightweight"
-install_full_mht_prior_survival_scoring()
-
-mht_config = FullMHTConfig(
-    seed_source="track2p-output",
-    beam_width=8,
-    scan_hypotheses=8,
-    edge_top_k=4,
-    identity_diverse_beam=True,
-    miss_cost=2.0,
-    max_gap=1,
-    gap_reactivation_cost=1.0,
-    min_output_observations=1,
-    min_edge_score=0.25,
-    track2p_prior_weight=12.0,
-    track2p_non_prior_penalty=2.0,
-    track2p_prior_switch_penalty=8.0,
-    track2p_no_prior_successor_penalty=8.0,
-    track2p_prior_miss_penalty=4.0,
-)
-object.__setattr__(mht_config, "track2p_prior_survival_weight", 1.0)
-object.__setattr__(mht_config, "track2p_prior_survival_min_examples_per_class", 2)
-object.__setattr__(mht_config, "track2p_prior_survival_score_clip", 8.0)
-
-config = Track2pBenchmarkConfig(
-    data=data,
-    reference=data,
-    reference_kind="track2p-output",
-    method="global-assignment",
-    input_format="suite2p",
-    transform_type="affine",
-    allow_track2p_as_reference_for_smoke_test=True,
-    include_non_cells=False,
-    cell_probability_threshold=0.5,
-    exclude_overlapping_pixels=False,
-    weighted_masks=False,
-    weighted_centroids=False,
-)
-
-result = run_track2p_policy_full_mht(
-    config,
-    threshold_method="min",
-    iou_distance_threshold=12.0,
-    transform_type="affine",
-    cell_probability_threshold=0.5,
-    mht_config=mht_config,
-    progress=True,
-)
-
-_write_rows(result.summary_rows, out / "summary.csv", output_format="csv")
-_write_rows(result.diagnostic_rows, out / "diagnostics.csv", output_format="csv")
-_write_rows(
-    [benchmark_result.to_dict() for benchmark_result in result.results],
-    out / "scores_against_track2p_reference.csv",
-    output_format="csv",
-)
-
-with (out / "exposure_counts.csv").open("w", encoding="utf-8", newline="") as handle:
-    writer = csv.DictWriter(
-        handle,
-        fieldnames=(
-            "subject",
-            "scan_selected_prior_edges",
-            "scan_selected_non_prior_edges",
-            "scan_missed_prior_successors",
-            "scan_switched_prior_successors",
-            "scan_no_prior_successor_continuations",
-            "terminal_selected_rank",
-        ),
-    )
-    writer.writeheader()
-    for row in result.summary_rows:
-        if row.get("subject") == "ALL":
-            continue
-        writer.writerow(
-            {
-                "subject": row.get("subject", ""),
-                "scan_selected_prior_edges": row.get("scan_selected_prior_edges", 0),
-                "scan_selected_non_prior_edges": row.get(
-                    "scan_selected_non_prior_edges", 0
-                ),
-                "scan_missed_prior_successors": row.get(
-                    "scan_missed_prior_successors", 0
-                ),
-                "scan_switched_prior_successors": row.get(
-                    "scan_switched_prior_successors", 0
-                ),
-                "scan_no_prior_successor_continuations": row.get(
-                    "scan_no_prior_successor_continuations", 0
-                ),
-                "terminal_selected_rank": row.get("terminal_selected_rank", 1),
-            }
-        )
-
-print(out)
-PY
+"$PY" -m bayescatrack.experiments.track2p_policy_full_mht_prior_survival_benchmark \
+  --data "$REPO/results/policy_dp/data_lightweight" \
+  --reference "$REPO/results/policy_dp/data_lightweight" \
+  --reference-kind track2p-output \
+  --allow-track2p-as-reference-for-smoke-test \
+  --input-format suite2p \
+  --threshold-method min \
+  --transform-type affine \
+  --iou-distance-threshold 12 \
+  --cell-probability-threshold 0.5 \
+  --seed-source track2p-output \
+  --beam-width 8 \
+  --scan-hypotheses 8 \
+  --edge-top-k 4 \
+  --identity-diverse-beam \
+  --miss-cost 2.0 \
+  --max-gap 1 \
+  --gap-reactivation-cost 1.0 \
+  --min-output-observations 1 \
+  --min-edge-score 0.25 \
+  --track2p-prior-weight 12.0 \
+  --track2p-non-prior-penalty 2.0 \
+  --track2p-prior-switch-penalty 8.0 \
+  --track2p-no-prior-successor-penalty 8.0 \
+  --track2p-prior-miss-penalty 4.0 \
+  --track2p-prior-survival-weight 1.0 \
+  --track2p-prior-survival-min-examples-per-class 2 \
+  --track2p-prior-survival-score-clip 8.0 \
+  --output "$AUDIT/scores_against_track2p_reference.csv" \
+  --format csv \
+  --diagnostics-output "$AUDIT/diagnostics.csv" \
+  --diagnostics-format csv \
+  --summary-output "$AUDIT/summary.csv" \
+  --progress
 ```
 
 Decision rule:
@@ -224,6 +199,7 @@ After the server runs, update this document and
 - output directories;
 - focused pytest result;
 - canonical comparison table;
+- direct diagnostic run summary;
 - sensitivity table;
-- exposure counts table;
+- exposure counts table from `summary.csv`;
 - promote / keep exploratory / reject decision.
