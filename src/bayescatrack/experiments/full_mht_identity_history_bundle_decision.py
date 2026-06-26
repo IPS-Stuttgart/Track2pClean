@@ -62,7 +62,10 @@ def evaluate_identity_history_bundle(
         status = "promotable_core_method"
         paper_row = CORE_ROW
         recommendation = "promote the central identity-history row; treat add-ons as separate variants"
-    elif core_status == "incomplete" or subject["status"] in {"not_evaluated", "incomplete"}:
+    elif core_status == "incomplete" or (
+        core_status == "promotable_after_review"
+        and subject["status"] in {"not_evaluated", "incomplete"}
+    ):
         status = "incomplete"
         paper_row = ""
         recommendation = "rerun the central identity-history promotion and subject-support gates before interpreting add-ons"
