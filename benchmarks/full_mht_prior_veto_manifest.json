@@ -39,6 +39,27 @@
       "track2p_prior_miss_penalty": 4.0
     },
     {
+      "name": "FullMHTGreedyPrior2",
+      "runner": "track2p-full-mht",
+      "output": "full_mht_prior_veto/full_mht_greedy_prior2.csv",
+      "format": "csv",
+      "seed_source": "reference",
+      "beam_width": 1,
+      "scan_hypotheses": 8,
+      "edge_top_k": 4,
+      "identity_diverse_beam": false,
+      "miss_cost": 2.0,
+      "full_mht_max_gap": 1,
+      "gap_reactivation_cost": 1.0,
+      "min_output_observations": 1,
+      "min_edge_score": 0.25,
+      "track2p_prior_weight": 12.0,
+      "track2p_non_prior_penalty": 2.0,
+      "track2p_prior_switch_penalty": 8.0,
+      "track2p_no_prior_successor_penalty": 8.0,
+      "track2p_prior_miss_penalty": 4.0
+    },
+    {
       "name": "FullMHTPriorVetoScaled",
       "runner": "track2p-full-mht",
       "output": "full_mht_prior_veto/full_mht_prior_veto_scaled.csv",
@@ -104,6 +125,7 @@
       "inputs": {
         "Track2p": "Track2p",
         "FullMHTPrior2": "FullMHTPrior2",
+        "FullMHTGreedyPrior2": "FullMHTGreedyPrior2",
         "FullMHTPriorVetoScaled": "FullMHTPriorVetoScaled",
         "FullMHTPriorSurvival": "FullMHTPriorSurvival"
       },
@@ -116,6 +138,7 @@
       "inputs": {
         "Track2p": "Track2p",
         "FullMHTPrior2": "FullMHTPrior2",
+        "FullMHTGreedyPrior2": "FullMHTGreedyPrior2",
         "FullMHTPriorVetoScaled": "FullMHTPriorVetoScaled",
         "FullMHTPriorSurvival": "FullMHTPriorSurvival"
       },
