@@ -92,7 +92,51 @@ def test_history_dynamics_decision_rejects_pairwise_regression() -> None:
     assert decision["candidate_decisions"][0]["decision"] == "pairwise_regression"
 
 
-def test_history_dynamics_decision_markdown_is_compact() -> None:
+def test_history_dynamics_decision_rejects_regression_even_with_two_gains() -> None:
+    decision = evaluate_history_dynamics_decision(
+        _probe_rows(c025=(0.965, 0.931), c050=(0.965, 0.932), c100=(0.964, 0.933))
+    )
+
+    assert decision["history_dynamics_result"] == "history_dynamics_pairwise_regression"
+    assert decision["viable_candidate_count"] == 2
+    assert decision["pairwise_regression_count"] == 1
+
+
+def test_history_dynamics_decision_rejects_macro_pairwise_regression() -> None:
+    rows = _probe_rows(c025=(0.965, 0.933), c050=(0.965, 0.931), c100=(0.965, 0.931))
+    rows[2]["pairwise_f1_macro"] = "0.900"
+
+    decision = evaluate_history_dynamics_decision(rows)
+
+    assert decision["candidate_decisions"][0]["delta_pairwise_f1_micro"] == 0.0
+    assert decision["candidate_decisions"][0]["delta_pairwise_f1_macro"] < 0.0
+    assert decision["candidate_decisions"][0]["decision"] == "pairwise_regression"
+    assert decision["history_dynamics_result"] == "history_dynamics_pairwise_regression"
+
+
+def test_history_dynamics_decision_rejects_complete_regression_even_with_two_gains() -> None:
+    decision = evaluate_history_dynamics_decision(
+        _probe_rows(c025=(0.965, 0.931), c050=(0.965, 0.932), c100=(0.965, 0.929))
+    )
+
+    assert decision["history_dynamics_result"] == "history_dynamics_complete_regression"
+    assert decision["viable_candidate_count"] == 2
+    assert decision["complete_regression_count"] == 1
+
+
+def test_history_dynamics_decision_rejects_macro_complete_regression() -> None:
+    rows = _probe_rows(c025=(0.965, 0.933), c050=(0.965, 0.931), c100=(0.965, 0.931))
+    rows[2]["complete_track_f1_macro"] = "0.900"
+
+    decision = evaluate_history_dynamics_decision(rows)
+
+    assert decision["candidate_decisions"][0]["delta_complete_track_f1_micro"] > 0.0
+    assert decision["candidate_decisions"][0]["delta_complete_track_f1_macro"] < 0.0
+    assert decision["candidate_decisions"][0]["decision"] == "complete_regression"
+    assert decision["history_dynamics_result"] == "history_dynamics_complete_regression"
+
+
+def test_history_dynamics_decision_markdown_reports_all_four_metrics() -> None:
     markdown = format_decision_markdown(
         evaluate_history_dynamics_decision(_probe_rows())
     )
@@ -100,3 +144,5 @@ def test_history_dynamics_decision_markdown_is_compact() -> None:
     assert "# FullMHT History Dynamics Decision" in markdown
     assert "FullMHTHistoryDynamics050" in markdown
     assert "history_dynamics_stable_gain" in markdown
+    assert "pairwise F1 macro delta" in markdown
+    assert "complete-track F1 macro delta" in markdown
