@@ -10,6 +10,7 @@ method can make different choices before any manual-GT metric is read.
 | Calibrated association likelihood is scan-assignment active, not just an exposed score | `test_calibrated_likelihood_flips_scan_assignment_from_local_overlap` | calibrated likelihood selects the globally coherent edge over a higher registered-IoU local edge |
 | No-prior continuation is a birth/death dynamics term | `test_no_prior_continuation_likelihood_opens_scan_assignment_over_death` | the likelihood opens a no-prior continuation where local scoring leaves the row missed/dead |
 | Growth-history prediction changes scan-time identity selection | `test_growth_history_prediction_flips_scan_assignment_to_coherent_history` | the history-conditioned growth penalty flips assignment toward the coherent prior trajectory |
+| Scan-history pruning is a true history term, not a terminal metric patch | `test_scan_history_conflict_demo_rejects_local_motion_break` and `test_scan_history_conflict_demo_zero_weight_matches_local_score` | local-score pruning keeps the higher raw-score motion break; positive history weight flips to the coherent path, while zero weight exactly matches local scoring |
 | Full MHT can beat greedy local history search | `test_full_mht_conflict_demo_mht_history_beats_greedy` | beam search keeps an alternate history until later evidence makes it best |
 | Pairwise-good tracking can still be complete-track-bad | `test_full_mht_conflict_demo_pairwise_good_can_be_complete_bad` | greedy remains high pairwise F1 while losing complete identity; full MHT recovers it |
 | The constructed witness is label-free in selection | `test_full_mht_conflict_demo_selection_is_reference_independent` | selected paths do not change when only the evaluation reference is changed |
@@ -29,5 +30,6 @@ attractive.  The method story requires all three pieces at once:
 ```text
 scan-assignment likelihoods and dynamics are active
 full-history beam search beats greedy in a controlled conflict
+scan-history pruning rejects locally attractive but history-incoherent continuations
 real-data frozen manifests pass metric, sensitivity, exposure, and no-GT gates
 ```
