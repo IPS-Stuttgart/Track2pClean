@@ -5,16 +5,21 @@ hand-gated prior-veto pocket with a calibrated, label-free prior-edge survival
 likelihood. It should not be promoted from candidate row to paper method until it
 passes the checks below.
 
-The row can be run either through the benchmark manifest or directly with:
+The direct runner delegates to the base FullMHT implementation, installs the
+calibrated survival scorer, and exposes `--track2p-prior-survival-*` knobs as
+normal command-line flags:
 
 ```bash
 "$PY" -m bayescatrack.experiments.track2p_policy_full_mht_prior_survival_benchmark \
   --help
 ```
 
-The direct runner delegates to the base FullMHT implementation, installs the
-calibrated survival scorer, and exposes `--track2p-prior-survival-*` knobs as
-normal command-line flags.
+The final promotion decision is deliberately mechanical. It combines three frozen
+artifacts:
+
+1. canonical manifest comparison with matching greedy ablations;
+2. small prior-survival sensitivity table;
+3. label-free exposure audit with prior-survival scoring enabled.
 
 ## Frozen Reproduction
 
@@ -35,6 +40,9 @@ export PYTHONPATH="$REPO/src"
   tests/test_full_mht_prior_survival_model.py \
   tests/test_full_mht_prior_survival_integration.py \
   tests/test_full_mht_prior_survival_runner.py \
+  tests/test_full_mht_prior_survival_promotion_gate.py \
+  tests/test_full_mht_exposure_audit.py \
+  tests/test_full_mht_no_gt_leakage.py \
   tests/test_track2p_policy_full_mht_conflict_demo.py \
   tests/test_track2p_policy_full_mht_growth_prior.py::test_full_mht_prior_veto_scoring_does_not_read_gt_audit_columns
 
@@ -62,7 +70,7 @@ Required rows:
 | `FullMHTPriorSurvival` | calibrated label-free prior-survival likelihood |
 | `FullMHTGreedyPriorSurvival` | greedy beam-width-1 ablation for the calibrated survival row |
 
-Promotion requires both of these manifest-decision conditions:
+Promotion requires both manifest-decision conditions:
 
 ```text
 history_search_result = prior_survival_complete_history_advantage
@@ -75,18 +83,6 @@ pairwise-F1 loss. `fixed_veto_complete_history_advantage` is useful interim
 evidence for the fixed-hazard row, but it does not by itself promote the
 calibrated prior-survival candidate. A pairwise-only beam gain is not evidence for
 the paper's complete-identity claim and must be recorded as exploratory.
-
-The decision artifact reports:
-
-- whether the base proposal-prior beam gives a complete-track advantage, ties its
-  greedy row, regresses against it, or improves only pairwise F1;
-- whether the fixed prior-veto beam gives a complete-track advantage over its own
-  greedy row;
-- whether the calibrated prior-survival beam gives a complete-track advantage
-  over its own greedy row;
-- whether `FullMHTPriorSurvival` improves, ties, or falls below
-  `FullMHTPriorVetoScaled`;
-- the pairwise/complete-track micro deltas used for the decision.
 
 ## Direct Reproduction With Diagnostics
 
@@ -137,11 +133,11 @@ mkdir -p "$DIRECT"
 Run the frozen neighborhood manifest next:
 
 ```bash
-OUT="$REPO/results/full_mht_prior_survival_sensitivity_$(date +%Y%m%d_%H%M%S)"
-mkdir -p "$OUT"
+SENS="$REPO/results/full_mht_prior_survival_sensitivity_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$SENS"
 "$PY" -m bayescatrack benchmark suite \
   benchmarks/full_mht_prior_survival_sensitivity_manifest.json \
-  --output-dir "$OUT" \
+  --output-dir "$SENS" \
   --summary-format table
 ```
 
@@ -154,44 +150,35 @@ The manifest varies only immediate method-neighborhood settings:
 | minimum pseudo examples per class | `2`, `3` |
 | anchor strictness | default vs stricter anchor overlap/confidence |
 
-Decision rule:
-
-- complete-track F1 should stay at least as high as `FullMHTPrior2` for nearby
-  settings;
-- pairwise F1 should not collapse in any immediate neighbor;
-- if only one exact setting works, report the survival layer as exploratory;
-- if a small plateau works, `FullMHTPriorSurvival` can replace the fixed
-  prior-veto hazard as the stronger method row.
+The promotion gate requires `stable_plateau`: the central row must pass, at least
+four of the six sensitivity rows must stay at or above `FullMHTPrior2` on
+pairwise and complete-track F1, and at least two of the three weight-neighborhood
+rows must pass. Pairwise collapse in any row keeps the layer exploratory.
 
 ## Non-GT Exposure Audit
 
-The exposure audit is deliberately not a manual-GT benchmark. It runs the same
-FullMHT prior-survival configuration with Track2p output as the reference/seed
-source so that all Track2p-style subjects can be inspected for broad firing.
-The scoring numbers in this audit are not paper metrics; the summary counts are
-the point.
+The exposure audit is deliberately not a benchmark and does not load reference
+labels. It uses Track2p output only as the seed/proposal source and records how
+broadly the FullMHT candidate layer fires across all Track2p-style subjects.
 
 ```bash
 AUDIT="$REPO/results/full_mht_prior_survival_exposure_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$AUDIT"
 
-"$PY" -m bayescatrack.experiments.track2p_policy_full_mht_prior_survival_benchmark \
+"$PY" -m bayescatrack.experiments.track2p_policy_full_mht_exposure_audit \
   --data "$REPO/results/policy_dp/data_lightweight" \
-  --reference "$REPO/results/policy_dp/data_lightweight" \
-  --reference-kind track2p-output \
-  --allow-track2p-as-reference-for-smoke-test \
   --input-format suite2p \
   --threshold-method min \
   --transform-type affine \
   --iou-distance-threshold 12 \
   --cell-probability-threshold 0.5 \
-  --seed-source track2p-output \
+  --seed-session 0 \
   --beam-width 8 \
   --scan-hypotheses 8 \
   --edge-top-k 4 \
   --identity-diverse-beam \
   --miss-cost 2.0 \
-  --max-gap 1 \
+  --full-mht-max-gap 1 \
   --gap-reactivation-cost 1.0 \
   --min-output-observations 1 \
   --min-edge-score 0.25 \
@@ -203,22 +190,42 @@ mkdir -p "$AUDIT"
   --track2p-prior-survival-weight 1.0 \
   --track2p-prior-survival-min-examples-per-class 2 \
   --track2p-prior-survival-score-clip 8.0 \
-  --output "$AUDIT/scores_against_track2p_reference.csv" \
+  --output "$AUDIT/prior_survival_exposure.csv" \
   --format csv \
-  --diagnostics-output "$AUDIT/diagnostics.csv" \
-  --diagnostics-format csv \
-  --summary-output "$AUDIT/summary.csv" \
   --progress
 ```
 
-Decision rule:
+The audit must include prior-survival exposure columns such as
+`history_prior_survival_scored_edges`, `history_prior_survival_negative_edges`,
+and `max_prior_survival_negative_edges_per_subject`. If these are missing or the
+scored-edge count is zero, the promotion gate reports the exposure artifact as
+incomplete.
 
-- `scan_selected_non_prior_edges` should remain rare;
-- `scan_missed_prior_successors` should remain tiny, not broad across subjects;
-- no subject should receive a large number of prior switches or no-prior
-  continuations;
-- if exposure is broad, the survival model is too permissive or too strong even
-  if the manual-GT benchmark improves.
+## Combined Promotion Gate
+
+After the canonical manifest, sensitivity manifest, and exposure audit exist, run:
+
+```bash
+"$PY" -m bayescatrack.experiments.full_mht_prior_survival_promotion_gate \
+  "$OUT/full_mht_prior_veto/full_mht_prior_veto_comparison.csv" \
+  "$SENS/full_mht_prior_survival_sensitivity/full_mht_prior_survival_sensitivity.csv" \
+  "$AUDIT/prior_survival_exposure.csv" \
+  --output "$AUDIT/prior_survival_promotion_gate.md"
+```
+
+Promotion requires:
+
+- `manifest_result = prior_survival_complete_history_advantage`;
+- `prior_survival_result = survival_improves_fixed_veto` or `survival_ties_fixed_veto`;
+- `sensitivity_result = stable_plateau`;
+- `exposure_result = bounded_exposure`;
+- prior-survival scored edges are nonzero;
+- selected non-prior edges, prior switches, no-prior continuations, and negative
+  prior-survival penalties remain bounded.
+
+If any gate fails, keep the row exploratory and record the failure reason. This is
+the safeguard that prevents a ledger-discovered prior-survival likelihood from
+being presented as a validated method row.
 
 ## Recording
 
@@ -231,5 +238,6 @@ After the server runs, update this document and
 - `full_mht_manifest_decision.md`;
 - direct diagnostic run summary;
 - sensitivity table;
-- exposure counts table from `summary.csv`;
+- exposure counts table from `prior_survival_exposure.csv`;
+- `prior_survival_promotion_gate.md`;
 - promote / keep exploratory / reject decision.
