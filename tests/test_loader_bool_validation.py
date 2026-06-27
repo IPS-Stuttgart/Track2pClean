@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bayescatrack import _suite2p_validation
+from bayescatrack import _suite2p_validation, load_suite2p_plane
 from bayescatrack.core import _loader_validation
 
 _BOOL_CONTROL_NAMES = tuple(_loader_validation._SUITE2P_BOOL_CONTROL_DEFAULTS)
@@ -22,6 +22,29 @@ def test_suite2p_stat_validation_strict_bool_accepts_numpy_bool_scalars() -> Non
 def test_suite2p_trace_flag_validation_accepts_numpy_bool_scalars() -> None:
     assert _suite2p_validation._strict_python_bool(np.bool_(True), name="load_traces") is True
     assert _suite2p_validation._strict_python_bool(np.bool_(False), name="load_traces") is False
+
+
+def test_public_suite2p_trace_flags_accept_numpy_bool_scalars(tmp_path) -> None:
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([0], dtype=int),
+                "xpix": np.asarray([0], dtype=int),
+                "lam": np.asarray([1.0], dtype=float),
+            }
+        ],
+        dtype=object,
+    )
+    np.save(tmp_path / "stat.npy", stat)
+
+    plane = load_suite2p_plane(
+        tmp_path,
+        load_traces=np.bool_(False),
+        load_spike_traces=np.bool_(False),
+        load_neuropil_traces=np.bool_(False),
+    )
+
+    assert plane.n_rois == 1
 
 
 def test_suite2p_loader_controls_normalize_numpy_bool_scalars() -> None:
