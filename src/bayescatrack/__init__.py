@@ -37,6 +37,9 @@ from ._edge_ranking_label_validation import (
 from ._empty_candidate_margin import (
     install_empty_candidate_gate_margin_fix as _install_empty_candidate_gate_margin_fix,
 )
+from ._empty_match_collection_validation import (
+    install_empty_match_collection_validation as _install_empty_match_collection_validation,
+)
 from ._empty_registered_roi_mask_validation import (
     install_empty_registered_roi_mask_validation as _install_empty_registered_roi_mask_validation,
 )
@@ -241,6 +244,7 @@ _install_empty_candidate_gate_margin_fix()
 _install_empty_registered_roi_mask_validation()
 _install_matching_bundle_roi_index_validation()
 _install_matching_control_validation()
+_install_empty_match_collection_validation(_matching)
 _install_multisession_config_validation()
 _install_multisession_solver_track_validation()
 _install_multisession_solver_validation()
@@ -258,9 +262,3 @@ _install_track_row_export_option_validation()
 _install_track_row_fill_value_validation()
 _install_track_table_session_name_validation()
 _install_track2p_policy_session_gap_validation(_track2p_policy_priors)
-_install_global_track_row_validation()
-_install_tracking_fill_value_validation()
-_install_tracking_result_matrix_validation()
-_install_return_components_validation(_bridge)
-
-__all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
