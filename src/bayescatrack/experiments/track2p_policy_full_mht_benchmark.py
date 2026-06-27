@@ -167,6 +167,10 @@ _CandidateScoreCache = dict[
     tuple[int, int, int, tuple[int, ...], tuple[int, ...]],
     tuple[tuple[float, int], ...],
 ]
+_BaseScoreCache = dict[
+    tuple[int, int, tuple[int, ...], tuple[int, ...]],
+    tuple[tuple[float, int, int], ...],
+]
 
 
 @dataclass(frozen=True)
@@ -1475,12 +1479,16 @@ def _advance_scan(
         track2p_prior_edges=track2p_prior_edges,
     )
     expanded: list[_MHTHypothesis] = []
-    # Growth-history prediction is deliberately hypothesis-dependent, so sharing
-    # candidate scores across beam hypotheses would change the method.
+    # Growth-history prediction is deliberately hypothesis-dependent, so only
+    # the base score can be shared across beam hypotheses when it is active.
+    growth_history_active = (
+        float(getattr(config, "growth_history_prediction_weight", 0.0)) > 0.0
+    )
     candidate_score_cache: _CandidateScoreCache | None = (
-        None
-        if float(getattr(config, "growth_history_prediction_weight", 0.0)) > 0.0
-        else {}
+        None if growth_history_active else {}
+    )
+    base_score_cache: _BaseScoreCache | None = (
+        {} if growth_history_active else None
     )
     for hypothesis in hypotheses:
         expanded.extend(
@@ -1493,6 +1501,7 @@ def _advance_scan(
                 track2p_prior_edges=track2p_prior_edges,
                 scan_pair_matrices_by_source_session=pooled_matrices,
                 candidate_score_cache=candidate_score_cache,
+                base_score_cache=base_score_cache,
             )
         )
     return _prune_beam(expanded, config=config)
@@ -1546,6 +1555,7 @@ def _expand_hypothesis_scan(
         Mapping[int, _FullMHTPairMatrices] | None
     ) = None,
     candidate_score_cache: _CandidateScoreCache | None = None,
+    base_score_cache: _BaseScoreCache | None = None,
 ) -> list[_MHTHypothesis]:
     tracks = np.asarray(hypothesis.tracks, dtype=int)
     next_session = int(session_index) + 1
@@ -1685,6 +1695,22 @@ def _expand_hypothesis_scan(
         for source_session, matrices in matrices_by_source_session.items()
     }
     score_cache = candidate_score_cache if candidate_score_cache is not None else {}
+    base_cache = base_score_cache if base_score_cache is not None else {}
+    growth_history_weight = float(
+        getattr(config, "growth_history_prediction_weight", 0.0)
+    )
+    base_edge_score = (
+        globals().get("_bayescatrack_growth_history_prediction_original_edge_score")
+        if growth_history_weight > 0.0 and base_score_cache is not None
+        else None
+    )
+    growth_penalty_for_candidate = None
+    if callable(base_edge_score):
+        from bayescatrack.experiments.full_mht_growth_history_prediction_integration import (
+            growth_history_prediction_penalty_for_candidate,
+        )
+
+        growth_penalty_for_candidate = growth_history_prediction_penalty_for_candidate
     candidate_entries: list[tuple[int, int, float]] = []
     candidate_target_roi_set: set[int] = set()
     candidate_count = 0
@@ -1697,6 +1723,58 @@ def _expand_hypothesis_scan(
         if source_local is None:
             continue
         target_key = target_key_by_source_session[source_session]
+        if callable(base_edge_score) and growth_penalty_for_candidate is not None:
+            base_key = (
+                int(source_session),
+                int(active_source.source_roi),
+                target_key[0],
+                target_key[1],
+            )
+            base_scores = base_cache.get(base_key)
+            if base_scores is None:
+                entries: list[tuple[float, int, int]] = []
+                for target_roi in finite_target_rois:
+                    target_local = target_lookup.get(int(target_roi))
+                    if target_local is None:
+                        continue
+                    score = base_edge_score(
+                        sessions,
+                        matrices,
+                        target_session=next_session,
+                        source_local=int(source_local),
+                        target_local=int(target_local),
+                        config=config,
+                        track2p_prior_edges=prior_edges,
+                    )
+                    entries.append(
+                        (float(score), int(target_roi), int(target_local))
+                    )
+                base_scores = tuple(entries)
+                base_cache[base_key] = base_scores
+            row_scores = []
+            for base_score, target_roi, target_local in base_scores:
+                score = float(base_score) - growth_history_weight * float(
+                    growth_penalty_for_candidate(
+                        matrices,
+                        source_local=int(source_local),
+                        target_local=int(target_local),
+                        target_session=next_session,
+                        config=config,
+                    )
+                )
+                if int(active_source.gap_length) > 0:
+                    score -= float(config.gap_reactivation_cost) * float(
+                        active_source.gap_length
+                    )
+                if score >= float(config.min_edge_score):
+                    row_scores.append((float(score), int(target_roi)))
+            row_scores.sort(reverse=True)
+            cached_scores = tuple(row_scores[: max(1, int(config.edge_top_k))])
+            for score, target_roi in cached_scores:
+                candidate_entries.append((int(row_pos), int(target_roi), float(score)))
+                candidate_target_roi_set.add(int(target_roi))
+                candidate_count += 1
+            continue
         cache_key = (
             int(source_session),
             int(active_source.source_roi),
