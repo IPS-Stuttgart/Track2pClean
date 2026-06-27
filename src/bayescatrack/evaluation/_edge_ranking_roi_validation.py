@@ -24,7 +24,9 @@ _LABEL_ERROR = "labels must be a binary matrix containing only 0/1 or boolean va
 def install_edge_ranking_roi_validation() -> None:
     """Install idempotent strict ROI and label validation on edge-ranking helpers."""
 
-    from . import edge_ranking as _edge_ranking  # pylint: disable=import-outside-toplevel
+    from . import (
+        edge_ranking as _edge_ranking,  # pylint: disable=import-outside-toplevel
+    )
 
     original_rank: Callable[..., Any] = _edge_ranking.rank_labeled_edges
     if not getattr(original_rank, _PATCH_MARKER, False):
@@ -57,7 +59,11 @@ def install_edge_ranking_roi_validation() -> None:
             )
 
         setattr(rank_labeled_edges_with_roi_validation, _PATCH_MARKER, True)
-        setattr(rank_labeled_edges_with_roi_validation, "_bayescatrack_original", original_rank)
+        setattr(
+            rank_labeled_edges_with_roi_validation,
+            "_bayescatrack_original",
+            original_rank,
+        )
         _edge_ranking.rank_labeled_edges = rank_labeled_edges_with_roi_validation
 
     original_missing: Callable[..., Any] = _edge_ranking.missing_reference_edge_rows
@@ -91,8 +97,14 @@ def install_edge_ranking_roi_validation() -> None:
             )
 
         setattr(missing_reference_edge_rows_with_roi_validation, _PATCH_MARKER, True)
-        setattr(missing_reference_edge_rows_with_roi_validation, "_bayescatrack_original", original_missing)
-        _edge_ranking.missing_reference_edge_rows = missing_reference_edge_rows_with_roi_validation
+        setattr(
+            missing_reference_edge_rows_with_roi_validation,
+            "_bayescatrack_original",
+            original_missing,
+        )
+        _edge_ranking.missing_reference_edge_rows = (
+            missing_reference_edge_rows_with_roi_validation
+        )
 
 
 def _normalize_label_matrix(labels: Any) -> np.ndarray:

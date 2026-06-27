@@ -90,7 +90,9 @@ def _finite_cost_array(values: Any, field_name: str) -> np.ndarray:
     try:
         array = np.asarray(raw_array, dtype=float)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"{field_name} must contain finite numeric assignment costs") from exc
+        raise ValueError(
+            f"{field_name} must contain finite numeric assignment costs"
+        ) from exc
     if not np.all(np.isfinite(array)):
         raise ValueError(f"{field_name} must contain finite numeric assignment costs")
     return array

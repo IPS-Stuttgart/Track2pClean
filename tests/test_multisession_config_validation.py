@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from bayescatrack.multisession_tracking import MultisessionTrackingConfig
 
 

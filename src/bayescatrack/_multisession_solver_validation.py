@@ -99,9 +99,11 @@ def install_multisession_solver_validation(module: Any | None = None) -> None:
                         raise ValueError(
                             "multisession solver tracks must not contain duplicate session indices after normalization"
                         )
-                    normalized_track[normalized_session_index] = _coerce_solver_track_index(
-                        detection_index,
-                        f"multisession solver track {track_number} detection index",
+                    normalized_track[normalized_session_index] = (
+                        _coerce_solver_track_index(
+                            detection_index,
+                            f"multisession solver track {track_number} detection index",
+                        )
                     )
                 normalized_tracks.append(normalized_track)
                 continue
@@ -109,7 +111,9 @@ def install_multisession_solver_validation(module: Any | None = None) -> None:
                 "Each returned track must be a mapping from session index to detection index"
             )
 
-        return tuple(normalized_tracks), None if total_cost is None else float(total_cost)
+        return tuple(normalized_tracks), (
+            None if total_cost is None else float(total_cost)
+        )
 
     def _tracks_to_matrix(
         tracks: Sequence[Mapping[int, int]],
@@ -150,7 +154,9 @@ def install_multisession_solver_validation(module: Any | None = None) -> None:
             else:
                 lookup = np.asarray(session.plane_data.roi_indices, dtype=int)
             if lookup.shape != (int(session.plane_data.n_rois),):
-                raise ValueError("plane_data.roi_indices must have one entry per loaded ROI")
+                raise ValueError(
+                    "plane_data.roi_indices must have one entry per loaded ROI"
+                )
 
             column = track_matrix[:, session_index]
             invalid_missing = column < -1

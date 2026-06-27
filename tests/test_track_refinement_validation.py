@@ -5,11 +5,10 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.testing as npt
 import pytest
-
 from bayescatrack.association.track_refinement import (
     roi_position_tables_from_sessions,
-    split_tracks_at_issues,
     smoothed_track_positions,
+    split_tracks_at_issues,
 )
 
 
@@ -21,9 +20,13 @@ class _Plane:
 
     def __post_init__(self) -> None:
         if self.n_rois is None:
-            object.__setattr__(self, "n_rois", int(np.asarray(self.centroid_matrix).shape[1]))
+            object.__setattr__(
+                self, "n_rois", int(np.asarray(self.centroid_matrix).shape[1])
+            )
 
-    def centroids(self, *, order="xy", weighted=False):  # pylint: disable=unused-argument
+    def centroids(
+        self, *, order="xy", weighted=False
+    ):  # pylint: disable=unused-argument
         return self.centroid_matrix
 
 
@@ -34,7 +37,9 @@ class _Session:
 
 def _session(centroids, *, roi_indices=None, n_rois=None):
     return _Session(
-        _Plane(np.asarray(centroids, dtype=float), roi_indices=roi_indices, n_rois=n_rois)
+        _Plane(
+            np.asarray(centroids, dtype=float), roi_indices=roi_indices, n_rois=n_rois
+        )
     )
 
 

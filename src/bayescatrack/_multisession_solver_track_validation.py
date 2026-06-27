@@ -22,7 +22,9 @@ _ERROR_SUFFIX = "must be a non-negative integer"
 def install_multisession_solver_track_validation() -> None:
     """Install idempotent validation around multisession solver tracks."""
 
-    from . import multisession_tracking as _multisession_tracking  # pylint: disable=import-outside-toplevel
+    from . import (
+        multisession_tracking as _multisession_tracking,  # pylint: disable=import-outside-toplevel
+    )
 
     original_coerce_solver_tracks = _multisession_tracking._coerce_solver_tracks
     if getattr(original_coerce_solver_tracks, _PATCH_MARKER, False):
@@ -65,7 +67,9 @@ def install_multisession_solver_track_validation() -> None:
                 )
             normalized_tracks.append(normalized_track)
 
-        return tuple(normalized_tracks), None if total_cost is None else float(total_cost)
+        return tuple(normalized_tracks), (
+            None if total_cost is None else float(total_cost)
+        )
 
     setattr(_coerce_solver_tracks_with_validation, _PATCH_MARKER, True)
     setattr(

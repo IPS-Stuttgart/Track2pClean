@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.activity_similarity import activity_similarity_components
 from bayescatrack.core.bridge import CalciumPlaneData
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
-import pytest
 from types import SimpleNamespace
 
+import numpy as np
+import pytest
 
 pytest.importorskip("pyrecest")
 
@@ -13,9 +13,7 @@ from bayescatrack.experiments import (  # noqa: E402
 
 
 def test_full_mht_growth_prior_is_fit_from_mutual_label_free_anchors():
-    source_centroids = np.asarray(
-        [[0.0, 0.0], [10.0, 0.0], [0.0, 10.0]], dtype=float
-    )
+    source_centroids = np.asarray([[0.0, 0.0], [10.0, 0.0], [0.0, 10.0]], dtype=float)
     target_centroids = source_centroids + np.asarray([2.0, 3.0], dtype=float)
     registered_iou = np.asarray(
         [[0.95, 0.10, 0.10], [0.10, 0.92, 0.10], [0.10, 0.10, 0.90]],

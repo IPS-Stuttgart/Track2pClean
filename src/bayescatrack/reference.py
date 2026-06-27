@@ -677,7 +677,9 @@ def _normalize_session_indices(
         normalized = tuple(range(n_sessions))
     else:
         if isinstance(session_indices, (str, bytes)):
-            raise ValueError("session_indices must be a sequence of integer session indices")
+            raise ValueError(
+                "session_indices must be a sequence of integer session indices"
+            )
         try:
             normalized = tuple(
                 _parse_integer_scalar(
@@ -689,7 +691,9 @@ def _normalize_session_indices(
                 for session_index in session_indices
             )
         except TypeError as exc:
-            raise ValueError("session_indices must be a sequence of integer session indices") from exc
+            raise ValueError(
+                "session_indices must be a sequence of integer session indices"
+            ) from exc
     if not normalized:
         raise ValueError("At least one session must be selected")
     if len(set(normalized)) != len(normalized):

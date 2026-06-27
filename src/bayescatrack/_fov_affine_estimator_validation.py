@@ -44,8 +44,14 @@ def install_fov_affine_estimator_validation() -> None:
         )
 
     setattr(estimate_fov_affine_transform_with_validation, _PATCH_MARKER, True)
-    setattr(estimate_fov_affine_transform_with_validation, "_bayescatrack_original", original)
-    _fov_affine_registration.estimate_fov_affine_transform = estimate_fov_affine_transform_with_validation
+    setattr(
+        estimate_fov_affine_transform_with_validation,
+        "_bayescatrack_original",
+        original,
+    )
+    _fov_affine_registration.estimate_fov_affine_transform = (
+        estimate_fov_affine_transform_with_validation
+    )
 
 
 def _normalize_bool(value: Any, error_message: str) -> bool:

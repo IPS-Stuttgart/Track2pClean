@@ -98,7 +98,10 @@ def test_auto_registration_selector_rejects_malformed_control_scalars(
     [
         (("none", "fov-tranlsation"), "unknown transform type"),
         (("none", 1), "candidate_transforms must contain transform-type strings"),
-        (("none", "auto"), "'auto' must not be nested inside auto-registration candidates"),
+        (
+            ("none", "auto"),
+            "'auto' must not be nested inside auto-registration candidates",
+        ),
     ],
 )
 def test_auto_registration_selector_rejects_malformed_candidate_transforms(
@@ -150,4 +153,6 @@ def test_auto_registration_selector_accepts_single_string_candidate() -> None:
     )
 
     assert result.selected_transform_type == "none"
-    assert tuple(candidate.transform_type for candidate in result.diagnostics) == ("none",)
+    assert tuple(candidate.transform_type for candidate in result.diagnostics) == (
+        "none",
+    )

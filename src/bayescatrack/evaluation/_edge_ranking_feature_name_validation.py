@@ -22,7 +22,9 @@ _FEATURE_NAME_ERROR = "feature_names must be a sequence of unique, non-empty str
 def install_edge_ranking_feature_name_validation() -> None:
     """Install idempotent feature-name validation on edge-ranking helpers."""
 
-    from . import edge_ranking as _edge_ranking  # pylint: disable=import-outside-toplevel
+    from . import (
+        edge_ranking as _edge_ranking,  # pylint: disable=import-outside-toplevel
+    )
 
     original: Callable[..., Any] = _edge_ranking.score_matrices_from_feature_tensor
     if getattr(original, _PATCH_MARKER, False):
@@ -45,7 +47,9 @@ def install_edge_ranking_feature_name_validation() -> None:
         "_bayescatrack_original",
         original,
     )
-    _edge_ranking.score_matrices_from_feature_tensor = score_matrices_from_feature_tensor_with_feature_name_validation
+    _edge_ranking.score_matrices_from_feature_tensor = (
+        score_matrices_from_feature_tensor_with_feature_name_validation
+    )
 
 
 def _normalize_feature_names(feature_names: Any) -> tuple[str, ...]:

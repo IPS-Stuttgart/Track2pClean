@@ -30,7 +30,9 @@ def install_suite2p_trace_bool_validation(bridge_module: Any) -> None:
             return original_load_suite2p_plane(plane_dir, *args, **kwargs)
 
         setattr(load_suite2p_plane, _PLANE_PATCH_ATTR, True)
-        setattr(load_suite2p_plane, "_bayescatrack_original", original_load_suite2p_plane)
+        setattr(
+            load_suite2p_plane, "_bayescatrack_original", original_load_suite2p_plane
+        )
         bridge_module.load_suite2p_plane = load_suite2p_plane
 
     _install_subject_like_validation(
@@ -65,7 +67,9 @@ def _install_subject_like_validation(
         return
 
     @wraps(original)
-    def subject_like_entrypoint(subject_dir: str | Path, *args: Any, **kwargs: Any) -> Any:
+    def subject_like_entrypoint(
+        subject_dir: str | Path, *args: Any, **kwargs: Any
+    ) -> Any:
         if len(args) <= max_extra_positional and _uses_suite2p_input_format(kwargs):
             _validate_trace_bool_kwargs(kwargs)
         return original(subject_dir, *args, **kwargs)

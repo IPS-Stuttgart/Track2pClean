@@ -21,7 +21,9 @@ _CACHE_ATTRIBUTE = "_tracklet_graph_roi_mask_cache"
 def install_tracklet_graph_mask_cache_validation() -> None:
     """Install an idempotent read-only guard for tracklet-graph cached ROI masks."""
 
-    from . import track2p_policy_tracklet_graph_mht as _tracklet_graph  # pylint: disable=import-outside-toplevel
+    from . import (
+        track2p_policy_tracklet_graph_mht as _tracklet_graph,  # pylint: disable=import-outside-toplevel
+    )
 
     original_cached_roi_mask = _tracklet_graph._cached_roi_mask
     if getattr(original_cached_roi_mask, _PATCH_MARKER, False):
@@ -42,19 +44,27 @@ def install_tracklet_graph_mask_cache_validation() -> None:
 
         cached = mask_cache.get(cache_key)
         if cached is None:
-            cached = np.array(np.asarray(masks[int(position)]) > 0, dtype=bool, copy=True)
+            cached = np.array(
+                np.asarray(masks[int(position)]) > 0, dtype=bool, copy=True
+            )
             cached.setflags(write=False)
             mask_cache[cache_key] = cached
             return cached
 
-        if not isinstance(cached, np.ndarray) or cached.dtype != np.bool_ or cached.flags.writeable:
+        if (
+            not isinstance(cached, np.ndarray)
+            or cached.dtype != np.bool_
+            or cached.flags.writeable
+        ):
             cached = np.array(cached, dtype=bool, copy=True)
             cached.setflags(write=False)
             mask_cache[cache_key] = cached
         return cached
 
     setattr(_cached_roi_mask_read_only, _PATCH_MARKER, True)
-    setattr(_cached_roi_mask_read_only, "_bayescatrack_original", original_cached_roi_mask)
+    setattr(
+        _cached_roi_mask_read_only, "_bayescatrack_original", original_cached_roi_mask
+    )
     _tracklet_graph._cached_roi_mask = _cached_roi_mask_read_only
 
 
