@@ -116,6 +116,31 @@ def test_auto_registration_selector_rejects_malformed_candidate_transforms(
         )
 
 
+@pytest.mark.parametrize(
+    ("complexity_penalty", "message"),
+    [
+        ({"fov-tranlsation": 0.0}, "complexity_penalty contains unknown transform type"),
+        ({1: 0.0}, "complexity_penalty keys must be transform-type strings"),
+        ({"auto": 0.0}, "'auto' must not have a complexity penalty"),
+        ({"none": 0.0, " none ": 0.1}, "duplicate transform type 'none'"),
+    ],
+)
+def test_auto_registration_selector_rejects_malformed_complexity_penalty_keys(
+    complexity_penalty: object,
+    message: str,
+) -> None:
+    reference = _single_roi_plane("reference")
+    moving = _single_roi_plane("moving")
+
+    with pytest.raises(ValueError, match=message):
+        select_registration_transform(
+            reference,
+            moving,
+            candidate_transforms=("none",),
+            complexity_penalty=complexity_penalty,
+        )
+
+
 def test_auto_registration_selector_keeps_finite_scores_for_valid_controls() -> None:
     reference = _single_roi_plane("reference")
     moving = _single_roi_plane("moving")
@@ -147,6 +172,21 @@ def test_auto_registration_selector_accepts_single_string_candidate() -> None:
         reference,
         moving,
         candidate_transforms="none",
+    )
+
+    assert result.selected_transform_type == "none"
+    assert tuple(candidate.transform_type for candidate in result.diagnostics) == ("none",)
+
+
+def test_auto_registration_selector_normalizes_complexity_penalty_keys() -> None:
+    reference = _single_roi_plane("reference")
+    moving = _single_roi_plane("moving")
+
+    result = select_registration_transform(
+        reference,
+        moving,
+        candidate_transforms="none",
+        complexity_penalty={" none ": 0.0},
     )
 
     assert result.selected_transform_type == "none"
