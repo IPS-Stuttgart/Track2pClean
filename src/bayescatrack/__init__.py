@@ -70,6 +70,9 @@ from ._growth_optional_roi_validation import (
 from ._growth_session_index_validation import (
     install_growth_session_index_validation as _install_growth_session_index_validation,
 )
+from ._growth_target_sessions_validation import (
+    install_growth_target_sessions_validation as _install_growth_target_sessions_validation,
+)
 from ._integer_translation_validation import (
     install_integer_image_translation_validation as _install_integer_translation_validation,
 )
@@ -236,6 +239,7 @@ _install_nonrigid_registration_control_validation()
 _install_ground_truth_track_validation()
 _install_growth_optional_roi_validation()
 _install_growth_session_index_validation()
+_install_growth_target_sessions_validation()
 _install_registration_selection_validation()
 _install_registration_warp_validation()
 _install_strict_config_validation()
