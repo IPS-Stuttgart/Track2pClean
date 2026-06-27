@@ -12,7 +12,7 @@ from bayescatrack.evaluation.complete_track_scores import normalize_track_matrix
 from bayescatrack.matching import build_track_rows_from_matches
 
 TrackEdge = tuple[int, int, int, int]
-_MISSING_OBSERVATION_STRINGS = frozenset({"", "none", "nan", "null"})
+_MISSING_OBSERVATION_STRINGS = frozenset({"", "-", "none", "nan", "null"})
 
 
 def track_matrix_edge_counter(
@@ -22,7 +22,7 @@ def track_matrix_edge_counter(
 ) -> Counter[TrackEdge]:
     """Return a multiset of ROI identity edges from one track matrix."""
 
-    matrix = normalize_track_matrix(track_matrix)
+    matrix = _normalize_track_matrix_for_edges(track_matrix)
     pairs = _session_pairs(matrix.shape[1], session_pairs)
     counter: Counter[TrackEdge] = Counter()
     for session_a, session_b in pairs:
@@ -95,19 +95,27 @@ def consensus_track_rows(
     )
 
 
+def _normalize_track_matrix_for_edges(track_matrix: Any) -> np.ndarray:
+    """Normalize track matrices without silently dropping malformed ROI labels."""
+
+    matrix = np.asarray(track_matrix, dtype=object)
+    if matrix.ndim != 2:
+        raise ValueError("track_matrix must have shape (n_tracks, n_sessions)")
+    normalized = np.empty(matrix.shape, dtype=object)
+    for index, value in np.ndenumerate(matrix):
+        roi_index = _roi_index_or_none(value)
+        normalized[index] = -1 if roi_index is None else roi_index
+    return normalize_track_matrix(normalized)
+
+
 def _roi_index_or_none(value: object) -> int | None:
     if value is None:
         return None
     if isinstance(value, str):
-        stripped = value.strip()
-        if stripped.lower() in _MISSING_OBSERVATION_STRINGS:
+        parsed_text = _parse_roi_index_text(value)
+        if parsed_text is None:
             return None
-        try:
-            roi_index = int(stripped, 10)
-        except ValueError as exc:
-            raise ValueError(
-                f"track matrix contains non-integer ROI index: {value!r}"
-            ) from exc
+        roi_index = parsed_text
     elif isinstance(value, (bool, np.bool_)):
         raise ValueError(f"track matrix contains boolean ROI index: {value!r}")
     elif isinstance(value, (int, np.integer)):
@@ -128,6 +136,25 @@ def _roi_index_or_none(value: object) -> int | None:
     if roi_index < 0:
         return None
     return roi_index
+
+
+def _parse_roi_index_text(value: str) -> int | None:
+    stripped = value.strip()
+    if stripped.casefold() in _MISSING_OBSERVATION_STRINGS:
+        return None
+    try:
+        return int(stripped, 10)
+    except ValueError:
+        pass
+    try:
+        numeric_value = float(stripped)
+    except ValueError as exc:
+        raise ValueError(
+            f"track matrix contains non-integer ROI index: {value!r}"
+        ) from exc
+    if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+        raise ValueError(f"track matrix contains non-integer ROI index: {value!r}")
+    return int(numeric_value)
 
 
 def _one_to_one_edge_mapping(edges: Sequence[TrackEdge] | Any) -> dict[int, int]:
@@ -155,7 +182,7 @@ def _start_indices_from_matrices(
     )
     values: set[int] = set()
     for matrix_like in track_matrices:
-        matrix = normalize_track_matrix(matrix_like)
+        matrix = _normalize_track_matrix_for_edges(matrix_like)
         if start_session_index < 0 or start_session_index >= matrix.shape[1]:
             raise IndexError("start_session_index out of bounds")
         for value in matrix[:, start_session_index]:
