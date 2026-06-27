@@ -7,6 +7,7 @@ from . import _diag_defaults as _diag_defaults
 from . import _mask_input_sweep_option_validation as _mask_input_sweep_option_validation
 from . import _seed_session_validation as _seed_session_validation
 from . import _teacher_rescue_manifest_integration as _teacher_rescue_manifest_integration
+from . import _tracklet_graph_mask_cache_validation as _tracklet_graph_mask_cache_validation
 from . import (
     _triplet_support_benchmark_integration as _triplet_support_benchmark_integration,
 )
@@ -43,5 +44,6 @@ _cost_sweep_defaults.install_cost_sweep_suite2p_defaults()
 _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
 _diag_defaults.install_diagnostic_suite2p_defaults()
 _mask_input_sweep_option_validation.install_mask_input_sweep_option_validation()
+_tracklet_graph_mask_cache_validation.install_tracklet_graph_mask_cache_validation()
 
 __all__: list[str] = []
