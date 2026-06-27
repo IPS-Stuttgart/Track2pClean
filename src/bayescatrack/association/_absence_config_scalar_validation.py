@@ -1,4 +1,11 @@
-"""Strict scalar validation for absence-model configuration values."""
+"""Strict scalar validation for absence-model configuration values.
+
+``AbsenceModelConfig`` normalizes numeric controls with ``float(...)``.  That
+keeps numeric scalars convenient, but it can also accept text/bytes or
+one-element array-like values that usually indicate malformed benchmark
+configuration.  This import-time hook rejects those ambiguous values before the
+configuration dataclass performs its ordinary finite/non-negative checks.
+"""
 
 from __future__ import annotations
 
@@ -19,6 +26,9 @@ _NUMERIC_FIELDS = (
     "trace_missing_discount",
     "min_cost",
 )
+
+
+_TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 
 
 def install_absence_config_scalar_validation(absence_model: ModuleType) -> None:
@@ -43,16 +53,24 @@ def install_absence_config_scalar_validation(absence_model: ModuleType) -> None:
 
 
 def _validate_numeric_scalar(value: Any, field_name: str) -> None:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{field_name} must be numeric, not boolean")
-    if isinstance(value, (str, bytes, bytearray, np.str_, np.bytes_)):
-        raise ValueError(f"{field_name} must be numeric, not text")
+    message = f"{field_name} must be a numeric scalar"
+    if isinstance(value, (bool, np.bool_, *_TEXT_TYPES)):
+        raise ValueError(message)
+
     try:
         value_array = np.asarray(value, dtype=object)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"{field_name} must be a numeric scalar") from exc
+        raise ValueError(message) from exc
     if value_array.shape != ():
-        raise ValueError(f"{field_name} must be a numeric scalar")
+        raise ValueError(message)
+
+    scalar_value = value_array.item()
+    if isinstance(scalar_value, (bool, np.bool_, *_TEXT_TYPES)):
+        raise ValueError(message)
+    try:
+        float(scalar_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
 
 
 __all__ = ["install_absence_config_scalar_validation"]
