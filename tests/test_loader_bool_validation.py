@@ -19,6 +19,11 @@ def test_suite2p_stat_validation_strict_bool_accepts_numpy_bool_scalars() -> Non
     assert _suite2p_validation._strict_bool(np.bool_(False), name="include_non_cells") is False
 
 
+def test_suite2p_trace_flag_validation_accepts_numpy_bool_scalars() -> None:
+    assert _suite2p_validation._strict_python_bool(np.bool_(True), name="load_traces") is True
+    assert _suite2p_validation._strict_python_bool(np.bool_(False), name="load_traces") is False
+
+
 def test_suite2p_loader_controls_normalize_numpy_bool_scalars() -> None:
     controls = _loader_validation._validate_suite2p_loader_controls(
         {
@@ -49,3 +54,11 @@ def test_suite2p_loader_controls_normalize_numpy_bool_scalars() -> None:
 def test_loader_strict_bool_still_rejects_ambiguous_non_bool_values(bad_value: object) -> None:
     with pytest.raises(ValueError, match="flag must be a boolean"):
         _loader_validation._strict_bool(bad_value, name="flag")
+
+
+@pytest.mark.parametrize("bad_value", [1, 0, "true", None, np.array(True)])
+def test_suite2p_trace_flag_validation_rejects_ambiguous_non_bool_values(
+    bad_value: object,
+) -> None:
+    with pytest.raises(ValueError, match="load_traces must be a boolean"):
+        _suite2p_validation._strict_python_bool(bad_value, name="load_traces")
