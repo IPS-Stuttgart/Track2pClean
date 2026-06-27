@@ -154,6 +154,9 @@ from ._track_table_session_name_validation import (
 from ._track2p_policy_session_gap_validation import (
     install_track2p_policy_session_gap_validation as _install_track2p_policy_session_gap_validation,
 )
+from ._tracking_duplicate_start_roi_validation import (
+    install_tracking_duplicate_start_roi_validation as _install_tracking_duplicate_start_roi_validation,
+)
 from ._tracking_global_link_edge_validation import (
     install_tracking_global_link_edge_validation as _install_tracking_global_link_edge_validation,
 )
@@ -244,6 +247,7 @@ _install_roi_cue_length_validation(_absence_model)
 _install_supervised_mask_validation(_calibrated_costs)
 _install_tracking_start_roi_validation()
 _install_tracking_start_roi_availability_validation()
+_install_tracking_duplicate_start_roi_validation()
 _install_tracking_global_link_edge_validation()
 _install_track_row_export_option_validation()
 _install_track_row_fill_value_validation()
