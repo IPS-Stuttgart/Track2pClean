@@ -41,10 +41,7 @@ def _parse_label(value: Any) -> bool:
         return bool(value)
 
     if isinstance(value, str):
-        value = value.strip()
-        if value not in {"0", "1"}:
-            raise ValueError(_ERROR_MESSAGE)
-        return value == "1"
+        raise ValueError(_ERROR_MESSAGE)
 
     try:
         numeric_value = float(value)
