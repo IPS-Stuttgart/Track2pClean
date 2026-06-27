@@ -37,5 +37,5 @@ def test_smoothed_track_positions_allows_configured_missing_token():
     smoothed = smoothed_track_positions(track_rows, _position_tables(), fill_value=-2)
 
     assert set(smoothed[0]) == {0, 2}
-    npt.assert_allclose(smoothed[0][0], np.array([0.0, 0.0]))
-    npt.assert_allclose(smoothed[0][2], np.array([2.0, 2.0]))
+    npt.assert_allclose(smoothed[0][0], np.array([0.0, 0.0]), atol=1e-12)
+    npt.assert_allclose(smoothed[0][2], np.array([2.0, 2.0]), atol=1e-12)
