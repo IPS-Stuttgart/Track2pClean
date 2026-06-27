@@ -25,6 +25,14 @@ def _single_roi_plane(source: str = "plane") -> CalciumPlaneData:
             "min_fov_correlation_gain must be a finite non-negative value",
         ),
         (
+            {"min_fov_correlation_gain": "0.05"},
+            "min_fov_correlation_gain must be a finite non-negative value",
+        ),
+        (
+            {"min_fov_correlation_gain": np.asarray([0.05])},
+            "min_fov_correlation_gain must be a finite non-negative value",
+        ),
+        (
             {"max_empty_roi_fraction": np.inf},
             r"max_empty_roi_fraction must be a finite value in \[0, 1\]",
         ),
@@ -58,6 +66,14 @@ def _single_roi_plane(source: str = "plane") -> CalciumPlaneData:
         ),
         (
             {"complexity_penalty": {"none": True}},
+            r"complexity_penalty\['none'\] must be a finite non-negative value",
+        ),
+        (
+            {"complexity_penalty": {"none": "0.0"}},
+            r"complexity_penalty\['none'\] must be a finite non-negative value",
+        ),
+        (
+            {"complexity_penalty": {"none": np.asarray([0.0])}},
             r"complexity_penalty\['none'\] must be a finite non-negative value",
         ),
     ],
@@ -115,7 +131,7 @@ def test_auto_registration_selector_keeps_finite_scores_for_valid_controls() -> 
         empty_roi_penalty=0.0,
         retained_area_penalty=0.0,
         nonrigid_valid_fraction_penalty=0.0,
-        complexity_penalty={"none": "0.0"},
+        complexity_penalty={"none": 0.0},
     )
 
     assert result.selected_transform_type == "none"
