@@ -303,11 +303,12 @@ def _parse_binary_label(value: Any) -> bool:
             value = value.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise ValueError("labels must contain only binary 0/1 values") from exc
-    if isinstance(value, str):
         value = value.strip()
         if value not in {"0", "1"}:
             raise ValueError("labels must contain only binary 0/1 values")
         return value == "1"
+    if isinstance(value, str):
+        raise ValueError("labels must contain only binary 0/1 values")
     try:
         numeric = float(value)
     except (TypeError, ValueError) as exc:
