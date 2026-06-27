@@ -4,9 +4,28 @@ import numpy as np
 import pytest
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
 from bayescatrack.association.monotone_ranking_costs import (
+    MonotonePairwiseRanker,
     MonotoneRankerOptions,
     fit_monotone_ranked_association_model,
 )
+
+
+def test_monotone_pairwise_ranker_rejects_scalar_feature_input_cleanly():
+    ranker = MonotonePairwiseRanker(
+        feature_names=("centroid_distance",),
+        feature_directions=(1.0,),
+        feature_center=np.array([0.0]),
+        feature_scale=np.array([1.0]),
+        weights=np.array([1.0]),
+        probability_intercept=0.0,
+        probability_score_scale=1.0,
+        training_examples=2,
+        positive_examples=1,
+        preference_pairs=1,
+    )
+
+    with pytest.raises(ValueError, match="final feature dimension"):
+        ranker.pairwise_cost_matrix(1.0)
 
 
 def test_monotone_ranker_orders_positive_edges_above_hard_negatives():
