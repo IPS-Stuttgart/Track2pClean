@@ -104,6 +104,22 @@ def test_run_registered_subject_tracking_rejects_invalid_single_session_seed_ind
         )
 
 
+def test_run_registered_subject_tracking_rejects_unavailable_single_session_seed_roi(
+    tmp_path: Path,
+):
+    subject_dir = tmp_path / "jm271"
+    _write_single_session_subject(subject_dir)
+
+    with pytest.raises(ValueError, match="missing ROI index 99"):
+        run_registered_subject_tracking(
+            subject_dir,
+            plane_name="plane0",
+            input_format="auto",
+            include_behavior=False,
+            start_roi_indices=[99],
+        )
+
+
 def test_run_registered_subject_tracking_rejects_fractional_start_session_index(
     tmp_path: Path,
 ):

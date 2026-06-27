@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 from bayescatrack.reference import Track2pReference
 
+from . import complete_track_scores as _complete_track_scores
 from .calibration_metrics import brier_score
 from .complete_track_scores import *  # noqa: F401,F403
 from .complete_track_scores import __all__ as _complete_track_score_exports
@@ -17,9 +18,6 @@ from .complete_track_scores import (
 )
 from .complete_track_scores import (
     normalize_track_matrix as _pyrecest_normalize_track_matrix,
-)
-from .complete_track_scores import (
-    score_track_matrices,
 )
 from .track_error_ledger import *  # noqa: F401,F403
 from .track_error_ledger import __all__ as _track_error_ledger_exports
@@ -30,6 +28,30 @@ __all__ = [
     "brier_score",
     "score_track_matrix_against_reference",
 ]
+
+
+def score_track_matrices(
+    predicted_track_matrix: Any,
+    reference_track_matrix: Any,
+    *,
+    session_pairs: Any | None = None,
+    complete_session_indices: Any | None = None,
+) -> dict[str, float | int]:
+    """Delegate to the currently installed aggregate track scorer.
+
+    The evaluation package installs validation wrappers on
+    ``complete_track_scores.score_track_matrices`` during package initialization.
+    Keep this facade dynamic so callers through this module use the wrapped
+    scorer instead of an import-time function reference captured before wrapper
+    installation.
+    """
+
+    return _complete_track_scores.score_track_matrices(
+        predicted_track_matrix,
+        reference_track_matrix,
+        session_pairs=session_pairs,
+        complete_session_indices=complete_session_indices,
+    )
 
 
 def normalize_track_matrix(track_matrix: Any) -> np.ndarray:

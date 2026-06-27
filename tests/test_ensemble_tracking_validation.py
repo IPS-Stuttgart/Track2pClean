@@ -48,3 +48,32 @@ def test_consensus_edge_counter_accepts_integer_like_control_strings():
     )
 
     assert counter[(0, 2, 0, 2)] == 1
+
+
+def test_track_matrix_edge_counter_keeps_stringified_integral_float_roi_labels():
+    counter = track_matrix_edge_counter(
+        np.asarray([["10.0", "20.0", "30.0"]], dtype=object)
+    )
+
+    assert counter[(0, 1, 10, 20)] == 1
+    assert counter[(1, 2, 20, 30)] == 1
+    assert sum(counter.values()) == 2
+
+
+@pytest.mark.parametrize("bad_value", ["not-a-roi", "1.5", "inf"])
+def test_track_matrix_edge_counter_rejects_malformed_roi_strings(bad_value):
+    with pytest.raises(ValueError, match="non-integer ROI index"):
+        track_matrix_edge_counter(np.asarray([[bad_value, 2]], dtype=object))
+
+
+def test_consensus_track_rows_seeds_from_stringified_integral_float_roi_labels():
+    track_rows = consensus_track_rows(
+        ("s0", "s1"),
+        [
+            np.asarray([["10.0", "20.0"]], dtype=object),
+            np.asarray([[10, 20]], dtype=object),
+        ],
+        min_votes=2,
+    )
+
+    np.testing.assert_array_equal(track_rows, np.asarray([[10, 20]], dtype=int))
