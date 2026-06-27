@@ -82,7 +82,12 @@ def _normalize_unique_session_names(
     *,
     field_name: str,
 ) -> tuple[str, ...]:
-    normalized_session_names = tuple(str(name) for name in session_names)
+    if isinstance(session_names, (str, bytes)):
+        raise ValueError(f"{field_name} must be a sequence of session-name values, not a bare string")
+    try:
+        normalized_session_names = tuple(str(name) for name in session_names)
+    except TypeError as exc:
+        raise ValueError(f"{field_name} must be a sequence of session-name values") from exc
     seen: set[str] = set()
     duplicates: list[str] = []
     for session_name in normalized_session_names:
