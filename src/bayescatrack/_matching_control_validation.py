@@ -27,7 +27,9 @@ def install_matching_control_validation() -> None:
 
     original_solve = _matching.solve_bundle_linear_assignment
     original_build_matches = _matching.build_track_rows_from_matches
-    original_bundle_roi_indices = _matching._bundle_roi_indices_for_session  # pylint: disable=protected-access
+    original_bundle_roi_indices = (
+        _matching._bundle_roi_indices_for_session
+    )  # pylint: disable=protected-access
 
     if (
         getattr(original_solve, _PATCH_MARKER, False)
@@ -86,14 +88,20 @@ def install_matching_control_validation() -> None:
         )
 
     _mark_patch(solve_bundle_linear_assignment_with_control_validation, original_solve)
-    _mark_patch(build_track_rows_from_matches_with_control_validation, original_build_matches)
+    _mark_patch(
+        build_track_rows_from_matches_with_control_validation, original_build_matches
+    )
     _mark_patch(
         bundle_roi_indices_for_session_with_control_validation,
         original_bundle_roi_indices,
     )
 
-    _matching.solve_bundle_linear_assignment = solve_bundle_linear_assignment_with_control_validation
-    _matching.build_track_rows_from_matches = build_track_rows_from_matches_with_control_validation
+    _matching.solve_bundle_linear_assignment = (
+        solve_bundle_linear_assignment_with_control_validation
+    )
+    _matching.build_track_rows_from_matches = (
+        build_track_rows_from_matches_with_control_validation
+    )
     _matching._bundle_roi_indices_for_session = bundle_roi_indices_for_session_with_control_validation  # pylint: disable=protected-access
 
 
@@ -110,7 +118,9 @@ def _normalize_assignment_max_cost(value: Any) -> float | None:
     try:
         value_array = np.asarray(value, dtype=object)
     except (TypeError, ValueError) as exc:
-        raise ValueError("max_cost must be a finite non-negative value or None") from exc
+        raise ValueError(
+            "max_cost must be a finite non-negative value or None"
+        ) from exc
     if value_array.shape != ():
         raise ValueError("max_cost must be a finite non-negative value or None")
     scalar = value_array.item()
@@ -119,7 +129,9 @@ def _normalize_assignment_max_cost(value: Any) -> float | None:
     try:
         normalized = float(scalar)
     except (TypeError, ValueError) as exc:
-        raise ValueError("max_cost must be a finite non-negative value or None") from exc
+        raise ValueError(
+            "max_cost must be a finite non-negative value or None"
+        ) from exc
     if not np.isfinite(normalized) or normalized < 0.0:
         raise ValueError("max_cost must be a finite non-negative value or None")
     return normalized

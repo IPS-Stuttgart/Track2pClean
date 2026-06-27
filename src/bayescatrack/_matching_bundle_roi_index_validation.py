@@ -92,10 +92,12 @@ def _normalize_bundle_roi_indices(
     if array.ndim != 1:
         raise ValueError(f"{field_name} must be one-dimensional")
 
-    normalized = _matching._normalize_roi_index_sequence(  # pylint: disable=protected-access
-        array.tolist(),
-        field_name,
-        require_unique=True,
+    normalized = (
+        _matching._normalize_roi_index_sequence(  # pylint: disable=protected-access
+            array.tolist(),
+            field_name,
+            require_unique=True,
+        )
     )
     if len(normalized) != expected_length:
         raise ValueError(

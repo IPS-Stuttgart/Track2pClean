@@ -21,7 +21,9 @@ def install_registered_component_shape_validation() -> None:
 
     from . import registered_masks  # pylint: disable=import-outside-toplevel
 
-    original = registered_masks._infer_pairwise_component_shape  # pylint: disable=protected-access
+    original = (
+        registered_masks._infer_pairwise_component_shape
+    )  # pylint: disable=protected-access
     if getattr(original, _PATCH_MARKER, False):
         return
 

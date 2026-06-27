@@ -241,7 +241,9 @@ def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
     return value
 
 
-def _validated_absence_cost_vector(name: str, raw_values: Any, n_rois: int) -> np.ndarray:
+def _validated_absence_cost_vector(
+    name: str, raw_values: Any, n_rois: int
+) -> np.ndarray:
     values = np.asarray(raw_values, dtype=float).reshape(-1)
     if values.shape != (n_rois,):
         raise ValueError("absence cost vectors must match plane ROI counts")

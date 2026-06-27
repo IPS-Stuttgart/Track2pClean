@@ -185,5 +185,7 @@ def test_adaptive_edge_priors_reject_shape_mismatch_when_disabled(
         make_track2p_session("2024-01-02_a", target_masks),
     )
 
-    with pytest.raises(ValueError, match="does not match the loaded session ROI counts"):
+    with pytest.raises(
+        ValueError, match="does not match the loaded session ROI counts"
+    ):
         apply_adaptive_edge_priors({(0, 1): np.zeros((1, 1))}, sessions)

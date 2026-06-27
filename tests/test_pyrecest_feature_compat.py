@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.association._pyrecest_feature_compat import (
     CalibratedPairwiseAssociationModel,
     NamedPairwiseFeatureSchema,
@@ -58,7 +57,9 @@ def test_predict_proba_model_flattens_pairwise_tensor_and_restores_matrix():
         schema=NamedPairwiseFeatureSchema(("score",)),
     )
 
-    probabilities = wrapped.pairwise_probability_matrix_from_components({"score": score})
+    probabilities = wrapped.pairwise_probability_matrix_from_components(
+        {"score": score}
+    )
 
     assert model.seen_shape == (score.size, 1)
     np.testing.assert_allclose(probabilities, score)
@@ -81,7 +82,9 @@ def test_predict_match_probability_model_restores_flat_probabilities_to_matrix()
         schema=NamedPairwiseFeatureSchema(("score",)),
     )
 
-    probabilities = wrapped.pairwise_probability_matrix_from_components({"score": score})
+    probabilities = wrapped.pairwise_probability_matrix_from_components(
+        {"score": score}
+    )
 
     assert model.seen_shape == (*score.shape, 1)
     np.testing.assert_allclose(probabilities, score)
@@ -104,7 +107,9 @@ def test_predict_match_probability_model_can_fall_back_to_flat_feature_matrix():
         schema=NamedPairwiseFeatureSchema(("score",)),
     )
 
-    probabilities = wrapped.pairwise_probability_matrix_from_components({"score": score})
+    probabilities = wrapped.pairwise_probability_matrix_from_components(
+        {"score": score}
+    )
 
     assert model.seen_shape == (score.size, 1)
     np.testing.assert_allclose(probabilities, score)

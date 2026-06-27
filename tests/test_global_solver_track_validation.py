@@ -74,7 +74,9 @@ def test_tracks_to_suite2p_index_matrix_rejects_malformed_solver_tracks(
     tracks: object,
     message: str,
 ) -> None:
-    def forbidden_tracks_to_index_matrix(*_args: object, **_kwargs: object) -> np.ndarray:
+    def forbidden_tracks_to_index_matrix(
+        *_args: object, **_kwargs: object
+    ) -> np.ndarray:
         raise AssertionError("converter should not be called for malformed tracks")
 
     monkeypatch.setattr(
@@ -106,8 +108,12 @@ def test_tracks_to_suite2p_index_matrix_rejects_malformed_session_sizes(
     monkeypatch: pytest.MonkeyPatch,
     size: object,
 ) -> None:
-    def forbidden_tracks_to_index_matrix(*_args: object, **_kwargs: object) -> np.ndarray:
-        raise AssertionError("converter should not be called for malformed session sizes")
+    def forbidden_tracks_to_index_matrix(
+        *_args: object, **_kwargs: object
+    ) -> np.ndarray:
+        raise AssertionError(
+            "converter should not be called for malformed session sizes"
+        )
 
     monkeypatch.setattr(
         assignment,

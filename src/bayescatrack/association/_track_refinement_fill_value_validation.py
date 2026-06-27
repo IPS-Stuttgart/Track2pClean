@@ -57,13 +57,17 @@ def install_track_refinement_fill_value_validation() -> None:
                 fill_value=_normalize_fill_value(fill_value),
             )
 
-        setattr(smoothed_track_positions_with_fill_value_validation, _PATCH_MARKER, True)
+        setattr(
+            smoothed_track_positions_with_fill_value_validation, _PATCH_MARKER, True
+        )
         setattr(
             smoothed_track_positions_with_fill_value_validation,
             "_bayescatrack_original",
             original_smoothed,
         )
-        module.smoothed_track_positions = smoothed_track_positions_with_fill_value_validation
+        module.smoothed_track_positions = (
+            smoothed_track_positions_with_fill_value_validation
+        )
 
     original_split = module.split_tracks_at_issues
     if not getattr(original_split, _PATCH_MARKER, False):
@@ -76,7 +80,9 @@ def install_track_refinement_fill_value_validation() -> None:
             fill_value: Any = -1,
         ) -> Any:
             normalized_fill_value = _normalize_fill_value(fill_value)
-            rows = module._validated_track_row_matrix(track_rows)  # pylint: disable=protected-access
+            rows = module._validated_track_row_matrix(
+                track_rows
+            )  # pylint: disable=protected-access
             issue_tuple = _validated_issue_tuple(
                 issues,
                 n_tracks=rows.shape[0],
@@ -94,7 +100,9 @@ def install_track_refinement_fill_value_validation() -> None:
             "_bayescatrack_original",
             original_split,
         )
-        module.split_tracks_at_issues = split_tracks_at_issues_with_fill_value_validation
+        module.split_tracks_at_issues = (
+            split_tracks_at_issues_with_fill_value_validation
+        )
 
 
 def _validated_issue_tuple(
@@ -106,7 +114,9 @@ def _validated_issue_tuple(
     try:
         issue_tuple = tuple(issues)
     except TypeError as exc:
-        raise ValueError("issues must be an iterable of TrackGeometryIssue entries") from exc
+        raise ValueError(
+            "issues must be an iterable of TrackGeometryIssue entries"
+        ) from exc
 
     for issue in issue_tuple:
         _normalize_bounded_issue_index(

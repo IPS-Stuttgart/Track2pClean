@@ -59,8 +59,10 @@ def _handle_benchmark(args: list[str]) -> int:
         return 0
 
     requested_command_name = args[0]
-    command_name = _legacy_cli._BENCHMARK_ALIASES.get(  # pylint: disable=protected-access
-        requested_command_name, requested_command_name
+    command_name = (
+        _legacy_cli._BENCHMARK_ALIASES.get(  # pylint: disable=protected-access
+            requested_command_name, requested_command_name
+        )
     )
     command = _legacy_cli._BENCHMARK_COMMANDS.get(  # pylint: disable=protected-access
         command_name
@@ -222,9 +224,15 @@ def _build_benchmark_help_parser() -> argparse.ArgumentParser:
         description="Run Track2pClean benchmark harnesses.",
     )
     subparsers = parser.add_subparsers(dest="benchmark", required=False)
-    for name, command in _legacy_cli._BENCHMARK_COMMANDS.items():  # pylint: disable=protected-access
+    for (
+        name,
+        command,
+    ) in _legacy_cli._BENCHMARK_COMMANDS.items():  # pylint: disable=protected-access
         subparsers.add_parser(name, help=command.help)
-    for alias, canonical in _legacy_cli._BENCHMARK_ALIASES.items():  # pylint: disable=protected-access
+    for (
+        alias,
+        canonical,
+    ) in _legacy_cli._BENCHMARK_ALIASES.items():  # pylint: disable=protected-access
         subparsers.add_parser(alias, help=f"Alias for {canonical}")
     return parser
 

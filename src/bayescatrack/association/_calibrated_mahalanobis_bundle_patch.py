@@ -196,7 +196,9 @@ def _finite_positive_covariance_epsilon(value: Any) -> float:
     try:
         numeric = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("covariance_epsilon must be finite and strictly positive") from exc
+        raise ValueError(
+            "covariance_epsilon must be finite and strictly positive"
+        ) from exc
     if not np.isfinite(numeric) or numeric <= 0.0:
         raise ValueError("covariance_epsilon must be finite and strictly positive")
     return numeric

@@ -19,7 +19,9 @@ _PATCH_MARKER = "_bayescatrack_multisession_config_validation_patch"
 def install_multisession_config_validation() -> None:
     """Install idempotent validation for ``MultisessionTrackingConfig``."""
 
-    from . import multisession_tracking as _multisession_tracking  # pylint: disable=import-outside-toplevel
+    from . import (
+        multisession_tracking as _multisession_tracking,  # pylint: disable=import-outside-toplevel
+    )
 
     config_cls = _multisession_tracking.MultisessionTrackingConfig
     if getattr(config_cls, _PATCH_MARKER, False):

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bayescatrack.association.multi_hypothesis import (
     HypothesisConfig,
     TrackHypothesis,
@@ -36,6 +35,4 @@ def test_enumerate_track_hypotheses_preserves_roi_zero() -> None:
 
 
 def test_consensus_edges_preserves_roi_zero_with_negative_fill_value() -> None:
-    assert consensus_edges([[[0, 2]]], min_votes=1, fill_value=-1) == {
-        (0, 1, 0, 2): 1
-    }
+    assert consensus_edges([[[0, 2]]], min_votes=1, fill_value=-1) == {(0, 1, 0, 2): 1}

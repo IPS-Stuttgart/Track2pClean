@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import _suite2p_validation
 from bayescatrack.core import _loader_validation
 
@@ -10,13 +9,24 @@ _BOOL_CONTROL_NAMES = tuple(_loader_validation._SUITE2P_BOOL_CONTROL_DEFAULTS)
 
 
 def test_loader_strict_bool_accepts_numpy_bool_scalars() -> None:
-    assert _loader_validation._strict_bool(np.bool_(True), name="include_behavior") is True
-    assert _loader_validation._strict_bool(np.bool_(False), name="include_behavior") is False
+    assert (
+        _loader_validation._strict_bool(np.bool_(True), name="include_behavior") is True
+    )
+    assert (
+        _loader_validation._strict_bool(np.bool_(False), name="include_behavior")
+        is False
+    )
 
 
 def test_suite2p_stat_validation_strict_bool_accepts_numpy_bool_scalars() -> None:
-    assert _suite2p_validation._strict_bool(np.bool_(True), name="include_non_cells") is True
-    assert _suite2p_validation._strict_bool(np.bool_(False), name="include_non_cells") is False
+    assert (
+        _suite2p_validation._strict_bool(np.bool_(True), name="include_non_cells")
+        is True
+    )
+    assert (
+        _suite2p_validation._strict_bool(np.bool_(False), name="include_non_cells")
+        is False
+    )
 
 
 def test_suite2p_loader_controls_normalize_numpy_bool_scalars() -> None:
@@ -46,6 +56,8 @@ def test_suite2p_loader_controls_normalize_numpy_bool_scalars() -> None:
 
 
 @pytest.mark.parametrize("bad_value", [1, 0, "true", None, np.array(True)])
-def test_loader_strict_bool_still_rejects_ambiguous_non_bool_values(bad_value: object) -> None:
+def test_loader_strict_bool_still_rejects_ambiguous_non_bool_values(
+    bad_value: object,
+) -> None:
     with pytest.raises(ValueError, match="flag must be a boolean"):
         _loader_validation._strict_bool(bad_value, name="flag")

@@ -27,11 +27,15 @@ def install_reference_validation(reference_module: ModuleType | None = None) -> 
 
 
 def _install_optional_int_parser_validation(reference_module: ModuleType) -> None:
-    original_parse_optional_int = reference_module._parse_optional_int  # pylint: disable=protected-access
+    original_parse_optional_int = (
+        reference_module._parse_optional_int
+    )  # pylint: disable=protected-access
     if getattr(original_parse_optional_int, _PATCH_ATTR, False):
         return
 
-    missing_strings = frozenset(reference_module._MISSING_STRINGS)  # pylint: disable=protected-access
+    missing_strings = frozenset(
+        reference_module._MISSING_STRINGS
+    )  # pylint: disable=protected-access
 
     def _parse_optional_int_with_validation(value: Any) -> int | None:
         if isinstance(value, (bool, np.bool_)):
@@ -56,7 +60,9 @@ def _install_optional_int_parser_validation(reference_module: ModuleType) -> Non
         "_bayescatrack_original",
         original_parse_optional_int,
     )
-    reference_module._parse_optional_int = _parse_optional_int_with_validation  # pylint: disable=protected-access
+    reference_module._parse_optional_int = (
+        _parse_optional_int_with_validation  # pylint: disable=protected-access
+    )
 
 
 def _install_curated_mask_validation(reference_module: ModuleType) -> None:
@@ -196,7 +202,9 @@ def _install_complete_track_vector_normalization(reference_module: ModuleType) -
         "_bayescatrack_original",
         original_score_complete_tracks,
     )
-    reference_module.score_complete_tracks = _score_complete_tracks_with_vector_normalization
+    reference_module.score_complete_tracks = (
+        _score_complete_tracks_with_vector_normalization
+    )
 
 
 def _install_track_label_fill_value_validation(reference_module: ModuleType) -> None:
@@ -212,11 +220,13 @@ def _install_track_label_fill_value_validation(reference_module: ModuleType) -> 
         fill_value: Any = -1,
         curated_only: Any = False,
     ) -> list[np.ndarray]:
-        fill_value_int = reference_module._parse_integer_scalar(  # pylint: disable=protected-access
-            fill_value,
-            name="fill_value",
-            allow_negative=True,
-            allow_string=False,
+        fill_value_int = (
+            reference_module._parse_integer_scalar(  # pylint: disable=protected-access
+                fill_value,
+                name="fill_value",
+                allow_negative=True,
+                allow_string=False,
+            )
         )
         if fill_value_int >= 0:
             raise ValueError(

@@ -1,5 +1,4 @@
 import numpy as np
-
 from bayescatrack.core.bridge import CalciumPlaneData
 
 

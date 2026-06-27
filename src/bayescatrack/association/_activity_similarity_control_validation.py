@@ -45,7 +45,9 @@ def install_activity_similarity_control_validation() -> None:
     validated_activity_similarity_components.__name__ = original.__name__
     validated_activity_similarity_components.__qualname__ = original.__qualname__
     setattr(validated_activity_similarity_components, _ORIGINAL_ATTR, original)
-    _activity_similarity.activity_similarity_components = validated_activity_similarity_components
+    _activity_similarity.activity_similarity_components = (
+        validated_activity_similarity_components
+    )
     setattr(_activity_similarity, _PATCH_MARKER, True)
 
 

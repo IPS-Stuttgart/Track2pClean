@@ -174,7 +174,9 @@ def _local_pairwise_feature_tensor(
     return np.stack(feature_planes, axis=-1)
 
 
-def _flatten_pairwise_feature_tensor(features: Any) -> tuple[np.ndarray, tuple[int, ...] | None]:
+def _flatten_pairwise_feature_tensor(
+    features: Any,
+) -> tuple[np.ndarray, tuple[int, ...] | None]:
     feature_array = np.asarray(features, dtype=float)
     if feature_array.ndim < 2:
         raise ValueError("features must include sample and feature dimensions")

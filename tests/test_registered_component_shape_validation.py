@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.registered_masks import (
     add_registered_roi_validity_components,
     mask_invalid_registered_roi_columns,
@@ -26,7 +25,9 @@ def test_invalid_registered_roi_masking_rejects_inconsistent_component_shapes() 
         )
 
 
-def test_registered_roi_validity_components_reject_inconsistent_component_shapes() -> None:
+def test_registered_roi_validity_components_reject_inconsistent_component_shapes() -> (
+    None
+):
     with pytest.raises(ValueError, match="same shape"):
         add_registered_roi_validity_components(
             _mismatched_pairwise_components(),

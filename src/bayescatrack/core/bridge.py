@@ -3,8 +3,10 @@
 # pylint: disable=duplicate-code
 
 from .._exports import BRIDGE_PUBLIC_NAMES
-from . import _bridge_impl
 from . import _association_bundle_bool_validation as _association_bundle_bool_validation
+from . import (
+    _bridge_impl,
+)
 from . import _cell_probability_validation as _cell_probability_validation
 from . import _core_scalar_validation as _core_scalar_validation
 from . import _export_bool_validation as _export_bool_validation

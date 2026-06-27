@@ -5,7 +5,6 @@ from typing import Any
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.pyrecest_global_assignment import (
     registered_iou_cost_kwargs,
     registered_shifted_iou_cost_kwargs,

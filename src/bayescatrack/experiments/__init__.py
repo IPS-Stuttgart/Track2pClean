@@ -6,7 +6,9 @@ from . import _cost_sweep_defaults as _cost_sweep_defaults
 from . import _diag_defaults as _diag_defaults
 from . import _mask_input_sweep_option_validation as _mask_input_sweep_option_validation
 from . import _seed_session_validation as _seed_session_validation
-from . import _teacher_rescue_manifest_integration as _teacher_rescue_manifest_integration
+from . import (
+    _teacher_rescue_manifest_integration as _teacher_rescue_manifest_integration,
+)
 from . import (
     _triplet_support_benchmark_integration as _triplet_support_benchmark_integration,
 )

@@ -13,11 +13,15 @@ def install_multisession_solver_signature_validation(module: Any | None = None) 
     """Install idempotent compatibility for legacy PyRecEst solver kwargs."""
 
     if module is None:
-        from . import multisession_tracking as target_module  # pylint: disable=import-outside-toplevel
+        from . import (
+            multisession_tracking as target_module,  # pylint: disable=import-outside-toplevel
+        )
     else:
         target_module = module
 
-    original_compatible_solver_call_attempts = target_module._compatible_solver_call_attempts
+    original_compatible_solver_call_attempts = (
+        target_module._compatible_solver_call_attempts
+    )
     if getattr(original_compatible_solver_call_attempts, _PATCH_MARKER, False):
         return
 
@@ -62,7 +66,9 @@ def install_multisession_solver_signature_validation(module: Any | None = None) 
         "_bayescatrack_original",
         original_compatible_solver_call_attempts,
     )
-    target_module._compatible_solver_call_attempts = _compatible_solver_call_attempts_with_legacy_gap_names
+    target_module._compatible_solver_call_attempts = (
+        _compatible_solver_call_attempts_with_legacy_gap_names
+    )
 
 
 def _with_cost_threshold_free_variants(
