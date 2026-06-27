@@ -22,6 +22,8 @@ def install_tracking_result_matrix_validation() -> None:
 
         @wraps(original_post_init)
         def subject_tracking_result_post_init_with_matrix_validation(self: Any) -> Any:
+            session_names = _normalize_session_names(getattr(self, "session_names", ()))
+            object.__setattr__(self, "session_names", session_names)
             fill_value = _normalize_fill_value(getattr(self, "fill_value", -1))
             object.__setattr__(self, "fill_value", fill_value)
             track_rows = _normalize_track_rows(getattr(self, "track_rows"), fill_value=fill_value)
@@ -92,9 +94,18 @@ def _mark_patch(wrapper: Any, original: Any) -> None:
 
 def _infer_session_count(session_names: Any) -> int:
     try:
-        return len(tuple(session_names))
-    except TypeError:
+        return len(_normalize_session_names(session_names))
+    except ValueError:
         return 0
+
+
+def _normalize_session_names(values: Any) -> tuple[str, ...]:
+    if isinstance(values, (str, bytes)):
+        raise ValueError("session_names must be a sequence of session-name values, not a bare string")
+    try:
+        return tuple(str(name) for name in values)
+    except TypeError as exc:
+        raise ValueError("session_names must be a sequence of session-name values") from exc
 
 
 def _normalize_track_rows(values: Any, *, fill_value: int) -> np.ndarray:
