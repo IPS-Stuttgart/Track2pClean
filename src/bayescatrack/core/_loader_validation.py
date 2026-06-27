@@ -14,7 +14,7 @@ from typing import Any
 
 import numpy as np
 
-_TRANSIENT_LOAD_EXCEPTIONS = (
+_AUTO_LOAD_EXCEPTIONS = (
     FileNotFoundError,
     OSError,
     KeyError,
@@ -22,6 +22,8 @@ _TRANSIENT_LOAD_EXCEPTIONS = (
     TypeError,
     ValueError,
 )
+
+_FALLBACK_ELIGIBLE_SUITE2P_EXCEPTIONS = (FileNotFoundError,)
 
 _SUITE2P_BOOL_CONTROL_DEFAULTS: dict[str, bool] = {
     "include_non_cells": False,
@@ -319,13 +321,20 @@ def _load_auto_plane_with_fallback(
     if suite2p_plane_dir.exists():
         try:
             return bridge_impl.load_suite2p_plane(suite2p_plane_dir, **suite2p_kwargs)
-        except _TRANSIENT_LOAD_EXCEPTIONS as exc:
+        except _FALLBACK_ELIGIBLE_SUITE2P_EXCEPTIONS as exc:
             errors.append(("suite2p", exc))
+        except _AUTO_LOAD_EXCEPTIONS as exc:
+            raise RuntimeError(
+                "Suite2p input exists for recognized Track2p session "
+                f"'{session_dir.name}' and plane '{plane_name}' but failed "
+                "validation/loading; refusing auto fallback to another input "
+                f"format. Error: {type(exc).__name__}: {exc}"
+            ) from exc
 
     if npy_plane_dir.exists():
         try:
             return bridge_impl.load_raw_npy_plane(npy_plane_dir)
-        except _TRANSIENT_LOAD_EXCEPTIONS as exc:
+        except _AUTO_LOAD_EXCEPTIONS as exc:
             errors.append(("npy", exc))
 
     if errors:
