@@ -5,6 +5,11 @@ walking ROI rows and while materializing split fragments.  Non-negative sentinel
 collide with Suite2p ROI identifiers, and permissive ``int(...)`` coercions can
 turn booleans, strings, or fractional floats into misleading missing values.
 
+Track-row entries must also use the configured sentinel consistently.  A negative
+value other than ``fill_value`` is neither a valid Suite2p ROI identifier nor a
+missing marker for the current call, so accepting it can silently drop detections
+from geometry diagnostics or copy malformed values into split fragments.
+
 The split helper also consumes externally supplied ``TrackGeometryIssue`` objects.
 Their track/session fields select cut points, so malformed values must be rejected
 before the underlying implementation can silently coerce them with ``int(...)`` or
@@ -41,6 +46,35 @@ def install_track_refinement_fill_value_validation() -> None:
         setattr(checked_post_init, "_bayescatrack_original", original_post_init)
         module.TrackSmoothingConfig.__post_init__ = checked_post_init
 
+    original_issues = module.track_geometry_issues
+    if not getattr(original_issues, _PATCH_MARKER, False):
+
+        @wraps(original_issues)
+        def track_geometry_issues_with_fill_value_validation(
+            track_rows: Any,
+            position_tables: Any,
+            *,
+            config: Any = None,
+        ) -> Any:
+            cfg = config or module.TrackSmoothingConfig()
+            normalized_fill_value = _normalize_fill_value(cfg.fill_value)
+            rows = module._validated_track_row_matrix(  # pylint: disable=protected-access
+                track_rows
+            )
+            _validate_track_rows_use_fill_value(
+                rows,
+                fill_value=normalized_fill_value,
+            )
+            return original_issues(rows, position_tables, config=config)
+
+        setattr(track_geometry_issues_with_fill_value_validation, _PATCH_MARKER, True)
+        setattr(
+            track_geometry_issues_with_fill_value_validation,
+            "_bayescatrack_original",
+            original_issues,
+        )
+        module.track_geometry_issues = track_geometry_issues_with_fill_value_validation
+
     original_smoothed = module.smoothed_track_positions
     if not getattr(original_smoothed, _PATCH_MARKER, False):
 
@@ -51,10 +85,18 @@ def install_track_refinement_fill_value_validation() -> None:
             *,
             fill_value: Any = -1,
         ) -> Any:
+            normalized_fill_value = _normalize_fill_value(fill_value)
+            rows = module._validated_track_row_matrix(  # pylint: disable=protected-access
+                track_rows
+            )
+            _validate_track_rows_use_fill_value(
+                rows,
+                fill_value=normalized_fill_value,
+            )
             return original_smoothed(
-                track_rows,
+                rows,
                 position_tables,
-                fill_value=_normalize_fill_value(fill_value),
+                fill_value=normalized_fill_value,
             )
 
         setattr(smoothed_track_positions_with_fill_value_validation, _PATCH_MARKER, True)
@@ -76,7 +118,13 @@ def install_track_refinement_fill_value_validation() -> None:
             fill_value: Any = -1,
         ) -> Any:
             normalized_fill_value = _normalize_fill_value(fill_value)
-            rows = module._validated_track_row_matrix(track_rows)  # pylint: disable=protected-access
+            rows = module._validated_track_row_matrix(  # pylint: disable=protected-access
+                track_rows
+            )
+            _validate_track_rows_use_fill_value(
+                rows,
+                fill_value=normalized_fill_value,
+            )
             issue_tuple = _validated_issue_tuple(
                 issues,
                 n_tracks=rows.shape[0],
@@ -188,6 +236,17 @@ def _normalize_fill_value(value: Any) -> int:
             "with non-negative ROI indices"
         )
     return integer_value
+
+
+def _validate_track_rows_use_fill_value(rows: np.ndarray, *, fill_value: int) -> None:
+    invalid_negative = (rows < 0) & (rows != fill_value)
+    if not np.any(invalid_negative):
+        return
+    invalid_value = int(rows[invalid_negative][0])
+    raise ValueError(
+        "track_rows must contain non-negative ROI indices or the configured "
+        f"fill_value {fill_value}; got negative value {invalid_value}"
+    )
 
 
 __all__ = ["install_track_refinement_fill_value_validation"]
