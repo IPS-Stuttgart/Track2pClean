@@ -140,7 +140,7 @@ def pairwise_context_components(
 def local_density_features(centroids_xy: Any, *, radius: float) -> np.ndarray:
     """Return local ROI-density and nearest-neighbor summary features."""
 
-    centroids = np.asarray(centroids_xy, dtype=float)
+    centroids = _as_centroid_xy_matrix(centroids_xy)
     n = centroids.shape[0]
     if n == 0:
         return np.zeros((0, 4), dtype=float)
@@ -159,7 +159,7 @@ def local_density_features(centroids_xy: Any, *, radius: float) -> np.ndarray:
 def neighbor_graph_signature(centroids_xy: Any, *, neighbor_k: int) -> np.ndarray:
     """Return sorted normalized neighbor-distance signatures per ROI."""
 
-    centroids = np.asarray(centroids_xy, dtype=float)
+    centroids = _as_centroid_xy_matrix(centroids_xy)
     n = centroids.shape[0]
     signature = np.zeros((n, int(neighbor_k)), dtype=float)
     if n <= 1:
@@ -187,7 +187,7 @@ def fov_patch_moments(
     """Return mean and standard-deviation moments for local FOV patches."""
 
     img = np.asarray(image, dtype=float)
-    centroids = np.asarray(centroids_xy, dtype=float)
+    centroids = _as_centroid_xy_matrix(centroids_xy)
     moments = np.zeros((centroids.shape[0], 2), dtype=float)
     if img.ndim != 2:
         return moments
@@ -210,7 +210,7 @@ def fov_patch_moment_descriptors(
     """Return local FOV patch moments and histogram descriptors."""
 
     img = np.asarray(image, dtype=float)
-    centroids = np.asarray(centroids_xy, dtype=float)
+    centroids = _as_centroid_xy_matrix(centroids_xy)
     n = centroids.shape[0]
     width = 6 + int(histogram_bins)
     descriptors = np.zeros((n, width), dtype=float)
@@ -251,6 +251,22 @@ def _centroids_xy(plane: Any, *, order: str, weighted: bool) -> np.ndarray:
     if order == "xy":
         return centroids.T
     return centroids[[1, 0], :].T
+
+
+def _as_centroid_xy_matrix(centroids_xy: Any) -> np.ndarray:
+    try:
+        centroids = np.asarray(centroids_xy, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("centroids_xy must have shape (n_roi, 2)") from exc
+    if centroids.ndim == 1:
+        if centroids.size == 0:
+            return np.zeros((0, 2), dtype=float)
+        if centroids.shape == (2,):
+            return centroids.reshape(1, 2)
+        raise ValueError("centroids_xy must have shape (n_roi, 2)")
+    if centroids.ndim != 2 or centroids.shape[1] != 2:
+        raise ValueError("centroids_xy must have shape (n_roi, 2)")
+    return centroids
 
 
 def _pairwise_distances(points_xy: np.ndarray) -> np.ndarray:
