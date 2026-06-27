@@ -18,6 +18,20 @@ def test_track2pclean_module_help_uses_native_program_name():
     assert "bayescatrack <command> --help" not in proc.stdout
 
 
+def test_track2pclean_cli_module_reexports_native_main():
+    cli_module = importlib.import_module("track2pclean.cli")
+
+    assert cli_module.main is track2pclean_cli.main
+
+
+def test_track2pclean_cli_module_help_uses_native_program_name():
+    proc = run_module("-m", "track2pclean.cli", "--help")
+
+    assert "usage: track2pclean" in proc.stdout
+    assert "track2pclean <command> --help" in proc.stdout
+    assert "bayescatrack <command> --help" not in proc.stdout
+
+
 def test_track2pclean_summary_help_uses_native_program_name():
     proc = run_module("-m", "track2pclean", "summary", "--help")
 
