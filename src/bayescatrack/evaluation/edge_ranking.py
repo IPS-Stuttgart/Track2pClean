@@ -39,31 +39,7 @@ def rank_labeled_edges(
     score_directions: Mapping[str, ScoreDirection] | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> list[dict[str, float | int | str]]:
-    """Rank each positive label against row and column alternatives.
-
-    Parameters
-    ----------
-    labels
-        Binary ``(n_reference, n_measurement)`` matrix in loaded-ROI coordinates.
-    score_matrices
-        Named score or cost matrices with the same shape as ``labels``.
-    reference_roi_indices, measurement_roi_indices
-        Original Suite2p ROI indices corresponding to label rows and columns.
-    score_directions
-        Optional map declaring whether lower values (``"cost"``) or higher values
-        (``"similarity"``) are better for each score. Unspecified names are
-        inferred conservatively from their names.
-    metadata
-        Scalar fields copied into every output row, for example subject and
-        session identifiers.
-
-    Returns
-    -------
-    list of dict
-        One row per positive GT edge per score matrix. Positive margins mean the
-        GT edge beats the best same-row or same-column false competitor.
-    """
-
+    """Rank each positive label against row and column alternatives."""
     label_matrix = _as_label_matrix(labels)
     reference_indices = np.asarray(reference_roi_indices, dtype=int).reshape(-1)
     measurement_indices = np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
@@ -83,50 +59,41 @@ def rank_labeled_edges(
         measurement_roi_index = int(measurement_indices[column_index])
         for score_name, matrix in matrices.items():
             direction = directions[score_name]
-            row_details = _rank_details(
-                matrix[row_index, :], int(column_index), direction
+            row_details = _rank_details(matrix[row_index, :], int(column_index), direction)
+            column_details = _rank_details(matrix[:, column_index], int(row_index), direction)
+            rows.append(
+                {
+                    **base_metadata,
+                    "reference_roi_index": reference_roi_index,
+                    "measurement_roi_index": measurement_roi_index,
+                    "score_name": score_name,
+                    "score_direction": direction,
+                    "edge_present": 1,
+                    "missing_reason": "",
+                    "true_score": _float_or_nan(matrix[row_index, column_index]),
+                    "true_is_finite": int(row_details["true_is_finite"]),
+                    "row_rank": int(row_details["rank"]),
+                    "column_rank": int(column_details["rank"]),
+                    "row_better_count": int(row_details["better_count"]),
+                    "column_better_count": int(column_details["better_count"]),
+                    "row_tie_count": int(row_details["tie_count"]),
+                    "column_tie_count": int(column_details["tie_count"]),
+                    "row_candidate_count": int(row_details["candidate_count"]),
+                    "column_candidate_count": int(column_details["candidate_count"]),
+                    "row_finite_candidate_count": int(row_details["finite_candidate_count"]),
+                    "column_finite_candidate_count": int(column_details["finite_candidate_count"]),
+                    "best_false_row_score": _float_or_nan(row_details["best_false_score"]),
+                    "best_false_column_score": _float_or_nan(column_details["best_false_score"]),
+                    "best_false_row_roi_index": _roi_index_or_minus_one(
+                        measurement_indices, row_details["best_false_index"]
+                    ),
+                    "best_false_column_roi_index": _roi_index_or_minus_one(
+                        reference_indices, column_details["best_false_index"]
+                    ),
+                    "row_margin": _float_or_nan(row_details["margin"]),
+                    "column_margin": _float_or_nan(column_details["margin"]),
+                }
             )
-            column_details = _rank_details(
-                matrix[:, column_index], int(row_index), direction
-            )
-            output_row: dict[str, float | int | str] = {
-                **base_metadata,
-                "reference_roi_index": reference_roi_index,
-                "measurement_roi_index": measurement_roi_index,
-                "score_name": score_name,
-                "score_direction": direction,
-                "edge_present": 1,
-                "missing_reason": "",
-                "true_score": _float_or_nan(matrix[row_index, column_index]),
-                "true_is_finite": int(row_details["true_is_finite"]),
-                "row_rank": int(row_details["rank"]),
-                "column_rank": int(column_details["rank"]),
-                "row_better_count": int(row_details["better_count"]),
-                "column_better_count": int(column_details["better_count"]),
-                "row_tie_count": int(row_details["tie_count"]),
-                "column_tie_count": int(column_details["tie_count"]),
-                "row_candidate_count": int(row_details["candidate_count"]),
-                "column_candidate_count": int(column_details["candidate_count"]),
-                "row_finite_candidate_count": int(
-                    row_details["finite_candidate_count"]
-                ),
-                "column_finite_candidate_count": int(
-                    column_details["finite_candidate_count"]
-                ),
-                "best_false_row_score": _float_or_nan(row_details["best_false_score"]),
-                "best_false_column_score": _float_or_nan(
-                    column_details["best_false_score"]
-                ),
-                "best_false_row_roi_index": _roi_index_or_minus_one(
-                    measurement_indices, row_details["best_false_index"]
-                ),
-                "best_false_column_roi_index": _roi_index_or_minus_one(
-                    reference_indices, column_details["best_false_index"]
-                ),
-                "row_margin": _float_or_nan(row_details["margin"]),
-                "column_margin": _float_or_nan(column_details["margin"]),
-            }
-            rows.append(output_row)
     return rows
 
 
@@ -140,13 +107,11 @@ def missing_reference_edge_rows(
     metadata: Mapping[str, Any] | None = None,
 ) -> list[dict[str, float | int | str]]:
     """Return diagnostic rows for manual-GT edges absent from the candidate matrix."""
-
     reference_indices = {
         int(value) for value in np.asarray(reference_roi_indices, dtype=int).reshape(-1)
     }
     measurement_indices = {
-        int(value)
-        for value in np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
+        int(value) for value in np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
     }
     base_metadata = dict(metadata or {})
     directions = {
@@ -211,13 +176,8 @@ def summarize_edge_ranking_rows(
     group_keys: Sequence[str] = DEFAULT_GROUP_KEYS,
     hit_ks: Sequence[int] = DEFAULT_HIT_KS,
 ) -> list[dict[str, float | int | str]]:
-    """Aggregate edge-ranking rows into hit-rate and margin summaries.
-
-    Hit rates use all GT rows in the group as the denominator, including missing
-    candidate edges. ``*_present`` variants use only present, finite true edges.
-    """
-
-    groups: "OrderedDict[tuple[Any, ...], list[Mapping[str, Any]]]" = OrderedDict()
+    """Aggregate edge-ranking rows into hit-rate and margin summaries."""
+    groups: OrderedDict[tuple[Any, ...], list[Mapping[str, Any]]] = OrderedDict()
     for row in rows:
         key = tuple(row.get(group_key, "") for group_key in group_keys)
         groups.setdefault(key, []).append(row)
@@ -225,22 +185,19 @@ def summarize_edge_ranking_rows(
     hit_ks = _validated_hit_ks(hit_ks)
     summaries: list[dict[str, float | int | str]] = []
     for key, group_rows in groups.items():
-        summary: dict[str, float | int | str] = dict(zip(group_keys, key))
         present_rows = [
-            _row for _row in group_rows if _truthy_int(_row.get("edge_present", 0))
+            row for row in group_rows if _truthy_int(row.get("edge_present", 0))
         ]
         finite_rows = [
-            _row for _row in present_rows if _truthy_int(_row.get("true_is_finite", 0))
+            row for row in present_rows if _truthy_int(row.get("true_is_finite", 0))
         ]
-        n_gt_edges = len(group_rows)
-        n_present = len(present_rows)
-        n_finite = len(finite_rows)
+        summary: dict[str, float | int | str] = dict(zip(group_keys, key))
         summary.update(
             {
-                "gt_edges": int(n_gt_edges),
-                "present_edges": int(n_present),
-                "missing_edges": int(n_gt_edges - n_present),
-                "finite_true_edges": int(n_finite),
+                "gt_edges": int(len(group_rows)),
+                "present_edges": int(len(present_rows)),
+                "missing_edges": int(len(group_rows) - len(present_rows)),
+                "finite_true_edges": int(len(finite_rows)),
                 "median_row_rank": _median_of(finite_rows, "row_rank"),
                 "median_column_rank": _median_of(finite_rows, "column_rank"),
                 "median_row_margin": _median_of(finite_rows, "row_margin"),
@@ -302,7 +259,6 @@ def score_matrices_from_feature_tensor(
     feature_names: Sequence[str],
 ) -> dict[str, np.ndarray]:
     """Return ``{feature_name: feature_plane}`` from an ``(..., n_features)`` tensor."""
-
     feature_array = np.asarray(features, dtype=float)
     names = tuple(feature_names)
     if feature_array.ndim != 3:
@@ -319,7 +275,6 @@ def score_matrices_from_feature_tensor(
 
 def infer_score_direction(score_name: str) -> ScoreDirection:
     """Infer whether a score name is cost-like or similarity-like."""
-
     normalized = str(score_name).strip().lower()
     if normalized in SIMILARITY_SCORE_NAMES:
         return "similarity"
@@ -331,10 +286,35 @@ def infer_score_direction(score_name: str) -> ScoreDirection:
 
 
 def _as_label_matrix(labels: Any) -> np.ndarray:
-    label_matrix = np.asarray(labels)
+    label_matrix = np.asarray(labels, dtype=object)
     if label_matrix.ndim != 2:
         raise ValueError("labels must be a two-dimensional matrix")
-    return label_matrix.astype(bool)
+    out = np.empty(label_matrix.shape, dtype=bool)
+    for index, value in np.ndenumerate(label_matrix):
+        out[index] = _parse_binary_label(value)
+    return out
+
+
+def _parse_binary_label(value: Any) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, bytes):
+        try:
+            value = value.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("labels must contain only binary 0/1 values") from exc
+    if isinstance(value, str):
+        value = value.strip()
+        if value not in {"0", "1"}:
+            raise ValueError("labels must contain only binary 0/1 values")
+        return value == "1"
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("labels must contain only binary 0/1 values") from exc
+    if not np.isfinite(numeric) or numeric not in (0.0, 1.0):
+        raise ValueError("labels must contain only binary 0/1 values")
+    return bool(numeric)
 
 
 def _validated_score_matrices(
@@ -416,11 +396,10 @@ def _rank_details(
         best_false_index = int(false_indices[best_false_local])
         best_false_score = float(values[best_false_index])
         if true_is_finite:
-            margin = (
-                best_false_score - true_value
-                if direction == "cost"
-                else true_value - best_false_score
-            )
+            if direction == "cost":
+                margin = best_false_score - true_value
+            else:
+                margin = true_value - best_false_score
         else:
             margin = np.nan
     else:
