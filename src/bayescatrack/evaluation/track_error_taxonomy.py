@@ -9,7 +9,10 @@ from typing import Any
 
 import numpy as np
 from bayescatrack.advanced_roi_components import pairwise_cost_margin_components
-from bayescatrack.evaluation.complete_track_scores import normalize_track_matrix
+from bayescatrack.evaluation.complete_track_scores import (
+    _normalize_track_matrix_observations,
+    normalize_track_matrix,
+)
 
 TrackLink = tuple[int, int, int, int]
 SessionEdge = tuple[int, int]
@@ -83,8 +86,14 @@ def classify_track_errors(
     index space as the track matrices.
     """
 
-    predicted = normalize_track_matrix(predicted_track_matrix)
-    reference = normalize_track_matrix(reference_track_matrix)
+    predicted = _normalize_taxonomy_track_matrix(
+        predicted_track_matrix,
+        "predicted_track_matrix",
+    )
+    reference = _normalize_taxonomy_track_matrix(
+        reference_track_matrix,
+        "reference_track_matrix",
+    )
     if predicted.shape[1] != reference.shape[1]:
         raise ValueError(
             "Predicted and reference matrices must have the same number of sessions"
@@ -129,6 +138,14 @@ def summarize_error_taxonomy(*args: Any, **kwargs: Any) -> dict[str, int]:
     """Return aggregate taxonomy counts for ``classify_track_errors``."""
 
     return classify_track_errors(*args, **kwargs).summary()
+
+
+def _normalize_taxonomy_track_matrix(track_matrix: Any, matrix_name: str) -> np.ndarray:
+    """Normalize a track matrix with Track2pClean's strict ROI-cell validation."""
+
+    return normalize_track_matrix(
+        _normalize_track_matrix_observations(track_matrix, matrix_name)
+    )
 
 
 def _classify_false_positive(
