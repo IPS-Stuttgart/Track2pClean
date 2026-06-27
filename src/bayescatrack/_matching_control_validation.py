@@ -12,6 +12,7 @@ or benchmark track population.
 from __future__ import annotations
 
 import operator
+from collections.abc import Mapping
 from functools import wraps
 from typing import Any
 
@@ -63,7 +64,7 @@ def install_matching_control_validation() -> None:
         normalized_session_names = tuple(str(name) for name in session_names)
         return original_build_matches(
             normalized_session_names,
-            matches,
+            _normalize_empty_match_collections(matches),
             *args,
             start_roi_indices=start_roi_indices,
             start_session_index=_normalize_session_index(
@@ -100,6 +101,36 @@ def install_matching_control_validation() -> None:
 def _mark_patch(wrapper: Any, original: Any) -> None:
     setattr(wrapper, _PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
+
+
+def _normalize_empty_match_collections(matches: Any) -> Any:
+    """Normalize explicit empty match collections to an empty pair matrix."""
+
+    if isinstance(matches, (str, bytes)):
+        return matches
+    try:
+        match_iterator = iter(matches)
+    except TypeError:
+        return matches
+    return [_normalize_empty_match_collection(match) for match in match_iterator]
+
+
+def _normalize_empty_match_collection(match: Any) -> Any:
+    if isinstance(match, Mapping):
+        return match
+    if isinstance(match, tuple) and len(match) == 2:
+        return match
+
+    try:
+        match_array = np.asarray(match)
+    except ValueError:
+        return match
+
+    if match_array.size != 0:
+        return match
+    if match_array.ndim == 1 or (match_array.ndim == 2 and match_array.shape[1] == 2):
+        return np.empty((0, 2), dtype=int)
+    raise TypeError("unsupported match representation")
 
 
 def _normalize_assignment_max_cost(value: Any) -> float | None:
