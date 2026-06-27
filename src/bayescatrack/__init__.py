@@ -166,6 +166,9 @@ from ._tracking_result_matrix_validation import (
 from ._tracking_start_roi_validation import (
     install_tracking_start_roi_validation as _install_tracking_start_roi_validation,
 )
+from ._tracking_start_roi_availability_validation import (
+    install_tracking_start_roi_availability_validation as _install_tracking_start_roi_availability_validation,
+)
 from .advanced_roi_components import (
     install_advanced_roi_components as _install_advanced_roi_components,
 )
@@ -240,6 +243,7 @@ _install_session_match_result_validation()
 _install_roi_cue_length_validation(_absence_model)
 _install_supervised_mask_validation(_calibrated_costs)
 _install_tracking_start_roi_validation()
+_install_tracking_start_roi_availability_validation()
 _install_tracking_global_link_edge_validation()
 _install_track_row_export_option_validation()
 _install_track_row_fill_value_validation()
