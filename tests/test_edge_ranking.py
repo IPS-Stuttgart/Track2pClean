@@ -57,6 +57,25 @@ def test_rank_labeled_edges_supports_similarity_scores():
     assert rows[0]["row_margin"] == pytest.approx(0.2)
 
 
+@pytest.mark.parametrize(
+    "labels",
+    [
+        np.array([[0, 2]]),
+        np.array([[0, -1]]),
+        np.array([[0, np.nan]]),
+        np.array([["False", "True"]], dtype=object),
+    ],
+)
+def test_rank_labeled_edges_rejects_non_binary_labels(labels):
+    with pytest.raises(ValueError, match="labels must contain only binary 0/1 values"):
+        rank_labeled_edges(
+            labels,
+            {"cost": np.zeros(labels.shape, dtype=float)},
+            reference_roi_indices=np.arange(labels.shape[0]),
+            measurement_roi_indices=np.arange(labels.shape[1]),
+        )
+
+
 def test_missing_reference_edges_are_counted_in_summary_denominator():
     present_rows = rank_labeled_edges(
         np.array([[1]]),
