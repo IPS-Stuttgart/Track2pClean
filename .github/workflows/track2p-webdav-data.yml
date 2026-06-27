@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - ".github/workflows/track2p-webdav-data.yml"
-      - ".github/actions/setup-longitudinaltracking-data/action.yml"
+      - ".github/actions/setup-bayescatrack-data/action.yml"
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
@@ -15,7 +15,7 @@ on:
       - main
     paths:
       - ".github/workflows/track2p-webdav-data.yml"
-      - ".github/actions/setup-longitudinaltracking-data/action.yml"
+      - ".github/actions/setup-bayescatrack-data/action.yml"
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
@@ -47,11 +47,11 @@ jobs:
       - name: Show runner disk before data restore
         run: df -h "$GITHUB_WORKSPACE"
 
-      - name: Restore or download longitudinal tracking data
-        uses: ./.github/actions/setup-longitudinaltracking-data
+      - name: Restore or download BayesCaTrack data
+        uses: ./.github/actions/setup-bayescatrack-data
         with:
           data_path: track2p-data
-          cache_key: longitudinaltracking-webdav-track2p-data-v1
+          cache_key: bayescatrack-webdav-track2p-data-v1
           webdav_url: ${{ secrets.LONGITUDINALTRACKING_WEBDAV_URL }}
           webdav_user: ${{ secrets.LONGITUDINALTRACKING_DATA_KEY }}
           webdav_password: ${{ secrets.LONGITUDINALTRACKING_DATA_PASSWORD }}

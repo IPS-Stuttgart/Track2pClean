@@ -10,6 +10,12 @@ from bayescatrack.dependency_pins import (
 )
 
 
+def test_python_requires_matches_supported_range():
+    pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+
+    assert 'requires-python = ">=3.11,<3.15"' in pyproject
+
+
 def test_pyrecest_dependency_pin_matches_project_metadata():
     pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
     match = re.search(

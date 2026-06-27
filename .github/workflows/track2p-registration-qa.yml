@@ -100,10 +100,10 @@ jobs:
           python -m pip install -e ".[track2p]"
 
       - name: Restore or download raw pre-Track2p Suite2p data
-        uses: ./.github/actions/setup-longitudinaltracking-data
+        uses: ./.github/actions/setup-bayescatrack-data
         with:
           data_path: ${{ inputs.raw_data_path }}
-          cache_key: longitudinaltrackingraw-webdav-${{ inputs.raw_data_path }}-spatial-v3
+          cache_key: bayescatrack-raw-webdav-${{ inputs.raw_data_path }}-spatial-v3
           webdav_url: ${{ secrets.LONGITUDINALTRACKINGRAW_WEBDAV_URL }}
           webdav_user: ${{ secrets.LONGITUDINALTRACKINGRAW_DATA_KEY }}
           webdav_password: ${{ secrets.LONGITUDINALTRACKINGRAW_DATA_PASSWORD }}
@@ -117,10 +117,10 @@ jobs:
             - **
 
       - name: Restore or download Track2p metadata data
-        uses: ./.github/actions/setup-longitudinaltracking-data
+        uses: ./.github/actions/setup-bayescatrack-data
         with:
           data_path: ${{ inputs.metadata_data_path }}
-          cache_key: longitudinaltracking-webdav-${{ inputs.metadata_data_path }}-metadata-v2
+          cache_key: bayescatrack-webdav-${{ inputs.metadata_data_path }}-metadata-v2
           webdav_url: ${{ secrets.LONGITUDINALTRACKING_WEBDAV_URL }}
           webdav_user: ${{ secrets.LONGITUDINALTRACKING_DATA_KEY }}
           webdav_password: ${{ secrets.LONGITUDINALTRACKING_DATA_PASSWORD }}
