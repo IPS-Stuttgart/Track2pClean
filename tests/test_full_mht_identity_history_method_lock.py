@@ -65,7 +65,10 @@ def test_identity_history_sensitivity_rows_match_method_lock() -> None:
 
     assert _normalized(runs["IdentityHistoryCentral"]) == central
     for row_name, changed in lock["sensitivity_axes"].items():
-        assert _normalized(runs[row_name], ignored=set(changed)) == central
+        ignored = set(changed)
+        assert _normalized(runs[row_name], ignored=ignored) == _normalized(
+            central, ignored=ignored
+        )
         for key, value in changed.items():
             assert runs[row_name][key] == value
 
