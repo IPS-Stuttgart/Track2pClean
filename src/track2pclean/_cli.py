@@ -137,6 +137,7 @@ def _handle_module_command(
             legacy_program_name=legacy_program_name,
             program_name=program_name,
         )
+        parser.prog = program_name
         return parser
 
     try:
