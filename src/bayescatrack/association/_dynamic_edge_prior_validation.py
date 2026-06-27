@@ -30,7 +30,7 @@ _OPTIONAL_NUMERIC_FIELDS = (
 
 
 def install_dynamic_edge_prior_bool_validation() -> None:
-    """Reject booleans before ``DynamicEdgePriorConfig`` casts values to floats."""
+    """Reject ambiguous scalar controls before configs cast them to floats."""
 
     config_cls = _dynamic_edge_priors.DynamicEdgePriorConfig
     if getattr(config_cls, _PATCH_MARKER, False):
@@ -40,11 +40,11 @@ def install_dynamic_edge_prior_bool_validation() -> None:
 
     def validated_post_init(self: Any) -> None:
         for field_name in _REQUIRED_NUMERIC_FIELDS:
-            _reject_boolean_numeric_value(getattr(self, field_name), field_name)
+            _reject_ambiguous_numeric_value(getattr(self, field_name), field_name)
         for field_name in _OPTIONAL_NUMERIC_FIELDS:
             value = getattr(self, field_name)
             if value is not None:
-                _reject_boolean_numeric_value(value, field_name)
+                _reject_ambiguous_numeric_value(value, field_name)
         original_post_init(self)
 
     validated_post_init.__name__ = "__post_init__"
@@ -54,9 +54,17 @@ def install_dynamic_edge_prior_bool_validation() -> None:
     setattr(config_cls, _PATCH_MARKER, True)
 
 
-def _reject_boolean_numeric_value(value: Any, field_name: str) -> None:
+def _reject_ambiguous_numeric_value(value: Any, field_name: str) -> None:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{field_name} must be numeric, not boolean")
+    if isinstance(value, (str, bytes, np.str_, np.bytes_)):
+        raise ValueError(f"{field_name} must be numeric, not text")
+    try:
+        value_array = np.asarray(value, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be a numeric scalar") from exc
+    if value_array.shape != ():
+        raise ValueError(f"{field_name} must be a numeric scalar")
 
 
 __all__ = ["install_dynamic_edge_prior_bool_validation"]
