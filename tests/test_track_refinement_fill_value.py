@@ -50,11 +50,47 @@ def test_track_geometry_issues_rejects_nonfinite_position_table_entries():
         track_geometry_issues(track_rows, position_tables)
 
 
+@pytest.mark.parametrize("helper", [track_geometry_issues, smoothed_track_positions])
+def test_track_refinement_helpers_reject_non_sentinel_negative_track_rows(helper):
+    track_rows = np.array([[0, -2, 2]], dtype=int)
+    position_tables = (
+        {0: np.array([0.0, 0.0])},
+        {},
+        {2: np.array([2.0, 2.0])},
+    )
+
+    with pytest.raises(ValueError, match="configured fill_value"):
+        helper(track_rows, position_tables)
+
+
+def test_smoothed_track_positions_allows_configured_negative_fill_value():
+    track_rows = np.array([[0, -2, 2]], dtype=int)
+    position_tables = (
+        {0: np.array([0.0, 0.0])},
+        {},
+        {2: np.array([2.0, 2.0])},
+    )
+
+    result = smoothed_track_positions(track_rows, position_tables, fill_value=-2)
+
+    assert set(result) == {0}
+    assert set(result[0]) == {0, 2}
+    npt.assert_allclose(result[0][0], np.array([0.0, 0.0]))
+    npt.assert_allclose(result[0][2], np.array([2.0, 2.0]))
+
+
 def test_split_tracks_at_issues_rejects_non_negative_fill_value():
     track_rows = np.array([[0, 1]], dtype=int)
 
     with pytest.raises(ValueError, match="negative integer sentinel"):
         split_tracks_at_issues(track_rows, (), fill_value=0)
+
+
+def test_split_tracks_at_issues_rejects_non_sentinel_negative_track_rows():
+    track_rows = np.array([[0, -2, 2]], dtype=int)
+
+    with pytest.raises(ValueError, match="configured fill_value"):
+        split_tracks_at_issues(track_rows, ())
 
 
 def test_split_tracks_at_issues_preserves_roi_zero_with_negative_fill_value():
