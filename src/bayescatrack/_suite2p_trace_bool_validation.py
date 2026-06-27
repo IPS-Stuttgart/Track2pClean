@@ -6,6 +6,8 @@ from functools import wraps
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 _TRACE_BOOL_DEFAULTS: dict[str, bool] = {
     "load_traces": True,
     "load_spike_traces": True,
@@ -82,7 +84,7 @@ def _uses_suite2p_input_format(kwargs: dict[str, Any]) -> bool:
 def _validate_trace_bool_kwargs(kwargs: dict[str, Any]) -> None:
     for name, default in _TRACE_BOOL_DEFAULTS.items():
         value = kwargs.get(name, default)
-        if type(value) is not bool:
+        if not isinstance(value, (bool, np.bool_)):
             raise ValueError(f"{name} must be a boolean")
 
 
