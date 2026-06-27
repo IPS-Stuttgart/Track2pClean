@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.absence_model import absence_cost_vector
 
 

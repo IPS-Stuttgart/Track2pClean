@@ -23,13 +23,17 @@ import numpy as np
 
 _IMAGE_PATCH_MARKER = "_bayescatrack_registration_image_warp_validation_patch"
 _ROI_MASK_PATCH_MARKER = "_bayescatrack_registration_roi_mask_warp_validation_patch"
-_OUTPUT_SHAPE_ERROR = "output_shape must contain exactly two non-negative integer values"
+_OUTPUT_SHAPE_ERROR = (
+    "output_shape must contain exactly two non-negative integer values"
+)
 
 
 def install_registration_warp_validation() -> None:
     """Install idempotent validation around registration image and ROI-mask warping."""
 
-    from . import registration as _registration  # pylint: disable=import-outside-toplevel
+    from . import (
+        registration as _registration,  # pylint: disable=import-outside-toplevel
+    )
 
     original_image_warp = _registration.warp_image_into_reference_frame
     if not getattr(original_image_warp, _IMAGE_PATCH_MARKER, False):
@@ -97,7 +101,9 @@ def _mark_patch(wrapper: Any, original: Any, marker: str) -> None:
 def _normalize_common_warp_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     normalized_kwargs = dict(kwargs)
     if "output_shape" in normalized_kwargs:
-        normalized_kwargs["output_shape"] = _normalize_output_shape(normalized_kwargs["output_shape"])
+        normalized_kwargs["output_shape"] = _normalize_output_shape(
+            normalized_kwargs["output_shape"]
+        )
     return normalized_kwargs
 
 
@@ -128,7 +134,9 @@ def _normalize_output_shape(output_shape: Any) -> tuple[int, int]:
     if flat_shape.size != 2:
         raise ValueError(_OUTPUT_SHAPE_ERROR)
 
-    height, width = (_normalize_output_shape_component(value) for value in flat_shape.tolist())
+    height, width = (
+        _normalize_output_shape_component(value) for value in flat_shape.tolist()
+    )
     return height, width
 
 

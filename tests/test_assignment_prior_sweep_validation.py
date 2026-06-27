@@ -4,7 +4,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from bayescatrack.experiments import track2p_benchmark as benchmark
 
 

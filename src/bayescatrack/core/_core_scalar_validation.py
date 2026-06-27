@@ -8,7 +8,9 @@ from typing import Any
 
 import numpy as np
 
-_CORE_SCALAR_VALIDATION_INSTALLED_ATTR = "_bayescatrack_core_scalar_validation_installed"
+_CORE_SCALAR_VALIDATION_INSTALLED_ATTR = (
+    "_bayescatrack_core_scalar_validation_installed"
+)
 _PATCH_MARKER = "_bayescatrack_core_scalar_validation_patch"
 _ORIGINAL_ATTR = "_bayescatrack_original"
 
@@ -37,7 +39,9 @@ def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None
         return
 
     original_position_covariances = calcium_plane_cls.position_covariances
-    original_to_constant_velocity_state_moments = calcium_plane_cls.to_constant_velocity_state_moments
+    original_to_constant_velocity_state_moments = (
+        calcium_plane_cls.to_constant_velocity_state_moments
+    )
     original_build_pairwise_cost_matrix = calcium_plane_cls.build_pairwise_cost_matrix
 
     @wraps(original_position_covariances)
@@ -90,11 +94,15 @@ def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None
         return original_build_pairwise_cost_matrix(self, *args, **kwargs)
 
     _mark_wrapper(position_covariances, original_position_covariances)
-    _mark_wrapper(to_constant_velocity_state_moments, original_to_constant_velocity_state_moments)
+    _mark_wrapper(
+        to_constant_velocity_state_moments, original_to_constant_velocity_state_moments
+    )
     _mark_wrapper(build_pairwise_cost_matrix, original_build_pairwise_cost_matrix)
 
     calcium_plane_cls.position_covariances = position_covariances
-    calcium_plane_cls.to_constant_velocity_state_moments = to_constant_velocity_state_moments
+    calcium_plane_cls.to_constant_velocity_state_moments = (
+        to_constant_velocity_state_moments
+    )
     calcium_plane_cls.build_pairwise_cost_matrix = build_pairwise_cost_matrix
     setattr(calcium_plane_cls, _CORE_SCALAR_VALIDATION_INSTALLED_ATTR, True)
 
@@ -167,7 +175,11 @@ def _validate_finite_scalar(
     *,
     strictly_positive: bool,
 ) -> float:
-    requirement = "a finite strictly positive value" if strictly_positive else "a finite non-negative value"
+    requirement = (
+        "a finite strictly positive value"
+        if strictly_positive
+        else "a finite non-negative value"
+    )
     if isinstance(raw_value, (bool, np.bool_)):
         raise ValueError(f"{name} must be {requirement}")
     try:

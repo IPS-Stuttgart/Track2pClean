@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.segmentation_events import (
     merge_event_candidates,
     split_event_candidates,
@@ -17,7 +16,9 @@ def _pairwise_components() -> dict[str, np.ndarray]:
     }
 
 
-@pytest.mark.parametrize("bad_indices", ([True], [np.bool_(False)], [1.5], [-1], [np.nan]))
+@pytest.mark.parametrize(
+    "bad_indices", ([True], [np.bool_(False)], [1.5], [-1], [np.nan])
+)
 def test_split_event_candidates_reject_invalid_reference_roi_indices(
     bad_indices: list[object],
 ) -> None:
@@ -29,7 +30,9 @@ def test_split_event_candidates_reject_invalid_reference_roi_indices(
         )
 
 
-@pytest.mark.parametrize("bad_indices", ([True], [np.bool_(False)], [1.5], [-1], [np.nan]))
+@pytest.mark.parametrize(
+    "bad_indices", ([True], [np.bool_(False)], [1.5], [-1], [np.nan])
+)
 def test_merge_event_candidates_reject_invalid_measurement_roi_indices(
     bad_indices: list[object],
 ) -> None:

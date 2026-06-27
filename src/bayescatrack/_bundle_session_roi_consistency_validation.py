@@ -21,7 +21,9 @@ _PATCH_MARKER = "_bayescatrack_bundle_session_roi_consistency_validation_patch"
 def install_bundle_session_roi_consistency_validation(matching_module: Any) -> None:
     """Install an idempotent guard for intermediate-session ROI layouts."""
 
-    original_bundle_roi_indices_for_session = matching_module._bundle_roi_indices_for_session
+    original_bundle_roi_indices_for_session = (
+        matching_module._bundle_roi_indices_for_session
+    )
     if getattr(original_bundle_roi_indices_for_session, _PATCH_MARKER, False):
         return
 

@@ -38,6 +38,10 @@ def test_validated_supervised_mask_accepts_boolean_values() -> None:
         np.array([["yes", "no"], ["no", "yes"]], dtype=object),
     ],
 )
-def test_validated_supervised_mask_rejects_silent_boolean_coercions(mask: object) -> None:
-    with pytest.raises(ValueError, match="supervised_mask must contain only boolean values"):
+def test_validated_supervised_mask_rejects_silent_boolean_coercions(
+    mask: object,
+) -> None:
+    with pytest.raises(
+        ValueError, match="supervised_mask must contain only boolean values"
+    ):
         _validated_supervised_mask(_example_block(mask), (2, 2))

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from bayescatrack.evaluation.edge_ranking import missing_reference_edge_rows, rank_labeled_edges
+from bayescatrack.evaluation.edge_ranking import (
+    missing_reference_edge_rows,
+    rank_labeled_edges,
+)
 
 
 def test_rank_labeled_edges_rejects_boolean_roi_indices() -> None:

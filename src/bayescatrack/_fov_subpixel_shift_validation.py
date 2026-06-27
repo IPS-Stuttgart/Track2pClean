@@ -22,7 +22,9 @@ _SHIFT_ERROR = "shift_yx must contain exactly two finite numeric values"
 def install_fov_subpixel_shift_validation() -> None:
     """Install idempotent validation around FOV subpixel translation shifts."""
 
-    from . import fov_registration as _fov_registration  # pylint: disable=import-outside-toplevel
+    from . import (
+        fov_registration as _fov_registration,  # pylint: disable=import-outside-toplevel
+    )
 
     _wrap_shift_argument(_fov_registration, "apply_subpixel_image_translation")
     _wrap_shift_argument(_fov_registration, "apply_subpixel_roi_mask_translation")
@@ -55,7 +57,10 @@ def _normalize_subpixel_shift_yx(shift_yx: Any) -> np.ndarray:
         raise ValueError(_SHIFT_ERROR)
 
     return np.asarray(
-        [_normalize_subpixel_shift_component(value) for value in flattened_shift.tolist()],
+        [
+            _normalize_subpixel_shift_component(value)
+            for value in flattened_shift.tolist()
+        ],
         dtype=float,
     )
 

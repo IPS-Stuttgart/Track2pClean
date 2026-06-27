@@ -28,8 +28,12 @@ _FEATURE_ARRAY_ERROR = "features must be an array with a final feature dimension
 def install_monotone_ranker_feature_validation() -> None:
     """Install idempotent validation around monotone-ranker training and prediction."""
 
-    from . import monotone_ranker as _monotone_ranker  # pylint: disable=import-outside-toplevel
-    from . import monotone_ranking_costs as _monotone_ranking_costs  # pylint: disable=import-outside-toplevel
+    from . import (
+        monotone_ranker as _monotone_ranker,  # pylint: disable=import-outside-toplevel
+    )
+    from . import (
+        monotone_ranking_costs as _monotone_ranking_costs,  # pylint: disable=import-outside-toplevel
+    )
 
     original = _monotone_ranker.fit_monotone_ranking_association_model_from_blocks
     if not getattr(original, _MARKER, False):
@@ -77,12 +81,16 @@ def _patch_normalized_features(model_cls: type[Any]) -> None:
         return
 
     @wraps(original)
-    def _normalized_features_with_array_validation(self: Any, features: Any) -> np.ndarray:
+    def _normalized_features_with_array_validation(
+        self: Any, features: Any
+    ) -> np.ndarray:
         _validate_feature_tensor_has_dimension(features)
         return original(self, features)
 
     setattr(_normalized_features_with_array_validation, _FEATURE_ARRAY_MARKER, True)
-    setattr(_normalized_features_with_array_validation, "_track2pclean_original", original)
+    setattr(
+        _normalized_features_with_array_validation, "_track2pclean_original", original
+    )
     model_cls._normalized_features = _normalized_features_with_array_validation
 
 
@@ -105,14 +113,18 @@ def _validate_unique_feature_names(values: Any, *, field_name: str) -> None:
     duplicate_names: list[str] = []
     for name in names:
         if not isinstance(name, str) or not name:
-            raise ValueError(f"{field_name} must contain non-empty string feature names")
+            raise ValueError(
+                f"{field_name} must contain non-empty string feature names"
+            )
         if name in seen and name not in duplicate_names:
             duplicate_names.append(name)
         seen.add(name)
 
     if duplicate_names:
         duplicates = ", ".join(duplicate_names)
-        raise ValueError(f"{field_name} must be unique; duplicate feature(s): {duplicates}")
+        raise ValueError(
+            f"{field_name} must be unique; duplicate feature(s): {duplicates}"
+        )
 
 
 __all__ = ["install_monotone_ranker_feature_validation"]

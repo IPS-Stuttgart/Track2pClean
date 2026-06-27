@@ -131,7 +131,9 @@ def install_teacher_rescue_manifest_integration() -> None:
 
     if getattr(manifest, "_bayescatrack_teacher_rescue_manifest_integration", False):
         _install_advanced_workbench_manifest_row()
-        if getattr(manifest, "_bayescatrack_teacher_rescue_edit_cap_integration", False):
+        if getattr(
+            manifest, "_bayescatrack_teacher_rescue_edit_cap_integration", False
+        ):
             from bayescatrack.experiments import (
                 _teacher_rescue_edit_cap_manifest_integration as edit_cap,
             )

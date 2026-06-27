@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from bayescatrack.matching import export_track_rows_csv
 
 

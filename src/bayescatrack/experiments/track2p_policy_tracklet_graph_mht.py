@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import numpy as np
-
 from bayescatrack.experiments import track2p_policy_full_mht_benchmark as full_mht
 from bayescatrack.experiments import track2p_policy_suffix_stitch_ranking_audit as rank
 from bayescatrack.experiments.track2p_benchmark import (
@@ -27,11 +26,11 @@ from bayescatrack.experiments.track2p_benchmark import (
     Track2pBenchmarkConfig,
     _load_reference_for_subject,
     _load_subject_sessions,
+    _predict_subject_tracks,
     _reference_matrix,
     _score_prediction_against_reference,
     _validate_reference_for_benchmark,
     _validate_reference_roi_indices,
-    _predict_subject_tracks,
     discover_subject_dirs,
     write_results,
 )
@@ -43,7 +42,6 @@ from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE,
     track2p_policy_config,
 )
-
 
 METHOD = "track2p-policy-tracklet-graph-mht"
 SeedSource = Literal["reference", "all-cells"]
@@ -375,9 +373,7 @@ def _run_subject_tracklet_graph(
         "tracklet_graph_mht_track2p_proposal_only": int(
             bool(graph_config.track2p_proposal_only)
         ),
-        "tracklet_graph_mht_complete_path_risk_vetoes": int(
-            complete_path_risk_vetoes
-        ),
+        "tracklet_graph_mht_complete_path_risk_vetoes": int(complete_path_risk_vetoes),
         "tracklet_graph_mht_beam_width": int(graph_config.beam_width),
         "tracklet_graph_mht_path_hypotheses": int(graph_config.path_hypotheses),
         "tracklet_graph_mht_max_join_gap": int(graph_config.max_join_gap),
@@ -425,9 +421,7 @@ def _matrix_config(config: TrackletGraphConfig) -> full_mht.FullMHTConfig:
         threshold_margin_weight=float(config.threshold_margin_weight),
         growth_residual_weight=float(config.growth_residual_weight),
         growth_mahalanobis_weight=float(config.growth_mahalanobis_weight),
-        growth_anchor_min_registered_iou=float(
-            config.growth_anchor_min_registered_iou
-        ),
+        growth_anchor_min_registered_iou=float(config.growth_anchor_min_registered_iou),
         growth_anchor_min_shifted_iou=float(config.growth_anchor_min_shifted_iou),
         growth_anchor_min_cell_probability=float(
             config.growth_anchor_min_cell_probability
@@ -1143,12 +1137,8 @@ def _direct_boundary_features(
         else 0.0
     )
     endpoint_cell_probability_min = min(
-        full_mht._cell_probability(
-            sessions, int(source_session), int(source_roi)
-        ),
-        full_mht._cell_probability(
-            sessions, int(target_session), int(target_roi)
-        ),
+        full_mht._cell_probability(sessions, int(source_session), int(source_roi)),
+        full_mht._cell_probability(sessions, int(target_session), int(target_roi)),
     )
     return {
         "registered_iou": float(registered_iou),
@@ -1403,9 +1393,7 @@ def _veto_risky_complete_paths(
     graph_config: TrackletGraphConfig,
     n_sessions: int,
 ) -> tuple[tuple[_PathHypothesis, ...], int]:
-    edges_by_key = {
-        (int(edge.source_id), int(edge.target_id)): edge for edge in edges
-    }
+    edges_by_key = {(int(edge.source_id), int(edge.target_id)): edge for edge in edges}
     output: list[_PathHypothesis] = []
     vetoes = 0
     for path in paths:
@@ -1476,11 +1464,10 @@ def _complete_path_edge_is_risky(
 ) -> bool:
     if float(edge.area_ratio) < float(graph_config.complete_path_risk_min_area_ratio):
         return True
-    return (
-        float(edge.centroid_distance)
-        > float(graph_config.complete_path_risk_large_jump_distance)
-        and float(edge.endpoint_cell_probability_min)
-        >= float(graph_config.complete_path_risk_large_jump_min_cell_probability)
+    return float(edge.centroid_distance) > float(
+        graph_config.complete_path_risk_large_jump_distance
+    ) and float(edge.endpoint_cell_probability_min) >= float(
+        graph_config.complete_path_risk_large_jump_min_cell_probability
     )
 
 
@@ -1963,9 +1950,8 @@ def _missing_candidate_audit(
         return fields
     if target_local is None:
         if fields["missing_candidate_primary_reason"] == "":
-            if (
-                float(fields["missing_candidate_target_cell_probability"])
-                < float(feature_cache.cell_probability_threshold)
+            if float(fields["missing_candidate_target_cell_probability"]) < float(
+                feature_cache.cell_probability_threshold
             ):
                 reason = "target_cell_probability_below_threshold"
             else:
@@ -2114,12 +2100,8 @@ def _reference_break_failure_class(
         source_id, target_id = edge_key
         selected_target = selected_successor_by_source.get(int(source_id))
         selected_source = selected_predecessor_by_target.get(int(target_id))
-        if (
-            selected_target is not None
-            and int(selected_target) != int(target_id)
-        ) or (
-            selected_source is not None
-            and int(selected_source) != int(source_id)
+        if (selected_target is not None and int(selected_target) != int(target_id)) or (
+            selected_source is not None and int(selected_source) != int(source_id)
         ):
             return "conflict_issue"
         return "solver_too_conservative"
@@ -2224,9 +2206,7 @@ def _increment_missing_candidate_summary(
         "shifted_iou_below_gate": (
             "tracklet_graph_audit_missing_shifted_iou_below_gate"
         ),
-        "area_ratio_below_gate": (
-            "tracklet_graph_audit_missing_area_ratio_below_gate"
-        ),
+        "area_ratio_below_gate": ("tracklet_graph_audit_missing_area_ratio_below_gate"),
         "centroid_distance_above_gate": (
             "tracklet_graph_audit_missing_centroid_distance_above_gate"
         ),
@@ -2239,9 +2219,7 @@ def _increment_missing_candidate_summary(
             "tracklet_graph_audit_missing_materialization_unexpected"
         ),
     }
-    key = key_by_reason.get(
-        missing_reason, "tracklet_graph_audit_missing_unclassified"
-    )
+    key = key_by_reason.get(missing_reason, "tracklet_graph_audit_missing_unclassified")
     summary[key] += 1
 
 
@@ -2624,9 +2602,7 @@ def main(argv: list[str] | None = None) -> int:
             track2p_proposal_edges=bool(args.track2p_proposal_edges),
             track2p_proposal_only=bool(args.track2p_proposal_only),
             track2p_proposal_bonus=float(args.track2p_proposal_bonus),
-            track2p_proposal_feature_weight=float(
-                args.track2p_proposal_feature_weight
-            ),
+            track2p_proposal_feature_weight=float(args.track2p_proposal_feature_weight),
             complete_path_risk_veto=bool(args.complete_path_risk_veto),
             complete_path_risk_min_area_ratio=float(
                 args.complete_path_risk_min_area_ratio

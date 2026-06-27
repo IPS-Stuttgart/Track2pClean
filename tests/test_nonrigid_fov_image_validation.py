@@ -5,7 +5,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 from bayescatrack.core.bridge import CalciumPlaneData
-from bayescatrack.nonrigid_registration import register_measurement_plane_by_nonrigid_fov
+from bayescatrack.nonrigid_registration import (
+    register_measurement_plane_by_nonrigid_fov,
+)
 
 
 def _plane_with_fov(fov: np.ndarray) -> CalciumPlaneData:
@@ -41,5 +43,7 @@ def test_nonrigid_registration_rejects_nonfinite_fov_values(
         "bayescatrack.nonrigid_registration.estimate_fov_affine_transform",
         side_effect=AssertionError("estimator should not run for non-finite FOVs"),
     ):
-        with pytest.raises(ValueError, match="FOV images must contain only finite values"):
+        with pytest.raises(
+            ValueError, match="FOV images must contain only finite values"
+        ):
             register_measurement_plane_by_nonrigid_fov(reference, measurement)

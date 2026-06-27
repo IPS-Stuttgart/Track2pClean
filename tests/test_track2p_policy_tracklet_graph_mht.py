@@ -5,7 +5,6 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-
 pytest.importorskip("pyrecest")
 
 from bayescatrack.experiments import (  # noqa: E402
@@ -209,9 +208,7 @@ def test_coverage_audit_splits_candidate_presence_from_solver_rejection():
         _edge(0, 1),
         _edge(1, 2),
     )
-    selected_paths = (
-        graph_mht._PathHypothesis((0, 1, 2), ((1, 2),), 1.0),
-    )
+    selected_paths = (graph_mht._PathHypothesis((0, 1, 2), ((1, 2),), 1.0),)
 
     rows, summary = graph_mht._coverage_audit_rows(
         "subject-a",
@@ -241,9 +238,7 @@ def test_coverage_audit_splits_candidate_presence_from_solver_rejection():
         "correct_join_selected",
     ]
     failure_classes = [
-        row["failure_class"]
-        for row in rows
-        if row.get("row_type") == "reference_break"
+        row["failure_class"] for row in rows if row.get("row_type") == "reference_break"
     ]
     assert failure_classes == [
         "solver_too_conservative",

@@ -3,7 +3,6 @@ import sys
 from types import ModuleType
 
 import pytest
-
 from track2pclean import _cli as track2pclean_cli
 
 

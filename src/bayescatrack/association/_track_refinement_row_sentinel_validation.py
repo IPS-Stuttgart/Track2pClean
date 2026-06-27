@@ -18,7 +18,9 @@ import numpy as np
 from ._track_refinement_fill_value_validation import _normalize_fill_value
 
 _PATCH_MARKER = "_bayescatrack_track_refinement_row_sentinel_validation_patch"
-_ERROR_MESSAGE = "track_rows may only contain ROI indices >= 0 or the configured fill_value"
+_ERROR_MESSAGE = (
+    "track_rows may only contain ROI indices >= 0 or the configured fill_value"
+)
 
 
 def install_track_refinement_row_sentinel_validation() -> None:
@@ -49,7 +51,9 @@ def install_track_refinement_row_sentinel_validation() -> None:
             "_bayescatrack_original",
             original_issues,
         )
-        module.track_geometry_issues = track_geometry_issues_with_row_sentinel_validation
+        module.track_geometry_issues = (
+            track_geometry_issues_with_row_sentinel_validation
+        )
 
     original_smoothed = module.smoothed_track_positions
     if not getattr(original_smoothed, _PATCH_MARKER, False):
@@ -73,13 +77,17 @@ def install_track_refinement_row_sentinel_validation() -> None:
                 fill_value=normalized_fill_value,
             )
 
-        setattr(smoothed_track_positions_with_row_sentinel_validation, _PATCH_MARKER, True)
+        setattr(
+            smoothed_track_positions_with_row_sentinel_validation, _PATCH_MARKER, True
+        )
         setattr(
             smoothed_track_positions_with_row_sentinel_validation,
             "_bayescatrack_original",
             original_smoothed,
         )
-        module.smoothed_track_positions = smoothed_track_positions_with_row_sentinel_validation
+        module.smoothed_track_positions = (
+            smoothed_track_positions_with_row_sentinel_validation
+        )
 
     original_split = module.split_tracks_at_issues
     if not getattr(original_split, _PATCH_MARKER, False):
@@ -103,13 +111,17 @@ def install_track_refinement_row_sentinel_validation() -> None:
                 fill_value=normalized_fill_value,
             )
 
-        setattr(split_tracks_at_issues_with_row_sentinel_validation, _PATCH_MARKER, True)
+        setattr(
+            split_tracks_at_issues_with_row_sentinel_validation, _PATCH_MARKER, True
+        )
         setattr(
             split_tracks_at_issues_with_row_sentinel_validation,
             "_bayescatrack_original",
             original_split,
         )
-        module.split_tracks_at_issues = split_tracks_at_issues_with_row_sentinel_validation
+        module.split_tracks_at_issues = (
+            split_tracks_at_issues_with_row_sentinel_validation
+        )
 
 
 def _fill_value_from_config(config: Any | None) -> int:
@@ -121,8 +133,12 @@ def _fill_value_from_config(config: Any | None) -> int:
         raise ValueError("config must provide a fill_value") from exc
 
 
-def _validated_rows_for_fill_value(module: Any, track_rows: Any, *, fill_value: int) -> np.ndarray:
-    rows = module._validated_track_row_matrix(track_rows)  # pylint: disable=protected-access
+def _validated_rows_for_fill_value(
+    module: Any, track_rows: Any, *, fill_value: int
+) -> np.ndarray:
+    rows = module._validated_track_row_matrix(
+        track_rows
+    )  # pylint: disable=protected-access
     invalid = (rows < 0) & (rows != fill_value)
     if np.any(invalid):
         raise ValueError(_ERROR_MESSAGE)

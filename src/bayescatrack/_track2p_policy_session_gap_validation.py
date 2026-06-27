@@ -35,13 +35,17 @@ def install_track2p_policy_session_gap_validation(policy_module: Any) -> None:
             config=config,
         )
 
-    setattr(apply_track2p_policy_edge_prior_with_session_gap_validation, _PATCH_MARKER, True)
+    setattr(
+        apply_track2p_policy_edge_prior_with_session_gap_validation, _PATCH_MARKER, True
+    )
     setattr(
         apply_track2p_policy_edge_prior_with_session_gap_validation,
         "_bayescatrack_original",
         original_apply,
     )
-    policy_module.apply_track2p_policy_edge_prior = apply_track2p_policy_edge_prior_with_session_gap_validation
+    policy_module.apply_track2p_policy_edge_prior = (
+        apply_track2p_policy_edge_prior_with_session_gap_validation
+    )
 
 
 def _positive_integer_like(value: Any, *, name: str) -> int:

@@ -88,7 +88,9 @@ def test_pairwise_mahalanobis_centroid_distances_use_roi_covariances() -> None:
     np.testing.assert_allclose(distances[0, 0], np.sqrt(2.0))
 
 
-@pytest.mark.parametrize("regularization", [True, np.nan, np.inf, -1.0, None, "bad", [0.0]])
+@pytest.mark.parametrize(
+    "regularization", [True, np.nan, np.inf, -1.0, None, "bad", [0.0]]
+)
 def test_pairwise_mahalanobis_distances_reject_invalid_regularization(
     regularization: Any,
 ) -> None:

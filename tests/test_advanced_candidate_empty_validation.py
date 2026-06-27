@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.advanced_roi_components import candidate_mask_from_cost_matrix
 
 

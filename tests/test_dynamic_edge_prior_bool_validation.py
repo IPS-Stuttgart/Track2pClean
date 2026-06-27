@@ -7,7 +7,6 @@ from bayescatrack.association.dynamic_edge_priors import (
     dynamic_edge_prior_config_from_mapping,
 )
 
-
 _NUMERIC_CONTROL_FIELDS = [
     "session_gap_weight",
     "cell_probability_weight",

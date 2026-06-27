@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.registered_masks import (
     add_registered_roi_validity_components,
     expand_registered_pairwise_cost_columns,
@@ -33,7 +32,9 @@ def _pairwise_components() -> dict[str, np.ndarray]:
 def test_registered_roi_validity_rejects_non_boolean_vectors(
     valid_registered_rois: object,
 ) -> None:
-    with pytest.raises(ValueError, match="valid_registered_rois must be a boolean vector"):
+    with pytest.raises(
+        ValueError, match="valid_registered_rois must be a boolean vector"
+    ):
         mask_invalid_registered_roi_columns(
             _pairwise_components(),
             valid_registered_rois=valid_registered_rois,
@@ -54,7 +55,9 @@ def test_registered_roi_validity_masks_invalid_columns_explicitly() -> None:
     assert masked["registered_roi_invalid_cost"].tolist() == [[0.0, 7.0]]
 
 
-def test_registered_roi_validity_accepts_original_full_length_mask_for_compact_components() -> None:
+def test_registered_roi_validity_accepts_original_full_length_mask_for_compact_components() -> (
+    None
+):
     masked = mask_invalid_registered_roi_columns(
         _pairwise_components(),
         valid_registered_rois=np.array([True, False, True]),
@@ -75,8 +78,12 @@ def test_registered_roi_validity_accepts_original_full_length_mask_for_compact_c
         np.array([False, "true"], dtype=object),
     ],
 )
-def test_empty_registered_roi_mask_rejects_non_boolean_vectors(empty_registered_rois: object) -> None:
-    with pytest.raises(ValueError, match="empty_registered_rois must be a boolean vector"):
+def test_empty_registered_roi_mask_rejects_non_boolean_vectors(
+    empty_registered_rois: object,
+) -> None:
+    with pytest.raises(
+        ValueError, match="empty_registered_rois must be a boolean vector"
+    ):
         expand_registered_roi_columns(
             np.array([[1.0]]),
             empty_registered_rois,
