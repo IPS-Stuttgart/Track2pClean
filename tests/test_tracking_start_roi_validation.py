@@ -33,6 +33,38 @@ def test_tracking_start_roi_restriction_preserves_valid_seed_order():
     npt.assert_array_equal(restricted, np.asarray([[1, 11], [3, -1]], dtype=int))
 
 
+def test_tracking_start_roi_restriction_rejects_duplicate_start_rows():
+    track_rows = np.asarray(
+        [
+            [0, 10, -1],
+            [0, -1, 20],
+            [1, 11, 21],
+        ],
+        dtype=int,
+    )
+
+    with pytest.raises(ValueError, match="duplicate non-missing ROI"):
+        tracking._restrict_track_rows_to_start_rois(
+            track_rows,
+            start_roi_indices=[0, 1],
+            start_session_index=0,
+            fill_value=-1,
+        )
+
+
+def test_tracking_start_roi_restriction_allows_repeated_missing_start_rows():
+    track_rows = np.asarray([[-1, 10], [-1, 11], [2, 12]], dtype=int)
+
+    restricted = tracking._restrict_track_rows_to_start_rois(
+        track_rows,
+        start_roi_indices=[2],
+        start_session_index=0,
+        fill_value=-1,
+    )
+
+    npt.assert_array_equal(restricted, np.asarray([[2, 12]], dtype=int))
+
+
 @pytest.mark.parametrize(
     "bad_start_roi_indices",
     [

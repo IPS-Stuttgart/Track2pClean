@@ -2,6 +2,7 @@
 
 from .._exports import ASSOCIATION_PUBLIC_NAMES, reexport
 from ..core import bridge as _bridge
+from . import _absence_config_scalar_validation as _absence_config_scalar_validation
 from . import _absence_cue_shape_validation as _absence_cue_shape_validation
 from . import _activity_similarity_control_validation as _activity_similarity_control_validation
 from . import (
@@ -25,9 +26,11 @@ from . import (
     _track2p_policy_session_gap_validation as _track2p_policy_session_gap_validation,
 )
 from . import _track_refinement_fill_value_validation as _track_refinement_fill_value_validation
+from . import _track_refinement_row_sentinel_validation as _track_refinement_row_sentinel_validation
 from . import _triplet_support_validation as _triplet_support_validation
 from . import absence_model as _absence_model
 
+_absence_config_scalar_validation.install_absence_config_scalar_validation(_absence_model)
 _absence_cue_shape_validation.install_absence_cue_shape_validation(_absence_model)
 _activity_similarity_control_validation.install_activity_similarity_control_validation()
 _neuropil_ratio_shape_validation.install_neuropil_ratio_shape_validation()
@@ -42,9 +45,11 @@ _shifted_iou_preset_validation.install_shifted_iou_preset_validation()
 _dynamic_edge_prior_validation.install_dynamic_edge_prior_bool_validation()
 _track2p_policy_session_gap_validation.install_track2p_policy_session_gap_validation()
 _track_refinement_fill_value_validation.install_track_refinement_fill_value_validation()
+_track_refinement_row_sentinel_validation.install_track_refinement_row_sentinel_validation()
 _growth_coordinate_validation.install_growth_coordinate_validation()
 
 _PATCH_MODULES = (
+    _absence_config_scalar_validation,
     _absence_cue_shape_validation,
     _activity_similarity_control_validation,
     _calibrated_mahalanobis_bundle_patch,
@@ -62,6 +67,7 @@ _PATCH_MODULES = (
     _shifted_iou_preset_validation,
     _track2p_policy_session_gap_validation,
     _track_refinement_fill_value_validation,
+    _track_refinement_row_sentinel_validation,
     _triplet_support_validation,
 )
 

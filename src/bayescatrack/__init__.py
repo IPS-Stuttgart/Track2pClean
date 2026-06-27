@@ -31,6 +31,9 @@ from ._cli_exit_code_validation import (
 from ._confidence_ordered_strict_gap_cli import (
     install_confidence_ordered_strict_gap_cli as _install_confidence_ordered_strict_gap_cli,
 )
+from ._edge_ranking_label_validation import (
+    install_edge_ranking_label_validation as _install_edge_ranking_label_validation,
+)
 from ._empty_candidate_margin import (
     install_empty_candidate_gate_margin_fix as _install_empty_candidate_gate_margin_fix,
 )
@@ -154,6 +157,9 @@ from ._track_table_session_name_validation import (
 from ._track2p_policy_session_gap_validation import (
     install_track2p_policy_session_gap_validation as _install_track2p_policy_session_gap_validation,
 )
+from ._tracking_duplicate_start_roi_validation import (
+    install_tracking_duplicate_start_roi_validation as _install_tracking_duplicate_start_roi_validation,
+)
 from ._tracking_global_link_edge_validation import (
     install_tracking_global_link_edge_validation as _install_tracking_global_link_edge_validation,
 )
@@ -177,6 +183,7 @@ from .association import calibrated_costs as _calibrated_costs
 from .association import candidate_prefilter as _candidate_prefilter
 from .association import track2p_policy_priors as _track2p_policy_priors
 from .core import bridge as _bridge
+from .evaluation import edge_ranking as _edge_ranking
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
 )
@@ -216,6 +223,7 @@ _install_advanced_weight_validation()
 _install_assignment_bundle_validation()
 _install_integer_translation_validation()
 _install_reference_validation()
+_install_edge_ranking_label_validation(_edge_ranking)
 _install_fov_affine_estimator_validation()
 _install_fov_affine_warp_validation()
 _install_fov_translation_output_shape_validation()
@@ -244,6 +252,7 @@ _install_roi_cue_length_validation(_absence_model)
 _install_supervised_mask_validation(_calibrated_costs)
 _install_tracking_start_roi_validation()
 _install_tracking_start_roi_availability_validation()
+_install_tracking_duplicate_start_roi_validation()
 _install_tracking_global_link_edge_validation()
 _install_track_row_export_option_validation()
 _install_track_row_fill_value_validation()
