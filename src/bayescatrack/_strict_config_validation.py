@@ -51,7 +51,7 @@ class CandidatePruningConfig:
         object.__setattr__(
             self,
             "large_cost",
-            _finite_positive_float(self.large_cost, name="large_cost"),
+            _positive_finite_float(self.large_cost, name="large_cost"),
         )
 
 
@@ -214,21 +214,42 @@ def _strict_bool(value: Any, *, name: str) -> bool:
     return bool(value)
 
 
+def _strict_float_scalar(value: Any, *, message: str) -> float:
+    if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
+        raise ValueError(message)
+    try:
+        array = np.asarray(value, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if array.shape != ():
+        raise ValueError(message)
+    try:
+        return float(array.item())
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+
+
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite non-negative value")
-    numeric_value = float(value)
+    message = f"{name} must be a finite non-negative value"
+    numeric_value = _strict_float_scalar(value, message=message)
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
-        raise ValueError(f"{name} must be a finite non-negative value")
+        raise ValueError(message)
+    return numeric_value
+
+
+def _positive_finite_float(value: Any, *, name: str) -> float:
+    message = f"{name} must be a positive finite value"
+    numeric_value = _strict_float_scalar(value, message=message)
+    if not np.isfinite(numeric_value) or numeric_value <= 0.0:
+        raise ValueError(message)
     return numeric_value
 
 
 def _finite_positive_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite positive value")
-    numeric_value = float(value)
+    message = f"{name} must be a finite positive value"
+    numeric_value = _strict_float_scalar(value, message=message)
     if not np.isfinite(numeric_value) or numeric_value <= 0.0:
-        raise ValueError(f"{name} must be a finite positive value")
+        raise ValueError(message)
     return numeric_value
 
 
