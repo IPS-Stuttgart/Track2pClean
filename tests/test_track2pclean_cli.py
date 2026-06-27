@@ -1,7 +1,13 @@
+import argparse
 import importlib
 import importlib.resources
+import sys
+from types import ModuleType
+
+import pytest
 
 from tests._support import run_module
+from track2pclean import _cli as track2pclean_cli
 
 
 def test_track2pclean_module_help_uses_native_program_name():
@@ -88,6 +94,34 @@ def test_track2pclean_advanced_subcommand_help_uses_native_program_name():
 
     assert "usage: track2pclean advanced active-labels" in proc.stdout
     assert "bayescatrack" not in proc.stdout
+
+
+def test_track2pclean_module_command_forces_native_program_name(monkeypatch, capsys):
+    module = ModuleType("tests.fake_track2pclean_module_command")
+
+    def build_arg_parser():
+        return argparse.ArgumentParser(prog="unexpected-wrapper")
+
+    def main(args):
+        module.build_arg_parser().parse_args(args)
+        return 0
+
+    module.build_arg_parser = build_arg_parser
+    module.main = main
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+
+    with pytest.raises(SystemExit) as exc_info:
+        track2pclean_cli._handle_module_command(
+            ["--help"],
+            module_name=module.__name__,
+            program_name="track2pclean fake",
+            legacy_program_name="legacy fake",
+        )
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 0
+    assert "usage: track2pclean fake" in captured.out
+    assert "unexpected-wrapper" not in captured.out
 
 
 def test_track2pclean_is_marked_as_typed_package():
