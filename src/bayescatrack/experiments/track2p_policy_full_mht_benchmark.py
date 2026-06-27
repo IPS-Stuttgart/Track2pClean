@@ -163,6 +163,12 @@ class _MHTHypothesis:
     history: tuple[dict[str, Any], ...]
 
 
+_CandidateScoreCache = dict[
+    tuple[int, int, int, tuple[int, ...], tuple[int, ...]],
+    tuple[tuple[float, int], ...],
+]
+
+
 @dataclass(frozen=True)
 class _ActiveTrackSource:
     row_index: int
@@ -1469,6 +1475,7 @@ def _advance_scan(
         track2p_prior_edges=track2p_prior_edges,
     )
     expanded: list[_MHTHypothesis] = []
+    candidate_score_cache: _CandidateScoreCache = {}
     for hypothesis in hypotheses:
         expanded.extend(
             _expand_hypothesis_scan(
@@ -1479,6 +1486,7 @@ def _advance_scan(
                 config=config,
                 track2p_prior_edges=track2p_prior_edges,
                 scan_pair_matrices_by_source_session=pooled_matrices,
+                candidate_score_cache=candidate_score_cache,
             )
         )
     return _prune_beam(expanded, config=config)
@@ -1531,6 +1539,7 @@ def _expand_hypothesis_scan(
     scan_pair_matrices_by_source_session: (
         Mapping[int, _FullMHTPairMatrices] | None
     ) = None,
+    candidate_score_cache: _CandidateScoreCache | None = None,
 ) -> list[_MHTHypothesis]:
     tracks = np.asarray(hypothesis.tracks, dtype=int)
     next_session = int(session_index) + 1
@@ -1662,6 +1671,14 @@ def _expand_hypothesis_scan(
         }
         for source_session, matrices in matrices_by_source_session.items()
     }
+    target_key_by_source_session = {
+        int(source_session): (
+            tuple(int(roi) for roi in np.asarray(matrices.target_indices, dtype=int)),
+            tuple(int(roi) for roi in finite_target_rois),
+        )
+        for source_session, matrices in matrices_by_source_session.items()
+    }
+    score_cache = candidate_score_cache if candidate_score_cache is not None else {}
     candidate_entries: list[tuple[int, int, float]] = []
     candidate_target_roi_set: set[int] = set()
     candidate_count = 0
@@ -1673,28 +1690,40 @@ def _expand_hypothesis_scan(
         source_local = source_lookup.get(int(active_source.source_roi))
         if source_local is None:
             continue
-        row_scores: list[tuple[float, int]] = []
-        for target_roi in finite_target_rois:
-            target_local = target_lookup.get(int(target_roi))
-            if target_local is None:
-                continue
-            score = _edge_score(
-                sessions,
-                matrices,
-                target_session=next_session,
-                source_local=int(source_local),
-                target_local=int(target_local),
-                config=config,
-                track2p_prior_edges=prior_edges,
-            )
-            if int(active_source.gap_length) > 0:
-                score -= float(config.gap_reactivation_cost) * float(
-                    active_source.gap_length
+        target_key = target_key_by_source_session[source_session]
+        cache_key = (
+            int(source_session),
+            int(active_source.source_roi),
+            int(active_source.gap_length),
+            target_key[0],
+            target_key[1],
+        )
+        cached_scores = score_cache.get(cache_key)
+        if cached_scores is None:
+            row_scores: list[tuple[float, int]] = []
+            for target_roi in finite_target_rois:
+                target_local = target_lookup.get(int(target_roi))
+                if target_local is None:
+                    continue
+                score = _edge_score(
+                    sessions,
+                    matrices,
+                    target_session=next_session,
+                    source_local=int(source_local),
+                    target_local=int(target_local),
+                    config=config,
+                    track2p_prior_edges=prior_edges,
                 )
-            if score >= float(config.min_edge_score):
-                row_scores.append((float(score), int(target_roi)))
-        row_scores.sort(reverse=True)
-        for score, target_roi in row_scores[: max(1, int(config.edge_top_k))]:
+                if int(active_source.gap_length) > 0:
+                    score -= float(config.gap_reactivation_cost) * float(
+                        active_source.gap_length
+                    )
+                if score >= float(config.min_edge_score):
+                    row_scores.append((float(score), int(target_roi)))
+            row_scores.sort(reverse=True)
+            cached_scores = tuple(row_scores[: max(1, int(config.edge_top_k))])
+            score_cache[cache_key] = cached_scores
+        for score, target_roi in cached_scores:
             candidate_entries.append((int(row_pos), int(target_roi), float(score)))
             candidate_target_roi_set.add(int(target_roi))
             candidate_count += 1
