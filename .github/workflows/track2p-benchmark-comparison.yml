@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       data_path:
-        description: "Longitudinal tracking data directory"
+        description: "BayesCaTrack data directory"
         type: string
         default: track2p-data
         required: true
@@ -76,11 +76,11 @@ jobs:
       - name: Show runner disk before data setup
         run: df -h
 
-      - name: Restore or download longitudinal tracking data
-        uses: ./.github/actions/setup-longitudinaltracking-data
+      - name: Restore or download BayesCaTrack data
+        uses: ./.github/actions/setup-bayescatrack-data
         with:
           data_path: ${{ inputs.data_path }}
-          cache_key: longitudinaltracking-webdav-${{ inputs.data_path }}-v1
+          cache_key: bayescatrack-webdav-${{ inputs.data_path }}-v1
           webdav_url: ${{ secrets.LONGITUDINALTRACKING_WEBDAV_URL }}
           webdav_user: ${{ secrets.LONGITUDINALTRACKING_DATA_KEY }}
           webdav_password: ${{ secrets.LONGITUDINALTRACKING_DATA_PASSWORD }}
