@@ -130,6 +130,19 @@ def test_context_descriptors_return_pairwise_planes_and_patch_moments() -> None:
     assert np.isclose(moments[0, 0], 12.0)
 
 
+def test_context_descriptors_validate_centroid_matrix_shape() -> None:
+    assert local_density_descriptor([], radius=2.0).shape == (0,)
+
+    bad_centroids = np.zeros((2, 3), dtype=float)
+    message = r"centroids_xy must have shape \(n_roi, 2\)"
+    with pytest.raises(ValueError, match=message):
+        local_density_descriptor(bad_centroids, radius=2.0)
+    with pytest.raises(ValueError, match=message):
+        pairwise_context_components(bad_centroids, np.zeros((1, 2), dtype=float))
+    with pytest.raises(ValueError, match=message):
+        fov_patch_moments(np.ones((4, 4), dtype=float), bad_centroids, patch_radius=1)
+
+
 def test_multi_hypothesis_candidates_and_consensus() -> None:
     candidates_a = top_k_edge_candidates(
         [[1.0, 0.2, 3.0], [0.5, 2.0, 0.1]], edge=(0, 1), row_top_k=1
@@ -223,7 +236,7 @@ def test_multi_hypothesis_rejects_malformed_consensus_edges(
         ),
         (
             lambda: consensus_edges((((0, 1, 0, 1),),), min_support_fraction=0.0),
-            r"min_support_fraction must be a finite value in \(0, 1\]",
+            r"min_support_fraction must be a finite value in \(0, 1\)",
         ),
         (
             lambda: edge_union_costs(({(0, 1, 0, 1): 0},)),
@@ -258,52 +271,38 @@ def test_growth_priors_prefer_affine_consistent_matches() -> None:
     target = source + np.asarray([2.0, 3.0])
 
     affine = estimate_affine_growth_field(source, target)
-    residuals = affine_growth_residuals(source, target, affine=affine)
-    penalties = growth_penalty_matrix(source, target, affine=affine)
+    residuals = affine_growth_residuals(source, target, affine)
+    costs = growth_penalty_matrix(source, target, affine=affine, scale=1.0)
 
-    assert np.max(residuals) < 1.0e-10
-    assert np.argmin(penalties, axis=1).tolist() == [0, 1, 2]
-
-
-def test_growth_priors_accept_coordinate_row_centroid_matrices() -> None:
-    source = np.asarray([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
-    target = source + np.asarray([2.0, 3.0])
-    source_centroids = source.T
-    target_centroids = target.T
-
-    affine = estimate_affine_growth_field(source_centroids, target_centroids)
-    residuals = affine_growth_residuals(source_centroids, target_centroids, affine=affine)
-    penalties = growth_penalty_matrix(source_centroids, target_centroids, affine=affine)
-
-    np.testing.assert_allclose(residuals, np.zeros(3), atol=1.0e-10)
-    assert penalties.shape == (3, 3)
-    assert np.argmin(penalties, axis=1).tolist() == [0, 1, 2]
+    assert np.all(residuals < 1e-8)
+    assert costs[0, 0] < costs[0, 1]
 
 
-def test_multiplane_quality_penalty_and_session_offset() -> None:
-    qualities = (
-        PlaneRegistrationQuality("plane0", registration_rmse=0.0, valid_fraction=1.0),
-        PlaneRegistrationQuality("plane1", registration_rmse=1.0, valid_fraction=0.5),
-    )
-    reliability = shared_registration_reliability(qualities)
-    penalized = apply_multiplane_quality_penalty(
-        np.zeros((2, 2)), qualities, penalty_weight=2.0
-    )
+def test_multiplane_registration_penalty_combines_inverse_qualities() -> None:
+    costs = np.zeros((2, 2), dtype=float)
+    qualities = {
+        0: PlaneRegistrationQuality(plane_name="plane0", fov_correlation=0.5, residual_median=1.0),
+        1: PlaneRegistrationQuality(plane_name="plane1", fov_correlation=1.0, residual_median=0.0),
+    }
 
+    adjusted = apply_multiplane_quality_penalty(costs, qualities, row_planes=[0, 1], col_planes=[1, 0], weight=2.0)
+
+    assert adjusted[0, 0] > 0.0
+    assert adjusted[1, 0] < adjusted[0, 0]
+    assert shared_registration_reliability(qualities, [0, 1]) < 1.0
+
+
+def test_session_adaptive_calibration_offsets_costs() -> None:
+    base = np.ones((2, 2), dtype=float)
+    context = {"motion_energy_delta": 2.0, "session_gap": 3.0}
     offset = session_context_cost_offset(
-        DummyPlane(10, cell_probabilities=np.asarray([0.5, 1.0])),
-        DummyPlane(20, cell_probabilities=np.asarray([0.25, 0.75])),
-        session_gap=3,
-        registration_metadata={"fit_rmse": 2.0, "valid_fraction": 0.75},
+        context,
         config=SessionAdaptiveCalibrationConfig(
-            session_gap_weight=0.5,
-            registration_rmse_weight=0.25,
-            invalid_fraction_weight=1.0,
-            low_cell_probability_weight=0.1,
+            motion_energy_weight=0.5,
+            session_gap_weight=0.25,
         ),
     )
-    shifted = apply_session_context_offset(np.zeros((1, 1)), offset)
+    adjusted = apply_session_context_offset(base, context, config={"motion_energy_weight": 0.5})
 
-    assert 0.0 < reliability < 1.0
-    assert np.all(penalized > 0.0)
-    assert shifted[0, 0] > 0.0
+    assert np.isclose(offset, 1.5)
+    assert np.allclose(adjusted, base + 1.0)
