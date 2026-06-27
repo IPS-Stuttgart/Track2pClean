@@ -1704,13 +1704,28 @@ def _expand_hypothesis_scan(
         if growth_history_weight > 0.0 and base_score_cache is not None
         else None
     )
-    growth_penalty_for_candidate = None
+    growth_helpers = None
+    growth_feature_map = None
     if callable(base_edge_score):
         from bayescatrack.experiments.full_mht_growth_history_prediction_integration import (
-            growth_history_prediction_penalty_for_candidate,
+            _growth_history_prediction_clip,
+            _growth_history_prediction_min_edges,
+            _growth_history_prediction_scale,
+            row_growth_history_prediction_penalty,
+        )
+        from bayescatrack.experiments.full_mht_scan_history_dynamics_integration import (
+            ScanHistoryEdgeFeatures,
+            _selected_edge_feature_map,
         )
 
-        growth_penalty_for_candidate = growth_history_prediction_penalty_for_candidate
+        growth_helpers = (
+            ScanHistoryEdgeFeatures,
+            row_growth_history_prediction_penalty,
+            _growth_history_prediction_min_edges,
+            _growth_history_prediction_scale,
+            _growth_history_prediction_clip,
+        )
+        growth_feature_map = _selected_edge_feature_map(hypothesis.history)
     candidate_entries: list[tuple[int, int, float]] = []
     candidate_target_roi_set: set[int] = set()
     candidate_count = 0
@@ -1723,7 +1738,13 @@ def _expand_hypothesis_scan(
         if source_local is None:
             continue
         target_key = target_key_by_source_session[source_session]
-        if callable(base_edge_score) and growth_penalty_for_candidate is not None:
+        if callable(base_edge_score) and growth_helpers is not None:
+            previous_growth_features = _growth_history_previous_features_for_active_source(
+                tracks,
+                active_source=active_source,
+                target_session=next_session,
+                feature_map=growth_feature_map or {},
+            )
             base_key = (
                 int(source_session),
                 int(active_source.source_roi),
@@ -1754,12 +1775,14 @@ def _expand_hypothesis_scan(
             row_scores = []
             for base_score, target_roi, target_local in base_scores:
                 score = float(base_score) - growth_history_weight * float(
-                    growth_penalty_for_candidate(
+                    _growth_history_candidate_penalty(
                         matrices,
                         source_local=int(source_local),
                         target_local=int(target_local),
                         target_session=next_session,
+                        previous_features=previous_growth_features,
                         config=config,
+                        helpers=growth_helpers,
                     )
                 )
                 if int(active_source.gap_length) > 0:
@@ -1948,6 +1971,86 @@ def _expand_hypothesis_scan(
             )
         )
     return output
+
+
+def _growth_history_previous_features_for_active_source(
+    tracks: np.ndarray,
+    *,
+    active_source: _ActiveTrackSource,
+    target_session: int,
+    feature_map: Mapping[tuple[int, int, int, int], Any],
+) -> tuple[Any, ...]:
+    matrix = np.asarray(tracks, dtype=int)
+    if matrix.ndim != 2 or matrix.size == 0:
+        return tuple()
+    row_index = int(active_source.row_index)
+    if row_index < 0 or row_index >= matrix.shape[0]:
+        return tuple()
+    row = np.asarray(matrix[row_index], dtype=int)
+    observed = np.flatnonzero(row[: int(target_session)] >= 0)
+    if observed.size < 2:
+        return tuple()
+    features: list[Any] = []
+    for left, right in zip(observed[:-1], observed[1:]):
+        edge = (int(left), int(right), int(row[int(left)]), int(row[int(right)]))
+        parsed = feature_map.get(edge)
+        if parsed is not None:
+            features.append(parsed)
+    return tuple(features)
+
+
+def _growth_history_candidate_penalty(
+    matrices: _FullMHTPairMatrices,
+    *,
+    source_local: int,
+    target_local: int,
+    target_session: int,
+    previous_features: Sequence[Any],
+    config: FullMHTConfig,
+    helpers: tuple[Any, Any, Any, Any, Any],
+) -> float:
+    (
+        edge_feature_type,
+        row_penalty,
+        min_edges_fn,
+        scale_fn,
+        clip_fn,
+    ) = helpers
+    if len(previous_features) < int(min_edges_fn(config)):
+        return 0.0
+    source_roi = int(np.asarray(matrices.source_indices, dtype=int)[int(source_local)])
+    target_roi = int(np.asarray(matrices.target_indices, dtype=int)[int(target_local)])
+    candidate = edge_feature_type(
+        edge=(
+            int(matrices.source_session),
+            int(target_session),
+            source_roi,
+            target_roi,
+        ),
+        registered_iou=_finite_float(
+            matrices.registered_iou[int(source_local), int(target_local)], 0.0
+        ),
+        shifted_iou=_finite_float(
+            matrices.shifted_iou[int(source_local), int(target_local)], 0.0
+        ),
+        growth_residual=_finite_float(
+            matrices.growth_residual[int(source_local), int(target_local)], 0.0
+        ),
+        growth_mahalanobis=_finite_float(
+            matrices.growth_mahalanobis[int(source_local), int(target_local)], 0.0
+        ),
+        local_deformation=_finite_float(
+            matrices.local_deformation[int(source_local), int(target_local)], 0.0
+        ),
+    )
+    penalty = float(row_penalty(previous_features, candidate))
+    scale = float(scale_fn(config))
+    if scale > 0.0:
+        penalty /= scale
+    clip = float(clip_fn(config))
+    if clip > 0.0:
+        penalty = min(float(clip), float(penalty))
+    return float(max(0.0, penalty))
 
 
 def _empty_assignment_diagnostics(active_track_count: int) -> dict[str, int]:
