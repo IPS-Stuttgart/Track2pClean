@@ -1475,7 +1475,13 @@ def _advance_scan(
         track2p_prior_edges=track2p_prior_edges,
     )
     expanded: list[_MHTHypothesis] = []
-    candidate_score_cache: _CandidateScoreCache = {}
+    # Growth-history prediction is deliberately hypothesis-dependent, so sharing
+    # candidate scores across beam hypotheses would change the method.
+    candidate_score_cache: _CandidateScoreCache | None = (
+        None
+        if float(getattr(config, "growth_history_prediction_weight", 0.0)) > 0.0
+        else {}
+    )
     for hypothesis in hypotheses:
         expanded.extend(
             _expand_hypothesis_scan(
