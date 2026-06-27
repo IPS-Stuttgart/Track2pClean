@@ -20,6 +20,14 @@ from bayescatrack.association.track_refinement import (
             "residual_z_threshold must be a finite positive value",
         ),
         (
+            {"residual_z_threshold": np.array([3.5])},
+            "residual_z_threshold must be a finite positive value",
+        ),
+        (
+            {"residual_z_threshold": np.array([True])},
+            "residual_z_threshold must be a finite positive value",
+        ),
+        (
             {"min_track_detections": 2.5},
             "min_track_detections must be an integer",
         ),
@@ -37,6 +45,14 @@ from bayescatrack.association.track_refinement import (
         ),
         (
             {"min_edge_residual": True},
+            "min_edge_residual must be a finite non-negative value",
+        ),
+        (
+            {"min_edge_residual": [0.0]},
+            "min_edge_residual must be a finite non-negative value",
+        ),
+        (
+            {"min_edge_residual": np.array([False])},
             "min_edge_residual must be a finite non-negative value",
         ),
         ({"split_bad_edges": 1}, "split_bad_edges must be a boolean"),
@@ -65,6 +81,16 @@ def test_track_smoothing_config_normalizes_integer_like_controls() -> None:
     assert config.min_edge_residual == pytest.approx(0.0)
     assert config.split_bad_edges is False
     assert config.fill_value == -1
+
+
+def test_track_smoothing_config_accepts_numpy_scalar_float_controls() -> None:
+    config = TrackSmoothingConfig(
+        residual_z_threshold=np.array(3.5),
+        min_edge_residual=np.array(0.0),
+    )
+
+    assert config.residual_z_threshold == pytest.approx(3.5)
+    assert config.min_edge_residual == pytest.approx(0.0)
 
 
 def test_track_geometry_flags_isolated_outlier_when_mad_is_zero() -> None:
