@@ -93,3 +93,15 @@ def test_subject_tracking_result_accepts_forward_link_target_indices() -> None:
         result.link_target_indices,
         np.asarray([[2, -1]], dtype=int),
     )
+
+
+def test_subject_tracking_result_rejects_bare_string_session_names() -> None:
+    with pytest.raises(ValueError, match="bare string"):
+        SubjectTrackingResult(
+            sessions=(),
+            registered_bundles=RegisteredConsecutiveBundles(bundles=[]),
+            match_results=(),
+            session_names="day0",
+            track_rows=np.asarray([[0, 1, 2, 3]], dtype=int),
+            link_costs=np.zeros((1, 3), dtype=float),
+        )
