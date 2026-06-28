@@ -69,7 +69,7 @@ def _validate_numeric_scalar(value: Any, field_name: str) -> None:
         raise ValueError(message)
     try:
         float(scalar_value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(message) from exc
 
 
