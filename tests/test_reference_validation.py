@@ -127,7 +127,7 @@ def test_track2p_reference_rejects_unrecognized_missing_roi_tokens(bad_value) ->
 
 @pytest.mark.parametrize(
     "session_indices",
-    [(0, True), (0, 1.5), "01", bytearray([0, 1])],
+    [(0, True), (0, 1.5), "01", bytearray([0, 1]), memoryview(b"\x00\x01")],
 )
 def test_track2p_reference_rejects_malformed_session_indices(session_indices) -> None:
     reference = _reference(curated_mask=np.array([True, True]))

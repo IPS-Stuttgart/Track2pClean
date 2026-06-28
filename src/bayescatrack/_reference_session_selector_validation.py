@@ -8,6 +8,7 @@ from typing import Any
 
 _PATCH_ATTR = "_bayescatrack_reference_session_selector_validation_patch"
 _ERROR_MESSAGE = "session_indices must be an iterable of integer session indices"
+_BYTES_LIKE_SELECTOR_TYPES = (bytearray, memoryview)
 
 
 def install_reference_session_selector_validation(
@@ -31,7 +32,7 @@ def install_reference_session_selector_validation(
         session_indices: Any,
         n_sessions: int,
     ) -> tuple[int, ...]:
-        if isinstance(session_indices, bytearray):
+        if isinstance(session_indices, _BYTES_LIKE_SELECTOR_TYPES):
             raise ValueError(_ERROR_MESSAGE)
         return original_normalize_session_indices(session_indices, n_sessions)
 
