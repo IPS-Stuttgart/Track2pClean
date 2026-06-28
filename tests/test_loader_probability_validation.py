@@ -1,0 +1,44 @@
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from bayescatrack import load_suite2p_plane
+
+
+def _write_minimal_suite2p_plane(plane_dir):
+    plane_dir.mkdir(parents=True)
+    stat = np.empty(1, dtype=object)
+    stat[0] = {
+        "ypix": np.array([0]),
+        "xpix": np.array([0]),
+        "lam": np.array([1.0]),
+        "overlap": np.array([False]),
+    }
+    np.save(plane_dir / "stat.npy", stat)
+    np.save(plane_dir / "iscell.npy", np.array([[1.0, 0.75]], dtype=float))
+    np.save(
+        plane_dir / "ops.npy",
+        {"Ly": 2, "Lx": 2, "meanImg": np.ones((2, 2), dtype=float)},
+        allow_pickle=True,
+    )
+
+
+@pytest.mark.parametrize("bad_value", [np.array([0.5]), np.array([[0.5]])])
+def test_load_suite2p_plane_rejects_array_probability_threshold(tmp_path, bad_value):
+    plane_dir = tmp_path / "plane0"
+    _write_minimal_suite2p_plane(plane_dir)
+
+    with pytest.raises(
+        ValueError, match="cell_probability_threshold must be a finite probability"
+    ):
+        load_suite2p_plane(plane_dir, cell_probability_threshold=bad_value)
+
+
+def test_load_suite2p_plane_accepts_zero_dimensional_probability_threshold(tmp_path):
+    plane_dir = tmp_path / "plane0"
+    _write_minimal_suite2p_plane(plane_dir)
+
+    plane = load_suite2p_plane(plane_dir, cell_probability_threshold=np.array(0.5))
+
+    assert plane.n_rois == 1
