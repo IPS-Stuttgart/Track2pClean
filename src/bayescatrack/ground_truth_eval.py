@@ -19,7 +19,7 @@ from typing import Mapping, Sequence
 
 import numpy as np
 
-from .matching import build_track_rows_from_matches
+from bayescatrack.matching import build_track_rows_from_matches
 
 _MISSING_VALUE_STRINGS = {"", "na", "nan", "none", "null", "-"}
 _TRACK_ID_HEADERS = {
@@ -55,15 +55,17 @@ class TrackTable:
 
     def __post_init__(self) -> None:
         session_names = tuple(str(name) for name in self.session_names)
-        tracks = np.asarray(self.tracks, dtype=int)
-        if tracks.ndim != 2:
+        track_values = np.asarray(self.tracks, dtype=object)
+        if track_values.ndim != 2:
             raise ValueError("tracks must have shape (n_tracks, n_sessions)")
-        if tracks.shape[1] != len(session_names):
+        if track_values.shape[1] != len(session_names):
             raise ValueError(
                 "tracks second dimension must equal the number of session names"
             )
         if len(session_names) == 0:
             raise ValueError("session_names must not be empty")
+        _reject_boolean_roi_values(track_values, matrix_name="tracks")
+        tracks = np.asarray(track_values, dtype=int)
         object.__setattr__(self, "session_names", session_names)
         object.__setattr__(self, "tracks", tracks)
 
@@ -131,6 +133,15 @@ class TrackEvaluation:
         }
 
 
+def _reject_boolean_roi_values(track_array: np.ndarray, *, matrix_name: str) -> None:
+    for index, value in np.ndenumerate(track_array):
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError(
+                f"{matrix_name} contains boolean ROI index at {index}: {value!r}; "
+                "ROI indices must be integer-like or -1 for missing values"
+            )
+
+
 def _normalize_header(header: str) -> str:
     return header.strip().lower().replace(" ", "_")
 
@@ -151,6 +162,8 @@ def _parse_roi_value(  # pylint: disable=too-many-return-statements
 ) -> int:
     if value is None:
         return -1
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"ROI index must be integer-like or missing, got boolean {value!r}")
     if isinstance(value, (int, np.integer)):
         return int(value)
     if isinstance(value, (float, np.floating)):
