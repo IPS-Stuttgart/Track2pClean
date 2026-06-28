@@ -279,6 +279,9 @@ def _strict_python_bool(value: Any, *, name: str) -> bool:
 def _finite_probability(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a finite probability")
+    array_value = np.asarray(value)
+    if array_value.ndim > 0:
+        raise ValueError(f"{name} must be a finite probability")
     try:
         numeric = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
