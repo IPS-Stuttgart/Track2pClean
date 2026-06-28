@@ -10,6 +10,7 @@ from bayescatrack.matching import build_track_rows_from_bundles, build_track_row
     [
         True,
         np.bool_(False),
+        np.asarray(-1),
         0,
         1,
         0.5,
