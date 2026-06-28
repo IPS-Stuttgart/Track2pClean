@@ -14,6 +14,14 @@ def test_score_track_matrices_rejects_bare_string_session_pairs():
         score_track_matrices(predicted, reference, session_pairs="01")
 
 
+def test_score_track_matrices_rejects_string_like_session_pair_entries():
+    reference = np.array([[0, 1]], dtype=object)
+    predicted = np.array([[0, 1]], dtype=object)
+
+    with pytest.raises(ValueError, match="session_pairs entries must be"):
+        score_track_matrices(predicted, reference, session_pairs=["01"])
+
+
 def test_score_track_matrices_rejects_bare_string_complete_session_indices():
     reference = np.array([[0, 1]], dtype=object)
     predicted = np.array([[0, 1]], dtype=object)
