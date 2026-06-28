@@ -118,6 +118,9 @@ from ._pyrecest_shifted_validation import (
 from ._reference_empty_prediction_validation import (
     install_reference_empty_prediction_validation as _install_reference_empty_prediction_validation,
 )
+from ._reference_session_selector_validation import (
+    install_reference_session_selector_validation as _install_reference_session_selector_validation,
+)
 from ._reference_validation import (
     install_reference_validation as _install_reference_validation,
 )
@@ -239,6 +242,7 @@ _install_advanced_weight_validation()
 _install_assignment_bundle_validation()
 _install_integer_translation_validation()
 _install_reference_validation()
+_install_reference_session_selector_validation()
 _install_reference_empty_prediction_validation()
 _install_aligned_roi_index_validation()
 _install_edge_ranking_label_validation(_edge_ranking)
