@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import ModuleType
 from typing import Any, Iterable
 
@@ -63,8 +63,8 @@ def _install_optional_int_parser_validation(reference_module: ModuleType) -> Non
         "_bayescatrack_original",
         original_parse_optional_int,
     )
-    reference_module._parse_optional_int = (
-        _parse_optional_int_with_validation  # pylint: disable=protected-access
+    reference_module._parse_optional_int = (  # pylint: disable=protected-access
+        _parse_optional_int_with_validation
     )
 
 
@@ -155,7 +155,9 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
             "_bayescatrack_original",
             original_normalize_session_indices,
         )
-        reference_module._normalize_session_indices = _normalize_session_indices_with_validation  # pylint: disable=protected-access
+        reference_module._normalize_session_indices = (  # pylint: disable=protected-access
+            _normalize_session_indices_with_validation
+        )
 
     original_validate_session_index = (
         reference_module._validate_session_index
@@ -180,8 +182,8 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
         "_bayescatrack_original",
         original_validate_session_index,
     )
-    reference_module._validate_session_index = (
-        _validate_session_index_with_validation  # pylint: disable=protected-access
+    reference_module._validate_session_index = (  # pylint: disable=protected-access
+        _validate_session_index_with_validation
     )
 
 
@@ -200,19 +202,19 @@ def _install_track_ops_session_path_normalization(reference_module: ModuleType) 
     ) -> tuple[str, ...]:
         if "all_ds_path" not in track_ops:
             raise KeyError("track_ops.npy does not contain all_ds_path")
-        path_list = [
-            Path(str(path))
+        raw_paths = [
+            str(path)
             for path in np.asarray(track_ops["all_ds_path"], dtype=object)
             .reshape(-1)
             .tolist()
         ]
-        if len(path_list) != n_sessions:
+        if len(raw_paths) != n_sessions:
             raise ValueError(
                 "The number of paths in track_ops.all_ds_path does not match the number of sessions"
             )
         return tuple(
             _session_name_from_track_ops_path(path, reference_module)
-            for path in path_list
+            for path in raw_paths
         )
 
     setattr(
@@ -230,9 +232,14 @@ def _install_track_ops_session_path_normalization(reference_module: ModuleType) 
     )
 
 
-def _session_name_from_track_ops_path(path: Path, reference_module: ModuleType) -> str:
+def _session_name_from_track_ops_path(
+    path_value: str | Path | PureWindowsPath,
+    reference_module: ModuleType,
+) -> str:
+    raw_path = str(path_value)
+    path = _track_ops_path(raw_path)
     if not path.name:
-        return str(path)
+        return raw_path
 
     plane_name_pattern = (
         reference_module._PLANE_NAME_PATTERN
@@ -249,6 +256,13 @@ def _session_name_from_track_ops_path(path: Path, reference_module: ModuleType) 
     if path.name in {"suite2p", "data_npy"} and path.parent.name:
         return path.parent.name
     return path.name
+
+
+def _track_ops_path(raw_path: str) -> Path | PureWindowsPath:
+    windows_path = PureWindowsPath(raw_path)
+    if "\\" in raw_path or windows_path.drive:
+        return windows_path
+    return Path(raw_path)
 
 
 def _install_complete_track_vector_normalization(reference_module: ModuleType) -> None:
@@ -271,9 +285,7 @@ def _install_complete_track_vector_normalization(reference_module: ModuleType) -
         "_bayescatrack_original",
         original_score_complete_tracks,
     )
-    reference_module.score_complete_tracks = (
-        _score_complete_tracks_with_vector_normalization
-    )
+    reference_module.score_complete_tracks = _score_complete_tracks_with_vector_normalization
 
 
 def _install_track_label_fill_value_validation(reference_module: ModuleType) -> None:
@@ -314,9 +326,7 @@ def _install_track_label_fill_value_validation(reference_module: ModuleType) -> 
         "_bayescatrack_original",
         original_to_session_track_labels,
     )
-    reference_cls.to_session_track_labels = (
-        _to_session_track_labels_with_fill_value_validation
-    )
+    reference_cls.to_session_track_labels = _to_session_track_labels_with_fill_value_validation
 
 
 def _normalize_complete_track_matrix(track_matrix: Any) -> Any:
