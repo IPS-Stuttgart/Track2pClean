@@ -227,9 +227,15 @@ def _resolve_session_indices(
         raise ValueError(
             "session_indices must be a sequence of integer-like indices, not a bare string-like value"
         )
+    try:
+        iterator = iter(session_indices)
+    except TypeError as exc:
+        raise ValueError(
+            "session_indices must be a sequence of integer-like indices"
+        ) from exc
     selected: list[int] = []
     seen: set[int] = set()
-    for candidate in session_indices:
+    for candidate in iterator:
         session_idx = _coerce_session_index(candidate)
         if session_idx < 0 or session_idx >= num_sessions:
             raise IndexError(
