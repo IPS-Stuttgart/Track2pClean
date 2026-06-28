@@ -35,8 +35,10 @@ def test_rank_labeled_edges_accepts_scalar_numpy_label_cell():
         measurement_roi_indices=np.array([20]),
     )
 
-    assert [(row["reference_roi_index"], row["measurement_roi_index"]) for row in rows] == [
-        (10, 20)
+    assert [
+        (row["reference_roi_index"], row["measurement_roi_index"]) for row in rows
+    ] == [
+        (10, 20),
     ]
 
 
