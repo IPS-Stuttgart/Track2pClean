@@ -73,9 +73,8 @@ def absence_cost_vector(
                 )
 
     if registered_empty_mask is not None:
-        empty = np.asarray(registered_empty_mask, dtype=bool).reshape(-1)
-        if empty.shape == (n_rois,):
-            costs[empty] -= cfg.empty_registered_mask_discount
+        empty = _validated_registered_empty_mask(registered_empty_mask, n_rois)
+        costs[empty] -= cfg.empty_registered_mask_discount
 
     if local_density is not None:
         density = np.asarray(local_density, dtype=float).reshape(-1)
@@ -267,6 +266,35 @@ def _validated_absence_cost_vector(
     if not np.all(np.isfinite(values)) or np.any(values < 0.0):
         raise ValueError(f"{name} must contain finite non-negative values")
     return values
+
+
+def _validated_registered_empty_mask(raw_values: Any, n_rois: int) -> np.ndarray:
+    message = "registered_empty_mask must be a boolean or binary numeric mask"
+    try:
+        values = np.asarray(raw_values).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+
+    if values.shape != (n_rois,):
+        raise ValueError(
+            "registered_empty_mask must contain one value per ROI; "
+            f"expected {n_rois}, got {values.size}"
+        )
+
+    if values.dtype.kind == "b":
+        return values.astype(bool, copy=False)
+
+    if values.dtype.kind in {"i", "u"}:
+        if np.any((values != 0) & (values != 1)):
+            raise ValueError(message)
+        return values.astype(bool)
+
+    if values.dtype.kind == "f":
+        if not np.all(np.isfinite(values)) or np.any((values != 0.0) & (values != 1.0)):
+            raise ValueError(message)
+        return values.astype(bool)
+
+    raise ValueError(message)
 
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:
