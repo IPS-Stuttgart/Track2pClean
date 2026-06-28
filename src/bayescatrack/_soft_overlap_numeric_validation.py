@@ -2,9 +2,10 @@
 
 The soft-overlap wrappers historically used bare ``float(...)`` coercion for
 runtime and preset controls.  That lets byte-like values such as ``b"0.5"``
-through as valid numbers and leaks raw conversion exceptions for opaque
-objects.  Patch the shared helper so these public controls fail with the same
-``ValueError`` contract used by the rest of the package validators.
+through as valid numbers and leaks raw conversion exceptions for opaque objects
+or overflowing numeric adapters.  Patch the shared helper so these public
+controls fail with the same ``ValueError`` contract used by the rest of the
+package validators.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ def _strict_finite_float(
         raise ValueError(f"{name} must be a finite {qualifier} value")
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite {qualifier} value") from exc
     violates_bound = numeric_value <= lower_bound if positive else numeric_value < lower_bound
     if not np.isfinite(numeric_value) or violates_bound:
