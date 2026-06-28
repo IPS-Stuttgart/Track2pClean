@@ -290,7 +290,7 @@ def _is_numeric_missing_roi_index(numeric_value: float) -> bool:
 
 
 def _normalize_curated_mask(mask: Any, *, n_tracks: int) -> np.ndarray:
-    array = np.asarray(mask, dtype=object).reshape(-1)
+    array = np.asarray(mask, dtype=object)
     if array.shape != (n_tracks,):
         raise ValueError("curated_mask must have shape (n_tracks,)")
 

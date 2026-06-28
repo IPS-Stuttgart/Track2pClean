@@ -12,8 +12,8 @@ from bayescatrack.reference import Track2pReference
 from . import complete_track_scores as _complete_track_scores
 from .calibration_metrics import brier_score
 from .complete_track_scores import *  # noqa: F401,F403
-from .complete_track_scores import __all__ as _complete_track_score_exports
 from .complete_track_scores import (
+    TrackLink,
     _normalize_track_matrix_observations,
 )
 from .complete_track_scores import (
@@ -22,8 +22,23 @@ from .complete_track_scores import (
 from .track_error_ledger import *  # noqa: F401,F403
 from .track_error_ledger import __all__ as _track_error_ledger_exports
 
+_COMPLETE_TRACK_SCORE_EXPORTS = (
+    "TrackLink",
+    "complete_track_set",
+    "normalize_track_matrix",
+    "pairwise_track_set",
+    "reference_fragment_counts",
+    "score_complete_tracks",
+    "score_false_continuations",
+    "score_fragmentation",
+    "score_pairwise_tracks",
+    "score_track_matrices",
+    "summarize_tracks",
+    "track_lengths",
+)
+
 __all__ = [
-    *_complete_track_score_exports,
+    *_COMPLETE_TRACK_SCORE_EXPORTS,
     *_track_error_ledger_exports,
     "brier_score",
     "score_track_matrix_against_reference",
