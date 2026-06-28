@@ -163,10 +163,19 @@ def _strict_bool(value: Any, *, name: str) -> bool:
 
 def _finite_unit_interval_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite value in [0, 1]")
-    numeric_value = float(value)
+        raise ValueError(f"{name} must be a finite scalar value in [0, 1]")
+    try:
+        value_array = np.asarray(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite scalar value in [0, 1]") from exc
+    if value_array.shape != ():
+        raise ValueError(f"{name} must be a finite scalar value in [0, 1]")
+    try:
+        numeric_value = float(value_array)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite scalar value in [0, 1]") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0 or numeric_value > 1.0:
-        raise ValueError(f"{name} must be a finite value in [0, 1]")
+        raise ValueError(f"{name} must be a finite scalar value in [0, 1]")
     return numeric_value
 
 
