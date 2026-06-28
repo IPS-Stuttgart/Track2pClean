@@ -15,6 +15,7 @@ from bayescatrack.association.track_refinement import (
     [
         True,
         np.bool_(False),
+        np.asarray(-1),
         0,
         1,
         0.5,
@@ -33,7 +34,18 @@ def test_track_smoothing_config_rejects_malformed_or_colliding_fill_value(
 
 @pytest.mark.parametrize(
     "bad_fill_value",
-    [True, np.bool_(False), 0, 1, 0.5, -1.5, np.nan, np.inf, "-1"],
+    [
+        True,
+        np.bool_(False),
+        np.asarray(-1),
+        0,
+        1,
+        0.5,
+        -1.5,
+        np.nan,
+        np.inf,
+        "-1",
+    ],
 )
 def test_smoothed_track_positions_rejects_malformed_or_colliding_fill_value(
     bad_fill_value,
@@ -48,7 +60,18 @@ def test_smoothed_track_positions_rejects_malformed_or_colliding_fill_value(
 
 @pytest.mark.parametrize(
     "bad_fill_value",
-    [True, np.bool_(False), 0, 1, 0.5, -1.5, np.nan, np.inf, "-1"],
+    [
+        True,
+        np.bool_(False),
+        np.asarray(-1),
+        0,
+        1,
+        0.5,
+        -1.5,
+        np.nan,
+        np.inf,
+        "-1",
+    ],
 )
 def test_split_tracks_at_issues_rejects_malformed_or_colliding_fill_value(
     bad_fill_value,
