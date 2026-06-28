@@ -168,11 +168,15 @@ def _validate_finite_scalar(
     strictly_positive: bool,
 ) -> float:
     requirement = "a finite strictly positive value" if strictly_positive else "a finite non-negative value"
+    if isinstance(raw_value, np.ndarray):
+        if raw_value.shape != ():
+            raise ValueError(f"{name} must be {requirement}")
+        raw_value = raw_value.item()
     if isinstance(raw_value, (bool, np.bool_)):
         raise ValueError(f"{name} must be {requirement}")
     try:
         value = float(raw_value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be {requirement}") from exc
     if not np.isfinite(value):
         raise ValueError(f"{name} must be {requirement}")
