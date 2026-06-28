@@ -281,7 +281,7 @@ def _finite_probability(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite probability")
     try:
         numeric = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite probability") from exc
     if not np.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
         raise ValueError(f"{name} must be a finite probability")
