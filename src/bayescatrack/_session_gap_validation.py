@@ -105,6 +105,14 @@ def _positive_session_gap(value: Any) -> int:
 def _integer_like(value: Any, *, name: str) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a finite value")
+    try:
+        array_value = np.asarray(value)
+    except (TypeError, ValueError):
+        array_value = None
+    if array_value is not None and array_value.ndim > 0:
+        raise ValueError(f"{name} must be a finite value")
+    if array_value is not None and isinstance(array_value.item(), (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite value")
 
     try:
         return int(operator.index(value))
