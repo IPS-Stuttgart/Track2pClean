@@ -13,6 +13,7 @@ from . import _export_bool_validation as _export_bool_validation
 from . import _feature_name_validation as _feature_name_validation
 from . import _iscell_value_validation as _iscell_value_validation
 from . import _loader_bool_validation as _loader_bool_validation
+from . import _loader_probability_validation as _loader_probability_validation
 from . import _loader_validation as _loader_validation
 from . import _local_evidence as _local_evidence
 from . import _mahalanobis as _mahalanobis
@@ -24,6 +25,7 @@ from . import (
 from . import _suite2p_overlap_value_validation as _suite2p_overlap_value_validation
 from . import _with_replaced_masks_fov_validation as _with_replaced_masks_fov_validation
 
+_loader_probability_validation.install_loader_probability_validation(_loader_validation)
 _association_bundle_bool_validation.install_association_bundle_bool_validation(
     _bridge_impl
 )
