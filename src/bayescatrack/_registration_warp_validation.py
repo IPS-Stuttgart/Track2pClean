@@ -26,6 +26,7 @@ _ROI_MASK_PATCH_MARKER = "_bayescatrack_registration_roi_mask_warp_validation_pa
 _OUTPUT_SHAPE_ERROR = (
     "output_shape must contain exactly two non-negative integer values"
 )
+_STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 
 
 def install_registration_warp_validation() -> None:
@@ -170,7 +171,7 @@ def _strict_bool(value: Any, *, name: str) -> bool:
 
 
 def _finite_unit_interval_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, *_STRING_LIKE_SCALAR_TYPES)):
         raise ValueError(f"{name} must be a finite scalar value in [0, 1]")
     try:
         value_array = np.asarray(value)
@@ -178,8 +179,13 @@ def _finite_unit_interval_float(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite scalar value in [0, 1]") from exc
     if value_array.shape != ():
         raise ValueError(f"{name} must be a finite scalar value in [0, 1]")
+
+    scalar_value = value_array.item()
+    if isinstance(scalar_value, (bool, np.bool_, *_STRING_LIKE_SCALAR_TYPES)):
+        raise ValueError(f"{name} must be a finite scalar value in [0, 1]")
+
     try:
-        numeric_value = float(value_array)
+        numeric_value = float(scalar_value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a finite scalar value in [0, 1]") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0 or numeric_value > 1.0:
