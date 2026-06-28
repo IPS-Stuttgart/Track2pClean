@@ -45,6 +45,14 @@ def test_track2pclean_benchmark_help_uses_native_program_name():
     assert "bayescatrack benchmark" not in proc.stdout
 
 
+def test_track2pclean_benchmark_without_subcommand_prints_help():
+    proc = run_module("-m", "track2pclean", "benchmark")
+
+    assert "usage: track2pclean benchmark" in proc.stdout
+    assert "Run Track2pClean benchmark harnesses." in proc.stdout
+    assert "bayescatrack benchmark" not in proc.stdout
+
+
 def test_track2pclean_benchmark_help_rewrites_legacy_project_names():
     proc = run_module("-m", "track2pclean", "benchmark", "--help")
 
