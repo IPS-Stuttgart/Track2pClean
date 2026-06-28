@@ -19,7 +19,7 @@ def validated_numeric_float(value: Any, *, name: str) -> float:
 
 
 def _numeric_scalar_candidate(value: Any, *, name: str) -> Any:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, str)):
         raise ValueError(f"{name} must be finite")
 
     try:
@@ -31,7 +31,7 @@ def _numeric_scalar_candidate(value: Any, *, name: str) -> Any:
         raise ValueError(f"{name} must be finite")
 
     scalar_value = array_value.item()
-    if isinstance(scalar_value, (bool, np.bool_)):
+    if isinstance(scalar_value, (bool, np.bool_, str)):
         raise ValueError(f"{name} must be finite")
     return scalar_value
 
