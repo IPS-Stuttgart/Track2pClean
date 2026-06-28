@@ -163,7 +163,28 @@ def test_gap_penalty_matrix_rejects_fractional_session_gap(session_gap: object) 
         gap_penalty_matrix(reference, measurement, session_gap=session_gap)
 
 
-@pytest.mark.parametrize("session_gap", (2, 2.0, np.int64(2), "2"))
+@pytest.mark.parametrize(
+    "session_gap",
+    (
+        np.asarray([2], dtype=int),
+        np.asarray([[2]], dtype=int),
+        np.asarray([], dtype=int),
+        np.asarray([2.0], dtype=float),
+        np.asarray([True], dtype=bool),
+    ),
+)
+def test_gap_penalty_matrix_rejects_non_scalar_session_gap(session_gap: object) -> None:
+    reference = _plane(1)
+    measurement = _plane(1)
+
+    with pytest.raises(ValueError, match="session_gap"):
+        gap_penalty_matrix(reference, measurement, session_gap=session_gap)
+
+
+@pytest.mark.parametrize(
+    "session_gap",
+    (2, 2.0, np.int64(2), np.asarray(2), np.asarray(2.0), "2"),
+)
 def test_gap_penalty_matrix_accepts_integer_like_session_gap(
     session_gap: object,
 ) -> None:

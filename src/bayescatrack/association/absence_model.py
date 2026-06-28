@@ -283,6 +283,16 @@ def _validated_positive_integer_session_gap(session_gap: Any) -> int:
         raise ValueError(message)
 
     try:
+        session_gap_array = np.asarray(session_gap, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if session_gap_array.shape != ():
+        raise ValueError(message)
+    session_gap = session_gap_array.item()
+    if isinstance(session_gap, (bool, np.bool_)):
+        raise ValueError(message)
+
+    try:
         gap = int(operator.index(session_gap))
     except TypeError:
         if isinstance(session_gap, str):
