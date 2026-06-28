@@ -26,6 +26,22 @@ def test_evaluate_track_table_prediction_scores_exact_tracks():
     assert evaluation.proportion_correct_by_horizon[2] == 0.5
 
 
+def test_track_table_rejects_python_boolean_roi_indices():
+    with pytest.raises(ValueError, match="boolean ROI index"):
+        TrackTable(
+            session_names=("s1", "s2"),
+            tracks=np.array([[True, 2]], dtype=object),
+        )
+
+
+def test_track_table_rejects_numpy_boolean_roi_indices():
+    with pytest.raises(ValueError, match="boolean ROI index"):
+        TrackTable(
+            session_names=("s1", "s2"),
+            tracks=np.array([[np.bool_(False), 2]], dtype=object),
+        )
+
+
 def test_track_table_row_tuples_validates_controls():
     table = TrackTable(
         session_names=("s1", "s2"),
