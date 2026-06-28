@@ -11,6 +11,7 @@ from bayescatrack.tracking import SubjectTrackingResult, _coerce_global_track_ro
     [
         True,
         np.bool_(False),
+        np.asarray(-1),
         0,
         1,
         0.5,

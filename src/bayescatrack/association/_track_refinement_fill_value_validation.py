@@ -153,6 +153,8 @@ def _normalize_issue_index(value: Any, *, name: str) -> int:
         raise ValueError(f"{name} must be an integer")
     if isinstance(value, (str, bytes, np.bytes_)):
         raise ValueError(f"{name} must be an integer")
+    if isinstance(value, np.ndarray):
+        raise ValueError(f"{name} must be an integer")
 
     if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
@@ -168,6 +170,8 @@ def _normalize_issue_index(value: Any, *, name: str) -> int:
 
 def _normalize_fill_value(value: Any) -> int:
     if isinstance(value, (bool, np.bool_)):
+        raise ValueError(_ERROR_MESSAGE)
+    if isinstance(value, np.ndarray):
         raise ValueError(_ERROR_MESSAGE)
 
     if isinstance(value, (float, np.floating)):
