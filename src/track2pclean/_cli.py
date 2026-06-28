@@ -229,6 +229,7 @@ def _build_benchmark_help_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="track2pclean benchmark",
         description="Run Track2pClean benchmark harnesses.",
+        epilog="Includes diagnostics for Track2pClean edges.",
     )
     subparsers = parser.add_subparsers(dest="benchmark", required=False)
     for name, command in _legacy_cli._BENCHMARK_COMMANDS.items():  # pylint: disable=protected-access
