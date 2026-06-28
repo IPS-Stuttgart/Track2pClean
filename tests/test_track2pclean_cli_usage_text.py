@@ -37,3 +37,41 @@ def test_track2pclean_module_command_retitles_custom_usage(monkeypatch, capsys):
     assert "usage: track2pclean fake [--example]" in captured.out
     assert "bayescatrack fake [--example]" not in captured.out
     assert "BayesCaTrack" not in captured.out
+
+
+def test_track2pclean_module_command_retitles_subparser_choice_help(monkeypatch, capsys):
+    module = ModuleType("tests.fake_track2pclean_module_subparser_choice_help")
+
+    def build_arg_parser():
+        parser = argparse.ArgumentParser(
+            prog="bayescatrack fake",
+            description="BayesCaTrack helper from bayescatrack",
+        )
+        subparsers = parser.add_subparsers(dest="command", required=True)
+        subparsers.add_parser(
+            "diagnose",
+            help="Run BayesCaTrack diagnostics with bayescatrack defaults",
+        )
+        return parser
+
+    def main(args):
+        module.build_arg_parser().parse_args(args)
+        return 0
+
+    module.build_arg_parser = build_arg_parser
+    module.main = main
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+
+    with pytest.raises(SystemExit) as exc_info:
+        track2pclean_cli._handle_module_command(
+            ["--help"],
+            module_name=module.__name__,
+            program_name="track2pclean fake",
+            legacy_program_name="bayescatrack fake",
+        )
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 0
+    assert "Run Track2pClean diagnostics with track2pclean defaults" in captured.out
+    assert "BayesCaTrack diagnostics" not in captured.out
+    assert "bayescatrack defaults" not in captured.out
