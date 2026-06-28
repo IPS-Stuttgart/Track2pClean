@@ -114,11 +114,7 @@ class LongitudinalTrackingResult:
 
 
 def _import_multisession_solver() -> Callable[..., Any]:
-    """Import a PyRecEst multisession-assignment solver.
-
-    The exact module path may move while the relevant PRs are iterated on, so we
-    try a small set of likely locations and only fail at call time.
-    """
+    """Import a PyRecEst multisession-assignment solver."""
 
     candidates = [
         ("pyrecest.assignment.multisession", "solve_multisession_assignment"),
@@ -159,19 +155,7 @@ def build_multisession_pairwise_costs(
         Mapping[tuple[int, int], CalciumPlaneData | None] | None
     ) = None,
 ) -> tuple[dict[tuple[int, int], np.ndarray], tuple[PairwiseTrackingBundle, ...]]:
-    """Build pairwise cost matrices for all session pairs up to ``max_session_gap``.
-
-    Parameters
-    ----------
-    sessions
-        Ordered sequence of per-session Track2p data.
-    config
-        Global tracking configuration.
-    pairwise_measurement_planes_in_reference_frames
-        Optional mapping ``(i, j) -> plane`` where ``plane`` is session ``j``
-        already expressed in session ``i``'s coordinate frame. This is the right
-        hook when you want Track2p-style registration-aware overlap costs.
-    """
+    """Build pairwise cost matrices for all session pairs up to ``max_session_gap``."""
 
     config = MultisessionTrackingConfig() if config is None else config
     pairwise_measurement_planes_in_reference_frames = dict(
@@ -222,31 +206,17 @@ def _compatible_solver_call_attempts(
     solver: Callable[..., Any],
     attempts: Sequence[dict[str, Any]],
 ) -> tuple[tuple[dict[str, Any], bool], ...]:
-    """Return solver-call attempts and whether TypeError may indicate API drift.
-
-    Older PyRecEst revisions used slightly different names for the same costs.
-    The previous implementation tried every keyword set and caught every
-    ``TypeError``. That made real ``TypeError`` exceptions raised inside the
-    solver indistinguishable from signature mismatches. When the signature is
-    inspectable, filter attempts before the call and let solver-internal
-    ``TypeError`` exceptions propagate unchanged.
-    """
+    """Return solver-call attempts and whether TypeError may indicate API drift."""
 
     try:
         signature = inspect.signature(solver)
     except (TypeError, ValueError):
-        # Some callables cannot be introspected. Preserve the old compatibility
-        # fallback for those rare cases because there is no safer way to select
-        # an API variant ahead of the call.
         return tuple((kwargs, True) for kwargs in attempts)
 
     if any(
         parameter.kind == inspect.Parameter.VAR_KEYWORD
         for parameter in signature.parameters.values()
     ):
-        # A solver that explicitly accepts **kwargs is expected to perform its
-        # own keyword validation. Do not retry on TypeError, because such an
-        # error is no longer evidence of an unsupported call signature.
         return ((attempts[0], False),)
 
     supported_keyword_names = {
@@ -325,6 +295,32 @@ def _call_multisession_solver(
     ) from last_error
 
 
+def _coerce_non_negative_integer_index(value: Any, *, label: str) -> int:
+    """Coerce integer-like scalar indices while rejecting ambiguous values."""
+
+    message = f"{label} must be a non-negative integer"
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(message)
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(message)
+        value = value.item()
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError(message)
+    if isinstance(value, (int, np.integer)):
+        index = int(value)
+    elif isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(message)
+        index = int(numeric_value)
+    else:
+        raise ValueError(message)
+    if index < 0:
+        raise ValueError(message)
+    return index
+
+
 def _coerce_solver_tracks(
     raw_result: Any,
 ) -> tuple[tuple[dict[int, int], ...], float | None]:
@@ -343,12 +339,18 @@ def _coerce_solver_tracks(
     normalized_tracks: list[dict[int, int]] = []
     for track in tracks:
         if isinstance(track, Mapping):
-            normalized_tracks.append(
-                {
-                    int(session_index): int(detection_index)
-                    for session_index, detection_index in track.items()
-                }
-            )
+            normalized_track: dict[int, int] = {}
+            for session_index, detection_index in track.items():
+                normalized_track[
+                    _coerce_non_negative_integer_index(
+                        session_index,
+                        label="session index",
+                    )
+                ] = _coerce_non_negative_integer_index(
+                    detection_index,
+                    label="detection index",
+                )
+            normalized_tracks.append(normalized_track)
             continue
         raise TypeError(
             "Each returned track must be a mapping from session index to detection index"
@@ -363,29 +365,68 @@ def _tracks_to_matrix(
     track_matrix = np.full((len(tracks), n_sessions), -1, dtype=int)
     for track_index, track in enumerate(tracks):
         for session_index, detection_index in track.items():
-            if session_index < 0 or session_index >= n_sessions:
+            normalized_session_index = _coerce_non_negative_integer_index(
+                session_index,
+                label="session index",
+            )
+            normalized_detection_index = _coerce_non_negative_integer_index(
+                detection_index,
+                label="detection index",
+            )
+            if normalized_session_index >= n_sessions:
                 raise ValueError(
-                    f"Track references session index {session_index} outside 0..{n_sessions - 1}"
+                    f"Track references session index {normalized_session_index} outside 0..{n_sessions - 1}"
                 )
-            track_matrix[track_index, session_index] = int(detection_index)
+            track_matrix[track_index, normalized_session_index] = normalized_detection_index
     return track_matrix
+
+
+def _coerce_track_matrix_detection_indices(track_matrix: np.ndarray) -> np.ndarray:
+    """Return an integer detection-index matrix while preserving ``-1`` sentinels."""
+
+    message = "track_matrix must contain integer detection indices"
+    matrix = np.asarray(track_matrix)
+    if matrix.ndim != 2:
+        raise ValueError("track_matrix must be two-dimensional")
+    if np.issubdtype(matrix.dtype, np.bool_):
+        raise ValueError(message)
+    if np.issubdtype(matrix.dtype, np.integer):
+        integer_matrix = matrix.astype(int, copy=False)
+    elif np.issubdtype(matrix.dtype, np.floating):
+        if not np.all(np.isfinite(matrix)) or not np.all(np.equal(matrix, np.floor(matrix))):
+            raise ValueError(message)
+        integer_matrix = matrix.astype(int)
+    else:
+        raise ValueError(message)
+    if np.any(integer_matrix < -1):
+        raise ValueError(message)
+    return integer_matrix
 
 
 def _track_matrix_to_roi_index_matrix(
     track_matrix: np.ndarray,
     sessions: Sequence[Track2pSession],
 ) -> np.ndarray:
-    roi_index_matrix = np.full(track_matrix.shape, -1, dtype=int)
+    track_indices = _coerce_track_matrix_detection_indices(track_matrix)
+    if track_indices.shape[1] != len(sessions):
+        raise ValueError("track_matrix column count must match the number of sessions")
+
+    roi_index_matrix = np.full(track_indices.shape, -1, dtype=int)
     for session_index, session in enumerate(sessions):
         if session.plane_data.roi_indices is None:
             lookup = np.arange(session.plane_data.n_rois, dtype=int)
         else:
             lookup = np.asarray(session.plane_data.roi_indices, dtype=int)
-        valid = track_matrix[:, session_index] >= 0
+        column = track_indices[:, session_index]
+        out_of_bounds = column >= len(lookup)
+        if np.any(out_of_bounds):
+            detection_index = int(column[out_of_bounds][0])
+            raise ValueError(
+                f"Track references detection index {detection_index} outside 0..{len(lookup) - 1} for session {session_index}"
+            )
+        valid = column >= 0
         if np.any(valid):
-            roi_index_matrix[valid, session_index] = lookup[
-                track_matrix[valid, session_index]
-            ]
+            roi_index_matrix[valid, session_index] = lookup[column[valid]]
     return roi_index_matrix
 
 
@@ -398,11 +439,7 @@ def track_sessions_multisession(
     ) = None,
     solver: Callable[..., Any] | None = None,
 ) -> LongitudinalTrackingResult:
-    """Solve the global cross-session identity assignment problem.
-
-    This is the step between BayesCaTrack's pairwise ROI-aware costs and a
-    Track2p-style benchmark output.
-    """
+    """Solve the global cross-session identity assignment problem."""
 
     sessions = list(sessions)
     config = MultisessionTrackingConfig() if config is None else config
@@ -427,7 +464,8 @@ def track_sessions_multisession(
             tracks=single_tracks,
             track_matrix=track_matrix,
             track_roi_index_matrix=_track_matrix_to_roi_index_matrix(
-                track_matrix, sessions
+                track_matrix,
+                sessions,
             ),
             session_names=(sessions[0].session_name,),
             session_dates=(
@@ -451,7 +489,10 @@ def track_sessions_multisession(
         solver = _import_multisession_solver()
     session_sizes = [session.plane_data.n_rois for session in sessions]
     raw_result = _call_multisession_solver(
-        solver, pairwise_costs, session_sizes, config
+        solver,
+        pairwise_costs,
+        session_sizes,
+        config,
     )
     tracks, total_cost = _coerce_solver_tracks(raw_result)
     track_matrix = _tracks_to_matrix(tracks, len(sessions))
@@ -543,7 +584,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         )
     )
     parser.add_argument(
-        "subject_dir", type=Path, help="Track2p-style subject directory"
+        "subject_dir",
+        type=Path,
+        help="Track2p-style subject directory",
     )
     parser.add_argument(
         "output_path",

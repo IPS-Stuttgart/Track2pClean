@@ -8,12 +8,14 @@ installations expose the ``track2pclean`` console script, while historical
 
 from bayescatrack import *  # noqa: F401,F403
 from bayescatrack import __all__ as _bayescatrack_all
+from bayescatrack._cli_exit_code_validation import _coerce_exit_code as _strict_exit_code_coerce
 
 from . import _cli as _cli
 from ._custom_usage_text_validation import (
     install_custom_usage_text_validation as _install_custom_usage_text_validation,
 )
 
+_cli._coerce_exit_code = _strict_exit_code_coerce  # pylint: disable=protected-access
 _install_custom_usage_text_validation(_cli)
 main = _cli.main
 

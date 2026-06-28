@@ -270,7 +270,7 @@ def _write_minimal_suite2p_plane(plane_dir):
         ({"exclude_overlapping_pixels": "false"}, "exclude_overlapping_pixels"),
         ({"load_traces": "false"}, "load_traces"),
         ({"load_spike_traces": 1}, "load_spike_traces"),
-        ({"load_neuropil_traces": np.bool_(False)}, "load_neuropil_traces"),
+        ({"load_neuropil_traces": np.array(False)}, "load_neuropil_traces"),
         ({"cell_probability_threshold": True}, "cell_probability_threshold"),
         ({"cell_probability_threshold": np.nan}, "cell_probability_threshold"),
         ({"cell_probability_threshold": -0.1}, "cell_probability_threshold"),

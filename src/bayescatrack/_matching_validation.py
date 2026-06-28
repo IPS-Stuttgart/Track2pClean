@@ -13,6 +13,7 @@ _PATCH_MARKER = "_bayescatrack_assignment_layout_validation_patch"
 _FILL_VALUE_PATCH_MARKER = "_bayescatrack_matching_fill_value_validation_patch"
 _SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_session_name_validation_patch"
 _BUNDLE_SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_bundle_session_name_validation_patch"
+_EXPORT_SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_export_session_names_validation_patch"
 _FILL_VALUE_ERROR_MESSAGE = "fill_value must be a negative integer sentinel"
 
 
@@ -24,6 +25,7 @@ def install_matching_layout_validation(matching_module: Any) -> None:
     _patch_fill_value_keyword_function(matching_module, "build_track_rows_from_bundles")
     _patch_track_row_session_names(matching_module)
     _patch_bundle_session_names(matching_module)
+    _patch_export_session_names(matching_module)
 
 
 def _patch_assignment_solver(matching_module: Any) -> None:
@@ -130,6 +132,41 @@ def _patch_bundle_session_names(matching_module: Any) -> None:
     )
 
 
+def _patch_export_session_names(matching_module: Any) -> None:
+    original: Callable[..., Any] = matching_module.export_track_rows_csv
+    if getattr(original, _EXPORT_SESSION_NAMES_PATCH_MARKER, False):
+        return
+
+    @wraps(original)
+    def export_track_rows_csv_with_session_name_validation(*args: Any, **kwargs: Any) -> Any:
+        if len(args) >= 2:
+            args_list = list(args)
+            args_list[1] = _normalize_unique_session_names(
+                args_list[1],
+                field_name="session_names",
+            )
+            args = tuple(args_list)
+        elif "session_names" in kwargs:
+            kwargs = dict(kwargs)
+            kwargs["session_names"] = _normalize_unique_session_names(
+                kwargs["session_names"],
+                field_name="session_names",
+            )
+        return original(*args, **kwargs)
+
+    setattr(
+        export_track_rows_csv_with_session_name_validation,
+        _EXPORT_SESSION_NAMES_PATCH_MARKER,
+        True,
+    )
+    setattr(
+        export_track_rows_csv_with_session_name_validation,
+        "_bayescatrack_original",
+        original,
+    )
+    matching_module.export_track_rows_csv = export_track_rows_csv_with_session_name_validation
+
+
 def _validate_bundle_assignment_layout(bundle: Any) -> None:
     try:
         cost_matrix = np.asarray(bundle.pairwise_cost_matrix, dtype=float)
@@ -214,7 +251,7 @@ def _normalize_unique_session_names(
     *,
     field_name: str,
 ) -> tuple[str, ...]:
-    if isinstance(session_names, (str, bytes)):
+    if isinstance(session_names, (str, bytes, bytearray)):
         raise ValueError(
             f"{field_name} must be a sequence of session-name values, not a bare string"
         )

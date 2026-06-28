@@ -81,6 +81,22 @@ def test_relink_rejects_nested_roi_index_vectors():
         )
 
 
+def test_relink_rejects_duplicate_roi_index_vectors():
+    rows = np.array([[10, 21]], dtype=int)
+
+    with pytest.raises(
+        ValueError,
+        match=r"roi_indices_by_session\[1\].*unique ROI indices",
+    ):
+        relink_tracks_at_geometry_issues(
+            rows,
+            [_issue()],
+            {(0, 1): np.array([[0.1, 0.2]], dtype=float)},
+            roi_indices_by_session=([10], [21, 21]),
+            config=PostSolveRelinkingConfig(max_edge_cost=None),
+        )
+
+
 def test_relink_rejects_non_matrix_pairwise_costs():
     rows = np.array([[10, 21]], dtype=int)
 

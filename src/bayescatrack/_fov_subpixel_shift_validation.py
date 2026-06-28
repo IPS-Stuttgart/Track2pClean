@@ -1,11 +1,16 @@
-"""Strict validation for FOV subpixel translation shifts.
+"""Strict validation for FOV subpixel translation controls.
 
 The low-level subpixel translation helpers previously coerced ``shift_yx`` with
-``np.asarray(..., dtype=float).reshape(2)``.  Boolean values therefore became
+``np.asarray(..., dtype=float).reshape(2)``. Boolean values therefore became
 numeric one-pixel or zero-pixel shifts before image or ROI-mask resampling, and
-malformed shapes surfaced as low-level reshape errors.  This package-level hook
+malformed shapes surfaced as low-level reshape errors. This package-level hook
 keeps ordinary numeric shifts working while rejecting booleans, non-finite
 values, and malformed shift vectors at the API boundary.
+
+The public mask-interpolation helpers also used membership checks directly on
+the user-supplied value. Array-like controls such as ``np.array(["nearest"])``
+therefore raised ``TypeError`` instead of the package's public ``ValueError``
+validation contract. The same hook validates those controls before delegation.
 """
 
 from __future__ import annotations
@@ -16,16 +21,19 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_fov_subpixel_shift_validation_patch"
+_MASK_INTERPOLATION_PATCH_MARKER = "_bayescatrack_fov_mask_interpolation_validation_patch"
 _SHIFT_ERROR = "shift_yx must contain exactly two finite numeric values"
+_MASK_INTERPOLATION_ERROR = "mask_interpolation must be either 'nearest' or 'bilinear'"
 
 
 def install_fov_subpixel_shift_validation() -> None:
-    """Install idempotent validation around FOV subpixel translation shifts."""
+    """Install idempotent validation around FOV subpixel translation controls."""
 
     from . import fov_registration as _fov_registration  # pylint: disable=import-outside-toplevel
 
     _wrap_shift_argument(_fov_registration, "apply_subpixel_image_translation")
     _wrap_shift_argument(_fov_registration, "apply_subpixel_roi_mask_translation")
+    _wrap_mask_interpolation_validation(_fov_registration)
 
 
 def _wrap_shift_argument(module: Any, function_name: str) -> None:
@@ -40,6 +48,22 @@ def _wrap_shift_argument(module: Any, function_name: str) -> None:
     setattr(wrapper, _PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
     setattr(module, function_name, wrapper)
+
+
+def _wrap_mask_interpolation_validation(module: Any) -> None:
+    original = module._validate_mask_interpolation  # pylint: disable=protected-access
+    if getattr(original, _MASK_INTERPOLATION_PATCH_MARKER, False):
+        return
+
+    @wraps(original)
+    def wrapper(interpolation: Any) -> None:
+        if not isinstance(interpolation, str):
+            raise ValueError(_MASK_INTERPOLATION_ERROR)
+        return original(interpolation)
+
+    setattr(wrapper, _MASK_INTERPOLATION_PATCH_MARKER, True)
+    setattr(wrapper, "_bayescatrack_original", original)
+    module._validate_mask_interpolation = wrapper  # pylint: disable=protected-access
 
 
 def _normalize_subpixel_shift_yx(shift_yx: Any) -> np.ndarray:

@@ -218,6 +218,22 @@ def test_track2p_teacher_prior_reliefs_suite2p_edges() -> None:
     assert adjusted[(0, 1)][0, 0] == pytest.approx(5.0)
 
 
+@pytest.mark.parametrize("boolean_value", [True, np.bool_(True)])
+def test_track2p_teacher_prior_ignores_boolean_track_entries(boolean_value: object) -> None:
+    sessions = (
+        _fake_session([0, 1]),
+        _fake_session([20]),
+    )
+    adjusted = apply_teacher_edge_priors(
+        {(0, 1): np.full((2, 1), 5.0, dtype=float)},
+        sessions,
+        teacher_track_matrix=np.array([[boolean_value, 20]], dtype=object),
+        config=TeacherEdgePriorConfig(relief=1.0, teacher_cost_cap=2.0, min_cost=0.0),
+    )
+
+    assert adjusted[(0, 1)][1, 0] == pytest.approx(5.0)
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
