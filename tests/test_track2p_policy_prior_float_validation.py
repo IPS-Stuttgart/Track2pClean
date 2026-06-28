@@ -25,11 +25,29 @@ def test_policy_prior_config_rejects_boolean_float_parameters(field_name: str) -
 
 
 @pytest.mark.parametrize(
+    "field_name",
+    [
+        "relief",
+        "accepted_cost_cap",
+        "non_policy_penalty",
+        "min_cost",
+        "rescue_min_iou",
+        "rescue_margin",
+        "large_cost",
+    ],
+)
+def test_policy_prior_config_rejects_vector_float_parameters(field_name: str) -> None:
+    with pytest.raises(ValueError, match=field_name):
+        Track2pPolicyPriorConfig(**{field_name: np.array([0.5])})
+
+
+@pytest.mark.parametrize(
     ("kwargs", "expected"),
     [
         ({"relief": "0.25"}, 0.25),
         ({"accepted_cost_cap": np.float64(1.5)}, 1.5),
         ({"rescue_min_iou": "1.0"}, 1.0),
+        ({"relief": np.array(0.25)}, 0.25),
     ],
 )
 def test_policy_prior_config_keeps_numeric_float_coercion(
