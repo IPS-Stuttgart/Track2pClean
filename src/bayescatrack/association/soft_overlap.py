@@ -278,7 +278,10 @@ def _finite_float(
     qualifier = "positive" if positive else "non-negative"
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a finite {qualifier} value")
-    numeric_value = float(value)
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be a finite {qualifier} value") from exc
     violates_bound = (
         numeric_value <= lower_bound if positive else numeric_value < lower_bound
     )
