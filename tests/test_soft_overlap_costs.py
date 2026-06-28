@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack import CalciumPlaneData
 from bayescatrack.association import pyrecest_global_assignment as global_assignment
 from bayescatrack.soft_overlap_costs import registered_soft_iou_cost_kwargs
@@ -38,6 +39,39 @@ def test_soft_overlap_components_capture_near_miss_with_zero_exact_iou():
     assert components["soft_iou"][0, 0] > 0.0
     assert components["distance_transform_overlap"][0, 0] > 0.0
     assert np.isfinite(components["pairwise_cost_matrix"][0, 0])
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"similarity_epsilon": np.asarray([1.0e-6])},
+        {"soft_iou_radius": np.asarray([2])},
+        {"distance_transform_overlap_radius": np.asarray([3])},
+        {"distance_transform_overlap_weight": np.asarray([0.35])},
+        {"distance_transform_overlap_scale": np.asarray([1.0])},
+    ],
+)
+def test_registered_soft_iou_rejects_vector_control_values(kwargs):
+    control_name = next(iter(kwargs))
+
+    with pytest.raises(ValueError, match=control_name):
+        registered_soft_iou_cost_kwargs(**kwargs)
+
+
+def test_registered_soft_iou_accepts_zero_dimensional_numpy_control_values():
+    kwargs = registered_soft_iou_cost_kwargs(
+        similarity_epsilon=np.asarray(1.0e-6),
+        soft_iou_radius=np.asarray(2),
+        distance_transform_overlap_radius=np.asarray(3),
+        distance_transform_overlap_weight=np.asarray(0.25),
+        distance_transform_overlap_scale=np.asarray(1.5),
+    )
+
+    assert kwargs["similarity_epsilon"] == 1.0e-6
+    assert kwargs["soft_iou_radius"] == 2
+    assert kwargs["distance_transform_overlap_radius"] == 3
+    assert kwargs["distance_transform_overlap_weight"] == 0.25
+    assert kwargs["distance_transform_overlap_scale"] == 1.5
 
 
 def test_registered_soft_iou_preset_is_available_to_global_assignment_dispatcher():
