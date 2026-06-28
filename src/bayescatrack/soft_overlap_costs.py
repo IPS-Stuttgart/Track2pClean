@@ -360,14 +360,24 @@ def _dilate_binary_mask_stack(masks: np.ndarray, radius: int) -> np.ndarray:
     return dilate_mask_stack(masks, radius=radius)
 
 
+def _unwrap_scalar_array(value: Any, *, message: str) -> Any:
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(message)
+        return value.item()
+    return value
+
+
 def _nonnegative_int(value: Any, *, name: str) -> int:
+    message = f"{name} must be an integer"
+    value = _unwrap_scalar_array(value, message=message)
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be an integer")
+        raise ValueError(message)
     numeric_candidate: Any
     if isinstance(value, str):
         numeric_candidate = value.strip()
         if not numeric_candidate:
-            raise ValueError(f"{name} must be an integer")
+            raise ValueError(message)
     elif isinstance(value, (float, np.floating)):
         numeric_candidate = value
     else:
@@ -376,14 +386,14 @@ def _nonnegative_int(value: Any, *, name: str) -> int:
         except TypeError:
             try:
                 numeric_candidate = float(value)
-            except (TypeError, ValueError) as float_exc:
-                raise ValueError(f"{name} must be an integer") from float_exc
+            except (TypeError, ValueError, OverflowError) as float_exc:
+                raise ValueError(message) from float_exc
     try:
         numeric_value = float(numeric_candidate)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{name} must be an integer") from exc
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
     if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-        raise ValueError(f"{name} must be an integer")
+        raise ValueError(message)
     return _reject_negative_int(int(numeric_value), name=name)
 
 
@@ -405,17 +415,19 @@ def _finite_float(
     value: Any, *, name: str, lower_bound: float, positive: bool
 ) -> float:
     qualifier = "positive" if positive else "non-negative"
+    message = f"{name} must be a finite {qualifier} value"
+    value = _unwrap_scalar_array(value, message=message)
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite {qualifier} value")
+        raise ValueError(message)
     try:
         numeric_value = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(f"{name} must be a finite {qualifier} value") from exc
+        raise ValueError(message) from exc
     violates_bound = (
         numeric_value <= lower_bound if positive else numeric_value < lower_bound
     )
     if not np.isfinite(numeric_value) or violates_bound:
-        raise ValueError(f"{name} must be a finite {qualifier} value")
+        raise ValueError(message)
     return numeric_value
 
 
