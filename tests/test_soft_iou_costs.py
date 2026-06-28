@@ -167,7 +167,7 @@ def test_registered_soft_iou_kwargs_reject_invalid_numeric_values(
             {"similarity_epsilon": 0.0},
             "similarity_epsilon must be a finite positive value",
         ),
-        ( {"large_cost": np.nan}, "large_cost must be a finite positive value" ),
+        ({"large_cost": np.nan}, "large_cost must be a finite positive value"),
         (
             {"large_cost": _OverflowingFloat()},
             "large_cost must be a finite positive value",
