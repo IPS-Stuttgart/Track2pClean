@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from bayescatrack.association.growth_priors import (
     GrowthPriorConfig,
+    apply_growth_prior_to_costs,
     estimate_growth_from_track_rows,
     fit_affine_growth_transform,
     radial_growth_penalty_matrix,
@@ -61,6 +62,20 @@ def test_radial_growth_penalty_rejects_invalid_scale() -> None:
             np.asarray([[0.0, 0.0]]),
             np.asarray([[1.0, 1.0]]),
             scale=float("inf"),
+        )
+
+
+def test_apply_growth_prior_rejects_broadcastable_cost_shape() -> None:
+    reference_centroids = np.asarray([[0.0, 0.0]])
+    measurement_centroids = np.asarray([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]])
+    costs = np.zeros((2, 3), dtype=float)
+
+    with pytest.raises(ValueError, match="cost_matrix shape"):
+        apply_growth_prior_to_costs(
+            costs,
+            reference_centroids,
+            measurement_centroids,
+            config=GrowthPriorConfig(affine_weight=0.0, radial_weight=1.0),
         )
 
 
