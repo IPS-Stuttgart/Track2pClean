@@ -105,7 +105,7 @@ def test_warp_roi_masks_rejects_non_boolean_binarize(bad_binarize):
         )
 
 
-@pytest.mark.parametrize("bad_threshold", [True, np.bool_(False), np.nan, -0.1, 1.1])
+@pytest.mark.parametrize("bad_threshold", [True, np.bool_(False), np.nan, -0.1, 1.1, np.array([0.5])])
 def test_warp_roi_masks_rejects_invalid_binarization_threshold(bad_threshold):
     masks, matrix, offset = _minimal_warp_inputs()
 
