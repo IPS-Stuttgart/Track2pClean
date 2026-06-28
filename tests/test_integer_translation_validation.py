@@ -31,6 +31,9 @@ def test_apply_integer_image_translation_accepts_integer_like_float_shift():
         np.array([np.nan, 0.0]),
         [True, 0],
         np.array([1, 0, 2]),
+        [[1, 0]],
+        np.array([[1, 0]]),
+        np.array([[1], [0]]),
     ],
 )
 def test_apply_integer_image_translation_rejects_malformed_shift(shift_yx):
@@ -46,6 +49,14 @@ def test_apply_integer_roi_mask_translation_rejects_fractional_shift():
 
     with pytest.raises(ValueError, match="shift_yx"):
         apply_integer_roi_mask_translation(roi_masks, np.array([0.5, 0.0]))
+
+
+def test_apply_integer_roi_mask_translation_rejects_nested_shift():
+    roi_masks = np.zeros((1, 3, 3), dtype=bool)
+    roi_masks[0, 1, 1] = True
+
+    with pytest.raises(ValueError, match="shift_yx"):
+        apply_integer_roi_mask_translation(roi_masks, [[1, 0]])
 
 
 def test_apply_integer_roi_mask_translation_rejects_bad_shift_for_empty_stack():

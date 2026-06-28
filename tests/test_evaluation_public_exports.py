@@ -14,3 +14,15 @@ def test_track2p_metrics_exports_track_scoring_facade_symbols():
     assert "score_track_matrices" in track2p_metrics.__all__
     assert "normalize_track_matrix" in track2p_metrics.__all__
     assert "score_track_matrix_against_reference" in track2p_metrics.__all__
+
+
+def test_track2p_metrics_binds_all_exported_tracklink_symbol():
+    assert "TrackLink" in track2p_metrics.__all__
+    assert track2p_metrics.TrackLink is not None
+
+    imported_symbols: dict[str, object] = {}
+    exec(
+        "from bayescatrack.evaluation.track2p_metrics import *",
+        imported_symbols,
+    )
+    assert imported_symbols["TrackLink"] is track2p_metrics.TrackLink

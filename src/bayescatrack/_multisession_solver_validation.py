@@ -115,9 +115,7 @@ def install_multisession_solver_validation(module: Any | None = None) -> None:
         tracks: Sequence[Mapping[int, int]],
         n_sessions: int,
     ) -> np.ndarray:
-        n_sessions = int(n_sessions)
-        if n_sessions < 0:
-            raise ValueError("n_sessions must be non-negative")
+        n_sessions = _coerce_solver_track_index(n_sessions, "n_sessions")
         track_matrix = np.full((len(tracks), n_sessions), -1, dtype=int)
         for track_index, track in enumerate(tracks):
             for session_index, detection_index in track.items():

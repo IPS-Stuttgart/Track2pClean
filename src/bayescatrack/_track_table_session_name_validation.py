@@ -14,6 +14,7 @@ from typing import Any, Sequence
 
 _TRACK_TABLE_PATCH_MARKER = "_bayescatrack_track_table_session_name_validation_patch"
 _REFERENCE_PATCH_MARKER = "_bayescatrack_reference_session_name_validation_patch"
+_GROUND_TRUTH_LOADER_PATCH_MARKER = "_bayescatrack_ground_truth_loader_session_name_validation_patch"
 
 
 def install_track_table_session_name_validation() -> None:
@@ -23,6 +24,7 @@ def install_track_table_session_name_validation() -> None:
     from . import reference  # pylint: disable=import-outside-toplevel
 
     _install_track_table_session_name_validation(ground_truth_eval.TrackTable)
+    _install_ground_truth_loader_session_name_validation(ground_truth_eval)
     _install_reference_session_name_validation(reference.Track2pReference)
 
 
@@ -56,6 +58,69 @@ def _install_track_table_session_name_validation(track_table: Any) -> None:
     setattr(track_table, "__post_init__", __post_init__)
     setattr(track_table, "aligned_to", aligned_to)
     setattr(track_table, _TRACK_TABLE_PATCH_MARKER, True)
+
+
+def _install_ground_truth_loader_session_name_validation(ground_truth_eval: Any) -> None:
+    _patch_optional_session_names_argument(ground_truth_eval, "load_track_table_csv")
+    _patch_optional_session_names_argument(ground_truth_eval, "load_track2p_ground_truth_csv")
+    _patch_required_session_names_argument(ground_truth_eval, "tracks_from_consecutive_matches")
+
+
+def _patch_optional_session_names_argument(module: Any, function_name: str) -> None:
+    original = getattr(module, function_name)
+    if _function_chain_has_patch(original, _GROUND_TRUTH_LOADER_PATCH_MARKER):
+        return
+
+    @wraps(original)
+    def _with_validated_optional_session_names(*args: Any, **kwargs: Any) -> Any:
+        if kwargs.get("session_names") is not None:
+            normalized_kwargs = dict(kwargs)
+            normalized_kwargs["session_names"] = _normalize_unique_session_names(
+                kwargs["session_names"],
+                field_name="session_names",
+            )
+            kwargs = normalized_kwargs
+        return original(*args, **kwargs)
+
+    setattr(_with_validated_optional_session_names, _GROUND_TRUTH_LOADER_PATCH_MARKER, True)
+    setattr(_with_validated_optional_session_names, "_bayescatrack_original", original)
+    setattr(module, function_name, _with_validated_optional_session_names)
+
+
+def _patch_required_session_names_argument(module: Any, function_name: str) -> None:
+    original = getattr(module, function_name)
+    if _function_chain_has_patch(original, _GROUND_TRUTH_LOADER_PATCH_MARKER):
+        return
+
+    @wraps(original)
+    def _with_validated_required_session_names(
+        session_names: Sequence[str],
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        normalized_session_names = _normalize_unique_session_names(
+            session_names,
+            field_name="session_names",
+        )
+        return original(normalized_session_names, *args, **kwargs)
+
+    setattr(_with_validated_required_session_names, _GROUND_TRUTH_LOADER_PATCH_MARKER, True)
+    setattr(_with_validated_required_session_names, "_bayescatrack_original", original)
+    setattr(module, function_name, _with_validated_required_session_names)
+
+
+def _function_chain_has_patch(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current: Any = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _install_reference_session_name_validation(reference_cls: Any) -> None:

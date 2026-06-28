@@ -74,6 +74,8 @@ def test_tracking_start_roi_restriction_allows_repeated_missing_start_rows():
         [-1],
         [0, 0],
         "0",
+        [[0, 1]],
+        np.asarray([[0, 1]], dtype=int),
     ],
 )
 def test_tracking_start_roi_restriction_rejects_invalid_seed_indices(
@@ -133,6 +135,22 @@ def test_run_registered_subject_tracking_rejects_invalid_single_session_seed_ind
             input_format="auto",
             include_behavior=False,
             start_roi_indices=[0, 0],
+        )
+
+
+def test_run_registered_subject_tracking_rejects_nested_single_session_seed_indices(
+    tmp_path: Path,
+):
+    subject_dir = tmp_path / "jm271"
+    _write_single_session_subject(subject_dir)
+
+    with pytest.raises(ValueError, match="start_roi_indices"):
+        run_registered_subject_tracking(
+            subject_dir,
+            plane_name="plane0",
+            input_format="auto",
+            include_behavior=False,
+            start_roi_indices=[[0, 1]],
         )
 
 
