@@ -409,42 +409,39 @@ def _column_mask_for_cost_shape(mask: Any, shape: tuple[int, int]) -> np.ndarray
 
 
 def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
-    message = f"{name} must be finite and non-negative"
-    if isinstance(raw_value, (bool, np.bool_)):
-        raise ValueError(message)
-    try:
-        value = float(raw_value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(message) from exc
+    value = _validated_numeric_scalar(name, raw_value)
     if value < 0.0 or not np.isfinite(value):
-        raise ValueError(message)
+        raise ValueError(f"{name} must be finite and non-negative")
     return value
 
 
 def _validated_finite_float(name: str, raw_value: Any) -> float:
-    message = f"{name} must be finite"
-    if isinstance(raw_value, (bool, np.bool_)):
-        raise ValueError(message)
-    try:
-        value = float(raw_value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(message) from exc
+    value = _validated_numeric_scalar(name, raw_value)
     if not np.isfinite(value):
-        raise ValueError(message)
+        raise ValueError(f"{name} must be finite")
     return value
 
 
 def _validated_positive_finite_float(name: str, raw_value: Any) -> float:
-    message = f"{name} must be finite and positive"
-    if isinstance(raw_value, (bool, np.bool_)):
-        raise ValueError(message)
-    try:
-        value = float(raw_value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(message) from exc
+    value = _validated_numeric_scalar(name, raw_value)
     if value <= 0.0 or not np.isfinite(value):
-        raise ValueError(message)
+        raise ValueError(f"{name} must be finite and positive")
     return value
+
+
+def _validated_numeric_scalar(name: str, raw_value: Any) -> float:
+    if isinstance(raw_value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a numeric scalar, not a boolean")
+    if isinstance(raw_value, str):
+        raise ValueError(f"{name} must be a numeric scalar, not text")
+
+    raw_array = np.asarray(raw_value)
+    if raw_array.ndim != 0:
+        raise ValueError(f"{name} must be a numeric scalar")
+    try:
+        return float(raw_array)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a numeric scalar") from exc
 
 
 __all__ = (
