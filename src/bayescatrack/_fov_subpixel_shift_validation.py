@@ -1,4 +1,9 @@
-"""Strict validation for FOV subpixel translation controls."""
+"""Strict validation for FOV subpixel translation controls.
+
+The wrappers normalize public subpixel shift vectors before low-level resampling
+so malformed, boolean, non-finite, and string-like values fail with ``ValueError``.
+They also validate mask-interpolation controls before delegation.
+"""
 
 from __future__ import annotations
 
