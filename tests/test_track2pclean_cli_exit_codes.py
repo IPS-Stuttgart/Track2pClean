@@ -20,6 +20,8 @@ _INVALID_EXIT_CODE_RETURNS = [
     object(),
 ]
 
+_OUT_OF_RANGE_EXIT_CODE_RETURNS = [-1, 256, np.int64(256)]
+
 
 def test_track2pclean_none_delegate_return_maps_to_success():
     def _delegate(args):
@@ -66,6 +68,20 @@ def test_track2pclean_rejects_non_integer_delegate_return(delegate_result):
         )
 
 
+@pytest.mark.parametrize("delegate_result", _OUT_OF_RANGE_EXIT_CODE_RETURNS)
+def test_track2pclean_rejects_out_of_range_integer_delegate_return(delegate_result):
+    def _delegate(args):
+        assert args == ["--example"]
+        return delegate_result
+
+    with pytest.raises(ValueError, match="integer exit code"):
+        track2pclean_cli._run_with_program_name(
+            "track2pclean delegate",
+            _delegate,
+            ["--example"],
+        )
+
+
 def test_bayescatrack_core_delegate_none_return_maps_to_success(monkeypatch):
     observed_args = []
 
@@ -91,6 +107,21 @@ def test_bayescatrack_core_rejects_non_integer_delegate_return(
     monkeypatch.setattr(bayescatrack_cli, "_core_main", _delegate)
 
     with pytest.raises(TypeError, match="integer exit code"):
+        bayescatrack_cli.main(["summary", "--example"])
+
+
+@pytest.mark.parametrize("delegate_result", _OUT_OF_RANGE_EXIT_CODE_RETURNS)
+def test_bayescatrack_core_rejects_out_of_range_integer_delegate_return(
+    delegate_result,
+    monkeypatch,
+):
+    def _delegate(args):
+        assert args == ["summary", "--example"]
+        return delegate_result
+
+    monkeypatch.setattr(bayescatrack_cli, "_core_main", _delegate)
+
+    with pytest.raises(ValueError, match="integer exit code"):
         bayescatrack_cli.main(["summary", "--example"])
 
 
