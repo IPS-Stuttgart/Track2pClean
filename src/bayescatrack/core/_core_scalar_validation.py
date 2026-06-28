@@ -33,7 +33,13 @@ _OPTIONAL_STRICTLY_POSITIVE_PAIRWISE_CONTROLS = (
 def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None:
     """Install idempotent validation wrappers for core scalar controls."""
 
-    if getattr(calcium_plane_cls, _CORE_SCALAR_VALIDATION_INSTALLED_ATTR, False):
+    installed = getattr(calcium_plane_cls, _CORE_SCALAR_VALIDATION_INSTALLED_ATTR, False)
+    current_methods_are_patched = (
+        getattr(calcium_plane_cls.position_covariances, _PATCH_MARKER, False)
+        and getattr(calcium_plane_cls.to_constant_velocity_state_moments, _PATCH_MARKER, False)
+        and getattr(calcium_plane_cls.build_pairwise_cost_matrix, _PATCH_MARKER, False)
+    )
+    if installed and current_methods_are_patched:
         return
 
     original_position_covariances = calcium_plane_cls.position_covariances
@@ -167,12 +173,16 @@ def _validate_finite_scalar(
     *,
     strictly_positive: bool,
 ) -> float:
-    requirement = "a finite strictly positive value" if strictly_positive else "a finite non-negative value"
+    requirement = "a finite positive value" if strictly_positive else "a finite non-negative value"
+    if isinstance(raw_value, np.ndarray):
+        if raw_value.shape != ():
+            raise ValueError(f"{name} must be {requirement}")
+        raw_value = raw_value.item()
     if isinstance(raw_value, (bool, np.bool_)):
         raise ValueError(f"{name} must be {requirement}")
     try:
         value = float(raw_value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be {requirement}") from exc
     if not np.isfinite(value):
         raise ValueError(f"{name} must be {requirement}")
