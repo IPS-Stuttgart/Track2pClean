@@ -109,7 +109,7 @@ def _mark_patch(wrapper: Any, original: Any) -> None:
 def _normalize_empty_match_collections(matches: Any) -> Any:
     """Normalize explicit empty match collections to an empty pair matrix."""
 
-    if isinstance(matches, (str, bytes)):
+    if isinstance(matches, (str, bytes, bytearray)):
         return matches
     try:
         match_iterator = iter(matches)
@@ -123,7 +123,7 @@ def _normalize_unique_session_names(
     *,
     field_name: str,
 ) -> tuple[str, ...]:
-    if isinstance(session_names, (str, bytes)):
+    if isinstance(session_names, (str, bytes, bytearray)):
         raise ValueError(
             f"{field_name} must be a sequence of session-name values, not a bare string"
         )
