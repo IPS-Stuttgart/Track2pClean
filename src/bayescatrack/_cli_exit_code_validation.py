@@ -13,7 +13,7 @@ import numpy as np
 # pylint: disable=protected-access
 
 
-_EXIT_CODE_ERROR = "CLI delegates must return None or an integer exit code"
+_EXIT_CODE_ERROR = "CLI delegates must return None or an integer exit code between 0 and 255"
 
 
 def install_cli_exit_code_validation(cli_module: Any) -> None:
@@ -78,9 +78,12 @@ def _coerce_exit_code(result: Any) -> int:
     if isinstance(result, (bool, np.bool_)):
         raise TypeError(_EXIT_CODE_ERROR)
     try:
-        return int(operator.index(result))
+        exit_code = int(operator.index(result))
     except TypeError as exc:
         raise TypeError(_EXIT_CODE_ERROR) from exc
+    if not 0 <= exit_code <= 255:
+        raise ValueError(_EXIT_CODE_ERROR)
+    return exit_code
 
 
 __all__ = ["install_cli_exit_code_validation"]
