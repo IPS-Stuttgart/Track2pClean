@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from decimal import Decimal
+from fractions import Fraction
+
 import numpy as np
 import pytest
 from bayescatrack.association.ensemble_tracking import (
@@ -60,10 +63,36 @@ def test_track_matrix_edge_counter_keeps_stringified_integral_float_roi_labels()
     assert sum(counter.values()) == 2
 
 
-@pytest.mark.parametrize("bad_value", ["not-a-roi", "1.5", "inf"])
-def test_track_matrix_edge_counter_rejects_malformed_roi_strings(bad_value):
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        "not-a-roi",
+        "1.5",
+        "inf",
+        Decimal("1.5"),
+        Decimal("NaN"),
+        Fraction(3, 2),
+    ],
+)
+def test_track_matrix_edge_counter_rejects_malformed_roi_labels(bad_value):
     with pytest.raises(ValueError, match="non-integer ROI index"):
         track_matrix_edge_counter(np.asarray([[bad_value, 2]], dtype=object))
+
+
+@pytest.mark.parametrize(
+    ("roi_value", "expected_roi"),
+    [
+        (Decimal("10"), 10),
+        (Fraction(20, 1), 20),
+    ],
+)
+def test_track_matrix_edge_counter_accepts_exact_integral_roi_objects(
+    roi_value,
+    expected_roi,
+):
+    counter = track_matrix_edge_counter(np.asarray([[roi_value, 2]], dtype=object))
+
+    assert counter[(0, 1, expected_roi, 2)] == 1
 
 
 def test_consensus_track_rows_seeds_from_stringified_integral_float_roi_labels():
