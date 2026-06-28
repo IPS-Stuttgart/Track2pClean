@@ -20,6 +20,18 @@ _PATCH_MARKER = "_bayescatrack_track_row_fill_value_validation_patch"
 _ERROR_MESSAGE = (
     "fill_value must be an integer; fill_value must be a negative integer sentinel"
 )
+_INDEX_PROTOCOL_PASSTHROUGH_TYPES = (
+    bool,
+    np.bool_,
+    int,
+    np.integer,
+    float,
+    np.floating,
+    str,
+    bytes,
+    bytearray,
+    np.ndarray,
+)
 
 
 def install_track_row_fill_value_validation() -> None:
@@ -37,6 +49,7 @@ def install_track_row_fill_value_validation() -> None:
         ) -> Any:
             kwargs = dict(kwargs)
             kwargs["fill_value"] = _normalize_fill_value(kwargs.get("fill_value", -1))
+            _normalize_track_row_index_kwargs(kwargs)
             return original_matches(*args, **kwargs)
 
         setattr(
@@ -63,6 +76,7 @@ def install_track_row_fill_value_validation() -> None:
         ) -> Any:
             kwargs = dict(kwargs)
             kwargs["fill_value"] = _normalize_fill_value(kwargs.get("fill_value", -1))
+            _normalize_track_row_index_kwargs(kwargs)
             return original_bundles(*args, **kwargs)
 
         setattr(
@@ -78,6 +92,45 @@ def install_track_row_fill_value_validation() -> None:
         _matching.build_track_rows_from_bundles = (
             build_track_rows_from_bundles_with_fill_value_validation
         )
+
+
+def _normalize_track_row_index_kwargs(kwargs: dict[str, Any]) -> None:
+    if "start_session_index" in kwargs:
+        kwargs["start_session_index"] = _normalize_index_protocol_value(
+            kwargs["start_session_index"],
+            error_message="start_session_index must be an integer session index",
+        )
+    if kwargs.get("start_roi_indices") is not None:
+        kwargs["start_roi_indices"] = _normalize_start_roi_indices(
+            kwargs["start_roi_indices"]
+        )
+
+
+def _normalize_start_roi_indices(values: Any) -> Any:
+    if isinstance(values, (str, bytes, bytearray, np.ndarray)):
+        return values
+    try:
+        iterator = iter(values)
+    except TypeError:
+        return values
+    return [
+        _normalize_index_protocol_value(
+            value,
+            error_message="start_roi_indices must contain integer ROI indices",
+        )
+        for value in iterator
+    ]
+
+
+def _normalize_index_protocol_value(value: Any, *, error_message: str) -> Any:
+    if isinstance(value, _INDEX_PROTOCOL_PASSTHROUGH_TYPES):
+        return value
+    if getattr(type(value), "__index__", None) is None:
+        return value
+    try:
+        return operator.index(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(error_message) from exc
 
 
 def _normalize_fill_value(value: Any) -> int:
