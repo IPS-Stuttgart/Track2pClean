@@ -279,7 +279,7 @@ def _coerce_exit_code(result: Any) -> int:
         raise TypeError(_EXIT_CODE_ERROR)
     try:
         exit_code = int(operator.index(result))
-    except TypeError as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise TypeError(_EXIT_CODE_ERROR) from exc
     if not 0 <= exit_code <= 255:
         raise ValueError(_EXIT_CODE_ERROR)
