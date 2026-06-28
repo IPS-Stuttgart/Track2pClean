@@ -1,4 +1,4 @@
-"""Command-line entry point for ``python -m track2pclean``."""
+"""Module entry point for ``python -m track2pclean``."""
 
 from track2pclean._cli import main
 
