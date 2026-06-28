@@ -15,7 +15,7 @@ from ._advanced_pruning_normalization import (
 )
 from .core.bridge import CalciumPlaneData
 
-_NONNEGATIVE_WEIGHT_KWARGS = (
+_NONNULL_NEGATIVE_WEIGHT_KWARGS = (
     "centroid_weight",
     "iou_weight",
     "mask_cosine_weight",
@@ -29,6 +29,7 @@ _NONNEGATIVE_WEIGHT_KWARGS = (
     "border_proximity_weight",
     "ambiguity_margin_weight",
 )
+_NONNEGATIVE_WEIGHT_KWARGS = _NONNULL_NEGATIVE_WEIGHT_KWARGS
 _POSITIVE_FLOAT_KWARGS = (
     "large_cost",
     "similarity_epsilon",
@@ -42,6 +43,7 @@ _BOOLEAN_KWARGS = (
     "ambiguity_margin_components",
     "candidate_include_column_top_k",
 )
+_REJECTED_SCALAR_TYPES = (bool, np.bool_, str, bytes, bytearray, np.str_, np.bytes_)
 
 
 def install_advanced_weight_validation() -> None:
@@ -126,31 +128,39 @@ def _strict_bool(value: Any, *, name: str) -> bool:
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite non-negative value")
-    if isinstance(value, np.ndarray) and value.shape != ():
-        raise ValueError(f"{name} must be a finite non-negative value")
+    message = f"{name} must be a finite non-negative value"
+    value = _validated_numeric_scalar(value, message=message)
     try:
         numeric_value = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(f"{name} must be a finite non-negative value") from exc
+        raise ValueError(message) from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
-        raise ValueError(f"{name} must be a finite non-negative value")
+        raise ValueError(message)
     return numeric_value
 
 
 def _finite_positive_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite positive value")
-    if isinstance(value, np.ndarray) and value.shape != ():
-        raise ValueError(f"{name} must be a finite positive value")
+    message = f"{name} must be a finite positive value"
+    value = _validated_numeric_scalar(value, message=message)
     try:
         numeric_value = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(f"{name} must be a finite positive value") from exc
+        raise ValueError(message) from exc
     if not np.isfinite(numeric_value) or numeric_value <= 0.0:
-        raise ValueError(f"{name} must be a finite positive value")
+        raise ValueError(message)
     return numeric_value
+
+
+def _validated_numeric_scalar(value: Any, *, message: str) -> Any:
+    if isinstance(value, _REJECTED_SCALAR_TYPES):
+        raise ValueError(message)
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(message)
+        value = value.item()
+        if isinstance(value, _REJECTED_SCALAR_TYPES):
+            raise ValueError(message)
+    return value
 
 
 __all__ = ["install_advanced_weight_validation"]
