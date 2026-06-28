@@ -89,13 +89,25 @@ def _soft_iou_pairwise_cost_matrix(
         kwargs.pop("soft_iou_radius", 0),
         name="soft_iou_radius",
     )
-    iou_weight = float(kwargs.get("iou_weight", 6.0))
+    iou_weight = _finite_nonnegative_float(
+        kwargs.get("iou_weight", 6.0),
+        name="iou_weight",
+    )
     if iou_weight <= 0.0:
         return original_method(self, other, **kwargs)
 
-    return_components = bool(kwargs.get("return_components", False))
-    similarity_epsilon = float(kwargs.get("similarity_epsilon", 1.0e-6))
-    large_cost = float(kwargs.get("large_cost", 1.0e6))
+    return_components = _strict_bool(
+        kwargs.get("return_components", False),
+        name="return_components",
+    )
+    similarity_epsilon = _finite_positive_float(
+        kwargs.get("similarity_epsilon", 1.0e-6),
+        name="similarity_epsilon",
+    )
+    large_cost = _finite_positive_float(
+        kwargs.get("large_cost", 1.0e6),
+        name="large_cost",
+    )
     if soft_iou_radius <= 0 and _is_iou_only_cost(kwargs):
         exact_iou = _pairwise_iou_matrix_sparse(self.roi_masks, other.roi_masks)
         iou_cost = -np.log(np.clip(exact_iou, similarity_epsilon, 1.0))
@@ -145,13 +157,18 @@ def _soft_iou_pairwise_cost_matrix(
 
 
 def _is_iou_only_cost(kwargs: dict[str, Any]) -> bool:
-    return (
-        float(kwargs.get("centroid_weight", 1.0)) == 0.0
-        and kwargs.get("max_centroid_distance") is None
-        and float(kwargs.get("mask_cosine_weight", 2.0)) == 0.0
-        and float(kwargs.get("area_weight", 0.5)) == 0.0
-        and float(kwargs.get("roi_feature_weight", 0.25)) == 0.0
-        and float(kwargs.get("cell_probability_weight", 0.0)) == 0.0
+    if kwargs.get("max_centroid_distance") is not None:
+        return False
+    zero_weight_controls = (
+        ("centroid_weight", 1.0),
+        ("mask_cosine_weight", 2.0),
+        ("area_weight", 0.5),
+        ("roi_feature_weight", 0.25),
+        ("cell_probability_weight", 0.0),
+    )
+    return all(
+        _finite_nonnegative_float(kwargs.get(name, default), name=name) == 0.0
+        for name, default in zero_weight_controls
     )
 
 
@@ -289,6 +306,39 @@ def _nonnegative_int(value: Any, *, name: str) -> int:
     if integer_value < 0:
         raise ValueError(f"{name} must be non-negative")
     return int(integer_value)
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if not isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a boolean")
+    return bool(value)
+
+
+def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=False)
+
+
+def _finite_positive_float(value: Any, *, name: str) -> float:
+    return _finite_float(value, name=name, lower_bound=0.0, positive=True)
+
+
+def _finite_float(
+    value: Any, *, name: str, lower_bound: float, positive: bool
+) -> float:
+    qualifier = "positive" if positive else "non-negative"
+    message = f"{name} must be a finite {qualifier} value"
+    if isinstance(value, (bool, np.bool_, str, bytes, bytearray, np.ndarray)):
+        raise ValueError(message)
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
+    violates_bound = (
+        numeric_value <= lower_bound if positive else numeric_value < lower_bound
+    )
+    if not np.isfinite(numeric_value) or violates_bound:
+        raise ValueError(message)
+    return numeric_value
 
 
 def _ensure_finite_cost_matrix(
