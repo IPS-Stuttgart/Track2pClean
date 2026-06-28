@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.matching import (
     build_track_rows_from_bundles,
     solve_bundle_linear_assignment,

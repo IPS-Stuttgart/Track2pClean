@@ -1,8 +1,10 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
-
-from bayescatrack.matching import build_track_rows_from_bundles, build_track_rows_from_matches
+from bayescatrack.matching import (
+    build_track_rows_from_bundles,
+    build_track_rows_from_matches,
+)
 
 
 @pytest.mark.parametrize(

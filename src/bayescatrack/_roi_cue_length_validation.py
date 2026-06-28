@@ -56,7 +56,9 @@ def install_roi_cue_length_validation(absence_model: ModuleType) -> None:
         "_track2pclean_original",
         original_absence_cost_vector,
     )
-    absence_model.absence_cost_vector = _absence_cost_vector_with_roi_cue_length_validation
+    absence_model.absence_cost_vector = (
+        _absence_cost_vector_with_roi_cue_length_validation
+    )
 
 
 def _validate_roi_cue_vector(values: Any, field_name: str, n_rois: int) -> None:

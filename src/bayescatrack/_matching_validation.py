@@ -8,12 +8,15 @@ from typing import Any, Callable
 
 import numpy as np
 
-
 _PATCH_MARKER = "_bayescatrack_assignment_layout_validation_patch"
 _FILL_VALUE_PATCH_MARKER = "_bayescatrack_matching_fill_value_validation_patch"
 _SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_session_name_validation_patch"
-_BUNDLE_SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_bundle_session_name_validation_patch"
-_EXPORT_SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_export_session_names_validation_patch"
+_BUNDLE_SESSION_NAMES_PATCH_MARKER = (
+    "_bayescatrack_matching_bundle_session_name_validation_patch"
+)
+_EXPORT_SESSION_NAMES_PATCH_MARKER = (
+    "_bayescatrack_matching_export_session_names_validation_patch"
+)
 _FILL_VALUE_ERROR_MESSAGE = (
     "fill_value must be an integer; fill_value must be a negative integer sentinel"
 )
@@ -140,7 +143,9 @@ def _patch_export_session_names(matching_module: Any) -> None:
         return
 
     @wraps(original)
-    def export_track_rows_csv_with_session_name_validation(*args: Any, **kwargs: Any) -> Any:
+    def export_track_rows_csv_with_session_name_validation(
+        *args: Any, **kwargs: Any
+    ) -> Any:
         if len(args) >= 2:
             args_list = list(args)
             args_list[1] = _normalize_unique_session_names(
@@ -166,7 +171,9 @@ def _patch_export_session_names(matching_module: Any) -> None:
         "_bayescatrack_original",
         original,
     )
-    matching_module.export_track_rows_csv = export_track_rows_csv_with_session_name_validation
+    matching_module.export_track_rows_csv = (
+        export_track_rows_csv_with_session_name_validation
+    )
 
 
 def _validate_bundle_assignment_layout(bundle: Any) -> None:
@@ -262,7 +269,9 @@ def _normalize_unique_session_names(
     try:
         normalized_session_names = tuple(str(name) for name in session_names)
     except TypeError as exc:
-        raise ValueError(f"{field_name} must be a sequence of session-name values") from exc
+        raise ValueError(
+            f"{field_name} must be a sequence of session-name values"
+        ) from exc
 
     if not normalized_session_names:
         raise ValueError(f"{field_name} must not be empty")

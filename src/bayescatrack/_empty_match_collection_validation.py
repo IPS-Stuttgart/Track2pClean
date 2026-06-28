@@ -22,15 +22,21 @@ _PATCH_MARKER = "_bayescatrack_empty_match_collection_patch"
 def install_empty_match_collection_validation(_matching_module: Any) -> None:
     """Install idempotent normalization for explicit empty match collections."""
 
-    original_normalize = _matching_module._normalize_match_mapping  # pylint: disable=protected-access
+    original_normalize = (
+        _matching_module._normalize_match_mapping
+    )  # pylint: disable=protected-access
     if getattr(original_normalize, _PATCH_MARKER, False):
         return
 
     session_match_result_type = getattr(_matching_module, "SessionMatchResult", None)
 
     @wraps(original_normalize)
-    def normalize_match_mapping_with_empty_collection_support(match: Any) -> dict[int, int]:
-        if session_match_result_type is not None and isinstance(match, session_match_result_type):
+    def normalize_match_mapping_with_empty_collection_support(
+        match: Any,
+    ) -> dict[int, int]:
+        if session_match_result_type is not None and isinstance(
+            match, session_match_result_type
+        ):
             return original_normalize(match)
         if isinstance(match, Mapping):
             return original_normalize(match)
@@ -43,7 +49,9 @@ def install_empty_match_collection_validation(_matching_module: Any) -> None:
             return original_normalize(match)
 
         if match_array.size == 0:
-            if match_array.ndim == 1 or (match_array.ndim == 2 and match_array.shape[1] == 2):
+            if match_array.ndim == 1 or (
+                match_array.ndim == 2 and match_array.shape[1] == 2
+            ):
                 return {}
             raise TypeError("unsupported match representation")
 

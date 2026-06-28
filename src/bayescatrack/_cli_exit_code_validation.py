@@ -13,7 +13,9 @@ import numpy as np
 # pylint: disable=protected-access
 
 _PATCH_MARKER = "_track2pclean_exit_code_validation_patch"
-_EXIT_CODE_ERROR = "CLI delegates must return None or an integer exit code between 0 and 255"
+_EXIT_CODE_ERROR = (
+    "CLI delegates must return None or an integer exit code between 0 and 255"
+)
 
 
 def install_cli_exit_code_validation(cli_module: Any) -> None:

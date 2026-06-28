@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from bayescatrack.reference import (
+    Track2pReference,
+    score_complete_tracks_against_reference,
+)
 
-from bayescatrack.reference import Track2pReference, score_complete_tracks_against_reference
 
-
-def test_score_complete_tracks_against_reference_accepts_empty_prediction_sequence() -> None:
+def test_score_complete_tracks_against_reference_accepts_empty_prediction_sequence() -> (
+    None
+):
     reference = Track2pReference(
         session_names=("day0", "day1", "day2"),
         suite2p_indices=np.array(

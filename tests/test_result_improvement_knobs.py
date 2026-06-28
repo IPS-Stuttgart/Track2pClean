@@ -219,7 +219,9 @@ def test_track2p_teacher_prior_reliefs_suite2p_edges() -> None:
 
 
 @pytest.mark.parametrize("boolean_value", [True, np.bool_(True)])
-def test_track2p_teacher_prior_ignores_boolean_track_entries(boolean_value: object) -> None:
+def test_track2p_teacher_prior_ignores_boolean_track_entries(
+    boolean_value: object,
+) -> None:
     sessions = (
         _fake_session([0, 1]),
         _fake_session([20]),

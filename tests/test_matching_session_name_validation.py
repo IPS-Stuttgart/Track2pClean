@@ -4,10 +4,11 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
+from bayescatrack.matching import (
+    build_track_rows_from_bundles,
+    build_track_rows_from_matches,
+)
 from tests import _support  # noqa: F401
-from bayescatrack.matching import build_track_rows_from_bundles, build_track_rows_from_matches
-
 
 _SEQUENCE_ERROR = "not a bare string"
 _DUPLICATE_ERROR = "unique session names"

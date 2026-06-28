@@ -39,7 +39,11 @@ def install_track_row_fill_value_validation() -> None:
             kwargs["fill_value"] = _normalize_fill_value(kwargs.get("fill_value", -1))
             return original_matches(*args, **kwargs)
 
-        setattr(build_track_rows_from_matches_with_fill_value_validation, _PATCH_MARKER, True)
+        setattr(
+            build_track_rows_from_matches_with_fill_value_validation,
+            _PATCH_MARKER,
+            True,
+        )
         setattr(
             build_track_rows_from_matches_with_fill_value_validation,
             "_bayescatrack_original",
@@ -61,7 +65,11 @@ def install_track_row_fill_value_validation() -> None:
             kwargs["fill_value"] = _normalize_fill_value(kwargs.get("fill_value", -1))
             return original_bundles(*args, **kwargs)
 
-        setattr(build_track_rows_from_bundles_with_fill_value_validation, _PATCH_MARKER, True)
+        setattr(
+            build_track_rows_from_bundles_with_fill_value_validation,
+            _PATCH_MARKER,
+            True,
+        )
         setattr(
             build_track_rows_from_bundles_with_fill_value_validation,
             "_bayescatrack_original",

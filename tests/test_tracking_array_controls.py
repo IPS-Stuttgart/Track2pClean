@@ -1,7 +1,6 @@
+import bayescatrack.tracking as tracking
 import numpy as np
 import pytest
-
-import bayescatrack.tracking as tracking
 
 
 def test_seed_roi_list_rejects_zero_dimensional_array_element():

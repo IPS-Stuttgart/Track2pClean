@@ -14,7 +14,9 @@ from typing import Any, Sequence
 
 _TRACK_TABLE_PATCH_MARKER = "_bayescatrack_track_table_session_name_validation_patch"
 _REFERENCE_PATCH_MARKER = "_bayescatrack_reference_session_name_validation_patch"
-_GROUND_TRUTH_LOADER_PATCH_MARKER = "_bayescatrack_ground_truth_loader_session_name_validation_patch"
+_GROUND_TRUTH_LOADER_PATCH_MARKER = (
+    "_bayescatrack_ground_truth_loader_session_name_validation_patch"
+)
 _STRING_LIKE_SESSION_NAMES = (str, bytes, bytearray)
 
 
@@ -61,10 +63,16 @@ def _install_track_table_session_name_validation(track_table: Any) -> None:
     setattr(track_table, _TRACK_TABLE_PATCH_MARKER, True)
 
 
-def _install_ground_truth_loader_session_name_validation(ground_truth_eval: Any) -> None:
+def _install_ground_truth_loader_session_name_validation(
+    ground_truth_eval: Any,
+) -> None:
     _patch_optional_session_names_argument(ground_truth_eval, "load_track_table_csv")
-    _patch_optional_session_names_argument(ground_truth_eval, "load_track2p_ground_truth_csv")
-    _patch_required_session_names_argument(ground_truth_eval, "tracks_from_consecutive_matches")
+    _patch_optional_session_names_argument(
+        ground_truth_eval, "load_track2p_ground_truth_csv"
+    )
+    _patch_required_session_names_argument(
+        ground_truth_eval, "tracks_from_consecutive_matches"
+    )
 
 
 def _patch_optional_session_names_argument(module: Any, function_name: str) -> None:
@@ -83,7 +91,9 @@ def _patch_optional_session_names_argument(module: Any, function_name: str) -> N
             kwargs = normalized_kwargs
         return original(*args, **kwargs)
 
-    setattr(_with_validated_optional_session_names, _GROUND_TRUTH_LOADER_PATCH_MARKER, True)
+    setattr(
+        _with_validated_optional_session_names, _GROUND_TRUTH_LOADER_PATCH_MARKER, True
+    )
     setattr(_with_validated_optional_session_names, "_bayescatrack_original", original)
     setattr(module, function_name, _with_validated_optional_session_names)
 
@@ -105,7 +115,9 @@ def _patch_required_session_names_argument(module: Any, function_name: str) -> N
         )
         return original(normalized_session_names, *args, **kwargs)
 
-    setattr(_with_validated_required_session_names, _GROUND_TRUTH_LOADER_PATCH_MARKER, True)
+    setattr(
+        _with_validated_required_session_names, _GROUND_TRUTH_LOADER_PATCH_MARKER, True
+    )
     setattr(_with_validated_required_session_names, "_bayescatrack_original", original)
     setattr(module, function_name, _with_validated_required_session_names)
 
@@ -149,11 +161,15 @@ def _normalize_unique_session_names(
     field_name: str,
 ) -> tuple[str, ...]:
     if isinstance(session_names, _STRING_LIKE_SESSION_NAMES):
-        raise ValueError(f"{field_name} must be a sequence of session-name values, not a bare string-like value")
+        raise ValueError(
+            f"{field_name} must be a sequence of session-name values, not a bare string-like value"
+        )
     try:
         normalized_session_names = tuple(str(name) for name in session_names)
     except TypeError as exc:
-        raise ValueError(f"{field_name} must be a sequence of session-name values") from exc
+        raise ValueError(
+            f"{field_name} must be a sequence of session-name values"
+        ) from exc
     seen: set[str] = set()
     duplicates: list[str] = []
     for session_name in normalized_session_names:

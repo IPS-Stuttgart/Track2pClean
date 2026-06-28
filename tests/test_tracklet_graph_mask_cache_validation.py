@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
 from bayescatrack.experiments import track2p_policy_tracklet_graph_mht as tracklet_graph
 
 

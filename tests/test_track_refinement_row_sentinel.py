@@ -18,7 +18,10 @@ def _position_tables():
     )
 
 
-@pytest.mark.parametrize("helper_name", ["track_geometry_issues", "smoothed_track_positions", "split_tracks_at_issues"])
+@pytest.mark.parametrize(
+    "helper_name",
+    ["track_geometry_issues", "smoothed_track_positions", "split_tracks_at_issues"],
+)
 def test_track_refinement_rejects_unconfigured_missing_token(helper_name):
     track_rows = np.array([[0, -2, 1]], dtype=int)
 

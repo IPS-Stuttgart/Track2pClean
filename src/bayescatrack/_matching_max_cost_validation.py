@@ -34,7 +34,9 @@ def install_matching_max_cost_validation(matching_module: Any) -> None:
             kwargs = normalized_kwargs
         return original(bundle, *args, **kwargs)
 
-    setattr(solve_bundle_linear_assignment_with_max_cost_validation, _PATCH_MARKER, True)
+    setattr(
+        solve_bundle_linear_assignment_with_max_cost_validation, _PATCH_MARKER, True
+    )
     setattr(
         solve_bundle_linear_assignment_with_max_cost_validation,
         "_bayescatrack_original",

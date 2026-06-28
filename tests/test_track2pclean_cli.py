@@ -5,7 +5,6 @@ import sys
 from types import ModuleType
 
 import pytest
-
 from tests._support import run_module
 from track2pclean import _cli as track2pclean_cli
 
@@ -83,7 +82,9 @@ def test_track2pclean_benchmark_alias_help_preserves_requested_alias_name():
         "--help",
     )
 
-    assert "usage: track2pclean benchmark audit-manual-gt-roi-index-space" in proc.stdout
+    assert (
+        "usage: track2pclean benchmark audit-manual-gt-roi-index-space" in proc.stdout
+    )
     assert "usage: track2pclean benchmark audit-manual-gt-rois" not in proc.stdout
 
 

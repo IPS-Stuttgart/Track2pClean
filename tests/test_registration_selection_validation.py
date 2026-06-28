@@ -111,7 +111,10 @@ def test_auto_registration_selector_rejects_malformed_control_scalars(
     [
         (("none", "fov-tranlsation"), "unknown transform type"),
         (("none", 1), "candidate_transforms must contain transform-type strings"),
-        (("none", "auto"), "'auto' must not be nested inside auto-registration candidates"),
+        (
+            ("none", "auto"),
+            "'auto' must not be nested inside auto-registration candidates",
+        ),
     ],
 )
 def test_auto_registration_selector_rejects_malformed_candidate_transforms(
@@ -132,7 +135,10 @@ def test_auto_registration_selector_rejects_malformed_candidate_transforms(
 @pytest.mark.parametrize(
     ("complexity_penalty", "message"),
     [
-        ({"fov-tranlsation": 0.0}, "complexity_penalty contains unknown transform type"),
+        (
+            {"fov-tranlsation": 0.0},
+            "complexity_penalty contains unknown transform type",
+        ),
         ({1: 0.0}, "complexity_penalty keys must be transform-type strings"),
         ({"auto": 0.0}, "'auto' must not have a complexity penalty"),
         ({"none": 0.0, " none ": 0.1}, "duplicate transform type 'none'"),
@@ -188,7 +194,9 @@ def test_auto_registration_selector_accepts_single_string_candidate() -> None:
     )
 
     assert result.selected_transform_type == "none"
-    assert tuple(candidate.transform_type for candidate in result.diagnostics) == ("none",)
+    assert tuple(candidate.transform_type for candidate in result.diagnostics) == (
+        "none",
+    )
 
 
 def test_auto_registration_selector_normalizes_complexity_penalty_keys() -> None:
@@ -203,4 +211,6 @@ def test_auto_registration_selector_normalizes_complexity_penalty_keys() -> None
     )
 
     assert result.selected_transform_type == "none"
-    assert tuple(candidate.transform_type for candidate in result.diagnostics) == ("none",)
+    assert tuple(candidate.transform_type for candidate in result.diagnostics) == (
+        "none",
+    )

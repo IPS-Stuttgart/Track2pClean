@@ -498,13 +498,9 @@ _BENCHMARK_ALIASES: dict[str, str] = {
     "track2p-pyrecest-mht-conflict-demo": ("track2p-policy-pyrecest-mht-conflict-demo"),
     "track2p-full-mht": "track2p-policy-full-mht",
     "track2p-pyrecest-full-mht": "track2p-policy-full-mht",
-    "track2p-component-full-mht": (
-        "track2p-policy-full-mht"
-    ),
+    "track2p-component-full-mht": ("track2p-policy-full-mht"),
     "track2p-tracklet-graph-mht": "track2p-policy-tracklet-graph-mht",
-    "track2p-component-tracklet-graph-mht": (
-        "track2p-policy-tracklet-graph-mht"
-    ),
+    "track2p-component-tracklet-graph-mht": ("track2p-policy-tracklet-graph-mht"),
     "track2p-coherence-suffix-exposure-audit": (
         "track2p-policy-coherence-suffix-exposure-audit"
     ),

@@ -377,7 +377,9 @@ def _tracks_to_matrix(
                 raise ValueError(
                     f"Track references session index {normalized_session_index} outside 0..{n_sessions - 1}"
                 )
-            track_matrix[track_index, normalized_session_index] = normalized_detection_index
+            track_matrix[track_index, normalized_session_index] = (
+                normalized_detection_index
+            )
     return track_matrix
 
 
@@ -393,7 +395,9 @@ def _coerce_track_matrix_detection_indices(track_matrix: np.ndarray) -> np.ndarr
     if np.issubdtype(matrix.dtype, np.integer):
         integer_matrix = matrix.astype(int, copy=False)
     elif np.issubdtype(matrix.dtype, np.floating):
-        if not np.all(np.isfinite(matrix)) or not np.all(np.equal(matrix, np.floor(matrix))):
+        if not np.all(np.isfinite(matrix)) or not np.all(
+            np.equal(matrix, np.floor(matrix))
+        ):
             raise ValueError(message)
         integer_matrix = matrix.astype(int)
     else:

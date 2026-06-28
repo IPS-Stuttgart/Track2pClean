@@ -22,7 +22,9 @@ _ALLOWED_KWARGS = frozenset({"top_k", "include_columns", "gate_margin", "large_c
 def install_advanced_candidate_empty_validation() -> None:
     """Install an idempotent empty-matrix guard for candidate pruning."""
 
-    from . import advanced_roi_components as advanced  # pylint: disable=import-outside-toplevel
+    from . import (
+        advanced_roi_components as advanced,  # pylint: disable=import-outside-toplevel
+    )
 
     original_candidate_mask = advanced.candidate_mask_from_cost_matrix
     if getattr(original_candidate_mask, _PATCH_MARKER, False):
@@ -53,9 +55,11 @@ def install_advanced_candidate_empty_validation() -> None:
             kwargs.get("gate_margin", None),
             name="gate_margin",
         )
-        large_cost = advanced._normalize_positive_float(  # pylint: disable=protected-access
-            kwargs.get("large_cost", 1.0e6),
-            name="large_cost",
+        large_cost = (
+            advanced._normalize_positive_float(  # pylint: disable=protected-access
+                kwargs.get("large_cost", 1.0e6),
+                name="large_cost",
+            )
         )
         return np.isfinite(costs) & (costs < large_cost)
 
@@ -65,7 +69,9 @@ def install_advanced_candidate_empty_validation() -> None:
         "_bayescatrack_original",
         original_candidate_mask,
     )
-    advanced.candidate_mask_from_cost_matrix = candidate_mask_from_cost_matrix_with_empty_guard
+    advanced.candidate_mask_from_cost_matrix = (
+        candidate_mask_from_cost_matrix_with_empty_guard
+    )
 
 
 __all__ = ["install_advanced_candidate_empty_validation"]

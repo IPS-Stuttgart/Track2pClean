@@ -13,7 +13,9 @@ _ORIGINAL_ATTR = "_bayescatrack_raw_benchmark_exclude_subjects_original"
 def install_raw_benchmark_exclude_subjects_validation() -> None:
     """Install idempotent normalization for raw-benchmark subject excludes."""
 
-    from bayescatrack.experiments import track2p_raw_benchmark_data as raw_benchmark  # pylint: disable=import-outside-toplevel
+    from bayescatrack.experiments import (
+        track2p_raw_benchmark_data as raw_benchmark,  # pylint: disable=import-outside-toplevel
+    )
 
     current_prepare = raw_benchmark.prepare_raw_suite2p_benchmark_data
     if getattr(current_prepare, _PATCH_MARKER, False):
@@ -31,10 +33,14 @@ def install_raw_benchmark_exclude_subjects_validation() -> None:
 
     setattr(prepare_raw_suite2p_benchmark_data, _PATCH_MARKER, True)
     setattr(prepare_raw_suite2p_benchmark_data, _ORIGINAL_ATTR, original_prepare)
-    raw_benchmark.prepare_raw_suite2p_benchmark_data = prepare_raw_suite2p_benchmark_data
+    raw_benchmark.prepare_raw_suite2p_benchmark_data = (
+        prepare_raw_suite2p_benchmark_data
+    )
 
 
-def _normalize_exclude_subjects(exclude_subjects: Iterable[str] | str) -> tuple[str, ...]:
+def _normalize_exclude_subjects(
+    exclude_subjects: Iterable[str] | str,
+) -> tuple[str, ...]:
     if isinstance(exclude_subjects, str):
         stripped = exclude_subjects.strip()
         return () if not stripped else (stripped,)
@@ -44,7 +50,9 @@ def _normalize_exclude_subjects(exclude_subjects: Iterable[str] | str) -> tuple[
     try:
         iterator = iter(exclude_subjects)
     except TypeError as exc:
-        raise ValueError("exclude_subjects must be a string or an iterable of strings") from exc
+        raise ValueError(
+            "exclude_subjects must be a string or an iterable of strings"
+        ) from exc
 
     normalized: list[str] = []
     for subject_name in iterator:

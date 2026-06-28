@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from bayescatrack.matching import SessionMatchResult
 
 
@@ -16,7 +15,9 @@ def _result(costs):
     )
 
 
-@pytest.mark.parametrize("costs", [[True], [np.bool_(False)], np.array([True], dtype=bool)])
+@pytest.mark.parametrize(
+    "costs", [[True], [np.bool_(False)], np.array([True], dtype=bool)]
+)
 def test_rejects_boolean_costs(costs):
     with pytest.raises(ValueError, match="finite numeric assignment costs"):
         _result(costs)

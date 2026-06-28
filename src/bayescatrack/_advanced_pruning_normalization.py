@@ -15,9 +15,13 @@ _ERROR_MESSAGE = "{name} must be a positive integer or None"
 def install_advanced_pruning_normalization() -> None:
     """Install idempotent scalar normalization for advanced ROI pruning controls."""
 
-    from . import advanced_roi_components as advanced  # pylint: disable=import-outside-toplevel
+    from . import (
+        advanced_roi_components as advanced,  # pylint: disable=import-outside-toplevel
+    )
 
-    original_int_normalizer = advanced._normalize_optional_positive_int  # pylint: disable=protected-access
+    original_int_normalizer = (
+        advanced._normalize_optional_positive_int
+    )  # pylint: disable=protected-access
     if not getattr(original_int_normalizer, _PATCH_MARKER, False):
 
         @wraps(original_int_normalizer)
@@ -30,7 +34,9 @@ def install_advanced_pruning_normalization() -> None:
             "_bayescatrack_original",
             original_int_normalizer,
         )
-        advanced._normalize_optional_positive_int = normalized_optional_positive_int  # pylint: disable=protected-access
+        advanced._normalize_optional_positive_int = (
+            normalized_optional_positive_int  # pylint: disable=protected-access
+        )
 
     original_post_init = advanced.CandidatePruningConfig.__post_init__
     if getattr(original_post_init, _PATCH_MARKER, False):

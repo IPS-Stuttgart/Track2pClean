@@ -30,7 +30,9 @@ def test_load_suite2p_plane_rejects_negative_roi_coordinates(tmp_path):
     np.save(tmp_path / "stat.npy", stat)
     np.save(tmp_path / "ops.npy", {"Ly": 4, "Lx": 5})
 
-    with pytest.raises(ValueError, match="Suite2p ROI ypix pixel coordinates must be non-negative"):
+    with pytest.raises(
+        ValueError, match="Suite2p ROI ypix pixel coordinates must be non-negative"
+    ):
         load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)
 
 

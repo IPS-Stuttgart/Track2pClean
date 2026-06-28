@@ -13,7 +13,9 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_fov_subpixel_shift_validation_patch"
-_MASK_INTERPOLATION_PATCH_MARKER = "_bayescatrack_fov_mask_interpolation_validation_patch"
+_MASK_INTERPOLATION_PATCH_MARKER = (
+    "_bayescatrack_fov_mask_interpolation_validation_patch"
+)
 _SHIFT_ERROR = "shift_yx must contain exactly two finite numeric values"
 _MASK_INTERPOLATION_ERROR = "mask_interpolation must be either 'nearest' or 'bilinear'"
 
@@ -21,7 +23,9 @@ _MASK_INTERPOLATION_ERROR = "mask_interpolation must be either 'nearest' or 'bil
 def install_fov_subpixel_shift_validation() -> None:
     """Install idempotent validation around FOV subpixel translation controls."""
 
-    from . import fov_registration as _fov_registration  # pylint: disable=import-outside-toplevel
+    from . import (
+        fov_registration as _fov_registration,  # pylint: disable=import-outside-toplevel
+    )
 
     _wrap_shift_argument(_fov_registration, "apply_subpixel_image_translation")
     _wrap_shift_argument(_fov_registration, "apply_subpixel_roi_mask_translation")

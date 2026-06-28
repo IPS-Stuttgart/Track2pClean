@@ -194,7 +194,9 @@ def apply_growth_prior_to_costs(
     affine_active = affine_xy is not None and cfg.affine_weight > 0.0
     radial_active = cfg.radial_weight > 0.0
     if affine_active or radial_active:
-        _validate_growth_cost_shape(costs, reference_centroids_xy, measurement_centroids_xy)
+        _validate_growth_cost_shape(
+            costs, reference_centroids_xy, measurement_centroids_xy
+        )
     if affine_active:
         costs += cfg.affine_weight * affine_growth_penalty_matrix(
             reference_centroids_xy,
@@ -332,7 +334,9 @@ def _integer_track_row_matrix(track_rows: Any) -> np.ndarray:
 
 def _integer_track_row_entry(value: Any) -> int:
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError("track_rows must contain integer ROI indices or negative missing sentinels")
+        raise ValueError(
+            "track_rows must contain integer ROI indices or negative missing sentinels"
+        )
     if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
@@ -364,7 +368,9 @@ def _normalize_session_column(value: Any, *, name: str, num_sessions: int) -> in
     if normalized < 0:
         normalized += num_sessions
     if normalized < 0 or normalized >= num_sessions:
-        raise IndexError(f"{name} {normalized} out of bounds for {num_sessions} sessions")
+        raise IndexError(
+            f"{name} {normalized} out of bounds for {num_sessions} sessions"
+        )
     return normalized
 
 

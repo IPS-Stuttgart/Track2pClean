@@ -134,9 +134,7 @@ def _normalize_roi_index(value: Any, *, field_name: str) -> int:
         integer_value = int(operator.index(value))
     except TypeError:
         if not isinstance(value, (float, np.floating)):
-            raise ValueError(
-                f"{field_name} must contain integer ROI indices"
-            ) from None
+            raise ValueError(f"{field_name} must contain integer ROI indices") from None
         numeric_value = float(value)
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
             raise ValueError(f"{field_name} must contain integer ROI indices")

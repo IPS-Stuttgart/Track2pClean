@@ -1,6 +1,5 @@
 import numpy as np
 import numpy.testing as npt
-
 from bayescatrack import CalciumPlaneData
 
 

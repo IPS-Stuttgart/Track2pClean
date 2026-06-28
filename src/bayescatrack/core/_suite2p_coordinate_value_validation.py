@@ -16,7 +16,6 @@ from typing import Any
 
 import numpy as np
 
-
 _COORDINATE_VALUE_VALIDATION_MARKER = (
     "_bayescatrack_suite2p_coordinate_value_validation_patch"
 )
@@ -55,7 +54,9 @@ def install_suite2p_coordinate_value_validation(bridge_impl: ModuleType) -> None
         "_bayescatrack_original",
         original_loader,
     )
-    bridge_impl.load_suite2p_plane = _load_suite2p_plane_with_coordinate_value_validation
+    bridge_impl.load_suite2p_plane = (
+        _load_suite2p_plane_with_coordinate_value_validation
+    )
 
 
 def _parse_selection_controls(kwargs: dict[str, Any]) -> dict[str, bool | float] | None:

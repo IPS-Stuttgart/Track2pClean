@@ -30,7 +30,9 @@ def install_ground_truth_track_validation() -> None:
     original_row_tuples = module.TrackTable.row_tuples
     original_rows_from_csv = module._rows_from_csv
     post_init_is_patched = getattr(original_post_init, _PATCH_MARKER, False)
-    row_tuples_is_patched = getattr(original_row_tuples, _ROW_TUPLES_PATCH_MARKER, False)
+    row_tuples_is_patched = getattr(
+        original_row_tuples, _ROW_TUPLES_PATCH_MARKER, False
+    )
     rows_from_csv_is_patched = getattr(original_rows_from_csv, _PATCH_MARKER, False)
     if post_init_is_patched and row_tuples_is_patched and rows_from_csv_is_patched:
         return
@@ -72,7 +74,9 @@ def install_ground_truth_track_validation() -> None:
             horizon: Any | None = None,
             require_complete: Any = False,
         ) -> Any:
-            normalized_horizon = _normalize_horizon(horizon, num_sessions=self.n_sessions)
+            normalized_horizon = _normalize_horizon(
+                horizon, num_sessions=self.n_sessions
+            )
             normalized_require_complete = _normalize_require_complete(require_complete)
             return original_row_tuples(
                 self,
@@ -87,7 +91,9 @@ def install_ground_truth_track_validation() -> None:
     if not rows_from_csv_is_patched:
 
         @wraps(original_rows_from_csv)
-        def checked_rows_from_csv(csv_path: str | Path) -> tuple[list[str], list[dict[str, str]]]:
+        def checked_rows_from_csv(
+            csv_path: str | Path,
+        ) -> tuple[list[str], list[dict[str, str]]]:
             try:
                 return original_rows_from_csv(csv_path)
             except ValueError as exc:
@@ -189,7 +195,9 @@ def _validate_roi_integer(value: int) -> int:
     raise ValueError(_ROI_ERROR)
 
 
-def _read_header_only_csv(csv_path: str | Path) -> tuple[list[str], list[dict[str, str]]]:
+def _read_header_only_csv(
+    csv_path: str | Path,
+) -> tuple[list[str], list[dict[str, str]]]:
     csv_path = Path(csv_path)
     with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)

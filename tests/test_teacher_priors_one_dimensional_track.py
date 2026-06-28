@@ -4,7 +4,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.teacher_priors import (
     apply_teacher_edge_priors,
     teacher_edge_masks_from_track_matrix,
@@ -73,7 +72,9 @@ def test_one_dimensional_teacher_track_matrix_is_single_track_row() -> None:
         ((0, 1), (0, 1)),
     ],
 )
-def test_teacher_edge_masks_reject_malformed_session_edges(bad_session_edges: object) -> None:
+def test_teacher_edge_masks_reject_malformed_session_edges(
+    bad_session_edges: object,
+) -> None:
     with pytest.raises(ValueError, match="session_edges"):
         teacher_edge_masks_from_track_matrix(
             [10, 21, 31],

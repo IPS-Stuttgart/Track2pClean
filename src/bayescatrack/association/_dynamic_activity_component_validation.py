@@ -28,7 +28,9 @@ _ACTIVITY_COMPONENT_NAMES = (
 def install_dynamic_activity_component_shape_validation() -> None:
     """Install idempotent validation for configured activity-prior components."""
 
-    original = _dynamic_edge_priors._activity_missing_component  # pylint: disable=protected-access
+    original = (
+        _dynamic_edge_priors._activity_missing_component
+    )  # pylint: disable=protected-access
     if getattr(original, _PATCH_MARKER, False):
         return
 
@@ -41,7 +43,11 @@ def install_dynamic_activity_component_shape_validation() -> None:
         return original(pairwise_components, shape)
 
     setattr(activity_missing_component_with_shape_validation, _PATCH_MARKER, True)
-    setattr(activity_missing_component_with_shape_validation, "_bayescatrack_original", original)
+    setattr(
+        activity_missing_component_with_shape_validation,
+        "_bayescatrack_original",
+        original,
+    )
     _dynamic_edge_priors._activity_missing_component = activity_missing_component_with_shape_validation  # pylint: disable=protected-access
 
 
@@ -56,7 +62,9 @@ def _validate_activity_component_shapes(
         try:
             values = np.asarray(pairwise_components[component_name], dtype=float)
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"Pairwise component {component_name!r} must be numeric") from exc
+            raise ValueError(
+                f"Pairwise component {component_name!r} must be numeric"
+            ) from exc
         if values.shape != expected_shape:
             raise ValueError(f"Pairwise component {component_name!r} has wrong shape")
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.evaluation.fixed_precision import (
     score_complete_tracks_at_fixed_precision,
 )

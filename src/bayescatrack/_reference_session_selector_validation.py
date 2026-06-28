@@ -17,8 +17,8 @@ def install_reference_session_selector_validation(
     """Install idempotent validation for malformed ``session_indices`` containers."""
 
     if reference_module is None:
-        from . import (  # pylint: disable=import-outside-toplevel,reimported
-            reference as reference_module,
+        from . import (
+            reference as reference_module,  # pylint: disable=import-outside-toplevel,reimported
         )
 
     original_normalize_session_indices = (
