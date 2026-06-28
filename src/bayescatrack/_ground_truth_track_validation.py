@@ -13,6 +13,7 @@ import numpy as np
 _PATCH_MARKER = "_bayescatrack_ground_truth_track_validation_patch"
 _ROW_TUPLES_PATCH_MARKER = "_bayescatrack_ground_truth_row_tuples_validation_patch"
 _ROI_ERROR = "ROI index must be a non-negative integer or -1 missing sentinel"
+_BOOLEAN_ROI_ERROR = "boolean ROI index is not a valid ground-truth ROI value"
 _SESSION_NAME_ERROR = "session_names must be unique"
 _HORIZON_ERROR = "horizon must be an integer between 1 and the number of sessions"
 _REQUIRE_COMPLETE_ERROR = "require_complete must be a boolean"
@@ -149,7 +150,7 @@ def _normalize_roi_index(value: Any) -> int:
     if value is None:
         return -1
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(_ROI_ERROR)
+        raise ValueError(_BOOLEAN_ROI_ERROR)
     try:
         return _validate_roi_integer(operator.index(value))
     except TypeError:
