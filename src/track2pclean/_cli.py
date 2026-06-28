@@ -258,10 +258,10 @@ def _run_with_program_name(
 
 
 def _coerce_exit_code(result: Any) -> int:
-    """Normalize delegated CLI return values to process exit codes."""
-
     if result is None:
         return 0
+    if isinstance(result, np.ndarray):
+        raise TypeError(_EXIT_CODE_ERROR)
     if isinstance(result, (bool, np.bool_)):
         raise TypeError(_EXIT_CODE_ERROR)
     try:
