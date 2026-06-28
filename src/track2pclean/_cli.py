@@ -60,8 +60,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _handle_benchmark(args: list[str]) -> int:
-    if not args or args[0] in {"-h", "--help"}:
-        _build_benchmark_help_parser().parse_args(args)
+    parser = _build_benchmark_help_parser()
+    if not args:
+        parser.print_help()
+        return 0
+    if args[0] in {"-h", "--help"}:
+        parser.parse_args(args)
         return 0
 
     requested_command_name = args[0]

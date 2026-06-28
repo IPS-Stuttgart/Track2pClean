@@ -9,6 +9,15 @@ from bayescatrack.experiments import (
 # pylint: disable=protected-access
 
 
+def test_benchmark_without_subcommand_prints_help(capsys):
+    status = cli._handle_benchmark([])
+
+    captured = capsys.readouterr()
+    assert status == 0
+    assert "usage: bayescatrack benchmark" in captured.out
+    assert "Run BayesCaTrack benchmark harnesses." in captured.out
+
+
 def test_benchmark_dispatches_shifted_iou_subcommand(monkeypatch):
     seen: dict[str, list[str]] = {}
 
