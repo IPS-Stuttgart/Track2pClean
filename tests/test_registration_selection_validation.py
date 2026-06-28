@@ -13,6 +13,11 @@ def _single_roi_plane(source: str = "plane") -> CalciumPlaneData:
     return CalciumPlaneData(roi_masks=roi_masks, fov=fov, source=source)
 
 
+class _OverflowingFloat:
+    def __float__(self) -> float:
+        raise OverflowError("numeric adapter overflowed")
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
@@ -30,6 +35,10 @@ def _single_roi_plane(source: str = "plane") -> CalciumPlaneData:
         ),
         (
             {"min_fov_correlation_gain": np.asarray([0.05])},
+            "min_fov_correlation_gain must be a finite non-negative value",
+        ),
+        (
+            {"min_fov_correlation_gain": _OverflowingFloat()},
             "min_fov_correlation_gain must be a finite non-negative value",
         ),
         (
@@ -74,6 +83,10 @@ def _single_roi_plane(source: str = "plane") -> CalciumPlaneData:
         ),
         (
             {"complexity_penalty": {"none": np.asarray([0.0])}},
+            r"complexity_penalty\['none'\] must be a finite non-negative value",
+        ),
+        (
+            {"complexity_penalty": {"none": _OverflowingFloat()}},
             r"complexity_penalty\['none'\] must be a finite non-negative value",
         ),
     ],
