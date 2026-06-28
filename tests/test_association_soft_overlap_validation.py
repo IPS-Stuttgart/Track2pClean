@@ -33,6 +33,7 @@ def _unexpected_original_method(*_args: Any, **_kwargs: Any) -> np.ndarray:
         ({"soft_iou_radius": 1.5}, "soft_iou_radius must be an integer"),
         ({"soft_iou_radius": "1.5"}, "soft_iou_radius must be an integer"),
         ({"soft_iou_radius": np.inf}, "soft_iou_radius must be an integer"),
+        ({"soft_iou_radius": np.array([1])}, "soft_iou_radius must be an integer"),
         ({"soft_iou_radius": -1}, "soft_iou_radius must be non-negative"),
         (
             {"use_soft_iou_for_iou_cost": 1},
@@ -46,9 +47,21 @@ def _unexpected_original_method(*_args: Any, **_kwargs: Any) -> np.ndarray:
             {"similarity_epsilon": np.nan},
             "similarity_epsilon must be a finite positive value",
         ),
+        (
+            {"similarity_epsilon": np.array([1.0e-6])},
+            "similarity_epsilon must be a finite positive value",
+        ),
         ({"large_cost": np.inf}, "large_cost must be a finite positive value"),
+        (
+            {"large_cost": np.array([1.0e6])},
+            "large_cost must be a finite positive value",
+        ),
         ({"iou_weight": True}, "iou_weight must be a finite non-negative value"),
         ({"iou_weight": -1.0}, "iou_weight must be a finite non-negative value"),
+        (
+            {"iou_weight": np.array([1.0])},
+            "iou_weight must be a finite non-negative value",
+        ),
     ],
 )
 def test_association_soft_overlap_rejects_invalid_scalar_controls(
@@ -76,7 +89,9 @@ def test_association_soft_overlap_keeps_integer_like_radius_values() -> None:
     mask[0, 1, 1] = True
 
     from_numpy_integer = dilate_mask_stack(mask, radius=np.int64(1))
+    from_zero_dim_array = dilate_mask_stack(mask, radius=np.array(1))
     from_string_integer = dilate_mask_stack(mask, radius="1")
 
+    assert np.array_equal(from_numpy_integer, from_zero_dim_array)
     assert np.array_equal(from_numpy_integer, from_string_integer)
     assert int(np.count_nonzero(from_numpy_integer)) == 5
