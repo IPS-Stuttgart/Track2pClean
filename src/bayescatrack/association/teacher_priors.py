@@ -265,6 +265,10 @@ def _normalize_track_matrix(track_matrix: Any) -> np.ndarray:
 def _parse_roi_index(value: Any) -> int | None:
     if value is None:
         return None
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            return None
+        value = value.item()
     if isinstance(value, (bool, np.bool_)):
         return None
     if isinstance(value, bytes):
