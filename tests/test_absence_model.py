@@ -272,6 +272,36 @@ def test_absence_cost_vector_rejects_optional_cue_length_mismatch(
         absence_cost_vector(plane, **{kwarg: value})
 
 
+@pytest.mark.parametrize(
+    ("plane_kwargs", "call_kwargs", "message"),
+    (
+        ({"cell_probabilities": "0.5"}, {}, "plane.cell_probabilities"),
+        (
+            {"cell_probabilities": np.asarray(["0.5"], dtype=object)},
+            {},
+            "plane.cell_probabilities",
+        ),
+        ({}, {"registered_empty_mask": "false"}, "registered_empty_mask"),
+        (
+            {},
+            {"registered_empty_mask": np.asarray(["False"], dtype=object)},
+            "registered_empty_mask",
+        ),
+        ({}, {"local_density": "0.5"}, "local_density"),
+        ({}, {"local_density": np.asarray(["0.5"], dtype=object)}, "local_density"),
+    ),
+)
+def test_absence_cost_vector_rejects_text_optional_cues(
+    plane_kwargs,
+    call_kwargs,
+    message,
+) -> None:
+    plane = _plane(1, **plane_kwargs)
+
+    with pytest.raises(ValueError, match=message):
+        absence_cost_vector(plane, **call_kwargs)
+
+
 def test_gap_penalty_matrix_rejects_registered_empty_mask_length_mismatch() -> None:
     reference = _plane(1)
     measurement = _plane(2)
