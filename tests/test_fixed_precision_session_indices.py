@@ -7,6 +7,18 @@ from bayescatrack.evaluation.fixed_precision import (
 )
 
 
+@pytest.mark.parametrize("session_indices", [0, 0.0, object(), np.array(0)])
+def test_fixed_precision_rejects_non_sequence_session_indices(
+    session_indices: object,
+) -> None:
+    with pytest.raises(ValueError, match="session_indices must be a sequence"):
+        score_complete_tracks_at_fixed_precision(
+            np.asarray([[0, 1]], dtype=object),
+            np.asarray([[0, 1]], dtype=object),
+            session_indices=session_indices,
+        )
+
+
 def test_fixed_precision_rejects_boolean_session_indices() -> None:
     with pytest.raises(ValueError, match="boolean session index"):
         score_complete_tracks_at_fixed_precision(
