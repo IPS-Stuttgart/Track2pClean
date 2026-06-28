@@ -147,6 +147,8 @@ def _normalize_roi_or_fill_value(value: Any, *, field_name: str, fill_value: int
 
 
 def _normalize_fill_value(value: Any) -> int:
+    if isinstance(value, np.ndarray):
+        raise ValueError(_FILL_VALUE_ERROR)
     try:
         integer_value = _normalize_integer_like(value, field_name="fill_value")
     except ValueError as exc:
