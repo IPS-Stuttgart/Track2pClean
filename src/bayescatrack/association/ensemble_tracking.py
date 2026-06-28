@@ -5,6 +5,8 @@ from __future__ import annotations
 import operator
 from collections import Counter, defaultdict
 from collections.abc import Sequence
+from decimal import Decimal
+from fractions import Fraction
 from typing import Any
 
 import numpy as np
@@ -126,16 +128,20 @@ def _roi_index_or_none(value: object) -> int | None:
         if not np.isfinite(value) or not float(value).is_integer():
             raise ValueError(f"track matrix contains non-integer ROI index: {value!r}")
         roi_index = int(value)
+    elif isinstance(value, Decimal):
+        roi_index = _parse_decimal_roi_index(value)
+    elif isinstance(value, Fraction):
+        roi_index = _parse_fraction_roi_index(value)
     else:
         try:
-            roi_index = int(value)  # type: ignore[arg-type]
-        except (TypeError, ValueError) as exc:
+            roi_index = operator.index(value)  # type: ignore[arg-type]
+        except TypeError as exc:
             raise ValueError(
                 f"track matrix contains non-integer ROI index: {value!r}"
             ) from exc
     if roi_index < 0:
         return None
-    return roi_index
+    return int(roi_index)
 
 
 def _parse_roi_index_text(value: str) -> int | None:
@@ -155,6 +161,18 @@ def _parse_roi_index_text(value: str) -> int | None:
     if not np.isfinite(numeric_value) or not numeric_value.is_integer():
         raise ValueError(f"track matrix contains non-integer ROI index: {value!r}")
     return int(numeric_value)
+
+
+def _parse_decimal_roi_index(value: Decimal) -> int:
+    if not value.is_finite() or value != value.to_integral_value():
+        raise ValueError(f"track matrix contains non-integer ROI index: {value!r}")
+    return int(value)
+
+
+def _parse_fraction_roi_index(value: Fraction) -> int:
+    if value.denominator != 1:
+        raise ValueError(f"track matrix contains non-integer ROI index: {value!r}")
+    return int(value.numerator)
 
 
 def _one_to_one_edge_mapping(edges: Sequence[TrackEdge] | Any) -> dict[int, int]:
