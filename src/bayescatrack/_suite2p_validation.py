@@ -13,6 +13,8 @@ from typing import Any, Callable
 
 import numpy as np
 
+_STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+
 
 def install_suite2p_stat_validation(bridge_module: Any) -> None:
     """Install an idempotent shape-validation wrapper on ``load_suite2p_plane``."""
@@ -277,7 +279,7 @@ def _strict_python_bool(value: Any, *, name: str) -> bool:
 
 
 def _finite_probability(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_)) or _is_string_like_scalar(value):
         raise ValueError(f"{name} must be a finite probability")
     array_value = np.asarray(value)
     if array_value.ndim > 0:
@@ -289,6 +291,14 @@ def _finite_probability(value: Any, *, name: str) -> float:
     if not np.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
         raise ValueError(f"{name} must be a finite probability")
     return numeric
+
+
+def _is_string_like_scalar(value: Any) -> bool:
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            return False
+        value = value.item()
+    return isinstance(value, _STRING_LIKE_SCALAR_TYPES)
 
 
 __all__ = ["install_suite2p_stat_validation", "load_suite2p_plane"]
