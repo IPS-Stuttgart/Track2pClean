@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 
 _ERROR_MESSAGE = "max_cost must be None or a finite non-negative scalar"
+_AMBIGUOUS_SCALAR_TYPES = (bool, np.bool_, str, bytes, bytearray)
 
 
 def normalize_assignment_max_cost(value: Any) -> float | None:
@@ -21,7 +22,7 @@ def normalize_assignment_max_cost(value: Any) -> float | None:
 
     if value is None:
         return None
-    if isinstance(value, (bool, np.bool_, str, bytes)):
+    if isinstance(value, _AMBIGUOUS_SCALAR_TYPES):
         raise ValueError(_ERROR_MESSAGE)
     try:
         value_array = np.asarray(value, dtype=object)
@@ -31,11 +32,11 @@ def normalize_assignment_max_cost(value: Any) -> float | None:
         raise ValueError(_ERROR_MESSAGE)
 
     scalar = value_array.item()
-    if isinstance(scalar, (bool, np.bool_, str, bytes)):
+    if isinstance(scalar, _AMBIGUOUS_SCALAR_TYPES):
         raise ValueError(_ERROR_MESSAGE)
     try:
         normalized = float(scalar)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(_ERROR_MESSAGE) from exc
     if not np.isfinite(normalized) or normalized < 0.0:
         raise ValueError(_ERROR_MESSAGE)
