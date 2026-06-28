@@ -3,9 +3,10 @@
 The registered subject tracker accepts optional ``start_roi_indices`` to restrict
 reported tracks to seed ROIs in a selected session.  The global and single-session
 paths used NumPy integer coercion directly, so malformed values such as booleans,
-fractional floats, negatives, or duplicates could silently become different seed
-tracks.  These hooks make the public runner and the internal restriction helper
-fail fast before that coercion can change the requested benchmark population.
+fractional floats, negatives, duplicates, or scalar array containers could silently
+become different seed tracks.  These hooks make the public runner and the internal
+restriction helper fail fast before that coercion can change the requested benchmark
+population.
 """
 
 from __future__ import annotations
@@ -110,7 +111,7 @@ def _normalize_start_roi_indices(values: Any) -> tuple[int, ...]:
 
 
 def _normalize_start_roi_index(value: Any) -> int:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, np.ndarray)):
         raise ValueError("start_roi_indices must contain integer ROI indices")
 
     try:
@@ -145,7 +146,7 @@ def _normalize_start_session_index(
     *,
     num_sessions: int | None = None,
 ) -> int:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, np.ndarray)):
         raise ValueError("start_session_index must be an integer session index")
 
     if isinstance(value, (float, np.floating)):
