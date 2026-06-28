@@ -84,6 +84,23 @@ def test_split_tracks_at_issues_rejects_malformed_or_colliding_fill_value(
         )
 
 
+def test_split_tracks_at_issues_rejects_array_valued_issue_index():
+    issue = TrackGeometryIssue(
+        track_index=np.asarray(0),
+        session_index=0,
+        roi_index=1,
+        residual=9.0,
+        robust_z=4.0,
+        suggested_action="split_or_relink",
+    )
+
+    with pytest.raises(ValueError, match="issue.track_index must be an integer"):
+        split_tracks_at_issues(
+            np.array([[0, 1]], dtype=int),
+            [issue],
+        )
+
+
 def test_split_tracks_at_issues_preserves_negative_missing_sentinel():
     rows = split_tracks_at_issues(
         np.array([[1, 2, 3]], dtype=int),
