@@ -1,4 +1,4 @@
-"""Reject bare string session subset selectors for aggregate track scoring."""
+"""Reject string-like session subset selectors for aggregate track scoring."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ _STRING_LIKE_TYPES = (str, bytes, bytearray)
 
 
 def install_track_subset_string_validation(scores_module: ModuleType) -> None:
-    """Install idempotent guards for ambiguous top-level subset selectors."""
+    """Install idempotent guards for ambiguous string-like subset selectors."""
 
     if getattr(scores_module, _PATCH_ATTR, False):
         return
@@ -28,7 +28,17 @@ def install_track_subset_string_validation(scores_module: ModuleType) -> None:
             name="session_pairs",
             expected="an iterable of session-index pairs",
         )
-        return original_normalize_session_pairs(session_pairs)
+        if session_pairs is None:
+            return original_normalize_session_pairs(session_pairs)
+
+        materialized_pairs = tuple(session_pairs)
+        for pair in materialized_pairs:
+            _reject_string_like_selector(
+                pair,
+                name="session_pairs entries",
+                expected="two-item session-index iterables",
+            )
+        return original_normalize_session_pairs(materialized_pairs)
 
     def _normalize_complete_session_indices_without_strings(
         session_indices: Any,
