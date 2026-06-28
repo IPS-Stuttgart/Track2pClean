@@ -108,11 +108,28 @@ def _validate_suite2p_overlap_values(
         if not keep_mask[roi_index] or "overlap" not in roi_stat:
             continue
         overlap = np.asarray(roi_stat["overlap"])
+        _validate_overlap_shape_matches_pixels(roi_index, roi_stat, overlap)
         if not _is_boolean_overlap_array(overlap):
             raise ValueError(
                 f"Suite2p ROI {roi_index} overlap must contain boolean values; "
                 f"got dtype {overlap.dtype}"
             )
+
+
+def _validate_overlap_shape_matches_pixels(
+    roi_index: int,
+    roi_stat: Any,
+    overlap: np.ndarray,
+) -> None:
+    ypix = np.asarray(roi_stat.get("ypix", ()))
+    xpix = np.asarray(roi_stat.get("xpix", ()))
+    if ypix.shape != xpix.shape:
+        return
+    if overlap.shape != ypix.shape:
+        raise ValueError(
+            f"Suite2p ROI {roi_index} overlap shape must match ypix/xpix shape; "
+            f"got {overlap.shape}, expected {ypix.shape}"
+        )
 
 
 def _suite2p_keep_mask(
