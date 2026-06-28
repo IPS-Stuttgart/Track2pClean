@@ -30,6 +30,11 @@ def _unexpected_original_method(*_args: Any, **_kwargs: Any) -> np.ndarray:
     [
         ({"soft_iou_radius": True}, "soft_iou_radius must be an integer"),
         ({"soft_iou_radius": np.bool_(True)}, "soft_iou_radius must be an integer"),
+        ({"soft_iou_radius": b"1"}, "soft_iou_radius must be an integer"),
+        (
+            {"soft_iou_radius": bytearray(b"1")},
+            "soft_iou_radius must be an integer",
+        ),
         ({"soft_iou_radius": 1.5}, "soft_iou_radius must be an integer"),
         ({"soft_iou_radius": "1.5"}, "soft_iou_radius must be an integer"),
         ({"soft_iou_radius": np.inf}, "soft_iou_radius must be an integer"),
