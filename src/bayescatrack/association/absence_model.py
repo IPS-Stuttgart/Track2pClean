@@ -213,6 +213,13 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
 def _validated_roi_count(plane: Any, plane_name: str) -> int:
     message = f"{plane_name}.n_rois must be a finite non-negative integer"
     raw_count = getattr(plane, "n_rois", 0)
+    try:
+        raw_count_array = np.asarray(raw_count, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if raw_count_array.shape != ():
+        raise ValueError(message)
+    raw_count = raw_count_array.item()
     if isinstance(raw_count, (bool, np.bool_)):
         raise ValueError(message)
 
@@ -221,7 +228,7 @@ def _validated_roi_count(plane: Any, plane_name: str) -> int:
     except TypeError:
         try:
             numeric_count = float(raw_count)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(message) from exc
         if not np.isfinite(numeric_count) or not numeric_count.is_integer():
             raise ValueError(message)
