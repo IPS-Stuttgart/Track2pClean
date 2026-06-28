@@ -7,6 +7,12 @@ from bayescatrack import cli as bayescatrack_cli
 from tests import _support  # noqa: F401
 from track2pclean import _cli as track2pclean_cli
 
+
+class _OverflowingIndex:
+    def __index__(self) -> int:
+        raise OverflowError("delegate exit code overflow")
+
+
 _INVALID_EXIT_CODE_RETURNS = [
     True,
     False,
@@ -18,6 +24,7 @@ _INVALID_EXIT_CODE_RETURNS = [
     1.0,
     1.5,
     object(),
+    pytest.param(_OverflowingIndex(), id="overflowing-index-adapter"),
 ]
 
 _OUT_OF_RANGE_EXIT_CODE_RETURNS = [-1, 256, np.int64(256)]
