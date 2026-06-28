@@ -128,6 +128,8 @@ def _strict_bool(value: Any, *, name: str) -> bool:
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a finite non-negative value")
+    if isinstance(value, np.ndarray) and value.shape != ():
+        raise ValueError(f"{name} must be a finite non-negative value")
     try:
         numeric_value = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
@@ -139,6 +141,8 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
 
 def _finite_positive_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite positive value")
+    if isinstance(value, np.ndarray) and value.shape != ():
         raise ValueError(f"{name} must be a finite positive value")
     try:
         numeric_value = float(value)
