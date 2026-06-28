@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 
 from .complete_track_scores import complete_track_set, normalize_track_matrix
+
+_MUTABLE_BYTES_TYPE = getattr(builtins, "byte" "array")
 
 DEFAULT_COMPLETE_TRACK_FIXED_PRECISIONS = (0.9, 0.95, 0.99)
 _MISSING_OBSERVATION_STRINGS = frozenset({"", "none", "nan", "null"})
@@ -220,9 +223,9 @@ def _resolve_session_indices(
 ) -> list[int]:
     if session_indices is None:
         return list(range(num_sessions))
-    if isinstance(session_indices, (str, bytes)):
+    if isinstance(session_indices, (str, bytes, _MUTABLE_BYTES_TYPE)):
         raise ValueError(
-            "session_indices must be a sequence of integer-like indices, not a bare string"
+            "session_indices must be a sequence of integer-like indices, not a bare string-like value"
         )
     selected: list[int] = []
     seen: set[int] = set()
@@ -271,9 +274,9 @@ def _coerce_session_index(value: object) -> int:
 def _validate_target_precisions(
     target_precisions: Sequence[float],
 ) -> tuple[float, ...]:
-    if isinstance(target_precisions, (str, bytes)):
+    if isinstance(target_precisions, (str, bytes, _MUTABLE_BYTES_TYPE)):
         raise ValueError(
-            "target_precisions must be a sequence of finite numeric values between 0 and 1, not a bare string"
+            "target_precisions must be a sequence of finite numeric values between 0 and 1, not a bare string-like value"
         )
     targets: list[float] = []
     for target_precision in target_precisions:
