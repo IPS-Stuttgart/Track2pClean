@@ -51,3 +51,12 @@ def test_build_track_rows_from_matches_rejects_boolean_fill_value():
             start_roi_indices=np.array([0], dtype=int),
             fill_value=False,
         )
+
+
+def test_build_track_rows_from_matches_rejects_bytearray_session_names():
+    with pytest.raises(ValueError, match="session_names"):
+        build_track_rows_from_matches(
+            bytearray(b"ab"),
+            [np.empty((0, 2), dtype=int)],
+            start_roi_indices=np.array([0], dtype=int),
+        )
