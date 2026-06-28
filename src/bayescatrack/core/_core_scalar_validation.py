@@ -33,7 +33,13 @@ _OPTIONAL_STRICTLY_POSITIVE_PAIRWISE_CONTROLS = (
 def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None:
     """Install idempotent validation wrappers for core scalar controls."""
 
-    if getattr(calcium_plane_cls, _CORE_SCALAR_VALIDATION_INSTALLED_ATTR, False):
+    installed = getattr(calcium_plane_cls, _CORE_SCALAR_VALIDATION_INSTALLED_ATTR, False)
+    current_methods_are_patched = (
+        getattr(calcium_plane_cls.position_covariances, _PATCH_MARKER, False)
+        and getattr(calcium_plane_cls.to_constant_velocity_state_moments, _PATCH_MARKER, False)
+        and getattr(calcium_plane_cls.build_pairwise_cost_matrix, _PATCH_MARKER, False)
+    )
+    if installed and current_methods_are_patched:
         return
 
     original_position_covariances = calcium_plane_cls.position_covariances

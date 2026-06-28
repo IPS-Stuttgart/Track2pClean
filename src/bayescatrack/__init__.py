@@ -198,6 +198,7 @@ from .association import calibrated_costs as _calibrated_costs
 from .association import candidate_prefilter as _candidate_prefilter
 from .association import track2p_policy_priors as _track2p_policy_priors
 from .core import bridge as _bridge
+from .core import _core_scalar_validation as _core_scalar_validation
 from .evaluation import edge_ranking as _edge_ranking
 from .soft_overlap_costs import (
     install_soft_overlap_costs as _install_soft_overlap_costs,
@@ -283,5 +284,6 @@ _install_global_track_row_validation()
 _install_tracking_fill_value_validation()
 _install_tracking_result_matrix_validation()
 _install_return_components_validation(_bridge)
+_core_scalar_validation.install_core_scalar_validation_patches(CalciumPlaneData)
 
 __all__ = tuple(dict.fromkeys((*_bridge.__all__, "main")))
