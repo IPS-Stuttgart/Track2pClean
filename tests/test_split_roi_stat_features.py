@@ -109,6 +109,32 @@ def test_split_roi_stat_features_are_usable_by_named_feature_schema() -> None:
     assert np.all(np.isfinite(features))
 
 
+def test_single_split_roi_stat_feature_name_string_selects_one_feature() -> None:
+    scalar_cost = _reference_plane().build_pairwise_cost_matrix(
+        _measurement_plane(),
+        centroid_weight=0.0,
+        iou_weight=0.0,
+        mask_cosine_weight=0.0,
+        area_weight=0.0,
+        roi_feature_weight=1.0,
+        cell_probability_weight=0.0,
+        feature_names="abs_log_radius_ratio",
+    )
+    list_cost = _reference_plane().build_pairwise_cost_matrix(
+        _measurement_plane(),
+        centroid_weight=0.0,
+        iou_weight=0.0,
+        mask_cosine_weight=0.0,
+        area_weight=0.0,
+        roi_feature_weight=1.0,
+        cell_probability_weight=0.0,
+        feature_names=["abs_log_radius_ratio"],
+    )
+
+    npt.assert_allclose(scalar_cost, list_cost)
+    assert np.any(scalar_cost != 0.0)
+
+
 def test_default_calibrated_features_use_split_roi_stats_not_scalar_summary() -> None:
     assert "roi_feature_cost" not in DEFAULT_ASSOCIATION_FEATURES
     assert "cell_probability_cost" in DEFAULT_ASSOCIATION_FEATURES
