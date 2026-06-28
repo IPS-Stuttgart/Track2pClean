@@ -39,12 +39,35 @@ def test_apply_affine_roi_mask_warp_rejects_nonfinite_bilinear_matrix():
 
 
 @pytest.mark.parametrize(
+    "bad_matrix_entry",
+    [
+        b"1",
+        bytearray(b"1"),
+        memoryview(b"1"),
+    ],
+)
+def test_apply_affine_image_warp_rejects_bytes_like_matrix_entries(
+    bad_matrix_entry,
+):
+    image = np.ones((4, 4), dtype=float)
+    bad_matrix = np.asarray(
+        [[1.0, 0.0, 0.0], [0.0, 1.0, bad_matrix_entry]],
+        dtype=object,
+    )
+
+    with pytest.raises(ValueError, match="finite 2-by-3 affine matrix"):
+        apply_affine_image_warp(image, bad_matrix, output_shape=(4, 4))
+
+
+@pytest.mark.parametrize(
     "bad_output_shape",
     [
         (4.5, 4),
         (True, 4),
         (-1, 4),
         (4,),
+        bytearray([4, 4]),
+        memoryview(bytes([4, 4])),
     ],
 )
 def test_apply_affine_image_warp_rejects_malformed_output_shape(bad_output_shape):
@@ -65,6 +88,8 @@ def test_apply_affine_image_warp_rejects_malformed_output_shape(bad_output_shape
         (np.bool_(True), 4),
         (-1, 4),
         (4,),
+        bytearray([4, 4]),
+        memoryview(bytes([4, 4])),
     ],
 )
 def test_apply_affine_roi_mask_warp_rejects_malformed_output_shape(bad_output_shape):
@@ -100,6 +125,8 @@ def test_estimate_fov_affine_transform_rejects_malformed_subtract_mean(
         (2.5, 3),
         (3,),
         "3,3",
+        bytearray([3, 3]),
+        memoryview(bytes([3, 3])),
     ],
 )
 def test_estimate_fov_affine_transform_rejects_malformed_grid_shape(bad_grid_shape):
