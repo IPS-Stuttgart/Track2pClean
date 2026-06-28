@@ -11,6 +11,7 @@ from . import activity_similarity as _activity_similarity
 
 _PATCH_MARKER = "_bayescatrack_activity_similarity_control_validation_patch"
 _ORIGINAL_ATTR = "_bayescatrack_activity_similarity_control_validation_original"
+_TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 
 
 def install_activity_similarity_control_validation() -> None:
@@ -79,7 +80,7 @@ def _validated_plane_roi_count(plane: Any, plane_name: str) -> int:
 
 
 def _coerce_scalar_float(value: Any, *, error_message: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, *_TEXT_TYPES)):
         raise ValueError(error_message)
 
     if isinstance(value, np.ndarray):
@@ -87,12 +88,12 @@ def _coerce_scalar_float(value: Any, *, error_message: str) -> float:
             raise ValueError(error_message)
         value = value.item()
 
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, *_TEXT_TYPES)):
         raise ValueError(error_message)
 
     try:
         return float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(error_message) from exc
 
 
