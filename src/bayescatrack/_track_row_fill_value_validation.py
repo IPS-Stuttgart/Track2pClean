@@ -73,6 +73,8 @@ def install_track_row_fill_value_validation() -> None:
 def _normalize_fill_value(value: Any) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(_ERROR_MESSAGE)
+    if isinstance(value, np.ndarray):
+        raise ValueError(_ERROR_MESSAGE)
 
     if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
