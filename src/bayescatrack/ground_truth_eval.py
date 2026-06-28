@@ -54,7 +54,10 @@ class TrackTable:
     tracks: np.ndarray
 
     def __post_init__(self) -> None:
-        session_names = tuple(str(name) for name in self.session_names)
+        session_names = _normalize_session_names(
+            self.session_names,
+            name="session_names",
+        )
         track_values = np.asarray(self.tracks, dtype=object)
         if track_values.ndim != 2:
             raise ValueError("tracks must have shape (n_tracks, n_sessions)")
@@ -62,8 +65,6 @@ class TrackTable:
             raise ValueError(
                 "tracks second dimension must equal the number of session names"
             )
-        if len(session_names) == 0:
-            raise ValueError("session_names must not be empty")
         _reject_boolean_roi_values(track_values, matrix_name="tracks")
         tracks = np.asarray(track_values, dtype=int)
         object.__setattr__(self, "session_names", session_names)
@@ -79,7 +80,10 @@ class TrackTable:
 
     def aligned_to(self, session_names: Sequence[str]) -> "TrackTable":
         """Return a copy with columns reordered to ``session_names``."""
-        session_names = tuple(str(name) for name in session_names)
+        session_names = _normalize_session_names(
+            session_names,
+            name="target session_names",
+        )
         if set(session_names) != set(self.session_names):
             raise ValueError("session names must match exactly for alignment")
         if session_names == self.session_names:
@@ -131,6 +135,29 @@ class TrackEvaluation:
             "n_predicted_tracks": int(self.n_predicted_tracks),
             "n_exact_full_track_matches": int(self.n_exact_full_track_matches),
         }
+
+
+def _normalize_session_names(session_names: Sequence[str], *, name: str) -> tuple[str, ...]:
+    if isinstance(session_names, (str, bytes)):
+        raise ValueError(f"{name} must be a sequence of session names, not a bare string")
+    try:
+        normalized = tuple(str(session_name) for session_name in session_names)
+    except TypeError as exc:
+        raise ValueError(f"{name} must be a sequence of session names") from exc
+    if not normalized:
+        raise ValueError(f"{name} must not be empty")
+    duplicate_names = [
+        session_name
+        for session_name, count in Counter(normalized).items()
+        if count > 1
+    ]
+    if duplicate_names:
+        duplicate_text = ", ".join(repr(session_name) for session_name in duplicate_names)
+        raise ValueError(
+            f"{name} must contain unique session names; duplicate values: "
+            f"{duplicate_text}"
+        )
+    return normalized
 
 
 def _reject_boolean_roi_values(track_array: np.ndarray, *, matrix_name: str) -> None:
@@ -316,7 +343,7 @@ def _load_long_format(  # pylint: disable=too-many-locals
                 ordered_sessions.append(session_name)
         session_names = ordered_sessions
     else:
-        session_names = [str(name) for name in session_names]
+        session_names = _normalize_session_names(session_names, name="session_names")
 
     session_to_index = {name: index for index, name in enumerate(session_names)}
     grouped: dict[str, np.ndarray] = {}
@@ -369,7 +396,7 @@ def _load_wide_format(
                 raise ValueError("could not infer any session columns from wide CSV")
             session_names = [str(name) for name in candidate_headers]
     else:
-        session_names = [str(name) for name in session_names]
+        session_names = _normalize_session_names(session_names, name="session_names")
 
     tracks = np.full((len(rows), len(session_names)), -1, dtype=int)
     for row_index, row in enumerate(rows):
@@ -464,6 +491,7 @@ def tracks_from_consecutive_matches(
     unmatched start-session ROIs must be retained in the output table.
     """
 
+    session_names = _normalize_session_names(session_names, name="session_names")
     if start_roi_indices is None:
         start_roi_indices = _infer_start_roi_indices_from_first_match(matches)
     track_rows = build_track_rows_from_matches(
@@ -472,9 +500,7 @@ def tracks_from_consecutive_matches(
         start_roi_indices=start_roi_indices,
         fill_value=-1,
     )
-    return TrackTable(
-        session_names=tuple(str(name) for name in session_names), tracks=track_rows
-    )
+    return TrackTable(session_names=session_names, tracks=track_rows)
 
 
 def _infer_start_roi_indices_from_first_match(
