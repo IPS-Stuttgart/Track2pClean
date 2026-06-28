@@ -364,12 +364,15 @@ def _load_long_format(  # pylint: disable=too-many-locals
         if track_id not in grouped:
             grouped[track_id] = np.full((len(session_names),), -1, dtype=int)
         current_roi = int(grouped[track_id][session_index])
-        if current_roi != -1 and current_roi != roi_index:
-            raise ValueError(
-                "Long-format CSV contains conflicting ROI entries for "
-                f"track {track_id!r} in session {session_name!r}: "
-                f"{current_roi} and {roi_index}"
-            )
+        if current_roi != -1:
+            if roi_index == -1:
+                continue
+            if current_roi != roi_index:
+                raise ValueError(
+                    "Long-format CSV contains conflicting ROI entries for "
+                    f"track {track_id!r} in session {session_name!r}: "
+                    f"{current_roi} and {roi_index}"
+                )
         grouped[track_id][session_index] = roi_index
 
     ordered_track_ids = sorted(grouped)
