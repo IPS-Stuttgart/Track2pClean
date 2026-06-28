@@ -13,6 +13,7 @@ from . import _loader_bool_validation as _loader_bool_validation
 from . import _loader_validation as _loader_validation
 from . import _local_evidence as _local_evidence
 from . import _mahalanobis as _mahalanobis
+from . import _roi_feature_name_validation as _roi_feature_name_validation
 from . import _roi_index_validation as _roi_index_validation
 from . import _roi_stat_features as _roi_stat_features
 from . import (
@@ -41,6 +42,7 @@ _roi_stat_features.install_split_roi_stat_pairwise_features(
     _bridge_impl.CalciumPlaneData
 )
 _local_evidence.install_local_evidence_pairwise_features(_bridge_impl.CalciumPlaneData)
+_roi_feature_name_validation.install_roi_feature_name_validation(_bridge_impl)
 _core_scalar_validation.install_core_scalar_validation_patches(
     _bridge_impl.CalciumPlaneData
 )
