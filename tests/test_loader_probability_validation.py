@@ -35,6 +35,23 @@ def test_load_suite2p_plane_rejects_array_probability_threshold(tmp_path, bad_va
         load_suite2p_plane(plane_dir, cell_probability_threshold=bad_value)
 
 
+@pytest.mark.parametrize(
+    "bad_value",
+    ["0.5", b"0.5", bytearray(b"0.5"), np.str_("0.5"), np.array("0.5")],
+)
+def test_load_suite2p_plane_rejects_stringlike_probability_threshold(
+    tmp_path,
+    bad_value,
+):
+    plane_dir = tmp_path / "plane0"
+    _write_minimal_suite2p_plane(plane_dir)
+
+    with pytest.raises(
+        ValueError, match="cell_probability_threshold must be a finite probability"
+    ):
+        load_suite2p_plane(plane_dir, cell_probability_threshold=bad_value)
+
+
 def test_load_suite2p_plane_accepts_zero_dimensional_probability_threshold(tmp_path):
     plane_dir = tmp_path / "plane0"
     _write_minimal_suite2p_plane(plane_dir)
