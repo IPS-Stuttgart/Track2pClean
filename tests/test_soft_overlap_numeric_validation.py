@@ -33,6 +33,14 @@ def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
             {"similarity_epsilon": object()},
             "similarity_epsilon must be a finite positive value",
         ),
+        (
+            {"soft_iou_radius": b"1"},
+            "soft_iou_radius must be an integer",
+        ),
+        (
+            {"distance_transform_overlap_radius": bytearray(b"1")},
+            "distance_transform_overlap_radius must be an integer",
+        ),
     ],
 )
 def test_registered_soft_iou_preset_rejects_invalid_numeric_controls(
@@ -56,6 +64,14 @@ def test_registered_soft_iou_preset_rejects_invalid_numeric_controls(
         (
             {"large_cost": _OverflowingFloat()},
             "large_cost must be a finite positive value",
+        ),
+        (
+            {"soft_iou_radius": b"1"},
+            "soft_iou_radius must be an integer",
+        ),
+        (
+            {"distance_transform_overlap_radius": bytearray(b"1")},
+            "distance_transform_overlap_radius must be an integer",
         ),
     ],
 )
