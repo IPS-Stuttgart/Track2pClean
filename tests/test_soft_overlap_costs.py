@@ -58,6 +58,11 @@ def test_registered_soft_iou_rejects_vector_control_values(kwargs):
         registered_soft_iou_cost_kwargs(**kwargs)
 
 
+def test_registered_soft_iou_rejects_logical_scalar_array_control():
+    with pytest.raises(ValueError, match="similarity_epsilon"):
+        registered_soft_iou_cost_kwargs(similarity_epsilon=np.array(1 == 1))
+
+
 def test_registered_soft_iou_accepts_zero_dimensional_numpy_control_values():
     kwargs = registered_soft_iou_cost_kwargs(
         similarity_epsilon=np.asarray(1.0e-6),
