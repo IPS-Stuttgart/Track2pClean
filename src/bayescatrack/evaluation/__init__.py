@@ -4,12 +4,14 @@ from . import _calibration_label_validation as _calibration_label_validation
 from . import (
     _edge_ranking_feature_name_validation as _edge_ranking_feature_name_validation,
 )
+from . import _edge_ranking_hit_k_validation as _edge_ranking_hit_k_validation
 from . import _edge_ranking_roi_validation as _edge_ranking_roi_validation
 from . import _track_matrix_vector_validation as _track_matrix_vector_validation
 from . import _track_subset_duplicate_validation as _subset_validation
 from . import _track_subset_string_validation as _subset_string_validation
 from . import calibration_diagnostics as _calibration_diagnostics
 from . import complete_track_scores as _scores
+from . import edge_ranking as _edge_ranking
 from . import track_error_ledger as _track_error_ledger
 
 
@@ -41,6 +43,7 @@ _SCORE_EXPORTS = (
 
 _edge_ranking_roi_validation.install_edge_ranking_roi_validation()
 _edge_ranking_feature_name_validation.install_edge_ranking_feature_name_validation()
+_edge_ranking_hit_k_validation.install_edge_ranking_hit_k_validation(_edge_ranking)
 _track_matrix_vector_validation.install_track_matrix_vector_input_validation(_scores)
 _subset_string_validation.install_track_subset_string_validation(_scores)
 _subset_validation.install_track_subset_duplicate_validation(_scores)
