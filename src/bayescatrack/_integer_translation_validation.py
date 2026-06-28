@@ -87,7 +87,7 @@ def _mark_patch(wrapper: Any, original: Any, marker: str) -> None:
 
 
 def _normalize_integer_shift_yx(shift_yx: Any) -> tuple[int, int]:
-    if isinstance(shift_yx, (str, bytes)):
+    if isinstance(shift_yx, (str, bytes, bytearray)):
         raise ValueError(_SHIFT_ERROR)
     try:
         shift_array = np.asarray(shift_yx, dtype=object)
@@ -104,7 +104,7 @@ def _normalize_integer_shift_yx(shift_yx: Any) -> tuple[int, int]:
 
 
 def _normalize_integer_shift_component(value: Any) -> int:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, bytes, bytearray)):
         raise ValueError(_SHIFT_ERROR)
 
     try:
