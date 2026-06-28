@@ -80,6 +80,20 @@ def install_multisession_solver_track_validation() -> None:
     _multisession_tracking._coerce_solver_tracks = _coerce_solver_tracks_with_validation
 
 
+def _method_chain_has_patch(method: Any) -> bool:
+    seen: set[int] = set()
+    current: Any = method
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, _PATCH_MARKER, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
+
+
 def _normalize_nonnegative_integer(value: Any, *, label: str) -> int:
     if isinstance(value, (bool, np.bool_)) or isinstance(value, np.ndarray):
         raise ValueError(f"{label} {_ERROR_SUFFIX}")
@@ -92,7 +106,7 @@ def _normalize_nonnegative_integer(value: Any, *, label: str) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{label} {_ERROR_SUFFIX}") from exc
 
     integer_value = int(integer_value)
