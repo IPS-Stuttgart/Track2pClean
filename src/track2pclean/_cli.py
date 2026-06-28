@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import operator
 import sys
 from collections.abc import Callable, Sequence
 from typing import Any
 
+import numpy as np
+
 from bayescatrack import cli as _legacy_cli
+
+_EXIT_CODE_ERROR = "CLI delegates must return None or an integer exit code between 0 and 255"
 
 _TOP_LEVEL_HELP = """usage: track2pclean {summary,export,benchmark,growth,advanced} ...
 
@@ -257,7 +262,15 @@ def _coerce_exit_code(result: Any) -> int:
 
     if result is None:
         return 0
-    return int(result)
+    if isinstance(result, (bool, np.bool_)):
+        raise TypeError(_EXIT_CODE_ERROR)
+    try:
+        exit_code = int(operator.index(result))
+    except TypeError as exc:
+        raise TypeError(_EXIT_CODE_ERROR) from exc
+    if not 0 <= exit_code <= 255:
+        raise ValueError(_EXIT_CODE_ERROR)
+    return exit_code
 
 
 __all__ = ["main"]
