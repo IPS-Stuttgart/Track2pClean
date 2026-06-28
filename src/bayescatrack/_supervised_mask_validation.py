@@ -14,7 +14,9 @@ _PATCH_ATTR = "_track2pclean_supervised_mask_validation"
 def install_supervised_mask_validation(calibrated_costs: ModuleType) -> None:
     """Install fail-fast validation for ``ReferencePairwiseExamples.supervised_mask``."""
 
-    original_validated_supervised_mask = calibrated_costs._validated_supervised_mask  # noqa: SLF001
+    original_validated_supervised_mask = (
+        calibrated_costs._validated_supervised_mask
+    )  # noqa: SLF001
     if getattr(original_validated_supervised_mask, _PATCH_ATTR, False):
         return
 
@@ -33,7 +35,9 @@ def install_supervised_mask_validation(calibrated_costs: ModuleType) -> None:
         "_track2pclean_original",
         original_validated_supervised_mask,
     )
-    calibrated_costs._validated_supervised_mask = _validated_supervised_mask_with_strict_values  # noqa: SLF001
+    calibrated_costs._validated_supervised_mask = (
+        _validated_supervised_mask_with_strict_values  # noqa: SLF001
+    )
 
 
 def _validated_boolean_mask(values: Any, label_shape: tuple[int, int]) -> np.ndarray:
@@ -46,9 +50,7 @@ def _validated_boolean_mask(values: Any, label_shape: tuple[int, int]) -> np.nda
     if mask.shape != tuple(label_shape):
         raise ValueError("supervised_mask must match the pairwise label matrix shape")
     invalid = [
-        value
-        for value in mask.reshape(-1)
-        if not isinstance(value, (bool, np.bool_))
+        value for value in mask.reshape(-1) if not isinstance(value, (bool, np.bool_))
     ]
     if invalid:
         raise ValueError("supervised_mask must contain only boolean values")

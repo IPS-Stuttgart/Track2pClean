@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.multi_hypothesis import (
     candidate_edge_map,
     enumerate_track_hypotheses,
 )
 
 
-@pytest.mark.parametrize("roi_value", [True, np.bool_(True), np.array(True), 1.5, np.nan, -1])
+@pytest.mark.parametrize(
+    "roi_value", [True, np.bool_(True), np.array(True), 1.5, np.nan, -1]
+)
 def test_candidate_edge_map_rejects_invalid_roi_indices(roi_value) -> None:
     with pytest.raises(ValueError, match="roi_indices_by_session"):
         candidate_edge_map({(0, 1): [[0.1]]}, [[roi_value], [20]])

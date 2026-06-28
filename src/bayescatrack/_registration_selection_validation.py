@@ -120,7 +120,9 @@ def _normalize_candidate_transforms(value: Any) -> tuple[str, ...]:
             raise ValueError("candidate_transforms must contain transform-type strings")
         transform_type = candidate.strip()
         if transform_type == "auto":
-            raise ValueError("'auto' must not be nested inside auto-registration candidates")
+            raise ValueError(
+                "'auto' must not be nested inside auto-registration candidates"
+            )
         if transform_type not in valid_transforms:
             valid_types = ", ".join(repr(name) for name in sorted(valid_transforms))
             raise ValueError(
@@ -134,7 +136,9 @@ def _normalize_candidate_transforms(value: Any) -> tuple[str, ...]:
 
 
 def _valid_candidate_transform_names() -> frozenset[str]:
-    from .track2p_registration import REGISTRATION_TRANSFORM_TYPES  # pylint: disable=import-outside-toplevel
+    from .track2p_registration import (  # pylint: disable=import-outside-toplevel
+        REGISTRATION_TRANSFORM_TYPES,
+    )
 
     return frozenset(
         transform_type

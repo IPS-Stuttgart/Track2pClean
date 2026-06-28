@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import CalciumPlaneData
 from bayescatrack.association.shifted_overlap import (
     install_shifted_overlap_cost_patch,

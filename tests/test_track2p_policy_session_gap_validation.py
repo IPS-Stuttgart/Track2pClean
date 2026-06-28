@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from bayescatrack.association.track2p_policy_priors import Track2pPolicyPriorConfig, apply_track2p_policy_edge_prior
+from bayescatrack.association.track2p_policy_priors import (
+    Track2pPolicyPriorConfig,
+    apply_track2p_policy_edge_prior,
+)
 
 
 def test_track2p_policy_session_gap_rejects_fractional_value():

@@ -50,6 +50,9 @@ from bayescatrack.experiments.track2p_benchmark import (
     write_results,
 )
 from bayescatrack.experiments.track2p_emulation_benchmark import ThresholdMethod
+from bayescatrack.experiments.track2p_fov_affine_benchmark import (
+    _pairwise_iou_matrix_sparse,
+)
 from bayescatrack.experiments.track2p_policy_benchmark import (
     TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
     TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
@@ -59,9 +62,6 @@ from bayescatrack.experiments.track2p_policy_benchmark import (
 )
 from bayescatrack.experiments.track2p_policy_growth_field_residual_audit import (
     _cell_probability,
-)
-from bayescatrack.experiments.track2p_fov_affine_benchmark import (
-    _pairwise_iou_matrix_sparse,
 )
 from bayescatrack.experiments.track2p_policy_pruned_benchmark import (
     _area_ratio_matrix,
@@ -241,9 +241,7 @@ def _run_subject_full_mht(
 
     initial = np.full((len(seed_rois), n_sessions), -1, dtype=int)
     initial[:, int(config.seed_session)] = np.asarray(seed_rois, dtype=int)
-    hypotheses: list[_MHTHypothesis] = [
-        _MHTHypothesis(initial, 0.0, tuple())
-    ]
+    hypotheses: list[_MHTHypothesis] = [_MHTHypothesis(initial, 0.0, tuple())]
 
     feature_cache = rank._FeatureCache(
         sessions=sessions,
@@ -293,12 +291,8 @@ def _run_subject_full_mht(
                     ),
                     "scan_max_gap_length": int(last.get("max_gap_length", 0)),
                     "scan_candidates": int(last.get("scan_candidates", 0)),
-                    "scan_growth_anchor_count": int(
-                        last.get("growth_anchor_count", 0)
-                    ),
-                    "scan_growth_model_type": str(
-                        last.get("growth_model_type", "")
-                    ),
+                    "scan_growth_anchor_count": int(last.get("growth_anchor_count", 0)),
+                    "scan_growth_model_type": str(last.get("growth_model_type", "")),
                     "beam_width": int(mht_config.beam_width),
                     "scan_hypotheses": int(mht_config.scan_hypotheses),
                     "edge_top_k": int(mht_config.edge_top_k),
@@ -382,9 +376,8 @@ def _seed_rois(
         raise ValueError(f"Unsupported seed_source: {seed_source!r}")
     output: list[int] = []
     for roi in _roi_indices(sessions[int(seed_session)]):
-        if (
-            _cell_probability(sessions, int(seed_session), int(roi))
-            >= float(cell_probability_threshold)
+        if _cell_probability(sessions, int(seed_session), int(roi)) >= float(
+            cell_probability_threshold
         ):
             output.append(int(roi))
     return sorted(output)
@@ -507,10 +500,12 @@ def _sparse_pair_matrices(
     moving_masks = (np.asarray(registered.roi_masks) > 0)[
         np.asarray(selected_target_positions, dtype=int)
     ]
-    registered_iou_all, distances_all, area_ratios_all = _sparse_cross_iou_diagnostic_matrices(
-        reference_masks,
-        moving_masks,
-        distance_threshold=float(feature_cache.iou_distance_threshold),
+    registered_iou_all, distances_all, area_ratios_all = (
+        _sparse_cross_iou_diagnostic_matrices(
+            reference_masks,
+            moving_masks,
+            distance_threshold=float(feature_cache.iou_distance_threshold),
+        )
     )
     if distances_all.size:
         nearby_columns = np.flatnonzero(
@@ -542,11 +537,13 @@ def _sparse_pair_matrices(
             )
         )
         selected_columns = row_candidates[row_order[:shift_target_budget]]
-        shifted[int(row_index), selected_columns] = rank._pairwise_shifted_iou_from_support(
-            reference_masks[int(row_index) : int(row_index) + 1],
-            moving_masks[selected_columns],
-            radius=2,
-        )["shifted_iou"][0]
+        shifted[int(row_index), selected_columns] = (
+            rank._pairwise_shifted_iou_from_support(
+                reference_masks[int(row_index) : int(row_index) + 1],
+                moving_masks[selected_columns],
+                radius=2,
+            )["shifted_iou"][0]
+        )
     source_centroids = _mask_centroids(reference_masks)
     target_centroids = _mask_centroids(moving_masks)
     growth_residual, growth_mahalanobis, growth_prior = _growth_residual_matrices(
@@ -894,8 +891,12 @@ def _expand_hypothesis_scan(
         }
     )
     active_rows = [int(active_source.row_index) for active_source in active_sources]
-    gap_active_tracks = sum(1 for active in active_sources if int(active.gap_length) > 0)
-    max_gap_length = max((int(active.gap_length) for active in active_sources), default=0)
+    gap_active_tracks = sum(
+        1 for active in active_sources if int(active.gap_length) > 0
+    )
+    max_gap_length = max(
+        (int(active.gap_length) for active in active_sources), default=0
+    )
     if not finite_target_rois:
         carried = tracks.copy()
         carried[active_rows, next_session] = -1
@@ -907,7 +908,8 @@ def _expand_hypothesis_scan(
                 + (
                     {
                         "session_index": int(session_index),
-                        "scan_cost": float(config.miss_cost) * float(len(active_sources)),
+                        "scan_cost": float(config.miss_cost)
+                        * float(len(active_sources)),
                         "assigned_edges": 0,
                         "missed_tracks": int(len(active_sources)),
                         "gap_active_tracks": int(gap_active_tracks),
@@ -979,7 +981,8 @@ def _expand_hypothesis_scan(
                 + (
                     {
                         "session_index": int(session_index),
-                        "scan_cost": float(config.miss_cost) * float(len(active_sources)),
+                        "scan_cost": float(config.miss_cost)
+                        * float(len(active_sources)),
                         "assigned_edges": 0,
                         "missed_tracks": int(len(active_sources)),
                         "gap_active_tracks": int(gap_active_tracks),
@@ -1053,7 +1056,9 @@ def _edge_score(
 ) -> float:
     registered = _finite_float(matrices.registered_iou[source_local, target_local], 0.0)
     shifted = _finite_float(matrices.shifted_iou[source_local, target_local], 0.0)
-    centroid = _finite_float(matrices.centroid_distance[source_local, target_local], 1e3)
+    centroid = _finite_float(
+        matrices.centroid_distance[source_local, target_local], 1e3
+    )
     area_ratio = _finite_float(matrices.area_ratio[source_local, target_local], 0.0)
     growth_residual = _finite_float(
         matrices.growth_residual[source_local, target_local], 0.0
@@ -1082,7 +1087,9 @@ def _all_summary_row(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     return {
         "subject": "ALL",
         "n_seed_tracks": int(sum(int(row.get("n_seed_tracks", 0)) for row in rows)),
-        "final_hypotheses": int(sum(int(row.get("final_hypotheses", 0)) for row in rows)),
+        "final_hypotheses": int(
+            sum(int(row.get("final_hypotheses", 0)) for row in rows)
+        ),
         "best_score": float(sum(float(row.get("best_score", 0.0)) for row in rows)),
     }
 
@@ -1137,15 +1144,39 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="manual-gt",
     )
     parser.add_argument("--plane", dest="plane_name", default="plane0")
-    parser.add_argument("--input-format", choices=("auto", "suite2p", "npy"), default="suite2p")
-    parser.add_argument("--threshold-method", choices=("otsu", "min"), default=TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD)
-    parser.add_argument("--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE)
-    parser.add_argument("--iou-distance-threshold", type=float, default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD)
-    parser.add_argument("--cell-probability-threshold", type=float, default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD)
+    parser.add_argument(
+        "--input-format", choices=("auto", "suite2p", "npy"), default="suite2p"
+    )
+    parser.add_argument(
+        "--threshold-method",
+        choices=("otsu", "min"),
+        default=TRACK2P_POLICY_DEFAULT_THRESHOLD_METHOD,
+    )
+    parser.add_argument(
+        "--transform-type", default=TRACK2P_POLICY_DEFAULT_TRANSFORM_TYPE
+    )
+    parser.add_argument(
+        "--iou-distance-threshold",
+        type=float,
+        default=TRACK2P_POLICY_DEFAULT_IOU_DISTANCE_THRESHOLD,
+    )
+    parser.add_argument(
+        "--cell-probability-threshold",
+        type=float,
+        default=TRACK2P_POLICY_DEFAULT_CELL_PROBABILITY_THRESHOLD,
+    )
     parser.add_argument("--seed-session", type=int, default=0)
-    parser.add_argument("--restrict-to-reference-seed-rois", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--allow-track2p-as-reference-for-smoke-test", action="store_true")
-    parser.add_argument("--include-behavior", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--restrict-to-reference-seed-rois",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--allow-track2p-as-reference-for-smoke-test", action="store_true"
+    )
+    parser.add_argument(
+        "--include-behavior", action=argparse.BooleanOptionalAction, default=False
+    )
     parser.add_argument("--beam-width", type=int, default=8)
     parser.add_argument("--scan-hypotheses", type=int, default=8)
     parser.add_argument("--edge-top-k", type=int, default=4)
@@ -1153,7 +1184,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-gap", type=int, default=1)
     parser.add_argument("--gap-reactivation-cost", type=float, default=1.0)
     parser.add_argument("--min-edge-score", type=float, default=0.25)
-    parser.add_argument("--seed-source", choices=("reference", "all-cells"), default="reference")
+    parser.add_argument(
+        "--seed-source", choices=("reference", "all-cells"), default="reference"
+    )
     parser.add_argument("--max-seed-tracks", type=int, default=None)
     parser.add_argument("--registered-iou-weight", type=float, default=1.0)
     parser.add_argument("--shifted-iou-weight", type=float, default=1.5)
@@ -1173,7 +1206,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--diagnostics-output", type=Path, default=None)
     parser.add_argument("--diagnostics-format", choices=("csv", "json"), default="csv")
     parser.add_argument("--summary-output", type=Path, default=None)
-    parser.add_argument("--progress", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--progress", action=argparse.BooleanOptionalAction, default=False
+    )
     return parser
 
 

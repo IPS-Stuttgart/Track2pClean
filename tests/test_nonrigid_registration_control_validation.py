@@ -6,7 +6,9 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 from bayescatrack.core.bridge import CalciumPlaneData
-from bayescatrack.nonrigid_registration import register_measurement_plane_by_nonrigid_fov
+from bayescatrack.nonrigid_registration import (
+    register_measurement_plane_by_nonrigid_fov,
+)
 from bayescatrack.track2p_registration import register_plane_pair
 
 

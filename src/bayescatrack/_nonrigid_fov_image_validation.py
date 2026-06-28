@@ -21,7 +21,9 @@ _ERROR_MESSAGE = "FOV images must contain only finite values"
 def install_nonrigid_fov_image_validation() -> None:
     """Install idempotent validation around nonrigid FOV image normalization."""
 
-    from . import nonrigid_registration as _nonrigid_registration  # pylint: disable=import-outside-toplevel
+    from . import (
+        nonrigid_registration as _nonrigid_registration,  # pylint: disable=import-outside-toplevel
+    )
 
     original = _nonrigid_registration._finite_image  # pylint: disable=protected-access
     if getattr(original, _PATCH_MARKER, False):
@@ -38,7 +40,9 @@ def install_nonrigid_fov_image_validation() -> None:
 
     setattr(finite_image_with_nonfinite_validation, _PATCH_MARKER, True)
     setattr(finite_image_with_nonfinite_validation, "_bayescatrack_original", original)
-    _nonrigid_registration._finite_image = finite_image_with_nonfinite_validation  # pylint: disable=protected-access
+    _nonrigid_registration._finite_image = (
+        finite_image_with_nonfinite_validation  # pylint: disable=protected-access
+    )
 
 
 __all__ = ["install_nonrigid_fov_image_validation"]

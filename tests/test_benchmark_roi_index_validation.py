@@ -4,7 +4,9 @@ import numpy as np
 from bayescatrack.experiments import track2p_benchmark as benchmark
 
 
-def test_benchmark_roi_predicate_rejects_fractional_boolean_and_textual_indices() -> None:
+def test_benchmark_roi_predicate_rejects_fractional_boolean_and_textual_indices() -> (
+    None
+):
     valid_values = [0, np.int64(1), 2.0, np.float64(3.0)]
     invalid_values = [
         True,

@@ -16,9 +16,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_tracking_duplicate_start_roi_validation_patch"
-_ERROR_MESSAGE = (
-    "track_rows must not contain duplicate non-missing ROI entries in start_session_index"
-)
+_ERROR_MESSAGE = "track_rows must not contain duplicate non-missing ROI entries in start_session_index"
 
 
 def install_tracking_duplicate_start_roi_validation() -> None:

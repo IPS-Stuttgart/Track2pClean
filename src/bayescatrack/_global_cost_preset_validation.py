@@ -20,13 +20,17 @@ _PATCH_MARKER = "_bayescatrack_global_cost_preset_validation_patch"
 def install_global_cost_preset_validation() -> None:
     """Install idempotent validation around global-assignment preset helpers."""
 
-    from .association import pyrecest_global_assignment as global_assignment  # pylint: disable=import-outside-toplevel
+    from .association import (
+        pyrecest_global_assignment as global_assignment,  # pylint: disable=import-outside-toplevel
+    )
 
     original_registered_iou = global_assignment.registered_iou_cost_kwargs
     if not getattr(original_registered_iou, _PATCH_MARKER, False):
 
         @wraps(original_registered_iou)
-        def registered_iou_cost_kwargs(*, similarity_epsilon: Any = 1.0e-6) -> dict[str, Any]:
+        def registered_iou_cost_kwargs(
+            *, similarity_epsilon: Any = 1.0e-6
+        ) -> dict[str, Any]:
             return original_registered_iou(
                 similarity_epsilon=_finite_positive_float(
                     similarity_epsilon,
@@ -72,7 +76,9 @@ def install_global_cost_preset_validation() -> None:
             )
 
         _mark_wrapper(registered_shifted_iou_cost_kwargs, original_registered_shifted)
-        global_assignment.registered_shifted_iou_cost_kwargs = registered_shifted_iou_cost_kwargs
+        global_assignment.registered_shifted_iou_cost_kwargs = (
+            registered_shifted_iou_cost_kwargs
+        )
 
     original_roi_aware_local = global_assignment.roi_aware_local_cost_kwargs
     if not getattr(original_roi_aware_local, _PATCH_MARKER, False):
@@ -202,7 +208,9 @@ def _finite_positive_float(value: Any, *, name: str) -> float:
     return _finite_float(value, name=name, lower_bound=0.0, positive=True)
 
 
-def _finite_float(value: Any, *, name: str, lower_bound: float, positive: bool) -> float:
+def _finite_float(
+    value: Any, *, name: str, lower_bound: float, positive: bool
+) -> float:
     qualifier = "positive" if positive else "non-negative"
     if isinstance(value, (bool, np.bool_, bytes, bytearray)):
         raise ValueError(f"{name} must be a finite {qualifier} value")
@@ -210,7 +218,9 @@ def _finite_float(value: Any, *, name: str, lower_bound: float, positive: bool) 
         numeric_value = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a finite {qualifier} value") from exc
-    violates_bound = numeric_value <= lower_bound if positive else numeric_value < lower_bound
+    violates_bound = (
+        numeric_value <= lower_bound if positive else numeric_value < lower_bound
+    )
     if not np.isfinite(numeric_value) or violates_bound:
         raise ValueError(f"{name} must be a finite {qualifier} value")
     return numeric_value

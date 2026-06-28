@@ -16,7 +16,9 @@ _PATCH_MARKER = "_track2pclean_custom_usage_text_validation_patch"
 def install_custom_usage_text_validation(cli_module: Any) -> None:
     """Install idempotent retitling for ``ArgumentParser.usage`` strings."""
 
-    original_replace_parser_text = cli_module._replace_parser_text  # pylint: disable=protected-access
+    original_replace_parser_text = (
+        cli_module._replace_parser_text
+    )  # pylint: disable=protected-access
     if getattr(original_replace_parser_text, _PATCH_MARKER, False):
         return
 
@@ -31,8 +33,14 @@ def install_custom_usage_text_validation(cli_module: Any) -> None:
             parser.usage = usage.replace(old_text, new_text)
 
     setattr(_replace_parser_text_with_usage, _PATCH_MARKER, True)
-    setattr(_replace_parser_text_with_usage, "_track2pclean_original", original_replace_parser_text)
-    cli_module._replace_parser_text = _replace_parser_text_with_usage  # pylint: disable=protected-access
+    setattr(
+        _replace_parser_text_with_usage,
+        "_track2pclean_original",
+        original_replace_parser_text,
+    )
+    cli_module._replace_parser_text = (
+        _replace_parser_text_with_usage  # pylint: disable=protected-access
+    )
 
 
 __all__ = ["install_custom_usage_text_validation"]

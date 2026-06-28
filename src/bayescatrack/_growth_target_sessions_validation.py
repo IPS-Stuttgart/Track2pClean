@@ -58,8 +58,7 @@ def _raise_on_duplicate_targets(targets: Sequence[int]) -> None:
         seen.add(int(target))
     if duplicates:
         raise ValueError(
-            "duplicate target_sessions are not allowed: "
-            f"{sorted(duplicates)}"
+            "duplicate target_sessions are not allowed: " f"{sorted(duplicates)}"
         )
 
 

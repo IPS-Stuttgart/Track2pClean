@@ -30,8 +30,14 @@ def install_assignment_prior_sweep_validation() -> None:
         return original_finite_float(value, option_name)
 
     setattr(_finite_float_without_boolean_scalars, _MARKER, True)
-    setattr(_finite_float_without_boolean_scalars, "_bayescatrack_original", original_finite_float)
-    benchmark._finite_float = _finite_float_without_boolean_scalars  # pylint: disable=protected-access
+    setattr(
+        _finite_float_without_boolean_scalars,
+        "_bayescatrack_original",
+        original_finite_float,
+    )
+    benchmark._finite_float = (
+        _finite_float_without_boolean_scalars  # pylint: disable=protected-access
+    )
 
 
 def _is_boolean_scalar(value: Any) -> bool:

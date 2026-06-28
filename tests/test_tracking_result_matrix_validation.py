@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.registration import RegisteredConsecutiveBundles
 from bayescatrack.tracking import SubjectTrackingResult
 
@@ -57,7 +56,9 @@ def test_subject_tracking_result_normalizes_integer_like_track_rows() -> None:
         link_costs=np.asarray([[0.25, np.nan]], dtype=float),
     )
 
-    np.testing.assert_array_equal(result.track_rows, np.asarray([[0, 1, -1]], dtype=int))
+    np.testing.assert_array_equal(
+        result.track_rows, np.asarray([[0, 1, -1]], dtype=int)
+    )
 
 
 @pytest.mark.parametrize(

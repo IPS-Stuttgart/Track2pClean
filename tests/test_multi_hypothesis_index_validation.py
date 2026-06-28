@@ -1,5 +1,4 @@
 import pytest
-
 from bayescatrack.association.multi_hypothesis import (
     candidate_edge_map,
     consensus_edges,
@@ -47,5 +46,7 @@ def test_enumerate_track_hypotheses_rejects_silent_start_index_coercion() -> Non
 
 
 def test_edge_union_costs_rejects_silent_edge_key_coercion() -> None:
-    with pytest.raises(ValueError, match=r"edge target_roi must be a non-negative integer"):
+    with pytest.raises(
+        ValueError, match=r"edge target_roi must be a non-negative integer"
+    ):
         edge_union_costs(({(0, 1, 0, 1.5): 1},))

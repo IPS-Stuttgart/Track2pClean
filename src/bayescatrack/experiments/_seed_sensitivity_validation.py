@@ -53,7 +53,9 @@ def _seed_session_values(seed_sessions: Sequence[int] | str) -> tuple[Any, ...]:
     try:
         return tuple(seed_sessions)
     except TypeError as exc:
-        raise ValueError("seed_sessions must be 'all' or an iterable of integer session indices") from exc
+        raise ValueError(
+            "seed_sessions must be 'all' or an iterable of integer session indices"
+        ) from exc
 
 
 def _positive_session_count(value: Any) -> int:
@@ -66,7 +68,9 @@ def _positive_session_count(value: Any) -> int:
 def _seed_session_index(value: Any, *, n_sessions: int) -> int:
     seed_session = _integer_value(value, field_name="seed_sessions")
     if seed_session < 0 or seed_session >= n_sessions:
-        raise ValueError(f"seed_session {seed_session} out of bounds for {n_sessions} sessions")
+        raise ValueError(
+            f"seed_session {seed_session} out of bounds for {n_sessions} sessions"
+        )
     return seed_session
 
 
@@ -87,7 +91,9 @@ def _integer_value(value: Any, *, field_name: str) -> int:
         try:
             return int(text, 10)
         except ValueError as exc:
-            raise ValueError(f"{field_name} must contain integer session indices") from exc
+            raise ValueError(
+                f"{field_name} must contain integer session indices"
+            ) from exc
     try:
         return int(operator.index(value))
     except TypeError as exc:
