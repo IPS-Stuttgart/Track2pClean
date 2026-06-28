@@ -8,6 +8,8 @@ import numpy as np
 
 __all__ = ("brier_score",)
 
+_TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+
 
 def brier_score(
     probabilities: Any, labels: Any, *, sample_weight: Any | None = None
@@ -67,10 +69,14 @@ def _validate_sample_weight(
 
 
 def _as_float_vector(values: Any, *, name: str, reject_bool: bool) -> np.ndarray:
+    if _is_text_like(values):
+        raise ValueError(f"{name} must be numeric, not text")
     try:
         raw_values = np.asarray(values, dtype=object)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be numeric") from exc
+    if any(_is_text_like(value) for value in raw_values.flat):
+        raise ValueError(f"{name} must be numeric, not text")
     if reject_bool and any(
         isinstance(value, (bool, np.bool_)) for value in raw_values.flat
     ):
@@ -79,3 +85,7 @@ def _as_float_vector(values: Any, *, name: str, reject_bool: bool) -> np.ndarray
         return np.asarray(raw_values, dtype=float).reshape(-1)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be numeric") from exc
+
+
+def _is_text_like(value: Any) -> bool:
+    return isinstance(value, _TEXT_TYPES)
