@@ -147,6 +147,9 @@ def _validate_per_pixel_array_shapes(
     xpix: np.ndarray,
     exclude_overlapping_pixels: bool,
 ) -> np.ndarray | None:
+    _validate_coordinate_array_shape(ypix, roi_index=roi_index, name="ypix")
+    _validate_coordinate_array_shape(xpix, roi_index=roi_index, name="xpix")
+
     if ypix.shape != xpix.shape:
         raise ValueError(
             f"Suite2p ROI {roi_index} ypix/xpix arrays must have matching shapes"
@@ -241,6 +244,8 @@ def _validate_coordinate_array(
     name: str,
     axis_size: int | None,
 ) -> None:
+    _validate_coordinate_array_shape(array, roi_index=roi_index, name=name)
+
     if _contains_ambiguous_coordinate_tokens(array):
         _raise_invalid_coordinate_values(roi_index, name)
 
@@ -257,6 +262,16 @@ def _validate_coordinate_array(
         raise ValueError(
             f"Suite2p ROI {roi_index} {name} pixel coordinates must be within image bounds"
         )
+
+
+def _validate_coordinate_array_shape(
+    array: np.ndarray,
+    *,
+    roi_index: int,
+    name: str,
+) -> None:
+    if array.ndim != 1:
+        raise ValueError(_coordinate_shape_message(roi_index, name))
 
 
 def _contains_ambiguous_coordinate_tokens(array: np.ndarray) -> bool:
@@ -276,6 +291,10 @@ def _invalid_coordinate_message(roi_index: int, name: str) -> str:
         f"Suite2p ROI {roi_index} {name} must contain finite non-negative "
         "integer pixel coordinates"
     )
+
+
+def _coordinate_shape_message(roi_index: int, name: str) -> str:
+    return f"Suite2p ROI {roi_index} {name} must be a one-dimensional pixel-coordinate array"
 
 
 def _strict_bool(value: Any, *, name: str) -> bool:
