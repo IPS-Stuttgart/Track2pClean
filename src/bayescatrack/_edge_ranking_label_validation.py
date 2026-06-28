@@ -37,6 +37,11 @@ def install_edge_ranking_label_validation(edge_ranking_module: Any) -> None:
 
 
 def _parse_label(value: Any) -> bool:
+    if isinstance(value, np.ndarray):
+        if value.ndim != 0:
+            raise ValueError(_ERROR_MESSAGE)
+        value = value.item()
+
     if isinstance(value, (bool, np.bool_)):
         return bool(value)
 
@@ -45,7 +50,7 @@ def _parse_label(value: Any) -> bool:
 
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(_ERROR_MESSAGE) from exc
     if not np.isfinite(numeric_value) or numeric_value not in (0.0, 1.0):
         raise ValueError(_ERROR_MESSAGE)
