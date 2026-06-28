@@ -27,9 +27,9 @@ def install_nonrigid_registration_control_validation() -> None:
         measurement_plane: Any,
         *,
         transform_type: Any = "bspline",
-        grid_shape: tuple[int, int] = (5, 5),
-        min_tile_size: int = 24,
-        max_shift_fraction: float = 0.75,
+        grid_shape: Any = (5, 5),
+        min_tile_size: Any = 24,
+        max_shift_fraction: Any = 0.75,
         tps_regularization: Any = 1.0e-3,
         bspline_regularization: Any = 1.0e-2,
         optical_flow_iterations: Any = 12,
@@ -55,9 +55,12 @@ def install_nonrigid_registration_control_validation() -> None:
             reference_plane,
             measurement_plane,
             transform_type=transform_type,
-            grid_shape=grid_shape,
-            min_tile_size=min_tile_size,
-            max_shift_fraction=max_shift_fraction,
+            grid_shape=_grid_shape(grid_shape, name="grid_shape"),
+            min_tile_size=_positive_integer(min_tile_size, name="min_tile_size"),
+            max_shift_fraction=_finite_nonnegative_float(
+                max_shift_fraction,
+                name="max_shift_fraction",
+            ),
             tps_regularization=_finite_nonnegative_float(
                 tps_regularization,
                 name="tps_regularization",
@@ -90,6 +93,37 @@ def install_nonrigid_registration_control_validation() -> None:
     setattr(_nonrigid_registration, _PATCH_MARKER, True)
 
 
+def _grid_shape(value: Any, *, name: str) -> tuple[int, int]:
+    error_message = f"{name} must contain exactly two integer dimensions of at least two"
+    if isinstance(value, (str, bytes, bytearray)):
+        raise ValueError(error_message)
+    try:
+        values = np.asarray(value, dtype=object).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(error_message) from exc
+    if values.size != 2:
+        raise ValueError(error_message)
+    grid_y, grid_x = (_integer(part, error_message=error_message) for part in values.tolist())
+    if grid_y < 2 or grid_x < 2:
+        raise ValueError(error_message)
+    return int(grid_y), int(grid_x)
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    error_message = f"{name} must be a positive integer"
+    integer_value = _integer(value, error_message=error_message)
+    if integer_value <= 0:
+        raise ValueError(error_message)
+    return integer_value
+
+
+def _integer(value: Any, *, error_message: str) -> int:
+    scalar = _scalar_value(value, error_message=error_message)
+    if isinstance(scalar, (bool, np.bool_, str, bytes, bytearray)) or not isinstance(scalar, Integral):
+        raise ValueError(error_message)
+    return int(scalar)
+
+
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
     error_message = f"{name} must be finite and non-negative"
     numeric_value = _finite_float(value, error_message=error_message)
@@ -108,7 +142,7 @@ def _finite_positive_float(value: Any, *, name: str) -> float:
 
 def _finite_float(value: Any, *, error_message: str) -> float:
     scalar = _scalar_value(value, error_message=error_message)
-    if isinstance(scalar, (bool, np.bool_)):
+    if isinstance(scalar, (bool, np.bool_, str, bytes, bytearray)):
         raise ValueError(error_message)
     try:
         numeric_value = float(scalar)
@@ -121,10 +155,7 @@ def _finite_float(value: Any, *, error_message: str) -> float:
 
 def _nonnegative_integer(value: Any, *, name: str) -> int:
     error_message = f"{name} must be a non-negative integer"
-    scalar = _scalar_value(value, error_message=error_message)
-    if isinstance(scalar, (bool, np.bool_)) or not isinstance(scalar, Integral):
-        raise ValueError(error_message)
-    integer_value = int(scalar)
+    integer_value = _integer(value, error_message=error_message)
     if integer_value < 0:
         raise ValueError(error_message)
     return integer_value
