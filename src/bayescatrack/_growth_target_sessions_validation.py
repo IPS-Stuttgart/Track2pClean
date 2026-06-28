@@ -1,9 +1,11 @@
-"""Reject duplicate growth-analysis target-session selectors.
+"""Validate growth-analysis target-session selectors.
 
 The radial and affine growth helpers iterate once per requested target session.
 If two raw selectors normalize to the same session index, output rows and
 summaries are emitted more than once and downstream aggregate counts are
-inflated.
+inflated.  A bare string is also a sequence in Python; without explicit
+rejection, programmatic calls such as ``target_sessions="10"`` are interpreted
+as the two independent selectors ``"1"`` and ``"0"``.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ _PATCH_MARKER = "_bayescatrack_growth_target_sessions_validation_patch"
 
 
 def install_growth_target_sessions_validation() -> None:
-    """Install idempotent duplicate rejection for growth-analysis targets."""
+    """Install idempotent validation for growth-analysis targets."""
 
     from .analysis import growth as _growth  # pylint: disable=import-outside-toplevel
 
@@ -31,6 +33,11 @@ def install_growth_target_sessions_validation() -> None:
         source_session: int,
         target_sessions: Sequence[Any] | None,
     ) -> tuple[int, ...]:
+        if isinstance(target_sessions, (str, bytes, bytearray)):
+            raise ValueError(
+                "target_sessions must be a sequence of session indices, "
+                "not a string-like value"
+            )
         targets = original_target_sessions(
             n_sessions=n_sessions,
             source_session=source_session,
