@@ -93,6 +93,35 @@ def test_load_track2p_subject_rejects_out_of_bounds_suite2p_coordinates(tmp_path
         )
 
 
+def test_load_track2p_subject_rejects_multidimensional_suite2p_coordinates(tmp_path):
+    subject_dir = tmp_path / "subject"
+    plane_dir = subject_dir / "2024-01-01_session" / "suite2p" / "plane0"
+    plane_dir.mkdir(parents=True)
+
+    stat = np.asarray(
+        [
+            {
+                "ypix": np.asarray([[1, 2]], dtype=int),
+                "xpix": np.asarray([[1, 2]], dtype=int),
+                "lam": np.asarray([[1.0, 1.0]], dtype=float),
+                "overlap": np.asarray([[False, False]], dtype=bool),
+            }
+        ],
+        dtype=object,
+    )
+    np.save(plane_dir / "stat.npy", stat)
+    np.save(plane_dir / "ops.npy", {"Ly": 4, "Lx": 5})
+
+    with pytest.raises(ValueError, match="one-dimensional pixel-coordinate array"):
+        load_track2p_subject(
+            subject_dir,
+            input_format="suite2p",
+            plane_name="plane0",
+            load_traces=False,
+            load_spike_traces=False,
+        )
+
+
 @pytest.mark.parametrize(
     ("ypix", "xpix", "message"),
     [
