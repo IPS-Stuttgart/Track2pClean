@@ -200,7 +200,7 @@ def _replace_parser_text(
     old_text: str,
     new_text: str,
 ) -> None:
-    for attribute_name in ("description", "epilog"):
+    for attribute_name in ("description", "epilog", "usage"):
         value = getattr(parser, attribute_name, None)
         if isinstance(value, str):
             setattr(parser, attribute_name, value.replace(old_text, new_text))
