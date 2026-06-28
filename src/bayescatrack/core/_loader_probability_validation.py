@@ -10,10 +10,11 @@ import numpy as np
 _PATCH_MARKER = "_bayescatrack_loader_probability_validation_patch"
 _ORIGINAL_ATTR = "_bayescatrack_original"
 _ERROR_TEMPLATE = "{name} must be a finite probability"
+_STRINGLIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 
 
 def install_loader_probability_validation(loader_validation_module: ModuleType) -> None:
-    """Reject array-valued loader probability controls before loader patch install."""
+    """Reject non-scalar array and string-like loader probability controls."""
 
     original_finite_probability = loader_validation_module._finite_probability  # pylint: disable=protected-access
     if getattr(original_finite_probability, _PATCH_MARKER, False):
@@ -24,6 +25,8 @@ def install_loader_probability_validation(loader_validation_module: ModuleType) 
             if value.shape != ():
                 raise ValueError(_ERROR_TEMPLATE.format(name=name))
             value = value.item()
+        if isinstance(value, _STRINGLIKE_SCALAR_TYPES):
+            raise ValueError(_ERROR_TEMPLATE.format(name=name))
         if isinstance(value, (bool, np.bool_)):
             raise ValueError(_ERROR_TEMPLATE.format(name=name))
         try:
