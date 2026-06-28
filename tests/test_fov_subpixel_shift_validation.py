@@ -22,7 +22,17 @@ def test_apply_subpixel_image_translation_rejects_boolean_shift_values(shift_yx)
         apply_subpixel_image_translation(np.zeros((4, 4), dtype=float), shift_yx)
 
 
-@pytest.mark.parametrize("shift_yx", [[1.0], [1.0, 2.0, 3.0]])
+@pytest.mark.parametrize(
+    "shift_yx",
+    [
+        [1.0],
+        [1.0, 2.0, 3.0],
+        [[1.0, 2.0]],
+        [[1.0], [2.0]],
+        np.asarray([[1.0, 2.0]], dtype=float),
+        np.asarray([[1.0], [2.0]], dtype=float),
+    ],
+)
 def test_apply_subpixel_image_translation_rejects_malformed_shift_shapes(shift_yx):
     with pytest.raises(ValueError, match="shift_yx"):
         apply_subpixel_image_translation(np.zeros((4, 4), dtype=float), shift_yx)
@@ -44,4 +54,13 @@ def test_apply_subpixel_roi_mask_translation_rejects_boolean_shift_values():
         apply_subpixel_roi_mask_translation(
             np.zeros((1, 4, 4), dtype=bool),
             [True, 0.0],
+        )
+
+
+@pytest.mark.parametrize("shift_yx", [[[1.0, 2.0]], [[1.0], [2.0]]])
+def test_apply_subpixel_roi_mask_translation_rejects_nested_shift_vectors(shift_yx):
+    with pytest.raises(ValueError, match="shift_yx"):
+        apply_subpixel_roi_mask_translation(
+            np.zeros((1, 4, 4), dtype=bool),
+            shift_yx,
         )

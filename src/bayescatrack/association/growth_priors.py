@@ -191,14 +191,18 @@ def apply_growth_prior_to_costs(
 
     cfg = config or GrowthPriorConfig()
     costs = np.asarray(cost_matrix, dtype=float).copy()
-    if affine_xy is not None and cfg.affine_weight > 0.0:
+    affine_active = affine_xy is not None and cfg.affine_weight > 0.0
+    radial_active = cfg.radial_weight > 0.0
+    if affine_active or radial_active:
+        _validate_growth_cost_shape(costs, reference_centroids_xy, measurement_centroids_xy)
+    if affine_active:
         costs += cfg.affine_weight * affine_growth_penalty_matrix(
             reference_centroids_xy,
             measurement_centroids_xy,
             affine_xy,
             scale=cfg.displacement_scale,
         )
-    if cfg.radial_weight > 0.0:
+    if radial_active:
         costs += cfg.radial_weight * radial_growth_penalty_matrix(
             reference_centroids_xy,
             measurement_centroids_xy,
@@ -255,6 +259,29 @@ def estimate_growth_from_track_rows(
         np.vstack(target_points),
         regularization=cfg.regularization,
     )
+
+
+def _validate_growth_cost_shape(
+    costs: np.ndarray,
+    reference_centroids_xy: Any,
+    measurement_centroids_xy: Any,
+) -> None:
+    reference = _as_xy_point_matrix(
+        reference_centroids_xy,
+        name="reference_centroids_xy",
+        peer_values=measurement_centroids_xy,
+    )
+    measurement = _as_xy_point_matrix(
+        measurement_centroids_xy,
+        name="measurement_centroids_xy",
+        peer_values=reference_centroids_xy,
+    )
+    expected_shape = (reference.shape[0], measurement.shape[0])
+    if costs.shape != expected_shape:
+        raise ValueError(
+            "cost_matrix shape must match centroid counts: "
+            f"expected {expected_shape}, got {costs.shape}"
+        )
 
 
 def _as_xy_point_matrix(

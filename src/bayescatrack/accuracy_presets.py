@@ -367,7 +367,7 @@ def run_track2p_accuracy_presets(
     *,
     reference: str | Path | None = None,
     reference_kind: ReferenceKind = "manual-gt",
-    preset_names: Iterable[AccuracyPresetName] | None = None,
+    preset_names: AccuracyPresetName | Iterable[AccuracyPresetName] | None = None,
     **preset_kwargs: object,
 ) -> dict[str, list[SubjectBenchmarkResult]]:
     """Run selected accuracy presets and return results keyed by preset name."""
@@ -378,19 +378,40 @@ def run_track2p_accuracy_presets(
         reference_kind=reference_kind,
         **preset_kwargs,
     )
-    requested = None if preset_names is None else {str(name) for name in preset_names}
+    requested = _normalize_accuracy_preset_names(preset_names)
+    preset_by_name = {str(preset.name): preset for preset in presets}
+    if requested is not None:
+        missing = requested.difference(preset_by_name)
+        if missing:
+            raise ValueError(
+                f"Unknown accuracy preset(s): {', '.join(sorted(missing))}"
+            )
+
     results: dict[str, list[SubjectBenchmarkResult]] = {}
     for preset in presets:
         if requested is not None and preset.name not in requested:
             continue
         results[preset.name] = _run_accuracy_preset(preset)
-    if requested is not None:
-        missing = requested.difference(results)
-        if missing:
-            raise ValueError(
-                f"Unknown accuracy preset(s): {', '.join(sorted(missing))}"
-            )
     return results
+
+
+def _normalize_accuracy_preset_names(
+    preset_names: AccuracyPresetName | Iterable[AccuracyPresetName] | None,
+) -> set[str] | None:
+    if preset_names is None:
+        return None
+    if isinstance(preset_names, str):
+        return {preset_names}
+    if isinstance(preset_names, bytes):
+        raise ValueError(
+            "preset_names must be a preset name or an iterable of preset names"
+        )
+    try:
+        return {str(name) for name in preset_names}
+    except TypeError as exc:
+        raise ValueError(
+            "preset_names must be a preset name or an iterable of preset names"
+        ) from exc
 
 
 def _run_accuracy_preset(preset: AccuracyPreset) -> list[SubjectBenchmarkResult]:
