@@ -54,7 +54,7 @@ def install_split_roi_stat_pairwise_features(calcium_plane_cls: type[Any]) -> No
         self: Any,
         other: Any,
         *args: Any,
-        feature_names: Sequence[str] | None = None,
+        feature_names: Sequence[str] | str | None = None,
         similarity_epsilon: float = 1.0e-6,
         return_components: bool = False,
         **kwargs: Any,
@@ -228,7 +228,7 @@ def _roi_feature_scale(
 
 
 def _normalize_roi_feature_names(
-    feature_names: Sequence[str] | None,
+    feature_names: Sequence[str] | str | None,
 ) -> list[str] | None:
     """Map split-component feature names back to raw Suite2p stat names."""
 
@@ -240,8 +240,14 @@ def _normalize_roi_feature_names(
         for raw_feature_name, component_name, _ in _SPLIT_ROI_FEATURE_COMPONENT_SPECS
     }
     normalized: list[str] = []
-    for feature_name in feature_names:
+    for feature_name in _feature_name_tuple(feature_names):
         raw_feature_name = component_to_raw.get(feature_name, feature_name)
         if raw_feature_name not in normalized:
             normalized.append(raw_feature_name)
     return normalized
+
+
+def _feature_name_tuple(feature_names: Sequence[str] | str) -> tuple[str, ...]:
+    if isinstance(feature_names, str):
+        return (feature_names,)
+    return tuple(feature_names)

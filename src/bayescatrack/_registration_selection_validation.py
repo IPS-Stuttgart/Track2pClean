@@ -150,13 +150,31 @@ def _validated_complexity_penalty(value: Any) -> dict[str, float] | None:
         raise ValueError(
             "complexity_penalty must be a mapping of transform names to finite non-negative values"
         )
-    return {
-        str(transform_type): _finite_nonnegative_scalar(
+
+    valid_transforms = _valid_candidate_transform_names()
+    normalized: dict[str, float] = {}
+    for transform_type, penalty in value.items():
+        if not isinstance(transform_type, str):
+            raise ValueError("complexity_penalty keys must be transform-type strings")
+        normalized_transform_type = transform_type.strip()
+        if normalized_transform_type == "auto":
+            raise ValueError(
+                "'auto' must not have a complexity penalty because it is not an auto-registration candidate"
+            )
+        if normalized_transform_type not in valid_transforms:
+            valid_types = ", ".join(repr(name) for name in sorted(valid_transforms))
+            raise ValueError(
+                f"complexity_penalty contains unknown transform type {transform_type!r}; expected one of {valid_types}"
+            )
+        if normalized_transform_type in normalized:
+            raise ValueError(
+                f"complexity_penalty contains duplicate transform type {normalized_transform_type!r}"
+            )
+        normalized[normalized_transform_type] = _finite_nonnegative_scalar(
             penalty,
             f"complexity_penalty[{transform_type!r}]",
         )
-        for transform_type, penalty in value.items()
-    }
+    return normalized
 
 
 def _finite_unit_interval_scalar(value: Any, field_name: str) -> float:
