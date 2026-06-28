@@ -58,46 +58,58 @@ def install_roi_aware_local_validation() -> None:
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    message = f"{name} must be a finite non-negative value"
+    value = _unwrap_scalar_array(value, message=message)
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite non-negative value")
+        raise ValueError(message)
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{name} must be a finite non-negative value") from exc
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
-        raise ValueError(f"{name} must be a finite non-negative value")
+        raise ValueError(message)
     return numeric_value
 
 
 def _integer_like(value: Any, *, name: str, minimum: int) -> int:
+    message = f"{name} must be an integer"
+    value = _unwrap_scalar_array(value, message=message)
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be an integer")
+        raise ValueError(message)
     if isinstance(value, (int, np.integer)):
         integer_value = int(value)
     elif isinstance(value, (float, np.floating)):
         if not np.isfinite(value) or not float(value).is_integer():
-            raise ValueError(f"{name} must be an integer")
+            raise ValueError(message)
         integer_value = int(value)
     elif isinstance(value, str):
         stripped = value.strip()
         if not stripped:
-            raise ValueError(f"{name} must be an integer")
+            raise ValueError(message)
         try:
             numeric_value = float(stripped)
         except ValueError as exc:
-            raise ValueError(f"{name} must be an integer") from exc
+            raise ValueError(message) from exc
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-            raise ValueError(f"{name} must be an integer")
+            raise ValueError(message)
         integer_value = int(numeric_value)
     else:
         try:
             integer_value = operator.index(value)
         except TypeError as exc:
-            raise ValueError(f"{name} must be an integer") from exc
+            raise ValueError(message) from exc
 
     if integer_value < minimum:
         raise ValueError(f"{name} must be at least {minimum}")
     return int(integer_value)
+
+
+def _unwrap_scalar_array(value: Any, *, message: str) -> Any:
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(message)
+        return value.item()
+    return value
 
 
 __all__ = ["install_roi_aware_local_validation"]

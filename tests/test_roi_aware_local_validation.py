@@ -18,7 +18,18 @@ from bayescatrack.association import pyrecest_global_assignment as global_assign
         "centroid_rank_weight",
     ],
 )
-@pytest.mark.parametrize("bad_value", [True, False, np.nan, np.inf, -1.0])
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        True,
+        False,
+        np.asarray(True),
+        np.asarray([1.0]),
+        np.nan,
+        np.inf,
+        -1.0,
+    ],
+)
 def test_roi_aware_local_cost_kwargs_reject_invalid_weights(weight_name, bad_value):
     with pytest.raises(
         ValueError,
@@ -27,19 +38,28 @@ def test_roi_aware_local_cost_kwargs_reject_invalid_weights(weight_name, bad_val
         global_assignment.roi_aware_local_cost_kwargs(**{weight_name: bad_value})
 
 
-@pytest.mark.parametrize("bad_value", [True, False, 1.5, np.nan, np.inf, -1])
+@pytest.mark.parametrize(
+    "bad_value",
+    [True, False, 1.5, np.asarray([1]), np.nan, np.inf, -1],
+)
 def test_roi_aware_local_cost_kwargs_reject_invalid_patch_radius(bad_value):
     with pytest.raises(ValueError, match="patch_radius"):
         global_assignment.roi_aware_local_cost_kwargs(patch_radius=bad_value)
 
 
-@pytest.mark.parametrize("bad_value", [True, False, 1.5, np.nan, np.inf, 0])
+@pytest.mark.parametrize(
+    "bad_value",
+    [True, False, 1.5, np.asarray([1]), np.nan, np.inf, 0],
+)
 def test_roi_aware_local_cost_kwargs_reject_invalid_neighbor_k(bad_value):
     with pytest.raises(ValueError, match="neighbor_k"):
         global_assignment.roi_aware_local_cost_kwargs(neighbor_k=bad_value)
 
 
-@pytest.mark.parametrize("integer_like", [4, np.int64(4), 4.0, "4"])
+@pytest.mark.parametrize(
+    "integer_like",
+    [4, np.int64(4), np.asarray(4), 4.0, np.asarray(4.0), "4"],
+)
 def test_roi_aware_local_cost_kwargs_accept_integer_like_radius_controls(integer_like):
     kwargs = global_assignment.roi_aware_local_cost_kwargs(
         patch_radius=integer_like,
