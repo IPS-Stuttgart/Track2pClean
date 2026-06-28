@@ -45,6 +45,35 @@ def test_absence_cost_vector_rejects_optional_cue_length_mismatch(
         absence_cost_vector(plane, **{kwarg: value})
 
 
+@pytest.mark.parametrize(
+    ("plane", "kwargs", "message"),
+    (
+        (
+            _plane(2, cell_probabilities=np.asarray([[1.0], [0.0]], dtype=float)),
+            {},
+            "plane.cell_probabilities",
+        ),
+        (
+            _plane(2),
+            {"registered_empty_mask": np.asarray([[True], [False]], dtype=bool)},
+            "registered_empty_mask",
+        ),
+        (
+            _plane(2),
+            {"local_density": np.asarray([[0.0], [1.0]], dtype=float)},
+            "local_density",
+        ),
+    ),
+)
+def test_absence_cost_vector_rejects_nested_roi_cue_vectors(
+    plane: SimpleNamespace,
+    kwargs: dict[str, np.ndarray],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        absence_cost_vector(plane, **kwargs)
+
+
 def test_gap_penalty_matrix_rejects_registered_empty_mask_length_mismatch() -> None:
     reference = _plane(1)
     measurement = _plane(2)
@@ -67,3 +96,33 @@ def test_gap_penalty_matrix_rejects_measurement_density_length_mismatch() -> Non
             measurement,
             measurement_local_density=np.asarray([0.5], dtype=float),
         )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    (
+        (
+            {
+                "reference_absence_costs": np.asarray([[1.0], [1.0]], dtype=float),
+                "measurement_absence_costs": np.asarray([1.0], dtype=float),
+            },
+            "reference_absence_costs",
+        ),
+        (
+            {
+                "reference_absence_costs": np.asarray([1.0, 1.0], dtype=float),
+                "measurement_absence_costs": np.asarray([[1.0]], dtype=float),
+            },
+            "measurement_absence_costs",
+        ),
+    ),
+)
+def test_gap_penalty_matrix_rejects_nested_absence_cost_vectors(
+    kwargs: dict[str, np.ndarray],
+    message: str,
+) -> None:
+    reference = _plane(2)
+    measurement = _plane(1)
+
+    with pytest.raises(ValueError, match=message):
+        gap_penalty_matrix(reference, measurement, **kwargs)
