@@ -21,6 +21,7 @@ from . import _roi_stat_features as _roi_stat_features
 from . import (
     _suite2p_coordinate_value_validation as _suite2p_coordinate_value_validation,
 )
+from . import _suite2p_lam_value_validation as _suite2p_lam_value_validation
 from . import _suite2p_overlap_value_validation as _suite2p_overlap_value_validation
 from . import _with_replaced_masks_fov_validation as _with_replaced_masks_fov_validation
 
@@ -37,6 +38,7 @@ _suite2p_coordinate_value_validation.install_suite2p_coordinate_value_validation
 )
 _suite2p_overlap_value_validation.install_suite2p_overlap_value_validation(_bridge_impl)
 _iscell_value_validation.install_suite2p_iscell_value_validation(_bridge_impl)
+_suite2p_lam_value_validation.install_suite2p_lam_value_validation(_bridge_impl)
 _roi_index_validation.install_calcium_plane_roi_index_validation(
     _bridge_impl.CalciumPlaneData
 )
