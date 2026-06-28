@@ -75,6 +75,11 @@ def consensus_prior_config_from_mapping(
         return None
     if isinstance(value, ConsensusPriorConfig):
         return value
+    if not isinstance(value, Mapping):
+        raise ValueError(
+            "config must be None, a ConsensusPriorConfig, or a mapping of "
+            "ConsensusPriorConfig fields"
+        )
     return ConsensusPriorConfig(**dict(value))
 
 
