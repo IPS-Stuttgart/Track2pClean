@@ -27,6 +27,7 @@ _SUBTRACT_MEAN_ERROR = "subtract_mean must be a boolean"
 _GRID_SHAPE_ERROR = "grid_shape must contain exactly two positive integer dimensions"
 _MIN_TILE_SIZE_ERROR = "min_tile_size must be a positive integer"
 _MAX_SHIFT_FRACTION_ERROR = "max_shift_fraction must be a finite non-negative value"
+_TEXT_OR_BYTES_LIKE_TYPES = (str, bytes, bytearray, memoryview)
 
 
 def install_fov_affine_warp_validation() -> None:
@@ -149,6 +150,8 @@ def _normalize_estimate_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_output_shape(output_shape: Any) -> tuple[int, int]:
+    if isinstance(output_shape, _TEXT_OR_BYTES_LIKE_TYPES):
+        raise ValueError(_OUTPUT_SHAPE_ERROR)
     try:
         shape_array = np.asarray(output_shape, dtype=object)
     except (TypeError, ValueError) as exc:
@@ -165,7 +168,9 @@ def _normalize_output_shape(output_shape: Any) -> tuple[int, int]:
 
 
 def _normalize_output_shape_component(value: Any) -> int:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_)) or isinstance(
+        value, _TEXT_OR_BYTES_LIKE_TYPES
+    ):
         raise ValueError(_OUTPUT_SHAPE_ERROR)
 
     try:
@@ -195,7 +200,7 @@ def _normalize_bool(value: Any, error_message: str) -> bool:
 
 
 def _normalize_grid_shape(grid_shape: Any) -> tuple[int, int]:
-    if isinstance(grid_shape, (str, bytes)):
+    if isinstance(grid_shape, _TEXT_OR_BYTES_LIKE_TYPES):
         raise ValueError(_GRID_SHAPE_ERROR)
     try:
         shape_array = np.asarray(grid_shape, dtype=object)
@@ -212,7 +217,9 @@ def _normalize_grid_shape(grid_shape: Any) -> tuple[int, int]:
 
 
 def _normalize_positive_integer(value: Any, error_message: str) -> int:
-    if isinstance(value, (bool, np.bool_, str, bytes)):
+    if isinstance(value, (bool, np.bool_)) or isinstance(
+        value, _TEXT_OR_BYTES_LIKE_TYPES
+    ):
         raise ValueError(error_message)
 
     try:
@@ -231,7 +238,9 @@ def _normalize_positive_integer(value: Any, error_message: str) -> int:
 
 
 def _normalize_nonnegative_float(value: Any, error_message: str) -> float:
-    if isinstance(value, (bool, np.bool_, str, bytes)):
+    if isinstance(value, (bool, np.bool_)) or isinstance(
+        value, _TEXT_OR_BYTES_LIKE_TYPES
+    ):
         raise ValueError(error_message)
     try:
         value_array = np.asarray(value, dtype=object)
@@ -260,7 +269,9 @@ def _normalize_affine_matrix_xy(matrix_xy: Any) -> np.ndarray:
         raise ValueError(_MATRIX_ERROR)
 
     for value in object_matrix.reshape(-1).tolist():
-        if isinstance(value, (bool, np.bool_, str)):
+        if isinstance(value, (bool, np.bool_)) or isinstance(
+            value, _TEXT_OR_BYTES_LIKE_TYPES
+        ):
             raise ValueError(_MATRIX_ERROR)
 
     try:
