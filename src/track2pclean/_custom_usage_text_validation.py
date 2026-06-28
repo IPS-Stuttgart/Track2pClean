@@ -89,7 +89,7 @@ def _replace_subparser_choice_help_text(
     """Recursively rewrite help stored in argparse subparser choice rows."""
 
     for action in parser._actions:  # pylint: disable=protected-access
-        for choice_action in getattr(action, "_choices_actions", ()):  # noqa: SLF001
+        for choice_action in getattr(action, "_choices_actions", ()):
             help_text = getattr(choice_action, "help", None)
             if isinstance(help_text, str):
                 choice_action.help = help_text.replace(old_text, new_text)
