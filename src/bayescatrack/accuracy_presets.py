@@ -9,11 +9,13 @@ command-line JSON assembly.
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
+import numpy as np
 from bayescatrack.experiments.track2p_benchmark import (
     ReferenceKind,
     SubjectBenchmarkResult,
@@ -53,6 +55,58 @@ class AccuracyPreset:
     runner_kwargs: Mapping[str, object] | None = None
 
 
+def _positive_int(value: Any, *, name: str) -> int:
+    normalized = _integer_value(value, name=name)
+    if normalized <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return normalized
+
+
+def _integer_value(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_, bytes, bytearray, np.ndarray)):
+        raise ValueError(f"{name} must be a positive integer")
+    try:
+        return int(operator.index(value))
+    except TypeError:
+        pass
+
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError(f"{name} must be a positive integer")
+    else:
+        candidate = value
+    try:
+        numeric_value = float(candidate)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a positive integer") from exc
+    if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+        raise ValueError(f"{name} must be a positive integer")
+    return int(numeric_value)
+
+
+def _finite_nonnegative_float_or_none(value: Any, *, name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (bool, np.bool_, bytes, bytearray, np.ndarray)):
+        raise ValueError(f"{name} must be a finite non-negative value or None")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{name} must be a finite non-negative value or None"
+        ) from exc
+    if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value or None")
+    return numeric_value
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
 def build_track2p_accuracy_presets(
     data: str | Path,
     *,
@@ -80,6 +134,13 @@ def build_track2p_accuracy_presets(
     penalties, which is usually preferable when optimizing complete-track F1.
     """
 
+    normalized_max_gap = _positive_int(max_gap, name="max_gap")
+    normalized_cost_threshold = _finite_nonnegative_float_or_none(
+        cost_threshold,
+        name="cost_threshold",
+    )
+    normalized_progress = _strict_bool(progress, name="progress")
+
     base = Track2pBenchmarkConfig(
         data=Path(data),
         method="global-assignment",
@@ -87,21 +148,21 @@ def build_track2p_accuracy_presets(
         input_format=input_format,
         reference=None if reference is None else Path(reference),
         reference_kind=reference_kind,
-        max_gap=int(max_gap),
+        max_gap=normalized_max_gap,
         transform_type=transform_type,
         auto_registration_candidates=tuple(auto_registration_candidates),
         fov_affine_mask_warp_mode="bilinear",
         start_cost=5.0,
         end_cost=5.0,
         gap_penalty=1.0,
-        cost_threshold=cost_threshold,
+        cost_threshold=normalized_cost_threshold,
         include_behavior=True,
         include_non_cells=True,
         cell_probability_threshold=0.0,
         weighted_masks=True,
         exclude_overlapping_pixels=True,
         restrict_to_reference_seed_rois=True,
-        progress=progress,
+        progress=normalized_progress,
     )
 
     shifted_safe = replace(
@@ -132,7 +193,11 @@ def build_track2p_accuracy_presets(
         candidate_pruning_config={
             "row_top_k": 24,
             "column_top_k": 24,
-            "max_cost": 6.0 if cost_threshold is None else float(cost_threshold),
+            "max_cost": (
+                6.0
+                if normalized_cost_threshold is None
+                else normalized_cost_threshold
+            ),
         },
         track2p_policy_prior_config={
             "threshold_method": "min",
@@ -142,7 +207,7 @@ def build_track2p_accuracy_presets(
             "mutual_top_k": 2,
             "rescue_min_iou": 0.10,
             "rescue_margin": 0.05,
-            "max_gap": max_gap,
+            "max_gap": normalized_max_gap,
         },
         dynamic_edge_prior_config={
             "session_gap_weight": 0.25,
@@ -187,7 +252,7 @@ def build_track2p_accuracy_presets(
         exclude_overlapping_pixels=False,
     )
 
-    supported_gap_max_gap = max(2, int(max_gap))
+    supported_gap_max_gap = max(2, normalized_max_gap)
     supported_gap_cleanup = replace(
         base,
         transform_type="affine",
