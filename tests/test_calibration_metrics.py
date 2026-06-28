@@ -55,6 +55,49 @@ def test_brier_score_rejects_boolean_sample_weights(sample_weight):
 
 
 @pytest.mark.parametrize(
+    "probabilities",
+    [
+        ["0.5"],
+        [b"0.5"],
+        np.asarray(["0.5"], dtype=str),
+        np.asarray("0.5"),
+        np.asarray([np.str_("0.5")], dtype=object),
+    ],
+)
+def test_brier_score_rejects_text_probabilities(probabilities):
+    with pytest.raises(ValueError, match="probabilities must be numeric, not text"):
+        brier_score(probabilities, [1])
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        ["1"],
+        [b"1"],
+        np.asarray(["1"], dtype=str),
+        np.asarray("1"),
+    ],
+)
+def test_brier_score_rejects_text_labels(labels):
+    with pytest.raises(ValueError, match="labels must be numeric, not text"):
+        brier_score([0.5], labels)
+
+
+@pytest.mark.parametrize(
+    "sample_weight",
+    [
+        ["1.0"],
+        [b"1.0"],
+        np.asarray(["1.0"], dtype=str),
+        np.asarray("1.0"),
+    ],
+)
+def test_brier_score_rejects_text_sample_weights(sample_weight):
+    with pytest.raises(ValueError, match="sample_weight must be numeric, not text"):
+        brier_score([0.5], [1], sample_weight=sample_weight)
+
+
+@pytest.mark.parametrize(
     ("probabilities", "labels", "message"),
     [
         ([0.2], [0, 1], "same flattened shape"),
