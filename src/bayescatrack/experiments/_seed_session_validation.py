@@ -91,23 +91,10 @@ def _seed_session_index(value: Any, *, field_name: str, n_sessions: int) -> int:
 
 
 def _integer_value(value: Any, *, field_name: str) -> int:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
         raise ValueError(f"{field_name} must contain integer session indices")
     if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
-        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-            raise ValueError(f"{field_name} must contain integer session indices")
-        return int(numeric_value)
-    if isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError(f"{field_name} must contain integer session indices")
-        try:
-            numeric_value = float(stripped)
-        except ValueError as exc:
-            raise ValueError(
-                f"{field_name} must contain integer session indices"
-            ) from exc
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
             raise ValueError(f"{field_name} must contain integer session indices")
         return int(numeric_value)
