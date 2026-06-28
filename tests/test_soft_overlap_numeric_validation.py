@@ -9,6 +9,11 @@ from bayescatrack.association.pyrecest_global_assignment import (
 from bayescatrack.core.bridge import CalciumPlaneData
 
 
+class _OverflowingFloat:
+    def __float__(self) -> float:
+        raise OverflowError("too large")
+
+
 def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
     roi_masks = np.asarray(mask, dtype=float).reshape(1, 1, -1)
     return CalciumPlaneData(roi_masks=roi_masks)
@@ -19,6 +24,10 @@ def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
     [
         (
             {"distance_transform_overlap_weight": "not-a-number"},
+            "distance_transform_overlap_weight must be a finite non-negative value",
+        ),
+        (
+            {"distance_transform_overlap_weight": _OverflowingFloat()},
             "distance_transform_overlap_weight must be a finite non-negative value",
         ),
         (
@@ -43,6 +52,10 @@ def test_registered_soft_iou_preset_rejects_invalid_numeric_controls(
         ),
         (
             {"large_cost": object()},
+            "large_cost must be a finite positive value",
+        ),
+        (
+            {"large_cost": _OverflowingFloat()},
             "large_cost must be a finite positive value",
         ),
     ],
