@@ -16,13 +16,11 @@ _VALIDATION_SENTINEL_COSTS = np.zeros((1, 1), dtype=float)
 def install_empty_candidate_gate_margin_fix() -> None:
     """Install an idempotent guard for empty margin-gated candidate masks."""
 
-    if getattr(_advanced_roi_components, _PATCH_MARKER, False):
-        return
-    original = _advanced_roi_components.candidate_mask_from_cost_matrix
-    if _candidate_mask_chain_has_empty_margin_fix(original):
+    current = _advanced_roi_components.candidate_mask_from_cost_matrix
+    if _candidate_mask_chain_has_empty_margin_fix(current):
         setattr(_advanced_roi_components, _PATCH_MARKER, True)
         return
-    setattr(candidate_mask_from_cost_matrix, _ORIGINAL_ATTR, original)
+    setattr(candidate_mask_from_cost_matrix, _ORIGINAL_ATTR, current)
     _advanced_roi_components.candidate_mask_from_cost_matrix = (
         candidate_mask_from_cost_matrix
     )
@@ -76,7 +74,7 @@ def _candidate_mask_chain_has_empty_margin_fix(
     while current is not None:
         current_id = id(current)
         if current_id in seen:
-            return True
+            return False
         seen.add(current_id)
         if getattr(current, _ORIGINAL_ATTR, None) is not None:
             return True

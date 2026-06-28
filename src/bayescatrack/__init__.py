@@ -261,9 +261,9 @@ _install_growth_target_sessions_validation()
 _install_registration_selection_validation()
 _install_registration_warp_validation()
 _install_registration_control_validation(_registration)
-_install_strict_config_validation()
-_strict_config_validation._positive_int = _candidate_prefilter._positive_int
 _install_empty_candidate_gate_margin_fix()
+_strict_config_validation._positive_int = _candidate_prefilter._positive_int
+_install_strict_config_validation()
 _install_empty_registered_roi_mask_validation()
 _install_matching_bundle_roi_index_validation()
 _install_matching_control_validation()
