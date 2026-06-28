@@ -63,16 +63,19 @@ class CandidateHardNegativeOptions:
 
 
 def _finite_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, bytes, bytearray, np.ndarray)):
         raise ValueError(f"{name} must be finite")
-    numeric = float(value)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be finite") from exc
     if not np.isfinite(numeric):
         raise ValueError(f"{name} must be finite")
     return numeric
 
 
 def _positive_integer_or_none(value: Any, *, name: str) -> int:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, bytes, bytearray, np.ndarray)):
         raise ValueError(f"{name} must be positive or None")
     numeric = _finite_float(value, name=name)
     if not numeric.is_integer() or numeric < 1.0:
