@@ -54,6 +54,20 @@ def test_session_match_result_rejects_bad_index_values(field_name):
 
 
 @pytest.mark.parametrize(
+    "field_name",
+    [
+        "reference_positions",
+        "measurement_positions",
+        "reference_roi_indices",
+        "measurement_roi_indices",
+    ],
+)
+def test_session_match_result_rejects_oversized_integer_values(field_name):
+    with pytest.raises(ValueError, match=field_name):
+        _valid_match_result(**{field_name: np.asarray([10**100], dtype=object)})
+
+
+@pytest.mark.parametrize(
     "costs",
     [
         [True],
