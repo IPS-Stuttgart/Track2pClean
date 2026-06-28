@@ -54,6 +54,11 @@ def install_activity_similarity_control_validation() -> None:
 def _validated_plane_roi_count(plane: Any, plane_name: str) -> int:
     message = f"{plane_name}.n_rois must be a finite non-negative integer"
     raw_count = getattr(plane, "n_rois", None)
+    if isinstance(raw_count, np.ndarray):
+        if raw_count.ndim != 0 or np.issubdtype(raw_count.dtype, np.bool_):
+            raise ValueError(message)
+        raw_count = raw_count.item()
+
     if isinstance(raw_count, (bool, np.bool_)):
         raise ValueError(message)
 
