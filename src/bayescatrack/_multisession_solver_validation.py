@@ -26,7 +26,7 @@ def _coerce_solver_track_index(value: Any, field_name: str) -> int:
     else:
         try:
             normalized = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{field_name} {_ERROR_SUFFIX}") from exc
     normalized = int(normalized)
     if normalized < 0:
