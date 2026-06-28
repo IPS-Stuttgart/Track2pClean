@@ -74,6 +74,13 @@ def test_calibration_inputs_are_validated():
         expected_calibration_error([0.5], [1], n_bins=0)
 
 
+def test_calibration_label_validation_handles_mixed_object_arrays():
+    labels = np.asarray([0, None], dtype=object)
+
+    with pytest.raises(ValueError, match="labels must be binary"):
+        expected_calibration_error([0.2, 0.8], labels)
+
+
 @pytest.mark.parametrize(
     "probabilities",
     [

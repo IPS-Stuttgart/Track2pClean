@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from bayescatrack.analysis.growth import (
     _optional_roi,
+    _target_sessions,
     _validate_session_index,
     affine_growth_summaries,
     radial_displacement_rows,
@@ -92,6 +93,16 @@ def test_affine_growth_summary_recovers_scale_and_translation():
     assert summary.determinant == pytest.approx(4.0)
     assert summary.isotropic_scale == pytest.approx(2.0)
     assert summary.residual_rmse == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("bad_target_sessions", ["10", b"10", bytearray(b"10")])
+def test_growth_target_sessions_rejects_string_like_sequences(bad_target_sessions):
+    with pytest.raises(ValueError, match="target_sessions.*string-like"):
+        _target_sessions(
+            n_sessions=12,
+            source_session=2,
+            target_sessions=bad_target_sessions,
+        )
 
 
 def test_growth_optional_roi_rejects_fractional_values():
