@@ -6,9 +6,10 @@ input validation and safer auto-format dispatch without changing the public API.
 
 from __future__ import annotations
 
+import os
 import warnings
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from types import ModuleType
 from typing import Any
 
@@ -233,6 +234,7 @@ def _load_track2p_subject_with_auto_fallback_impl(
     strict: bool,
     **suite2p_kwargs: Any,
 ) -> list[Any]:
+    plane_name = _validate_plane_name(plane_name)
     include_behavior = _strict_bool(include_behavior, name="include_behavior")
     strict = _strict_bool(strict, name="strict")
     if input_format not in {"auto", "suite2p", "npy"}:
@@ -370,6 +372,27 @@ def _validate_suite2p_loader_controls(
         name="cell_probability_threshold",
     )
     return validated
+
+
+def _validate_plane_name(value: Any) -> str:
+    if isinstance(value, bytes) or not isinstance(value, (str, os.PathLike)):
+        raise ValueError("plane_name must be a simple relative plane directory name")
+    plane_name = os.fspath(value)
+    if not isinstance(plane_name, str):
+        raise ValueError("plane_name must be a simple relative plane directory name")
+
+    posix_path = Path(plane_name)
+    windows_path = PureWindowsPath(plane_name)
+    if (
+        not plane_name
+        or plane_name in {".", ".."}
+        or posix_path.is_absolute()
+        or windows_path.is_absolute()
+        or len(posix_path.parts) != 1
+        or len(windows_path.parts) != 1
+    ):
+        raise ValueError("plane_name must be a simple relative plane directory name")
+    return plane_name
 
 
 def _strict_bool(value: Any, *, name: str) -> bool:
