@@ -22,7 +22,7 @@ def test_registered_shifted_iou_cost_kwargs_preserve_numeric_inputs():
 
 @pytest.mark.parametrize(
     "bad_radius",
-    [True, np.bool_(False), 1.5, "1.5", np.inf, "", object()],
+    [True, np.bool_(False), np.asarray(3), np.asarray([3]), 1.5, "1.5", np.inf, "", object()],
 )
 def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
     with pytest.raises(ValueError, match="shifted_iou_radius"):
@@ -37,6 +37,8 @@ def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
         ({"similarity_epsilon": True}, "similarity_epsilon"),
         ({"similarity_epsilon": 0.0}, "similarity_epsilon"),
         ({"similarity_epsilon": np.nan}, "similarity_epsilon"),
+        ({"similarity_epsilon": np.asarray(1.0)}, "similarity_epsilon"),
+        ({"similarity_epsilon": np.asarray([1.0])}, "similarity_epsilon"),
         (
             {"shifted_iou_shift_penalty_weight": True},
             "shifted_iou_shift_penalty_weight",
@@ -49,6 +51,14 @@ def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
             {"shifted_iou_shift_penalty_weight": np.inf},
             "shifted_iou_shift_penalty_weight",
         ),
+        (
+            {"shifted_iou_shift_penalty_weight": np.asarray(0.25)},
+            "shifted_iou_shift_penalty_weight",
+        ),
+        (
+            {"shifted_iou_shift_penalty_weight": np.asarray([0.25])},
+            "shifted_iou_shift_penalty_weight",
+        ),
         ({"shifted_iou_shift_penalty_scale": True}, "shifted_iou_shift_penalty_scale"),
         ({"shifted_iou_shift_penalty_scale": 0.0}, "shifted_iou_shift_penalty_scale"),
         (
@@ -57,6 +67,14 @@ def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
         ),
         (
             {"shifted_iou_shift_penalty_scale": np.inf},
+            "shifted_iou_shift_penalty_scale",
+        ),
+        (
+            {"shifted_iou_shift_penalty_scale": np.asarray(2.5)},
+            "shifted_iou_shift_penalty_scale",
+        ),
+        (
+            {"shifted_iou_shift_penalty_scale": np.asarray([2.5])},
             "shifted_iou_shift_penalty_scale",
         ),
     ],

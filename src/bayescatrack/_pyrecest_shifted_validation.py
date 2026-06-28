@@ -90,6 +90,8 @@ def install_pyrecest_shifted_validation() -> None:
 def _nonnegative_int(value: Any, *, name: str) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be an integer")
+    if isinstance(value, np.ndarray):
+        raise ValueError(f"{name} must be an integer")
     if isinstance(value, (float, np.floating)):
         if not np.isfinite(value) or not float(value).is_integer():
             raise ValueError(f"{name} must be an integer")
@@ -131,7 +133,7 @@ def _finite_float(
     positive: bool,
 ) -> float:
     qualifier = "positive" if positive else "non-negative"
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, np.ndarray)):
         raise ValueError(f"{name} must be a finite {qualifier} value")
     try:
         numeric_value = float(value)
