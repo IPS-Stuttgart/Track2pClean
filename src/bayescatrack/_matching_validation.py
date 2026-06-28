@@ -14,7 +14,9 @@ _FILL_VALUE_PATCH_MARKER = "_bayescatrack_matching_fill_value_validation_patch"
 _SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_session_name_validation_patch"
 _BUNDLE_SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_bundle_session_name_validation_patch"
 _EXPORT_SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_export_session_names_validation_patch"
-_FILL_VALUE_ERROR_MESSAGE = "fill_value must be a negative integer sentinel"
+_FILL_VALUE_ERROR_MESSAGE = (
+    "fill_value must be an integer; fill_value must be a negative integer sentinel"
+)
 
 
 def install_matching_layout_validation(matching_module: Any) -> None:
@@ -224,6 +226,8 @@ def _normalize_max_cost(value: Any) -> float | None:
 
 def _normalize_fill_value(value: Any) -> int:
     if isinstance(value, (bool, np.bool_)):
+        raise ValueError(_FILL_VALUE_ERROR_MESSAGE)
+    if isinstance(value, np.ndarray):
         raise ValueError(_FILL_VALUE_ERROR_MESSAGE)
 
     if isinstance(value, (float, np.floating)):
