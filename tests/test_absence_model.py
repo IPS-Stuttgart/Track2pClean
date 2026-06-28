@@ -83,6 +83,27 @@ def test_absence_model_config_rejects_boolean_scalars(
         AbsenceModelConfig(**{field: value})
 
 
+@pytest.mark.parametrize(
+    "value",
+    (
+        np.asarray([1.0, 2.0], dtype=float),
+        np.asarray([], dtype=float),
+        "",
+        "1.0",
+        object(),
+    ),
+)
+def test_absence_model_config_rejects_non_scalar_controls(value: object) -> None:
+    with pytest.raises(ValueError, match="base_absence_cost"):
+        AbsenceModelConfig(base_absence_cost=value)
+
+
+def test_absence_model_config_accepts_numpy_scalar_controls() -> None:
+    config = AbsenceModelConfig(base_absence_cost=np.asarray(1.25))
+
+    assert config.base_absence_cost == 1.25
+
+
 def test_absence_cost_vector_ignores_nonfinite_cell_probability_entries() -> None:
     plane = _plane(
         4,

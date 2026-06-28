@@ -233,11 +233,21 @@ def _validated_roi_count(plane: Any, plane_name: str) -> int:
 
 
 def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
+    message = f"{name} must be finite and non-negative"
     if isinstance(raw_value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be finite and non-negative")
-    value = float(raw_value)
+        raise ValueError(message)
+    if isinstance(raw_value, str):
+        raise ValueError(message)
+
+    raw_array = np.asarray(raw_value)
+    if raw_array.ndim != 0:
+        raise ValueError(message)
+    try:
+        value = float(raw_array)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
     if not np.isfinite(value) or value < 0.0:
-        raise ValueError(f"{name} must be finite and non-negative")
+        raise ValueError(message)
     return value
 
 
