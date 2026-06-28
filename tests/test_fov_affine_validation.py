@@ -103,6 +103,21 @@ def test_apply_affine_roi_mask_warp_rejects_malformed_output_shape(bad_output_sh
         )
 
 
+def test_estimate_fov_affine_transform_returns_identity_for_constant_fovs():
+    image = np.ones((8, 8), dtype=float)
+
+    estimate = estimate_fov_affine_transform(image, image, min_tile_size=2)
+
+    np.testing.assert_allclose(estimate.matrix_xy, _AFFINE_IDENTITY_XY)
+    np.testing.assert_allclose(estimate.inverse_matrix_xy, _AFFINE_IDENTITY_XY)
+    np.testing.assert_allclose(estimate.tile_shift_yx, np.zeros((1, 2), dtype=float))
+    np.testing.assert_allclose(estimate.tile_peak_correlation, np.zeros((1,), dtype=float))
+    assert estimate.tile_reference_xy.shape == (0, 2)
+    assert estimate.tile_measurement_xy.shape == (0, 2)
+    assert estimate.fit_rmse == 0.0
+    assert estimate.fallback_translation
+
+
 @pytest.mark.parametrize("bad_subtract_mean", ["false", 1, 0, None])
 def test_estimate_fov_affine_transform_rejects_malformed_subtract_mean(
     bad_subtract_mean,
