@@ -38,20 +38,24 @@ def _strict_finite_float(
     value: Any, *, name: str, lower_bound: float, positive: bool
 ) -> float:
     qualifier = "positive" if positive else "non-negative"
+    message = f"{name} must be a finite {qualifier} value"
     if isinstance(value, (bool, np.bool_, bytes, bytearray)):
-        raise ValueError(f"{name} must be a finite {qualifier} value")
+        raise ValueError(message)
     array_value = np.asarray(value)
-    if array_value.ndim > 0:
-        raise ValueError(f"{name} must be a finite {qualifier} value")
+    if array_value.ndim > 0 or array_value.dtype.kind == "?":
+        raise ValueError(message)
+    scalar_value = array_value.item()
+    if np.asarray(scalar_value).dtype.kind == "?":
+        raise ValueError(message)
     try:
-        numeric_value = float(value)
+        numeric_value = float(scalar_value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(f"{name} must be a finite {qualifier} value") from exc
+        raise ValueError(message) from exc
     violates_bound = (
         numeric_value <= lower_bound if positive else numeric_value < lower_bound
     )
     if not np.isfinite(numeric_value) or violates_bound:
-        raise ValueError(f"{name} must be a finite {qualifier} value")
+        raise ValueError(message)
     return numeric_value
 
 
