@@ -61,7 +61,10 @@ def install_matching_control_validation() -> None:
         fill_value: Any = -1,
         **kwargs: Any,
     ) -> np.ndarray:
-        normalized_session_names = tuple(str(name) for name in session_names)
+        normalized_session_names = _normalize_unique_session_names(
+            session_names,
+            field_name="session_names",
+        )
         return original_build_matches(
             normalized_session_names,
             _normalize_empty_match_collections(matches),
@@ -113,6 +116,38 @@ def _normalize_empty_match_collections(matches: Any) -> Any:
     except TypeError:
         return matches
     return [_normalize_empty_match_collection(match) for match in match_iterator]
+
+
+def _normalize_unique_session_names(
+    session_names: Any,
+    *,
+    field_name: str,
+) -> tuple[str, ...]:
+    if isinstance(session_names, (str, bytes)):
+        raise ValueError(
+            f"{field_name} must be a sequence of session-name values, not a bare string"
+        )
+    try:
+        normalized_session_names = tuple(str(name) for name in session_names)
+    except TypeError as exc:
+        raise ValueError(f"{field_name} must be a sequence of session-name values") from exc
+
+    if not normalized_session_names:
+        raise ValueError(f"{field_name} must not be empty")
+
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for session_name in normalized_session_names:
+        if session_name in seen and session_name not in duplicates:
+            duplicates.append(session_name)
+        seen.add(session_name)
+    if duplicates:
+        duplicate_summary = ", ".join(repr(name) for name in duplicates)
+        raise ValueError(
+            f"{field_name} must contain unique session names; "
+            f"duplicate values: {duplicate_summary}"
+        )
+    return normalized_session_names
 
 
 def _normalize_empty_match_collection(match: Any) -> Any:
