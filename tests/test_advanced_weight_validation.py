@@ -37,7 +37,15 @@ def _single_roi_plane() -> CalciumPlaneData:
             "radial_profile_weight must be a finite non-negative value",
         ),
         (
+            {"radial_profile_weight": "0.0"},
+            "radial_profile_weight must be a finite non-negative value",
+        ),
+        (
             {"orientation_weight": np.inf},
+            "orientation_weight must be a finite non-negative value",
+        ),
+        (
+            {"orientation_weight": np.asarray("0.0")},
             "orientation_weight must be a finite non-negative value",
         ),
         (
@@ -69,11 +77,20 @@ def _single_roi_plane() -> CalciumPlaneData:
             "candidate_include_column_top_k must be a boolean",
         ),
         ({"large_cost": np.nan}, "large_cost must be a finite positive value"),
+        ({"large_cost": b"1000000.0"}, "large_cost must be a finite positive value"),
         (
             {"similarity_epsilon": np.inf},
             "similarity_epsilon must be a finite positive value",
         ),
+        (
+            {"similarity_epsilon": np.asarray(b"1e-6")},
+            "similarity_epsilon must be a finite positive value",
+        ),
         ({"centroid_scale": 0.0}, "centroid_scale must be a finite positive value"),
+        (
+            {"centroid_scale": np.asarray("1.0")},
+            "centroid_scale must be a finite positive value",
+        ),
         (
             {"max_centroid_distance": True},
             "max_centroid_distance must be a finite positive value",
