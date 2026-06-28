@@ -92,7 +92,7 @@ def _normalize_nonnegative_integer(value: Any, *, label: str) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{label} {_ERROR_SUFFIX}") from exc
 
     integer_value = int(integer_value)
