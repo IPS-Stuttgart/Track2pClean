@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import CalciumPlaneData
 
 
@@ -53,7 +52,10 @@ def _plane() -> CalciumPlaneData:
             {"normalize_weighted_overlap": np.asarray(True)},
             "normalize_weighted_overlap must be a boolean",
         ),
-        ({"return_components": np.asarray(True)}, "return_components must be a boolean"),
+        (
+            {"return_components": np.asarray(True)},
+            "return_components must be a boolean",
+        ),
     ],
 )
 def test_pairwise_local_evidence_rejects_array_control_values(kwargs, message):

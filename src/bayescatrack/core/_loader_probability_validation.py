@@ -16,7 +16,9 @@ _STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 def install_loader_probability_validation(loader_validation_module: ModuleType) -> None:
     """Reject ambiguous loader probability controls before loader patch install."""
 
-    original_finite_probability = loader_validation_module._finite_probability  # pylint: disable=protected-access
+    original_finite_probability = (
+        loader_validation_module._finite_probability
+    )  # pylint: disable=protected-access
     if getattr(original_finite_probability, _PATCH_MARKER, False):
         return
 
@@ -39,7 +41,9 @@ def install_loader_probability_validation(loader_validation_module: ModuleType) 
 
     setattr(_finite_probability, _PATCH_MARKER, True)
     setattr(_finite_probability, _ORIGINAL_ATTR, original_finite_probability)
-    loader_validation_module._finite_probability = _finite_probability  # pylint: disable=protected-access
+    loader_validation_module._finite_probability = (
+        _finite_probability  # pylint: disable=protected-access
+    )
 
 
 __all__ = ["install_loader_probability_validation"]

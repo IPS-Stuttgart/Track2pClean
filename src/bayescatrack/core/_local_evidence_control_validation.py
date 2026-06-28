@@ -107,7 +107,9 @@ def _validate_local_evidence_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
     message = f"{name} must be a finite non-negative value"
     value = _unwrap_scalar_array(value, message=message)
-    if isinstance(value, (bool, np.bool_)) or isinstance(value, _STRINGLIKE_SCALAR_TYPES):
+    if isinstance(value, (bool, np.bool_)) or isinstance(
+        value, _STRINGLIKE_SCALAR_TYPES
+    ):
         raise ValueError(message)
     try:
         numeric_value = float(value)
@@ -133,7 +135,9 @@ def _integer_control(
 ) -> int:
     message = f"{name} must be an integer"
     value = _unwrap_scalar_array(value, message=message)
-    if isinstance(value, (bool, np.bool_)) or isinstance(value, _STRINGLIKE_SCALAR_TYPES):
+    if isinstance(value, (bool, np.bool_)) or isinstance(
+        value, _STRINGLIKE_SCALAR_TYPES
+    ):
         raise ValueError(message)
     try:
         integer_value = operator.index(value)

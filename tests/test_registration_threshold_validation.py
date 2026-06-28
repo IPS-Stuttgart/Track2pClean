@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from bayescatrack.registration import warp_roi_masks_into_reference_frame
 
 _IDENTITY_MATRIX = np.eye(2)

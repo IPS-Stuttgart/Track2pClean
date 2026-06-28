@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.consensus_priors import (
     apply_consensus_edge_priors,
     consensus_prior_config_from_mapping,

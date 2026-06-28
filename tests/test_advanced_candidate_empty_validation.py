@@ -65,7 +65,10 @@ def test_candidate_pruning_guard_reinstalls_after_stale_installed_flag(monkeypat
 
     install_empty_candidate_gate_margin_fix()
 
-    assert advanced_roi_components.candidate_mask_from_cost_matrix is not stale_candidate_mask
+    assert (
+        advanced_roi_components.candidate_mask_from_cost_matrix
+        is not stale_candidate_mask
+    )
     mask = advanced_roi_components.candidate_mask_from_cost_matrix(
         np.zeros((3, 0), dtype=float),
         top_k=None,

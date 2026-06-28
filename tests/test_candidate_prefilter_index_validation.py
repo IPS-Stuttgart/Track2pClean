@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import pytest
-
-from bayescatrack.association.candidate_prefilter import CentroidCandidatePrefilterConfig
+from bayescatrack.association.candidate_prefilter import (
+    CentroidCandidatePrefilterConfig,
+)
 
 
 class _BadIndex:

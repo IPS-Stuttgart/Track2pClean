@@ -55,4 +55,6 @@ def test_roi_aware_shifted_cost_kwargs_rejects_fractional_radius() -> None:
 
 def test_roi_aware_shifted_cost_kwargs_rejects_array_radius() -> None:
     with pytest.raises(ValueError, match="shifted_iou_radius"):
-        global_assignment.roi_aware_shifted_cost_kwargs(shifted_iou_radius=np.asarray(2))
+        global_assignment.roi_aware_shifted_cost_kwargs(
+            shifted_iou_radius=np.asarray(2)
+        )

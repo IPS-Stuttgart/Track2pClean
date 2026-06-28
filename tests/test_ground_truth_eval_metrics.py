@@ -58,14 +58,8 @@ def test_evaluate_track_table_prediction_counts_only_complete_exact_matches():
 @pytest.mark.parametrize(
     "csv_body",
     [
-        "track_id,session,roi\n"
-        "track_1,s1,10\n"
-        "track_1,s1,\n"
-        "track_1,s2,20\n",
-        "track_id,session,roi\n"
-        "track_1,s1,\n"
-        "track_1,s1,10\n"
-        "track_1,s2,20\n",
+        "track_id,session,roi\n" "track_1,s1,10\n" "track_1,s1,\n" "track_1,s2,20\n",
+        "track_id,session,roi\n" "track_1,s1,\n" "track_1,s1,10\n" "track_1,s2,20\n",
     ],
 )
 def test_long_format_duplicate_missing_rows_preserve_nonmissing_roi(tmp_path, csv_body):

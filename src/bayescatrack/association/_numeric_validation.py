@@ -6,7 +6,6 @@ from typing import Any
 
 import numpy as np
 
-
 _TEXT_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 
 

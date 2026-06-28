@@ -285,7 +285,9 @@ def _install_complete_track_vector_normalization(reference_module: ModuleType) -
         "_bayescatrack_original",
         original_score_complete_tracks,
     )
-    reference_module.score_complete_tracks = _score_complete_tracks_with_vector_normalization
+    reference_module.score_complete_tracks = (
+        _score_complete_tracks_with_vector_normalization
+    )
 
 
 def _install_track_label_fill_value_validation(reference_module: ModuleType) -> None:
@@ -326,7 +328,9 @@ def _install_track_label_fill_value_validation(reference_module: ModuleType) -> 
         "_bayescatrack_original",
         original_to_session_track_labels,
     )
-    reference_cls.to_session_track_labels = _to_session_track_labels_with_fill_value_validation
+    reference_cls.to_session_track_labels = (
+        _to_session_track_labels_with_fill_value_validation
+    )
 
 
 def _normalize_complete_track_matrix(track_matrix: Any) -> Any:
