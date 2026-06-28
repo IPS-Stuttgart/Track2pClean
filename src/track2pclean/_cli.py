@@ -162,6 +162,15 @@ def _retitle_arg_parser(
     _replace_parser_text(parser, "bayescatrack", "track2pclean")
 
 
+def _native_project_text(text: str) -> str:
+    """Rewrite legacy project names in native Track2pClean CLI prose."""
+
+    return text.replace("BayesCaTrack", "Track2pClean").replace(
+        "bayescatrack",
+        "track2pclean",
+    )
+
+
 def _replace_parser_program_prefix(
     parser: argparse.ArgumentParser,
     *,
@@ -223,9 +232,9 @@ def _build_benchmark_help_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="benchmark", required=False)
     for name, command in _legacy_cli._BENCHMARK_COMMANDS.items():  # pylint: disable=protected-access
-        subparsers.add_parser(name, help=command.help)
+        subparsers.add_parser(name, help=_native_project_text(command.help))
     for alias, canonical in _legacy_cli._BENCHMARK_ALIASES.items():  # pylint: disable=protected-access
-        subparsers.add_parser(alias, help=f"Alias for {canonical}")
+        subparsers.add_parser(alias, help=_native_project_text(f"Alias for {canonical}"))
     return parser
 
 
