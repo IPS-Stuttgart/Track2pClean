@@ -200,26 +200,34 @@ def _score_array_for_track_matrix(
         raise ValueError(
             "track_scores must contain exactly one score per predicted track"
         )
-    if any(_is_boolean_scalar(score) for score in raw_scores):
-        raise ValueError("track_scores must contain finite real-valued scores")
-    try:
-        scores = np.asarray(raw_scores, dtype=float)
-    except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError("track_scores must contain finite real-valued scores") from exc
-    if scores.ndim != 1 or scores.shape[0] != matrix.shape[0]:
+    scores = np.asarray(
+        [_coerce_track_score(score) for score in raw_scores],
+        dtype=float,
+    )
+    if scores.shape != (matrix.shape[0],):
         raise ValueError(
             "track_scores must contain exactly one score per predicted track"
         )
-    if not np.all(np.isfinite(scores)):
-        raise ValueError("track_scores must contain only finite values")
     return scores
 
 
-def _is_boolean_scalar(value: object) -> bool:
-    array = np.asarray(value, dtype=object)
-    if array.shape != ():
-        return False
-    return isinstance(array.item(), (bool, np.bool_))
+def _coerce_track_score(score: object) -> float:
+    try:
+        score_array = np.asarray(score, dtype=object)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("track_scores must contain finite real-valued scores") from exc
+    if score_array.shape != ():
+        raise ValueError("track_scores must contain scalar finite real-valued scores")
+    scalar_score = score_array.item()
+    if isinstance(scalar_score, (bool, np.bool_)):
+        raise ValueError("track_scores must contain finite real-valued scores")
+    try:
+        converted = float(scalar_score)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("track_scores must contain finite real-valued scores") from exc
+    if not np.isfinite(converted):
+        raise ValueError("track_scores must contain only finite values")
+    return converted
 
 
 def _resolve_session_indices(
