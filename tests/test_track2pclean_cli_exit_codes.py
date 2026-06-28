@@ -13,6 +13,7 @@ _INVALID_EXIT_CODE_RETURNS = [
     True,
     False,
     np.bool_(True),
+    np.array(0),
     "0",
     b"1",
     1.0,
