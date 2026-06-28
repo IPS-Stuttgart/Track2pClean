@@ -220,6 +220,10 @@ def _validate_pixel_coordinate_bounds(
 
 def _validate_integer_pixel_coordinate_array(value: Any, *, name: str) -> np.ndarray:
     array = np.asarray(value)
+    if array.ndim != 1:
+        raise ValueError(
+            f"Suite2p ROI {name} must be a one-dimensional pixel-coordinate array"
+        )
     if _contains_ambiguous_pixel_coordinate_tokens(array):
         raise ValueError(
             f"Suite2p ROI {name} must contain finite integer pixel coordinates"
