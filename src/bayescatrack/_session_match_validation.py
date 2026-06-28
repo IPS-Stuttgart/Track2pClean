@@ -56,7 +56,12 @@ def _nonnegative_integer_array(values: Any, field_name: str) -> np.ndarray:
         raise ValueError(f"{field_name} must be one-dimensional")
     normalized = np.empty(array.shape, dtype=int)
     for index, value in np.ndenumerate(array):
-        normalized[index] = _nonnegative_integer(value, field_name)
+        try:
+            normalized[index] = _nonnegative_integer(value, field_name)
+        except OverflowError as exc:
+            raise ValueError(
+                f"{field_name} must contain non-negative integer values"
+            ) from exc
     return normalized
 
 
