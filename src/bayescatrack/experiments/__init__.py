@@ -29,6 +29,9 @@ from ._teacher_rescue_edit_cap_manifest_integration import (
 from ._teacher_rescue_repair_preset_manifest_integration import (
     install_teacher_rescue_repair_preset_manifest_integration,
 )
+from bayescatrack._raw_benchmark_exclude_subjects_validation import (
+    install_raw_benchmark_exclude_subjects_validation,
+)
 
 _triplet_support_benchmark_integration.install_track2p_benchmark_triplet_support_integration()
 _assignment_prior_sweep_validation.install_assignment_prior_sweep_validation()
@@ -45,5 +48,6 @@ _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
 _diag_defaults.install_diagnostic_suite2p_defaults()
 _mask_input_sweep_option_validation.install_mask_input_sweep_option_validation()
 _tracklet_graph_mask_cache_validation.install_tracklet_graph_mask_cache_validation()
+install_raw_benchmark_exclude_subjects_validation()
 
 __all__: list[str] = []

@@ -10,6 +10,31 @@ from bayescatrack.association.monotone_ranking_costs import (
 )
 
 
+def _example_block(
+    feature_names: tuple[str, ...] = ("centroid_distance", "one_minus_iou"),
+) -> ReferencePairwiseExamples:
+    feature_planes = {
+        "centroid_distance": np.array(
+            [[0.1, 2.0], [2.0, 0.1]],
+            dtype=float,
+        ),
+        "one_minus_iou": np.array(
+            [[0.1, 0.8], [0.7, 0.1]],
+            dtype=float,
+        ),
+    }
+    features = np.stack([feature_planes[name] for name in feature_names], axis=-1)
+    return ReferencePairwiseExamples(
+        session_a=0,
+        session_b=1,
+        features=features,
+        labels=np.eye(2, dtype=int),
+        reference_roi_indices=np.arange(2),
+        measurement_roi_indices=np.arange(2),
+        feature_names=feature_names,
+    )
+
+
 def test_monotone_pairwise_ranker_rejects_scalar_feature_input_cleanly():
     ranker = MonotonePairwiseRanker(
         feature_names=("centroid_distance",),
@@ -92,6 +117,30 @@ def test_monotone_ranker_treats_raw_similarity_features_as_benefits():
     assert ranker.feature_directions == (-1.0,)
     assert ranker.predict_score(features)[0, 0] < ranker.predict_score(features)[0, 1]
     assert ranker.predict_score(features)[1, 1] < ranker.predict_score(features)[1, 0]
+
+
+def test_monotone_ranking_single_feature_name_string_is_one_feature():
+    calibrated_model = fit_monotone_ranked_association_model(
+        [_example_block()],
+        feature_names="centroid_distance",
+        options=MonotoneRankerOptions(max_iter=10),
+    )
+
+    assert calibrated_model.feature_names == ("centroid_distance",)
+    assert calibrated_model.model.feature_names == ("centroid_distance",)
+    assert calibrated_model.model.feature_directions == (1.0,)
+
+
+def test_monotone_ranking_hardness_feature_name_string_is_one_feature():
+    options = MonotoneRankerOptions(
+        hardness_feature_names="centroid_distance",
+        max_iter=10,
+    )
+
+    calibrated_model = fit_monotone_ranked_association_model([_example_block()], options=options)
+
+    assert options.hardness_feature_names == ("centroid_distance",)
+    assert calibrated_model.model.training_examples > calibrated_model.model.positive_examples
 
 
 @pytest.mark.parametrize(

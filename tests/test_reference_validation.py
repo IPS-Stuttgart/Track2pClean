@@ -75,6 +75,20 @@ def test_track2p_reference_rejects_ambiguous_curated_mask_values(curated_mask) -
         _reference(curated_mask=curated_mask)
 
 
+@pytest.mark.parametrize(
+    "curated_mask",
+    [
+        np.array([[True], [False]], dtype=object),
+        np.array([[True, False]], dtype=object),
+        [[True], [False]],
+        [[True, False]],
+    ],
+)
+def test_track2p_reference_rejects_nested_curated_mask_shape(curated_mask) -> None:
+    with pytest.raises(ValueError, match="curated_mask must have shape"):
+        _reference(curated_mask=curated_mask)
+
+
 def test_track2p_reference_preserves_explicit_missing_roi_values() -> None:
     reference = Track2pReference(
         session_names=("day0", "day1"),

@@ -64,6 +64,26 @@ def test_candidate_limited_hard_negatives_keep_all_positives_and_hard_negatives(
     assert selected_centroid_distances == [0.1, 0.2, 0.3]
 
 
+def test_hard_negative_single_feature_name_string_is_one_feature():
+    features, labels = collect_candidate_limited_training_examples(
+        [_example_block()],
+        options=CandidateHardNegativeOptions(
+            negative_to_positive_ratio=1.0,
+            candidate_top_k_per_anchor=1,
+            include_column_candidates=False,
+            hardness_feature_names="centroid_distance",
+        ),
+    )
+
+    assert int(np.sum(labels == 1)) == 3
+    assert int(np.sum(labels == 0)) == 3
+    assert features.shape == (6, 3)
+    selected_centroid_distances = sorted(
+        float(value) for value in features[labels == 0, 0]
+    )
+    assert selected_centroid_distances == [0.1, 0.2, 0.3]
+
+
 def test_candidate_limited_hard_negatives_ignore_unsupervised_pairs():
     supervised_mask = np.eye(3, dtype=bool)
     supervised_mask[0, 1] = True
