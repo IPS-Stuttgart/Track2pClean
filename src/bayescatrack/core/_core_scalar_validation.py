@@ -173,7 +173,7 @@ def _validate_finite_scalar(
     *,
     strictly_positive: bool,
 ) -> float:
-    requirement = "a finite strictly positive value" if strictly_positive else "a finite non-negative value"
+    requirement = "a finite positive value" if strictly_positive else "a finite non-negative value"
     if isinstance(raw_value, np.ndarray):
         if raw_value.shape != ():
             raise ValueError(f"{name} must be {requirement}")
