@@ -31,11 +31,15 @@ def install_matching_control_validation() -> None:
     original_solve = _matching.solve_bundle_linear_assignment
     original_build_matches = _matching.build_track_rows_from_matches
     original_bundle_roi_indices = _matching._bundle_roi_indices_for_session  # pylint: disable=protected-access
+    original_normalize_roi_index = _matching._normalize_roi_index  # pylint: disable=protected-access
+    original_normalize_session_index = _matching._normalize_session_index  # pylint: disable=protected-access
 
     if (
         getattr(original_solve, _PATCH_MARKER, False)
         and getattr(original_build_matches, _PATCH_MARKER, False)
         and getattr(original_bundle_roi_indices, _PATCH_MARKER, False)
+        and getattr(original_normalize_roi_index, _PATCH_MARKER, False)
+        and getattr(original_normalize_session_index, _PATCH_MARKER, False)
     ):
         return
 
@@ -91,16 +95,44 @@ def install_matching_control_validation() -> None:
             _normalize_session_index(session_index, len(bundles) + 1),
         )
 
+    @wraps(original_normalize_roi_index)
+    def normalize_roi_index_with_array_validation(value: Any, field_name: str) -> int:
+        if isinstance(value, np.ndarray):
+            raise ValueError(f"{field_name} must contain integer ROI indices")
+        return original_normalize_roi_index(value, field_name)
+
+    @wraps(original_normalize_session_index)
+    def normalize_session_index_with_array_validation(
+        value: Any,
+        field_name: str,
+        *,
+        num_sessions: int | None = None,
+    ) -> int:
+        if isinstance(value, np.ndarray):
+            raise ValueError(f"{field_name} must be an integer session index")
+        return original_normalize_session_index(
+            value,
+            field_name,
+            num_sessions=num_sessions,
+        )
+
     _mark_patch(solve_bundle_linear_assignment_with_control_validation, original_solve)
     _mark_patch(build_track_rows_from_matches_with_control_validation, original_build_matches)
     _mark_patch(
         bundle_roi_indices_for_session_with_control_validation,
         original_bundle_roi_indices,
     )
+    _mark_patch(normalize_roi_index_with_array_validation, original_normalize_roi_index)
+    _mark_patch(
+        normalize_session_index_with_array_validation,
+        original_normalize_session_index,
+    )
 
     _matching.solve_bundle_linear_assignment = solve_bundle_linear_assignment_with_control_validation
     _matching.build_track_rows_from_matches = build_track_rows_from_matches_with_control_validation
     _matching._bundle_roi_indices_for_session = bundle_roi_indices_for_session_with_control_validation  # pylint: disable=protected-access
+    _matching._normalize_roi_index = normalize_roi_index_with_array_validation  # pylint: disable=protected-access
+    _matching._normalize_session_index = normalize_session_index_with_array_validation  # pylint: disable=protected-access
 
 
 def _mark_patch(wrapper: Any, original: Any) -> None:
@@ -184,7 +216,7 @@ def _normalize_session_index(value: Any, n_sessions: int) -> int:
 
 
 def _normalize_integer_control(value: Any, field_name: str) -> int:
-    if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
+    if isinstance(value, (bool, np.bool_, str, bytes, bytearray, np.ndarray)):
         raise ValueError(f"{field_name} must be an integer")
 
     try:

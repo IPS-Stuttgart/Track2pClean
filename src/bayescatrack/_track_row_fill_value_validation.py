@@ -17,7 +17,9 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_track_row_fill_value_validation_patch"
-_ERROR_MESSAGE = "fill_value must be a negative integer sentinel"
+_ERROR_MESSAGE = (
+    "fill_value must be an integer; fill_value must be a negative integer sentinel"
+)
 
 
 def install_track_row_fill_value_validation() -> None:
@@ -72,6 +74,8 @@ def install_track_row_fill_value_validation() -> None:
 
 def _normalize_fill_value(value: Any) -> int:
     if isinstance(value, (bool, np.bool_)):
+        raise ValueError(_ERROR_MESSAGE)
+    if isinstance(value, np.ndarray):
         raise ValueError(_ERROR_MESSAGE)
 
     if isinstance(value, (float, np.floating)):
