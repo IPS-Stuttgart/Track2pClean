@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_tracking_start_roi_availability_validation_patch"
+_MAX_TRACKING_INDEX = int(np.iinfo(np.int_).max)
 
 
 def install_tracking_start_roi_availability_validation() -> None:
@@ -130,18 +131,23 @@ def _normalize_roi_index(value: Any, *, field_name: str) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{field_name} must contain integer ROI indices")
 
-    try:
-        integer_value = int(operator.index(value))
-    except TypeError:
-        if not isinstance(value, (float, np.floating)):
-            raise ValueError(f"{field_name} must contain integer ROI indices") from None
+    if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
             raise ValueError(f"{field_name} must contain integer ROI indices")
         integer_value = int(numeric_value)
+    else:
+        try:
+            integer_value = int(operator.index(value))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                f"{field_name} must contain integer ROI indices"
+            ) from exc
 
     if integer_value < 0:
         raise ValueError(f"{field_name} must contain non-negative ROI indices")
+    if integer_value > _MAX_TRACKING_INDEX:
+        raise ValueError(f"{field_name} must contain integer ROI indices")
     return int(integer_value)
 
 
@@ -161,14 +167,15 @@ def _normalize_start_session_index(
     else:
         try:
             normalized = int(operator.index(value))
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(
                 "start_session_index must be an integer session index"
             ) from exc
 
     if normalized < 0 or normalized >= int(num_sessions):
         raise IndexError(
-            f"start_session_index {normalized} out of bounds for {num_sessions} sessions"
+            f"start_session_index {normalized} out of bounds for "
+            f"{num_sessions} sessions"
         )
     return normalized
 
