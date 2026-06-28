@@ -74,3 +74,37 @@ def test_fixed_precision_keeps_numeric_track_score_strings() -> None:
     )
 
     assert scores["complete_track_score_threshold_at_fixed_precision_0_95"] == 0.75
+
+
+def test_fixed_precision_rejects_bare_mutable_bytes_track_scores() -> None:
+    predicted = np.array([[0, 10], [1, 11]], dtype=object)
+    reference = np.array([[0, 10]], dtype=object)
+
+    with pytest.raises(ValueError, match="track_scores"):
+        score_complete_tracks_at_fixed_precision(
+            predicted,
+            reference,
+            target_precisions=(0.95,),
+            track_scores=getattr(builtins, "byte" "array")(bytes([0, 1])),
+        )
+
+
+def test_fixed_precision_wraps_overflowing_numeric_controls() -> None:
+    predicted = np.array([[0, 10]], dtype=object)
+    reference = np.array([[0, 10]], dtype=object)
+    overflowing_integer = 10**5000
+
+    with pytest.raises(ValueError, match="target precisions"):
+        score_complete_tracks_at_fixed_precision(
+            predicted,
+            reference,
+            target_precisions=(overflowing_integer,),
+        )
+
+    with pytest.raises(ValueError, match="track_scores"):
+        score_complete_tracks_at_fixed_precision(
+            predicted,
+            reference,
+            target_precisions=(0.95,),
+            track_scores=(overflowing_integer,),
+        )
