@@ -30,7 +30,7 @@ class CandidateHardNegativeOptions:
     negative_to_positive_ratio: float = 4.0
     candidate_top_k_per_anchor: int | None = 20
     include_column_candidates: bool = True
-    hardness_feature_names: tuple[str, ...] = ()
+    hardness_feature_names: Sequence[str] | str | None = ()
 
     def __post_init__(self) -> None:
         ratio = _finite_float(
@@ -58,11 +58,7 @@ class CandidateHardNegativeOptions:
         object.__setattr__(
             self,
             "hardness_feature_names",
-            tuple(
-                ()
-                if self.hardness_feature_names is None
-                else self.hardness_feature_names
-            ),
+            _feature_name_tuple(self.hardness_feature_names),
         )
 
 
@@ -82,6 +78,14 @@ def _positive_integer_or_none(value: Any, *, name: str) -> int:
     if not numeric.is_integer() or numeric < 1.0:
         raise ValueError(f"{name} must be positive or None")
     return int(numeric)
+
+
+def _feature_name_tuple(feature_names: Sequence[str] | str | None) -> tuple[str, ...]:
+    if feature_names is None:
+        return ()
+    if isinstance(feature_names, str):
+        return (feature_names,)
+    return tuple(feature_names)
 
 
 def collect_candidate_limited_training_examples(
@@ -213,11 +217,11 @@ def _ordered_candidate_indices(scores: np.ndarray, indices: np.ndarray) -> np.nd
 def _pairwise_hardness_score(
     block: ReferencePairwiseExamples,
     *,
-    hardness_feature_names: Sequence[str] = (),
+    hardness_feature_names: Sequence[str] | str = (),
 ) -> np.ndarray:
     feature_names = tuple(block.feature_names)
     if hardness_feature_names:
-        selected_names = tuple(hardness_feature_names)
+        selected_names = _feature_name_tuple(hardness_feature_names)
         missing = [name for name in selected_names if name not in feature_names]
         if missing:
             raise ValueError(

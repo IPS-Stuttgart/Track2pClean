@@ -14,7 +14,7 @@ from bayescatrack.experiments.calibration_hard_negatives import (
 def balanced_binary_gap_sample_weights(
     features: Any,
     labels: Any,
-    feature_names: Sequence[str],
+    feature_names: Sequence[str] | str,
     *,
     gap_feature_name: str = "session_gap",
     missing_gap: str = "binary",
@@ -35,7 +35,8 @@ def balanced_binary_gap_sample_weights(
     labels:
         Binary labels with shape matching ``features.shape[:-1]``.
     feature_names:
-        Names corresponding to the last feature axis.
+        Names corresponding to the last feature axis. A single string is treated
+        as one feature name, not as a sequence of characters.
     gap_feature_name:
         Feature plane that contains the positive session gap. The calibrated
         default feature set contains ``"session_gap"``.
@@ -52,7 +53,7 @@ def balanced_binary_gap_sample_weights(
     if label_array.shape != feature_array.shape[:-1]:
         raise ValueError("labels must match features.shape[:-1]")
 
-    names = tuple(feature_names)
+    names = _feature_name_tuple(feature_names)
     if feature_array.shape[-1] != len(names):
         raise ValueError("feature_names length must match features.shape[-1]")
     if gap_feature_name not in names:
@@ -80,6 +81,12 @@ def balanced_binary_gap_sample_weights(
 
     weights = _inverse_group_frequency_weights(flat_labels != 0, gap_values)
     return weights.reshape(label_array.shape)
+
+
+def _feature_name_tuple(feature_names: Sequence[str] | str) -> tuple[str, ...]:
+    if isinstance(feature_names, str):
+        return (feature_names,)
+    return tuple(feature_names)
 
 
 def _inverse_group_frequency_weights(

@@ -220,6 +220,10 @@ def _resolve_session_indices(
 ) -> list[int]:
     if session_indices is None:
         return list(range(num_sessions))
+    if isinstance(session_indices, (str, bytes)):
+        raise ValueError(
+            "session_indices must be a sequence of integer-like indices, not a bare string"
+        )
     selected: list[int] = []
     seen: set[int] = set()
     for candidate in session_indices:
@@ -267,6 +271,10 @@ def _coerce_session_index(value: object) -> int:
 def _validate_target_precisions(
     target_precisions: Sequence[float],
 ) -> tuple[float, ...]:
+    if isinstance(target_precisions, (str, bytes)):
+        raise ValueError(
+            "target_precisions must be a sequence of finite numeric values between 0 and 1, not a bare string"
+        )
     targets: list[float] = []
     for target_precision in target_precisions:
         if isinstance(target_precision, (bool, np.bool_)):

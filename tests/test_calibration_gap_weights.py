@@ -49,6 +49,22 @@ def test_gap_balanced_weights_support_pairwise_feature_tensors():
     assert np.isclose(float(np.sum(weights[(labels == 0) & (gaps == 2)])), 1.0)
 
 
+def test_gap_balanced_weights_treat_single_feature_name_as_one_name():
+    labels = np.array([[1, 0], [0, 1]], dtype=int)
+    gaps = np.array([[1.0, 1.0], [2.0, 2.0]], dtype=float)
+    features = gaps[..., None]
+
+    weights = balanced_binary_gap_sample_weights(features, labels, "session_gap")
+
+    _assert_normalized_shape(weights, labels)
+    group_masses = []
+    for label in (0, 1):
+        for gap in (1.0, 2.0):
+            mask = (labels == label) & (gaps == gap)
+            group_masses.append(float(np.sum(weights[mask])))
+    assert group_masses == pytest.approx([1.0] * 4)
+
+
 def test_gap_balanced_weights_fall_back_to_binary_balance_when_gap_missing():
     labels = np.array([1, 0, 0, 0], dtype=int)
     features = np.zeros((4, 1), dtype=float)

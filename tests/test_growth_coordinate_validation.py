@@ -67,3 +67,22 @@ def test_radial_growth_penalty_rejects_nonfinite_center() -> None:
             center_xy=[0.0, float("nan")],
             scale=1.0,
         )
+
+
+@pytest.mark.parametrize(
+    "center_xy",
+    [
+        [[0.0, 0.0]],
+        [[0.0], [0.0]],
+        np.asarray([[0.0, 0.0]]),
+        np.asarray([[0.0], [0.0]]),
+    ],
+)
+def test_radial_growth_penalty_rejects_nested_center_vector(center_xy: object) -> None:
+    with pytest.raises(ValueError, match="center_xy.*shape"):
+        radial_growth_penalty_matrix(
+            _source_points(),
+            _target_points(),
+            center_xy=center_xy,
+            scale=1.0,
+        )

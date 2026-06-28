@@ -65,6 +65,35 @@ def test_relink_can_disable_outgoing_edge_evidence_for_legacy_behavior():
     assert relinked.tolist() == [[10, 20, 30]]
 
 
+def test_relink_rejects_nested_roi_index_vectors():
+    rows = np.array([[10, 21]], dtype=int)
+
+    with pytest.raises(
+        ValueError,
+        match=r"roi_indices_by_session\[1\].*one-dimensional",
+    ):
+        relink_tracks_at_geometry_issues(
+            rows,
+            [_issue()],
+            {(0, 1): np.array([[0.1, 0.2]], dtype=float)},
+            roi_indices_by_session=([10], [[20], [21]]),
+            config=PostSolveRelinkingConfig(max_edge_cost=None),
+        )
+
+
+def test_relink_rejects_non_matrix_pairwise_costs():
+    rows = np.array([[10, 21]], dtype=int)
+
+    with pytest.raises(ValueError, match=r"pairwise_costs.*two-dimensional"):
+        relink_tracks_at_geometry_issues(
+            rows,
+            [_issue()],
+            {(0, 1): np.array([0.1, 0.2], dtype=float)},
+            roi_indices_by_session=([10], [20, 21]),
+            config=PostSolveRelinkingConfig(max_edge_cost=None),
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

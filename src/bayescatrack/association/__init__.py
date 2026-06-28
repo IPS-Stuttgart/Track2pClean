@@ -10,12 +10,14 @@ from . import (
 )
 from . import _calibrated_roi_stat_feature_patch as _calibrated_roi_stat_feature_patch
 from . import _calibrated_session_gap_validation as _calibrated_session_gap_validation
+from . import _dynamic_activity_component_validation as _dynamic_activity_component_validation
 from . import _dynamic_edge_prior_validation as _dynamic_edge_prior_validation
 from . import _global_assignment_input_validation as _global_assignment_input_validation
 from . import _global_solver_track_validation as _global_solver_track_validation
 from . import _growth_coordinate_validation as _growth_coordinate_validation
 from . import _monotone_ranker_feature_validation as _monotone_ranker_feature_validation
 from . import _neuropil_ratio_shape_validation as _neuropil_ratio_shape_validation
+from . import _postsolve_relinking_input_validation as _postsolve_relinking_input_validation
 from . import (
     _registered_component_shape_validation as _registered_component_shape_validation,
 )
@@ -44,11 +46,13 @@ _roi_aware_local_validation.install_roi_aware_local_validation()
 _registered_component_shape_validation.install_registered_component_shape_validation()
 _shifted_iou_preset_validation.install_shifted_iou_preset_validation()
 _dynamic_edge_prior_validation.install_dynamic_edge_prior_bool_validation()
+_dynamic_activity_component_validation.install_dynamic_activity_component_shape_validation()
 _track2p_policy_session_gap_validation.install_track2p_policy_session_gap_validation()
 _track_refinement_fill_value_validation.install_track_refinement_fill_value_validation()
 _track_refinement_numeric_control_validation.install_track_refinement_numeric_control_validation()
 _track_refinement_row_sentinel_validation.install_track_refinement_row_sentinel_validation()
 _growth_coordinate_validation.install_growth_coordinate_validation()
+_postsolve_relinking_input_validation.install_postsolve_relinking_input_validation()
 
 _PATCH_MODULES = (
     _absence_config_scalar_validation,
@@ -57,12 +61,14 @@ _PATCH_MODULES = (
     _calibrated_mahalanobis_bundle_patch,
     _calibrated_roi_stat_feature_patch,
     _calibrated_session_gap_validation,
+    _dynamic_activity_component_validation,
     _dynamic_edge_prior_validation,
     _global_assignment_input_validation,
     _global_solver_track_validation,
     _growth_coordinate_validation,
     _monotone_ranker_feature_validation,
     _neuropil_ratio_shape_validation,
+    _postsolve_relinking_input_validation,
     _registered_component_shape_validation,
     _roi_aware_local_validation,
     _session_edge_pair_validation,

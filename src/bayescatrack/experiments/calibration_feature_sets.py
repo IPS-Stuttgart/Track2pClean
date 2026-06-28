@@ -136,7 +136,7 @@ def calibration_feature_names(
 
 def pairwise_cost_kwargs_for_calibration_features(
     pairwise_cost_kwargs: Mapping[str, Any] | None,
-    feature_names: Sequence[str],
+    feature_names: Sequence[str] | str,
 ) -> dict[str, Any] | None:
     """Return pairwise-cost kwargs needed to materialize requested features."""
 
@@ -166,21 +166,35 @@ def pairwise_kwargs_request_local_evidence(
     return False
 
 
-def uses_local_evidence_features(feature_names: Sequence[str]) -> bool:
+def uses_local_evidence_features(feature_names: Sequence[str] | str) -> bool:
     local_evidence_features = set(LOCAL_EVIDENCE_ASSOCIATION_FEATURES)
     return any(
-        feature_name in local_evidence_features for feature_name in feature_names
+        feature_name in local_evidence_features
+        for feature_name in _feature_name_tuple(feature_names)
     )
 
 
-def uses_shifted_overlap_features(feature_names: Sequence[str]) -> bool:
+def uses_shifted_overlap_features(feature_names: Sequence[str] | str) -> bool:
     shifted_overlap_features = set(SHIFTED_OVERLAP_ASSOCIATION_FEATURES)
     return any(
-        feature_name in shifted_overlap_features for feature_name in feature_names
+        feature_name in shifted_overlap_features
+        for feature_name in _feature_name_tuple(feature_names)
     )
 
 
-def _deduplicated_feature_names(*feature_groups: Sequence[str]) -> tuple[str, ...]:
+def _deduplicated_feature_names(
+    *feature_groups: Sequence[str] | str,
+) -> tuple[str, ...]:
     return tuple(
-        dict.fromkeys(feature for group in feature_groups for feature in group)
+        dict.fromkeys(
+            feature
+            for group in feature_groups
+            for feature in _feature_name_tuple(group)
+        )
     )
+
+
+def _feature_name_tuple(feature_names: Sequence[str] | str) -> tuple[str, ...]:
+    if isinstance(feature_names, str):
+        return (feature_names,)
+    return tuple(feature_names)

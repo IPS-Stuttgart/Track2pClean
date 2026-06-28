@@ -50,12 +50,11 @@ def _normalize_subpixel_shift_yx(shift_yx: Any) -> np.ndarray:
     except (TypeError, ValueError) as exc:
         raise ValueError(_SHIFT_ERROR) from exc
 
-    flattened_shift = shift_array.reshape(-1)
-    if flattened_shift.size != 2:
+    if shift_array.shape != (2,):
         raise ValueError(_SHIFT_ERROR)
 
     return np.asarray(
-        [_normalize_subpixel_shift_component(value) for value in flattened_shift.tolist()],
+        [_normalize_subpixel_shift_component(value) for value in shift_array.tolist()],
         dtype=float,
     )
 

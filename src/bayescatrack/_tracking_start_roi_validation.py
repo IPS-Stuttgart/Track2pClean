@@ -98,12 +98,12 @@ def _normalize_start_roi_indices(values: Any) -> tuple[int, ...]:
         raise ValueError("start_roi_indices must be a sequence of integer ROI indices")
 
     array = np.asarray(values, dtype=object)
-    if array.ndim == 0:
-        raise ValueError("start_roi_indices must be a sequence of integer ROI indices")
+    if array.ndim != 1:
+        raise ValueError(
+            "start_roi_indices must be a one-dimensional sequence of integer ROI indices"
+        )
 
-    normalized = tuple(
-        _normalize_start_roi_index(value) for value in array.reshape(-1).tolist()
-    )
+    normalized = tuple(_normalize_start_roi_index(value) for value in array.tolist())
     if len(set(normalized)) != len(normalized):
         raise ValueError("start_roi_indices must contain unique ROI indices")
     return normalized
