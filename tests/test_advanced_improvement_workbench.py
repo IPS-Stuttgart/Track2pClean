@@ -173,6 +173,10 @@ def test_active_label_config_rejects_invalid_selection_knobs() -> None:
         ActiveLabelConfig(margin_weight=np.nan)
     with pytest.raises(ValueError, match="uncertainty_weight must be finite"):
         ActiveLabelConfig(uncertainty_weight=True)
+    with pytest.raises(ValueError, match="uncertainty_weight must be finite"):
+        ActiveLabelConfig(uncertainty_weight=np.bool_(True))
+    with pytest.raises(ValueError, match="max_rows must be finite"):
+        ActiveLabelConfig(max_rows=np.bool_(True))
 
 
 def test_active_label_selection_uses_validated_row_cap() -> None:
