@@ -44,27 +44,26 @@ class DynamicEdgePriorConfig:
             "local_margin_weight",
             "local_margin_target",
         ):
-            value = float(getattr(self, name))
-            if value < 0.0 or not np.isfinite(value):
-                raise ValueError(f"{name} must be finite and non-negative")
+            value = _validated_non_negative_finite_float(name, getattr(self, name))
             object.__setattr__(self, name, value)
         if self.reciprocal_rank_cap is not None:
-            reciprocal_rank_cap = float(self.reciprocal_rank_cap)
-            if reciprocal_rank_cap < 0.0 or not np.isfinite(reciprocal_rank_cap):
-                raise ValueError("reciprocal_rank_cap must be finite and non-negative")
+            reciprocal_rank_cap = _validated_non_negative_finite_float(
+                "reciprocal_rank_cap",
+                self.reciprocal_rank_cap,
+            )
             object.__setattr__(self, "reciprocal_rank_cap", reciprocal_rank_cap)
         if self.local_margin_cap is not None:
-            local_margin_cap = float(self.local_margin_cap)
-            if local_margin_cap < 0.0 or not np.isfinite(local_margin_cap):
-                raise ValueError("local_margin_cap must be finite and non-negative")
+            local_margin_cap = _validated_non_negative_finite_float(
+                "local_margin_cap",
+                self.local_margin_cap,
+            )
             object.__setattr__(self, "local_margin_cap", local_margin_cap)
-        edge_quality_bias = float(self.edge_quality_bias)
-        if not np.isfinite(edge_quality_bias):
-            raise ValueError("edge_quality_bias must be finite")
+        edge_quality_bias = _validated_finite_float(
+            "edge_quality_bias",
+            self.edge_quality_bias,
+        )
         object.__setattr__(self, "edge_quality_bias", edge_quality_bias)
-        large_cost = float(self.large_cost)
-        if not np.isfinite(large_cost) or large_cost <= 0.0:
-            raise ValueError("large_cost must be finite and positive")
+        large_cost = _validated_positive_finite_float("large_cost", self.large_cost)
         object.__setattr__(self, "large_cost", large_cost)
 
 
@@ -407,6 +406,45 @@ def _column_mask_for_cost_shape(mask: Any, shape: tuple[int, int]) -> np.ndarray
     if compact_column_count == shape[1]:
         return np.zeros((shape[1],), dtype=bool)
     raise ValueError("empty_registered_rois must align with compact or full columns")
+
+
+def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
+    message = f"{name} must be finite and non-negative"
+    if isinstance(raw_value, (bool, np.bool_)):
+        raise ValueError(message)
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if value < 0.0 or not np.isfinite(value):
+        raise ValueError(message)
+    return value
+
+
+def _validated_finite_float(name: str, raw_value: Any) -> float:
+    message = f"{name} must be finite"
+    if isinstance(raw_value, (bool, np.bool_)):
+        raise ValueError(message)
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if not np.isfinite(value):
+        raise ValueError(message)
+    return value
+
+
+def _validated_positive_finite_float(name: str, raw_value: Any) -> float:
+    message = f"{name} must be finite and positive"
+    if isinstance(raw_value, (bool, np.bool_)):
+        raise ValueError(message)
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if value <= 0.0 or not np.isfinite(value):
+        raise ValueError(message)
+    return value
 
 
 __all__ = (
