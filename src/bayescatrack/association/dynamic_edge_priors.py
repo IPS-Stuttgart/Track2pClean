@@ -466,8 +466,13 @@ def _validated_numeric_scalar(name: str, raw_value: Any) -> float:
     raw_array = np.asarray(raw_value)
     if raw_array.ndim != 0:
         raise ValueError(f"{name} must be a numeric scalar")
+    raw_scalar = raw_array.item()
+    if isinstance(raw_scalar, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a numeric scalar, not a boolean")
+    if isinstance(raw_scalar, str):
+        raise ValueError(f"{name} must be a numeric scalar, not text")
     try:
-        return float(raw_array)
+        return float(raw_scalar)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a numeric scalar") from exc
 
