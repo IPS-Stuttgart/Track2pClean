@@ -1,17 +1,4 @@
-"""Strict validation for FOV subpixel translation controls.
-
-The low-level subpixel translation helpers previously coerced ``shift_yx`` with
-``np.asarray(..., dtype=float).reshape(2)``. Boolean values therefore became
-numeric one-pixel or zero-pixel shifts before image or ROI-mask resampling, and
-malformed shapes surfaced as low-level reshape errors. This package-level hook
-keeps ordinary numeric shifts working while rejecting booleans, non-finite
-values, and malformed shift vectors at the API boundary.
-
-The public mask-interpolation helpers also used membership checks directly on
-the user-supplied value. Array-like controls such as ``np.array(["nearest"])``
-therefore raised ``TypeError`` instead of the package's public ``ValueError``
-validation contract. The same hook validates those controls before delegation.
-"""
+"""Strict validation for FOV subpixel translation controls."""
 
 from __future__ import annotations
 
@@ -67,7 +54,7 @@ def _wrap_mask_interpolation_validation(module: Any) -> None:
 
 
 def _normalize_subpixel_shift_yx(shift_yx: Any) -> np.ndarray:
-    if isinstance(shift_yx, (str, bytes)):
+    if isinstance(shift_yx, (str, bytes, bytearray)):
         raise ValueError(_SHIFT_ERROR)
     try:
         shift_array = np.asarray(shift_yx, dtype=object)
@@ -88,7 +75,7 @@ def _normalize_subpixel_shift_component(value: Any) -> float:
         if value.shape != ():
             raise ValueError(_SHIFT_ERROR)
         value = value.item()
-    if isinstance(value, (bool, np.bool_, str, bytes)):
+    if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
         raise ValueError(_SHIFT_ERROR)
     try:
         numeric_value = float(value)
