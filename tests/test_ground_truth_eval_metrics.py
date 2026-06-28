@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 from bayescatrack.ground_truth_eval import (
     TrackTable,
@@ -52,6 +53,40 @@ def test_evaluate_track_table_prediction_counts_only_complete_exact_matches():
     evaluation = evaluate_track_table_prediction(ground_truth, prediction)
 
     assert evaluation.n_exact_full_track_matches == 1
+
+
+@pytest.mark.parametrize(
+    "csv_body",
+    [
+        "track_id,session,roi\n"
+        "track_1,s1,10\n"
+        "track_1,s1,\n"
+        "track_1,s2,20\n",
+        "track_id,session,roi\n"
+        "track_1,s1,\n"
+        "track_1,s1,10\n"
+        "track_1,s2,20\n",
+    ],
+)
+def test_long_format_duplicate_missing_rows_preserve_nonmissing_roi(tmp_path, csv_body):
+    csv_path = tmp_path / "tracks.csv"
+    csv_path.write_text(csv_body, encoding="utf-8")
+
+    table = load_track_table_csv(csv_path, session_names=("s1", "s2"))
+
+    assert table.session_names == ("s1", "s2")
+    np.testing.assert_array_equal(table.tracks, [[10, 20]])
+
+
+def test_long_format_rejects_conflicting_nonmissing_duplicate_rows(tmp_path):
+    csv_path = tmp_path / "tracks.csv"
+    csv_path.write_text(
+        "track_id,session,roi\n" "track_1,s1,10\n" "track_1,s1,11\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="conflicting ROI entries"):
+        load_track_table_csv(csv_path)
 
 
 def test_long_format_rejects_missing_track_ids(tmp_path):
