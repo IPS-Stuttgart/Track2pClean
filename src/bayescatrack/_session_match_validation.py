@@ -71,7 +71,7 @@ def _nonnegative_integer(value: Any, field_name: str) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(
                 f"{field_name} must contain non-negative integer values"
             ) from exc

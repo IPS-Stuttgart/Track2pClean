@@ -5,6 +5,11 @@ import pytest
 from bayescatrack.matching import SessionMatchResult
 
 
+class _BadIndex:
+    def __index__(self) -> int:
+        raise OverflowError("index conversion failed")
+
+
 def _valid_match_result(**overrides):
     kwargs = {
         "reference_session_name": "day0",
@@ -32,6 +37,20 @@ def test_session_match_result_rejects_boolean_positions():
 def test_session_match_result_rejects_nonfinite_costs():
     with pytest.raises(ValueError, match="costs"):
         _valid_match_result(costs=np.asarray([np.nan], dtype=float))
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "reference_positions",
+        "measurement_positions",
+        "reference_roi_indices",
+        "measurement_roi_indices",
+    ],
+)
+def test_session_match_result_rejects_bad_index_values(field_name):
+    with pytest.raises(ValueError, match=field_name):
+        _valid_match_result(**{field_name: np.asarray([_BadIndex()], dtype=object)})
 
 
 @pytest.mark.parametrize(
