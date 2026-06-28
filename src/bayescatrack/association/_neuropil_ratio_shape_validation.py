@@ -18,7 +18,9 @@ def install_neuropil_ratio_shape_validation() -> None:
     if getattr(_activity_similarity, _PATCH_MARKER, False):
         return
 
-    original = _activity_similarity._per_roi_neuropil_ratio  # pylint: disable=protected-access
+    original = (
+        _activity_similarity._per_roi_neuropil_ratio
+    )  # pylint: disable=protected-access
 
     def validated_per_roi_neuropil_ratio(
         fluorescence_traces: np.ndarray | None,
@@ -37,7 +39,9 @@ def install_neuropil_ratio_shape_validation() -> None:
     validated_per_roi_neuropil_ratio.__name__ = original.__name__
     validated_per_roi_neuropil_ratio.__qualname__ = original.__qualname__
     setattr(validated_per_roi_neuropil_ratio, _ORIGINAL_ATTR, original)
-    _activity_similarity._per_roi_neuropil_ratio = validated_per_roi_neuropil_ratio  # pylint: disable=protected-access
+    _activity_similarity._per_roi_neuropil_ratio = (
+        validated_per_roi_neuropil_ratio  # pylint: disable=protected-access
+    )
     setattr(_activity_similarity, _PATCH_MARKER, True)
 
 

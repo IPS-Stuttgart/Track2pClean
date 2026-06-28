@@ -23,8 +23,7 @@ def test_manifest_rows_are_restored_after_workbench_reload():
 
     names = [run["name"] for run in manifest["runs"]]
     row_name = (
-        "track2p-policy-teacher-adjacent-"
-        "rescue-dynamic-confidence-seed-source"
+        "track2p-policy-teacher-adjacent-" "rescue-dynamic-confidence-seed-source"
     )
     assert row_name in names
     assert names.count(row_name) == 1

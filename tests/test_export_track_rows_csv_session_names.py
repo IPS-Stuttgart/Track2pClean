@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from tests import _support  # noqa: F401
 from bayescatrack.matching import export_track_rows_csv
+from tests import _support  # noqa: F401
 
 
 def test_export_track_rows_csv_rejects_bare_session_names_string(tmp_path):

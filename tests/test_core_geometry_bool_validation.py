@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.core.bridge import CalciumPlaneData
 
 
@@ -20,7 +19,11 @@ def _weighted_plane() -> CalciumPlaneData:
         ("centroids", {"weighted": "false"}, "weighted"),
         ("position_covariances", {"weighted": bytearray(b"0")}, "weighted"),
         ("to_measurement_matrix", {"weighted": object()}, "weighted"),
-        ("to_constant_velocity_state_moments", {"weighted": np.array(False)}, "weighted"),
+        (
+            "to_constant_velocity_state_moments",
+            {"weighted": np.array(False)},
+            "weighted",
+        ),
         ("to_export_dict", {"weighted": "true"}, "weighted"),
         ("to_export_dict", {"include_masks": "false"}, "include_masks"),
     ],
@@ -53,5 +56,9 @@ def test_pairwise_centroid_distances_rejects_ambiguous_weighted() -> None:
 def test_geometry_boolean_controls_accept_numpy_bool_scalars() -> None:
     plane = _weighted_plane()
 
-    np.testing.assert_allclose(plane.roi_areas(weighted=np.bool_(True)), np.asarray([4.0]))
-    np.testing.assert_allclose(plane.roi_areas(weighted=np.bool_(False)), np.asarray([2.0]))
+    np.testing.assert_allclose(
+        plane.roi_areas(weighted=np.bool_(True)), np.asarray([4.0])
+    )
+    np.testing.assert_allclose(
+        plane.roi_areas(weighted=np.bool_(False)), np.asarray([2.0])
+    )

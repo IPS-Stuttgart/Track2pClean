@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.evaluation.track_error_taxonomy import classify_track_errors
 
 
@@ -18,9 +17,7 @@ def test_classify_track_errors_keeps_missing_observations_missing() -> None:
         np.asarray([[10, 20], [11, -1]], dtype=int),
     )
 
-    assert {
-        (record.kind, record.roi_a, record.roi_b) for record in report.records
-    } == {
+    assert {(record.kind, record.roi_a, record.roi_b) for record in report.records} == {
         ("false_negative", 10, 20),
         ("false_positive", 11, 21),
     }

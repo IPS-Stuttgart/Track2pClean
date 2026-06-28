@@ -1,7 +1,6 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
-
 from bayescatrack.association.track_refinement import (
     TrackGeometryIssue,
     TrackSmoothingConfig,

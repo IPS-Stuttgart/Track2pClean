@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.growth_priors import (
     affine_growth_penalty_matrix,
     fit_affine_growth_transform,

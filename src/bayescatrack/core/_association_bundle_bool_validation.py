@@ -45,13 +45,20 @@ def _patch_builder(bridge_impl: Any, function_name: str) -> None:
                     kwargs[control_name], name=control_name
                 )
 
-        if "pairwise_cost_kwargs" in kwargs and kwargs["pairwise_cost_kwargs"] is not None:
+        if (
+            "pairwise_cost_kwargs" in kwargs
+            and kwargs["pairwise_cost_kwargs"] is not None
+        ):
             normalized_pairwise_cost_kwargs = dict(kwargs["pairwise_cost_kwargs"])
             if _PAIRWISE_COMPONENT_RETURN_KEY in normalized_pairwise_cost_kwargs:
                 if normalized_kwargs is None:
                     normalized_kwargs = dict(kwargs)
-                normalized_pairwise_cost_kwargs.pop(_PAIRWISE_COMPONENT_RETURN_KEY, None)
-                normalized_kwargs["pairwise_cost_kwargs"] = normalized_pairwise_cost_kwargs
+                normalized_pairwise_cost_kwargs.pop(
+                    _PAIRWISE_COMPONENT_RETURN_KEY, None
+                )
+                normalized_kwargs["pairwise_cost_kwargs"] = (
+                    normalized_pairwise_cost_kwargs
+                )
 
         if normalized_kwargs is not None:
             kwargs = normalized_kwargs

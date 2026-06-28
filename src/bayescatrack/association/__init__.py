@@ -4,20 +4,26 @@ from .._exports import ASSOCIATION_PUBLIC_NAMES, reexport
 from ..core import bridge as _bridge
 from . import _absence_config_scalar_validation as _absence_config_scalar_validation
 from . import _absence_cue_shape_validation as _absence_cue_shape_validation
-from . import _activity_similarity_control_validation as _activity_similarity_control_validation
+from . import (
+    _activity_similarity_control_validation as _activity_similarity_control_validation,
+)
 from . import (
     _calibrated_mahalanobis_bundle_patch as _calibrated_mahalanobis_bundle_patch,
 )
 from . import _calibrated_roi_stat_feature_patch as _calibrated_roi_stat_feature_patch
 from . import _calibrated_session_gap_validation as _calibrated_session_gap_validation
-from . import _dynamic_activity_component_validation as _dynamic_activity_component_validation
+from . import (
+    _dynamic_activity_component_validation as _dynamic_activity_component_validation,
+)
 from . import _dynamic_edge_prior_validation as _dynamic_edge_prior_validation
 from . import _global_assignment_input_validation as _global_assignment_input_validation
 from . import _global_solver_track_validation as _global_solver_track_validation
 from . import _growth_coordinate_validation as _growth_coordinate_validation
 from . import _monotone_ranker_feature_validation as _monotone_ranker_feature_validation
 from . import _neuropil_ratio_shape_validation as _neuropil_ratio_shape_validation
-from . import _postsolve_relinking_input_validation as _postsolve_relinking_input_validation
+from . import (
+    _postsolve_relinking_input_validation as _postsolve_relinking_input_validation,
+)
 from . import (
     _registered_component_shape_validation as _registered_component_shape_validation,
 )
@@ -27,13 +33,21 @@ from . import _shifted_iou_preset_validation as _shifted_iou_preset_validation
 from . import (
     _track2p_policy_session_gap_validation as _track2p_policy_session_gap_validation,
 )
-from . import _track_refinement_fill_value_validation as _track_refinement_fill_value_validation
-from . import _track_refinement_numeric_control_validation as _track_refinement_numeric_control_validation
-from . import _track_refinement_row_sentinel_validation as _track_refinement_row_sentinel_validation
+from . import (
+    _track_refinement_fill_value_validation as _track_refinement_fill_value_validation,
+)
+from . import (
+    _track_refinement_numeric_control_validation as _track_refinement_numeric_control_validation,
+)
+from . import (
+    _track_refinement_row_sentinel_validation as _track_refinement_row_sentinel_validation,
+)
 from . import _triplet_support_validation as _triplet_support_validation
 from . import absence_model as _absence_model
 
-_absence_config_scalar_validation.install_absence_config_scalar_validation(_absence_model)
+_absence_config_scalar_validation.install_absence_config_scalar_validation(
+    _absence_model
+)
 _absence_cue_shape_validation.install_absence_cue_shape_validation(_absence_model)
 _activity_similarity_control_validation.install_activity_similarity_control_validation()
 _neuropil_ratio_shape_validation.install_neuropil_ratio_shape_validation()

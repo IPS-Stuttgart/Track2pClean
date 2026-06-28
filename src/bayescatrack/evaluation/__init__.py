@@ -1,7 +1,9 @@
 """Evaluation helpers for BayesCaTrack benchmarks."""
 
 from . import _calibration_label_validation as _calibration_label_validation
-from . import _edge_ranking_feature_name_validation as _edge_ranking_feature_name_validation
+from . import (
+    _edge_ranking_feature_name_validation as _edge_ranking_feature_name_validation,
+)
 from . import _edge_ranking_roi_validation as _edge_ranking_roi_validation
 from . import _track_matrix_vector_validation as _track_matrix_vector_validation
 from . import _track_subset_duplicate_validation as _subset_validation

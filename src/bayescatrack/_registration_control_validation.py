@@ -23,6 +23,7 @@ _PATCH_ATTR = "_bayescatrack_registration_control_validation_patch"
 
 # pylint: disable=too-many-arguments
 
+
 def install_registration_control_validation(registration_module: Any) -> None:
     """Install strict validation around ``register_measurement_plane_to_reference``."""
 
@@ -89,12 +90,16 @@ def install_registration_control_validation(registration_module: Any) -> None:
 
     setattr(register_measurement_plane_to_reference, _PATCH_ATTR, True)
     setattr(register_measurement_plane_to_reference, "_bayescatrack_original", original)
-    registration_module.register_measurement_plane_to_reference = register_measurement_plane_to_reference
+    registration_module.register_measurement_plane_to_reference = (
+        register_measurement_plane_to_reference
+    )
 
 
 def _registration_model(value: Any) -> RegistrationModel:
     if not isinstance(value, str) or value not in _VALID_REGISTRATION_MODELS:
-        raise ValueError("registration_model must be one of 'translation', 'rigid', or 'affine'")
+        raise ValueError(
+            "registration_model must be one of 'translation', 'rigid', or 'affine'"
+        )
     return cast(RegistrationModel, value)
 
 

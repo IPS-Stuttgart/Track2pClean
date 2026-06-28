@@ -31,19 +31,43 @@ class TeacherEdgePriorConfig:
     large_cost: float = 1.0e6
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "relief", _finite_nonnegative_float(self.relief, name="relief"))
-        object.__setattr__(self, "non_teacher_penalty", _finite_nonnegative_float(self.non_teacher_penalty, name="non_teacher_penalty"))
+        object.__setattr__(
+            self, "relief", _finite_nonnegative_float(self.relief, name="relief")
+        )
+        object.__setattr__(
+            self,
+            "non_teacher_penalty",
+            _finite_nonnegative_float(
+                self.non_teacher_penalty, name="non_teacher_penalty"
+            ),
+        )
         if self.teacher_cost_cap is not None:
-            object.__setattr__(self, "teacher_cost_cap", _finite_nonnegative_float(self.teacher_cost_cap, name="teacher_cost_cap"))
-        object.__setattr__(self, "min_cost", _validated_numeric_float(self.min_cost, name="min_cost"))
+            object.__setattr__(
+                self,
+                "teacher_cost_cap",
+                _finite_nonnegative_float(
+                    self.teacher_cost_cap, name="teacher_cost_cap"
+                ),
+            )
+        object.__setattr__(
+            self, "min_cost", _validated_numeric_float(self.min_cost, name="min_cost")
+        )
         if self.max_gap is not None:
-            object.__setattr__(self, "max_gap", _positive_integer(self.max_gap, name="max_gap"))
+            object.__setattr__(
+                self, "max_gap", _positive_integer(self.max_gap, name="max_gap")
+            )
         if not isinstance(self.consecutive_only, bool):
             raise ValueError("consecutive_only must be a boolean")
-        object.__setattr__(self, "large_cost", _finite_positive_float(self.large_cost, name="large_cost"))
+        object.__setattr__(
+            self,
+            "large_cost",
+            _finite_positive_float(self.large_cost, name="large_cost"),
+        )
 
 
-def teacher_edge_prior_config_from_mapping(value: TeacherEdgePriorConfig | Mapping[str, Any] | None) -> TeacherEdgePriorConfig | None:
+def teacher_edge_prior_config_from_mapping(
+    value: TeacherEdgePriorConfig | Mapping[str, Any] | None,
+) -> TeacherEdgePriorConfig | None:
     """Normalize optional teacher-prior configuration values."""
 
     if value is None:
@@ -65,7 +89,9 @@ def apply_teacher_edge_priors(
 
     cfg = teacher_edge_prior_config_from_mapping(config) or TeacherEdgePriorConfig()
     edges = tuple(session_edges) if session_edges is not None else tuple(pairwise_costs)
-    teacher_masks = teacher_edge_masks_from_track_matrix(teacher_track_matrix, sessions, session_edges=edges, config=cfg)
+    teacher_masks = teacher_edge_masks_from_track_matrix(
+        teacher_track_matrix, sessions, session_edges=edges, config=cfg
+    )
     adjusted: dict[SessionEdge, np.ndarray] = {}
     for edge, matrix in pairwise_costs.items():
         costs = np.asarray(matrix, dtype=float).copy()
@@ -74,7 +100,9 @@ def apply_teacher_edge_priors(
             adjusted[edge] = costs
             continue
         if mask.shape != costs.shape:
-            raise ValueError(f"Teacher mask for edge {edge!r} has shape {mask.shape}, expected {costs.shape}")
+            raise ValueError(
+                f"Teacher mask for edge {edge!r} has shape {mask.shape}, expected {costs.shape}"
+            )
         finite = np.isfinite(costs) & (costs < float(cfg.large_cost))
         if cfg.non_teacher_penalty > 0.0:
             costs[finite & ~mask] += float(cfg.non_teacher_penalty)
@@ -100,9 +128,14 @@ def teacher_edge_masks_from_track_matrix(
     sessions = tuple(sessions)
     tracks = _normalize_track_matrix(teacher_track_matrix)
     if tracks.shape[1] != len(sessions):
-        raise ValueError("teacher_track_matrix must have one column per loaded session: " f"got {tracks.shape[1]} columns for {len(sessions)} sessions")
+        raise ValueError(
+            "teacher_track_matrix must have one column per loaded session: "
+            f"got {tracks.shape[1]} columns for {len(sessions)} sessions"
+        )
     edges = _normalize_session_edges(session_edges, session_count=len(sessions))
-    roi_position_by_session = tuple(_suite2p_to_loaded_position(session) for session in sessions)
+    roi_position_by_session = tuple(
+        _suite2p_to_loaded_position(session) for session in sessions
+    )
     masks: dict[SessionEdge, np.ndarray] = {}
     for source, target in edges:
         gap = target - source
@@ -110,7 +143,13 @@ def teacher_edge_masks_from_track_matrix(
             continue
         if cfg.max_gap is not None and gap > int(cfg.max_gap):
             continue
-        masks[(source, target)] = np.zeros((int(sessions[source].plane_data.n_rois), int(sessions[target].plane_data.n_rois)), dtype=bool)
+        masks[(source, target)] = np.zeros(
+            (
+                int(sessions[source].plane_data.n_rois),
+                int(sessions[target].plane_data.n_rois),
+            ),
+            dtype=bool,
+        )
 
     for row in tracks:
         for edge, mask in masks.items():
@@ -133,19 +172,30 @@ def _suite2p_to_loaded_position(session: Track2pSession) -> dict[int, int]:
         roi_indices = np.arange(int(plane.n_rois), dtype=int)
     else:
         roi_indices = np.asarray(plane.roi_indices, dtype=int).reshape(-1)
-    return {int(suite2p_index): int(position) for position, suite2p_index in enumerate(roi_indices)}
+    return {
+        int(suite2p_index): int(position)
+        for position, suite2p_index in enumerate(roi_indices)
+    }
 
 
-def _normalize_session_edges(session_edges: Any, *, session_count: int) -> tuple[SessionEdge, ...]:
+def _normalize_session_edges(
+    session_edges: Any, *, session_count: int
+) -> tuple[SessionEdge, ...]:
     if isinstance(session_edges, (str, bytes)):
-        raise ValueError("session_edges must be a sequence of two-item session edge pairs")
+        raise ValueError(
+            "session_edges must be a sequence of two-item session edge pairs"
+        )
     try:
         raw_edges = tuple(session_edges)
     except TypeError as exc:
-        raise ValueError("session_edges must be a sequence of two-item session edge pairs") from exc
+        raise ValueError(
+            "session_edges must be a sequence of two-item session edge pairs"
+        ) from exc
 
     normalized = tuple(
-        _normalize_session_edge(edge, context=f"session_edges[{edge_index}]", session_count=session_count)
+        _normalize_session_edge(
+            edge, context=f"session_edges[{edge_index}]", session_count=session_count
+        )
         for edge_index, edge in enumerate(raw_edges)
     )
     if len(set(normalized)) != len(normalized):
@@ -153,7 +203,9 @@ def _normalize_session_edges(session_edges: Any, *, session_count: int) -> tuple
     return normalized
 
 
-def _normalize_session_edge(edge: Any, *, context: str, session_count: int) -> SessionEdge:
+def _normalize_session_edge(
+    edge: Any, *, context: str, session_count: int
+) -> SessionEdge:
     if isinstance(edge, (str, bytes)):
         raise ValueError(f"{context} must be a two-item session edge")
     try:
@@ -161,8 +213,12 @@ def _normalize_session_edge(edge: Any, *, context: str, session_count: int) -> S
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{context} must be a two-item session edge") from exc
 
-    source = _normalize_session_index(source_raw, context=f"{context} source", session_count=session_count)
-    target = _normalize_session_index(target_raw, context=f"{context} target", session_count=session_count)
+    source = _normalize_session_index(
+        source_raw, context=f"{context} source", session_count=session_count
+    )
+    target = _normalize_session_index(
+        target_raw, context=f"{context} target", session_count=session_count
+    )
     if target <= source:
         raise ValueError(f"{context} must point forward in time")
     return source, target
@@ -188,7 +244,9 @@ def _normalize_session_index(value: Any, *, context: str, session_count: int) ->
             raise ValueError(f"{context} must be an integer session index") from exc
 
     if index < 0 or index >= session_count:
-        raise ValueError(f"{context} {index} out of bounds for {session_count} sessions")
+        raise ValueError(
+            f"{context} {index} out of bounds for {session_count} sessions"
+        )
     return index
 
 

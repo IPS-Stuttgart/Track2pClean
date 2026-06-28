@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import export_subject_to_npz, load_track2p_subject, summarize_subject
-
 
 _TRACE_FLAG_NAMES = ("load_traces", "load_spike_traces", "load_neuropil_traces")
 _SUBJECT_ENTRYPOINTS = [

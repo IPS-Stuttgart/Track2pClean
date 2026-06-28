@@ -229,12 +229,15 @@ def fit_monotone_ranked_association_model(
 
 
 def _validated_feature_names(
-    blocks: Sequence[ReferencePairwiseExamples], feature_names: Sequence[str] | str | None
+    blocks: Sequence[ReferencePairwiseExamples],
+    feature_names: Sequence[str] | str | None,
 ) -> tuple[str, ...]:
     blocks = tuple(blocks)
     if not blocks:
         raise ValueError("At least one pairwise example block is required")
-    names = _feature_name_tuple(blocks[0].feature_names if feature_names is None else feature_names)
+    names = _feature_name_tuple(
+        blocks[0].feature_names if feature_names is None else feature_names
+    )
     if not names:
         raise ValueError("At least one feature is required")
     for block in blocks:

@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import types
 
+import bayescatrack.tracking as tracking
 import numpy as np
 import pytest
-
-import bayescatrack.tracking as tracking
 from bayescatrack.tracking import SubjectTrackingResult
 
 
@@ -22,7 +21,9 @@ class _Session:
         self.plane_data = _Plane()
 
 
-def _make_tracking_result(*, global_link_edges, global_link_costs=None) -> SubjectTrackingResult:
+def _make_tracking_result(
+    *, global_link_edges, global_link_costs=None
+) -> SubjectTrackingResult:
     if global_link_costs is None:
         global_link_costs = np.zeros((1, len(tuple(global_link_edges))), dtype=float)
     return SubjectTrackingResult(
@@ -47,7 +48,9 @@ def _make_tracking_result(*, global_link_edges, global_link_costs=None) -> Subje
         ((0, 1), (0, 1)),
     ],
 )
-def test_subject_tracking_result_rejects_invalid_global_link_edges(global_link_edges) -> None:
+def test_subject_tracking_result_rejects_invalid_global_link_edges(
+    global_link_edges,
+) -> None:
     with pytest.raises(ValueError, match="global_link_edges"):
         _make_tracking_result(global_link_edges=global_link_edges)
 

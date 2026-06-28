@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import pytest
-
+from bayescatrack.matching import (
+    build_track_rows_from_bundles,
+    build_track_rows_from_matches,
+)
 from tests import _support  # noqa: F401
-from bayescatrack.matching import build_track_rows_from_bundles, build_track_rows_from_matches
-
 
 _ERROR_MATCH = "negative integer sentinel"
 

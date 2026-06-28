@@ -7,7 +7,9 @@ from typing import Any
 import numpy as np
 
 
-def install_with_replaced_masks_fov_validation(calcium_plane_data_cls: type[Any]) -> None:
+def install_with_replaced_masks_fov_validation(
+    calcium_plane_data_cls: type[Any],
+) -> None:
     """Patch ``with_replaced_masks`` so stale FOV images are not reused."""
 
     original_method = calcium_plane_data_cls.with_replaced_masks

@@ -11,7 +11,9 @@ _FEATURE_NAME_PATCH_ATTR = "_bayescatrack_feature_name_string_patch"
 def install_feature_name_string_normalization(bridge_impl: ModuleType) -> None:
     """Treat a bare feature-name string as one feature instead of characters."""
 
-    original = bridge_impl._pairwise_roi_feature_distance  # pylint: disable=protected-access
+    original = (
+        bridge_impl._pairwise_roi_feature_distance
+    )  # pylint: disable=protected-access
     if getattr(original, _FEATURE_NAME_PATCH_ATTR, False):
         return
 
@@ -34,4 +36,6 @@ def install_feature_name_string_normalization(bridge_impl: ModuleType) -> None:
 
     setattr(_pairwise_roi_feature_distance, _FEATURE_NAME_PATCH_ATTR, True)
     setattr(_pairwise_roi_feature_distance, "_bayescatrack_original", original)
-    bridge_impl._pairwise_roi_feature_distance = _pairwise_roi_feature_distance  # pylint: disable=protected-access
+    bridge_impl._pairwise_roi_feature_distance = (
+        _pairwise_roi_feature_distance  # pylint: disable=protected-access
+    )

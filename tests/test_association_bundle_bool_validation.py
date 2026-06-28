@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+import bayescatrack
 import numpy as np
 import pytest
-import bayescatrack
 from bayescatrack.core.bridge import (
     CalciumPlaneData,
     Track2pSession,

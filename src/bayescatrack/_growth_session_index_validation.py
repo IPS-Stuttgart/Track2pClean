@@ -26,7 +26,9 @@ def install_growth_session_index_validation() -> None:
         return
 
     @wraps(original_validate_session_index)
-    def _validate_session_index_without_boolean_scalars(index: int, n_sessions: int) -> int:
+    def _validate_session_index_without_boolean_scalars(
+        index: int, n_sessions: int
+    ) -> int:
         if _is_boolean_scalar(index):
             raise ValueError("session index must be an integer, got boolean")
         return original_validate_session_index(index, n_sessions)

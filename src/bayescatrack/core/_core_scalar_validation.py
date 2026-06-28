@@ -8,7 +8,9 @@ from typing import Any
 
 import numpy as np
 
-_CORE_SCALAR_VALIDATION_INSTALLED_ATTR = "_bayescatrack_core_scalar_validation_installed"
+_CORE_SCALAR_VALIDATION_INSTALLED_ATTR = (
+    "_bayescatrack_core_scalar_validation_installed"
+)
 _PATCH_MARKER = "_bayescatrack_core_scalar_validation_patch"
 _ORIGINAL_ATTR = "_bayescatrack_original"
 
@@ -43,7 +45,9 @@ _PATCHED_METHOD_NAMES = (
 def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None:
     """Install idempotent validation wrappers for core scalar and boolean controls."""
 
-    installed = getattr(calcium_plane_cls, _CORE_SCALAR_VALIDATION_INSTALLED_ATTR, False)
+    installed = getattr(
+        calcium_plane_cls, _CORE_SCALAR_VALIDATION_INSTALLED_ATTR, False
+    )
     current_methods_are_patched = all(
         _function_chain_has_patch(getattr(calcium_plane_cls, method_name))
         for method_name in _PATCHED_METHOD_NAMES
@@ -56,7 +60,9 @@ def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None
     original_pairwise_centroid_distances = calcium_plane_cls.pairwise_centroid_distances
     original_position_covariances = calcium_plane_cls.position_covariances
     original_to_measurement_matrix = calcium_plane_cls.to_measurement_matrix
-    original_to_constant_velocity_state_moments = calcium_plane_cls.to_constant_velocity_state_moments
+    original_to_constant_velocity_state_moments = (
+        calcium_plane_cls.to_constant_velocity_state_moments
+    )
     original_to_export_dict = calcium_plane_cls.to_export_dict
     original_build_pairwise_cost_matrix = calcium_plane_cls.build_pairwise_cost_matrix
 
@@ -187,7 +193,9 @@ def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None
     _mark_wrapper(pairwise_centroid_distances, original_pairwise_centroid_distances)
     _mark_wrapper(position_covariances, original_position_covariances)
     _mark_wrapper(to_measurement_matrix, original_to_measurement_matrix)
-    _mark_wrapper(to_constant_velocity_state_moments, original_to_constant_velocity_state_moments)
+    _mark_wrapper(
+        to_constant_velocity_state_moments, original_to_constant_velocity_state_moments
+    )
     _mark_wrapper(to_export_dict, original_to_export_dict)
     _mark_wrapper(build_pairwise_cost_matrix, original_build_pairwise_cost_matrix)
 
@@ -196,7 +204,9 @@ def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None
     calcium_plane_cls.pairwise_centroid_distances = pairwise_centroid_distances
     calcium_plane_cls.position_covariances = position_covariances
     calcium_plane_cls.to_measurement_matrix = to_measurement_matrix
-    calcium_plane_cls.to_constant_velocity_state_moments = to_constant_velocity_state_moments
+    calcium_plane_cls.to_constant_velocity_state_moments = (
+        to_constant_velocity_state_moments
+    )
     calcium_plane_cls.to_export_dict = to_export_dict
     calcium_plane_cls.build_pairwise_cost_matrix = build_pairwise_cost_matrix
     setattr(calcium_plane_cls, _CORE_SCALAR_VALIDATION_INSTALLED_ATTR, True)
@@ -234,7 +244,9 @@ def _validated_positional_or_keyword_bool(
     mutable_args = list(args)
     mutable_kwargs = dict(kwargs)
     if len(mutable_args) > positional_index:
-        mutable_args[positional_index] = _validate_bool_control(name, mutable_args[positional_index])
+        mutable_args[positional_index] = _validate_bool_control(
+            name, mutable_args[positional_index]
+        )
     elif name in mutable_kwargs:
         mutable_kwargs[name] = _validate_bool_control(name, mutable_kwargs[name])
     return tuple(mutable_args), mutable_kwargs
@@ -317,7 +329,11 @@ def _validate_finite_scalar(
     *,
     strictly_positive: bool,
 ) -> float:
-    requirement = "a finite positive value" if strictly_positive else "a finite non-negative value"
+    requirement = (
+        "a finite positive value"
+        if strictly_positive
+        else "a finite non-negative value"
+    )
     if isinstance(raw_value, np.ndarray):
         if raw_value.shape != ():
             raise ValueError(f"{name} must be {requirement}")

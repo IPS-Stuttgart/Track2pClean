@@ -17,7 +17,9 @@ from typing import Any
 
 import numpy as np
 
-_OVERLAP_VALUE_VALIDATION_MARKER = "_bayescatrack_suite2p_overlap_value_validation_patch"
+_OVERLAP_VALUE_VALIDATION_MARKER = (
+    "_bayescatrack_suite2p_overlap_value_validation_patch"
+)
 
 
 def install_suite2p_overlap_value_validation(bridge_impl: ModuleType) -> None:
@@ -66,7 +68,9 @@ def _parse_selection_controls(kwargs: dict[str, Any]) -> dict[str, bool | float]
 
     try:
         return {
-            "include_non_cells": _strict_bool(kwargs.get("include_non_cells", False), name="include_non_cells"),
+            "include_non_cells": _strict_bool(
+                kwargs.get("include_non_cells", False), name="include_non_cells"
+            ),
             "cell_probability_threshold": _finite_probability(
                 kwargs.get("cell_probability_threshold", 0.5),
                 name="cell_probability_threshold",
@@ -135,7 +139,11 @@ def _suite2p_keep_mask(
     for roi_index in range(int(stat.shape[0])):
         if iscell.ndim == 2:
             is_cell = bool(iscell[roi_index, 0])
-            probability = float(iscell[roi_index, 1]) if iscell.shape[1] > 1 else float(iscell[roi_index, 0])
+            probability = (
+                float(iscell[roi_index, 1])
+                if iscell.shape[1] > 1
+                else float(iscell[roi_index, 0])
+            )
         else:
             is_cell = bool(iscell[roi_index])
             probability = float(iscell[roi_index])

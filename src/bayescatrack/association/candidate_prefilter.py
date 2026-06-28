@@ -205,13 +205,17 @@ def _row_top_k_mask(distances: np.ndarray, *, top_k: int) -> np.ndarray:
 def _as_candidate_mask(candidate_mask: Any) -> np.ndarray:
     mask = np.asarray(candidate_mask)
     if mask.ndim != 2:
-        raise ValueError("candidate_mask must be a two-dimensional boolean or binary mask")
+        raise ValueError(
+            "candidate_mask must be a two-dimensional boolean or binary mask"
+        )
     if mask.dtype == np.dtype(bool):
         return np.ascontiguousarray(mask, dtype=bool)
     if mask.dtype.kind in {"i", "u", "f"}:
         numeric_mask = np.asarray(mask, dtype=float)
         if not _is_binary_numeric_mask(numeric_mask):
-            raise ValueError("candidate_mask must contain only boolean or binary values")
+            raise ValueError(
+                "candidate_mask must contain only boolean or binary values"
+            )
         return np.ascontiguousarray(numeric_mask == 1.0, dtype=bool)
     if mask.dtype.kind == "O":
         normalized = np.empty(mask.shape, dtype=bool)
@@ -222,10 +226,7 @@ def _as_candidate_mask(candidate_mask: Any) -> np.ndarray:
 
 
 def _is_binary_numeric_mask(mask: np.ndarray) -> bool:
-    return bool(
-        np.all(np.isfinite(mask))
-        and np.all((mask == 0.0) | (mask == 1.0))
-    )
+    return bool(np.all(np.isfinite(mask)) and np.all((mask == 0.0) | (mask == 1.0)))
 
 
 def _candidate_mask_scalar_to_bool(value: Any) -> bool:

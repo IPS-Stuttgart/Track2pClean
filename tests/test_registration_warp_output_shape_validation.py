@@ -1,11 +1,9 @@
 import numpy as np
 import pytest
-
 from bayescatrack.registration import (
     warp_image_into_reference_frame,
     warp_roi_masks_into_reference_frame,
 )
-
 
 _IDENTITY_MATRIX = np.eye(2)
 _ZERO_OFFSET = np.zeros(2)

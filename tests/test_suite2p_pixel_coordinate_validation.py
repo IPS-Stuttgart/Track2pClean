@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import load_suite2p_plane
 
 
@@ -46,7 +45,9 @@ def test_load_suite2p_plane_rejects_malformed_pixel_coordinates(
         load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)
 
 
-def test_load_suite2p_plane_accepts_integer_like_float_pixel_coordinates(tmp_path) -> None:
+def test_load_suite2p_plane_accepts_integer_like_float_pixel_coordinates(
+    tmp_path,
+) -> None:
     _write_suite2p_stat(tmp_path, ypix=[1.0], xpix=[2.0])
 
     plane = load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)

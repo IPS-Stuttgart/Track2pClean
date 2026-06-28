@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 import numpy as np
-
 from bayescatrack.matching import build_track_rows_from_matches
 
 _MISSING_VALUE_STRINGS = {"", "na", "nan", "none", "null", "-"}
@@ -137,9 +136,13 @@ class TrackEvaluation:
         }
 
 
-def _normalize_session_names(session_names: Sequence[str], *, name: str) -> tuple[str, ...]:
+def _normalize_session_names(
+    session_names: Sequence[str], *, name: str
+) -> tuple[str, ...]:
     if isinstance(session_names, (str, bytes)):
-        raise ValueError(f"{name} must be a sequence of session names, not a bare string")
+        raise ValueError(
+            f"{name} must be a sequence of session names, not a bare string"
+        )
     try:
         normalized = tuple(str(session_name) for session_name in session_names)
     except TypeError as exc:
@@ -147,12 +150,12 @@ def _normalize_session_names(session_names: Sequence[str], *, name: str) -> tupl
     if not normalized:
         raise ValueError(f"{name} must not be empty")
     duplicate_names = [
-        session_name
-        for session_name, count in Counter(normalized).items()
-        if count > 1
+        session_name for session_name, count in Counter(normalized).items() if count > 1
     ]
     if duplicate_names:
-        duplicate_text = ", ".join(repr(session_name) for session_name in duplicate_names)
+        duplicate_text = ", ".join(
+            repr(session_name) for session_name in duplicate_names
+        )
         raise ValueError(
             f"{name} must contain unique session names; duplicate values: "
             f"{duplicate_text}"
@@ -190,7 +193,9 @@ def _parse_roi_value(  # pylint: disable=too-many-return-statements
     if value is None:
         return -1
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"ROI index must be integer-like or missing, got boolean {value!r}")
+        raise ValueError(
+            f"ROI index must be integer-like or missing, got boolean {value!r}"
+        )
     if isinstance(value, (int, np.integer)):
         return int(value)
     if isinstance(value, (float, np.floating)):

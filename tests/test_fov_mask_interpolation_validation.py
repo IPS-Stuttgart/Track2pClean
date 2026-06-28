@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from bayescatrack.fov_registration import apply_image_translation, apply_roi_mask_translation
+from bayescatrack.fov_registration import (
+    apply_image_translation,
+    apply_roi_mask_translation,
+)
 
 
 @pytest.mark.parametrize(
@@ -13,7 +15,9 @@ from bayescatrack.fov_registration import apply_image_translation, apply_roi_mas
         ["nearest"],
     ],
 )
-def test_apply_image_translation_rejects_array_like_interpolation_controls(interpolation):
+def test_apply_image_translation_rejects_array_like_interpolation_controls(
+    interpolation,
+):
     image = np.zeros((3, 3), dtype=float)
 
     with pytest.raises(ValueError, match="mask_interpolation"):
@@ -27,7 +31,9 @@ def test_apply_image_translation_rejects_array_like_interpolation_controls(inter
         ["bilinear"],
     ],
 )
-def test_apply_roi_mask_translation_rejects_array_like_interpolation_controls(interpolation):
+def test_apply_roi_mask_translation_rejects_array_like_interpolation_controls(
+    interpolation,
+):
     roi_masks = np.zeros((1, 3, 3), dtype=float)
 
     with pytest.raises(ValueError, match="mask_interpolation"):

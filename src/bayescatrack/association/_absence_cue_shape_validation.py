@@ -50,7 +50,11 @@ def install_absence_cue_shape_validation(absence_model: ModuleType) -> None:
             )
 
         setattr(checked_absence_cost_vector, _MARKER, True)
-        setattr(checked_absence_cost_vector, "_bayescatrack_original", original_absence_cost_vector)
+        setattr(
+            checked_absence_cost_vector,
+            "_bayescatrack_original",
+            original_absence_cost_vector,
+        )
         absence_model.absence_cost_vector = checked_absence_cost_vector
 
     original_gap_penalty_matrix = absence_model.gap_penalty_matrix
@@ -95,7 +99,11 @@ def install_absence_cue_shape_validation(absence_model: ModuleType) -> None:
             )
 
         setattr(checked_gap_penalty_matrix, _MARKER, True)
-        setattr(checked_gap_penalty_matrix, "_bayescatrack_original", original_gap_penalty_matrix)
+        setattr(
+            checked_gap_penalty_matrix,
+            "_bayescatrack_original",
+            original_gap_penalty_matrix,
+        )
         absence_model.gap_penalty_matrix = checked_gap_penalty_matrix
 
 

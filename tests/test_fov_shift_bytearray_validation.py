@@ -4,7 +4,6 @@ from collections.abc import Callable
 
 import numpy as np
 import pytest
-
 from bayescatrack.fov_registration import (
     apply_integer_image_translation,
     apply_integer_roi_mask_translation,

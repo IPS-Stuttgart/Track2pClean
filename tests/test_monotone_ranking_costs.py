@@ -137,10 +137,15 @@ def test_monotone_ranking_hardness_feature_name_string_is_one_feature():
         max_iter=10,
     )
 
-    calibrated_model = fit_monotone_ranked_association_model([_example_block()], options=options)
+    calibrated_model = fit_monotone_ranked_association_model(
+        [_example_block()], options=options
+    )
 
     assert options.hardness_feature_names == ("centroid_distance",)
-    assert calibrated_model.model.training_examples > calibrated_model.model.positive_examples
+    assert (
+        calibrated_model.model.training_examples
+        > calibrated_model.model.positive_examples
+    )
 
 
 @pytest.mark.parametrize(

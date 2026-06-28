@@ -30,9 +30,15 @@ def install_matching_control_validation() -> None:
 
     original_solve = _matching.solve_bundle_linear_assignment
     original_build_matches = _matching.build_track_rows_from_matches
-    original_bundle_roi_indices = _matching._bundle_roi_indices_for_session  # pylint: disable=protected-access
-    original_normalize_roi_index = _matching._normalize_roi_index  # pylint: disable=protected-access
-    original_normalize_session_index = _matching._normalize_session_index  # pylint: disable=protected-access
+    original_bundle_roi_indices = (
+        _matching._bundle_roi_indices_for_session
+    )  # pylint: disable=protected-access
+    original_normalize_roi_index = (
+        _matching._normalize_roi_index
+    )  # pylint: disable=protected-access
+    original_normalize_session_index = (
+        _matching._normalize_session_index
+    )  # pylint: disable=protected-access
 
     if (
         getattr(original_solve, _PATCH_MARKER, False)
@@ -117,7 +123,9 @@ def install_matching_control_validation() -> None:
         )
 
     _mark_patch(solve_bundle_linear_assignment_with_control_validation, original_solve)
-    _mark_patch(build_track_rows_from_matches_with_control_validation, original_build_matches)
+    _mark_patch(
+        build_track_rows_from_matches_with_control_validation, original_build_matches
+    )
     _mark_patch(
         bundle_roi_indices_for_session_with_control_validation,
         original_bundle_roi_indices,
@@ -128,10 +136,16 @@ def install_matching_control_validation() -> None:
         original_normalize_session_index,
     )
 
-    _matching.solve_bundle_linear_assignment = solve_bundle_linear_assignment_with_control_validation
-    _matching.build_track_rows_from_matches = build_track_rows_from_matches_with_control_validation
+    _matching.solve_bundle_linear_assignment = (
+        solve_bundle_linear_assignment_with_control_validation
+    )
+    _matching.build_track_rows_from_matches = (
+        build_track_rows_from_matches_with_control_validation
+    )
     _matching._bundle_roi_indices_for_session = bundle_roi_indices_for_session_with_control_validation  # pylint: disable=protected-access
-    _matching._normalize_roi_index = normalize_roi_index_with_array_validation  # pylint: disable=protected-access
+    _matching._normalize_roi_index = (
+        normalize_roi_index_with_array_validation  # pylint: disable=protected-access
+    )
     _matching._normalize_session_index = normalize_session_index_with_array_validation  # pylint: disable=protected-access
 
 
@@ -164,7 +178,9 @@ def _normalize_unique_session_names(
     try:
         normalized_session_names = tuple(str(name) for name in session_names)
     except TypeError as exc:
-        raise ValueError(f"{field_name} must be a sequence of session-name values") from exc
+        raise ValueError(
+            f"{field_name} must be a sequence of session-name values"
+        ) from exc
 
     if not normalized_session_names:
         raise ValueError(f"{field_name} must not be empty")

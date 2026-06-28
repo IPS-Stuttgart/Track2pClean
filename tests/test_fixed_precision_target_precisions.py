@@ -4,7 +4,6 @@ import builtins
 
 import numpy as np
 import pytest
-
 from bayescatrack.evaluation.fixed_precision import (
     score_complete_tracks_at_fixed_precision,
 )

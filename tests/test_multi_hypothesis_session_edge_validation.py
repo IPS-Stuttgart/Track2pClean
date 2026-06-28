@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bayescatrack.association.multi_hypothesis import (
     candidate_edge_map,
     enumerate_track_hypotheses,

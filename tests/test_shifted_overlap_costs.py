@@ -367,14 +367,26 @@ def _base_cost_should_not_run(*args, **kwargs):
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
-        ({"similarity_epsilon": np.nan}, "similarity_epsilon must be a finite positive value"),
-        ({"similarity_epsilon": 0.0}, "similarity_epsilon must be a finite positive value"),
+        (
+            {"similarity_epsilon": np.nan},
+            "similarity_epsilon must be a finite positive value",
+        ),
+        (
+            {"similarity_epsilon": 0.0},
+            "similarity_epsilon must be a finite positive value",
+        ),
         ({"large_cost": np.inf}, "large_cost must be a finite positive value"),
         ({"large_cost": 0.0}, "large_cost must be a finite positive value"),
         ({"iou_weight": True}, "iou_weight must be a finite non-negative value"),
         ({"iou_weight": -1.0}, "iou_weight must be a finite non-negative value"),
-        ({"mask_cosine_weight": np.nan}, "mask_cosine_weight must be a finite non-negative value"),
-        ({"mask_cosine_weight": -1.0}, "mask_cosine_weight must be a finite non-negative value"),
+        (
+            {"mask_cosine_weight": np.nan},
+            "mask_cosine_weight must be a finite non-negative value",
+        ),
+        (
+            {"mask_cosine_weight": -1.0},
+            "mask_cosine_weight must be a finite non-negative value",
+        ),
     ],
 )
 def test_shifted_overlap_rejects_invalid_shared_scalar_controls(kwargs, message):

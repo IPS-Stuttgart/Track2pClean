@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from types import ModuleType
 import sys
+from types import ModuleType
 
-from tests import _support  # noqa: F401
 from bayescatrack import cli as bayescatrack_cli
 from bayescatrack._cli_exit_code_validation import install_cli_exit_code_validation
+from tests import _support  # noqa: F401
 
 
 def test_cli_exit_code_validation_reinstalls_after_stale_installed_flag(monkeypatch):

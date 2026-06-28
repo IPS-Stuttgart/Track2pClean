@@ -19,7 +19,9 @@ import numpy as np
 
 _OPTIONAL_ROI_PATCH_MARKER = "_bayescatrack_growth_optional_roi_validation_patch"
 _SESSION_INDEX_PATCH_MARKER = "_bayescatrack_growth_session_index_validation_patch"
-_TRACK_ROI_LOOKUP_PATCH_MARKER = "_bayescatrack_growth_track_roi_lookup_validation_patch"
+_TRACK_ROI_LOOKUP_PATCH_MARKER = (
+    "_bayescatrack_growth_track_roi_lookup_validation_patch"
+)
 _MISSING_ROI_STRINGS = frozenset({"", "-", "na", "nan", "none", "null"})
 
 
@@ -43,7 +45,9 @@ def _install_optional_roi_validation(_growth: Any) -> None:
         return _normalize_optional_roi(value)
 
     setattr(_optional_roi_with_validation, _OPTIONAL_ROI_PATCH_MARKER, True)
-    setattr(_optional_roi_with_validation, "_bayescatrack_original", original_optional_roi)
+    setattr(
+        _optional_roi_with_validation, "_bayescatrack_original", original_optional_roi
+    )
     _growth._optional_roi = _optional_roi_with_validation
 
 
@@ -56,7 +60,9 @@ def _normalize_optional_roi(value: object) -> int | None:
         try:
             value = value.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise ValueError("ROI index must be integer-like or missing, got bytes") from exc
+            raise ValueError(
+                "ROI index must be integer-like or missing, got bytes"
+            ) from exc
     if isinstance(value, (int, np.integer)):
         return _missing_if_negative(int(value))
     if isinstance(value, (float, np.floating)):
@@ -64,8 +70,7 @@ def _normalize_optional_roi(value: object) -> int | None:
     if isinstance(value, str):
         return _parse_optional_roi_text(value)
     raise ValueError(
-        "ROI index must be integer-like or missing, "
-        f"got {type(value).__name__}"
+        "ROI index must be integer-like or missing, " f"got {type(value).__name__}"
     )
 
 
@@ -207,7 +212,9 @@ def _session_index_to_int(index: object) -> int:
         try:
             numeric = float(text)
         except ValueError as exc:
-            raise ValueError(f"session index must be integer-like, got {index!r}") from exc
+            raise ValueError(
+                f"session index must be integer-like, got {index!r}"
+            ) from exc
         return _parse_integer_like_session_index(numeric, original=index)
     raise ValueError(f"session index must be integer-like, got {type(index).__name__}")
 

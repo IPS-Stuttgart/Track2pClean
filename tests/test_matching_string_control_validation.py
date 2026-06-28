@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from bayescatrack.matching import build_track_rows_from_bundles, build_track_rows_from_matches
+from bayescatrack.matching import (
+    build_track_rows_from_bundles,
+    build_track_rows_from_matches,
+)
 
 
 class _Bundle:
@@ -26,7 +28,9 @@ def test_build_track_rows_from_matches_rejects_string_start_session_index() -> N
 
 
 def test_build_track_rows_from_matches_rejects_string_fill_value() -> None:
-    with pytest.raises(ValueError, match="fill_value must be a negative integer sentinel"):
+    with pytest.raises(
+        ValueError, match="fill_value must be a negative integer sentinel"
+    ):
         build_track_rows_from_matches(
             ("s1", "s2"),
             [np.empty((0, 2), dtype=int)],
@@ -36,7 +40,9 @@ def test_build_track_rows_from_matches_rejects_string_fill_value() -> None:
 
 
 def test_build_track_rows_from_bundles_rejects_string_fill_value() -> None:
-    with pytest.raises(ValueError, match="fill_value must be a negative integer sentinel"):
+    with pytest.raises(
+        ValueError, match="fill_value must be a negative integer sentinel"
+    ):
         build_track_rows_from_bundles(
             [_Bundle([[100.0]])],
             fill_value="-1",  # type: ignore[arg-type]

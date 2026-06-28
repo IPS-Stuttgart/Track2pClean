@@ -43,7 +43,9 @@ def install_teacher_rescue_repair_preset_manifest_integration() -> None:
         return original_runner(config, _expand_teacher_repair_preset(options))
 
     setattr(_run_teacher_rows_with_repair_preset, _PATCH_MARKER, True)
-    setattr(_run_teacher_rows_with_repair_preset, "_bayescatrack_original", original_runner)
+    setattr(
+        _run_teacher_rows_with_repair_preset, "_bayescatrack_original", original_runner
+    )
     base._run_track2p_policy_teacher_adjacent_rows = (
         _run_teacher_rows_with_repair_preset
     )

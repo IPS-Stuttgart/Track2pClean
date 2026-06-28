@@ -20,9 +20,13 @@ _PATCH_MARKER = "_bayescatrack_growth_coordinate_validation_patch"
 def install_growth_coordinate_validation() -> None:
     """Install idempotent finite-coordinate checks on growth-prior helpers."""
 
-    from . import growth_priors as _growth_priors  # pylint: disable=import-outside-toplevel
+    from . import (
+        growth_priors as _growth_priors,  # pylint: disable=import-outside-toplevel
+    )
 
-    original_xy_matrix: Callable[..., Any] = _growth_priors._as_xy_point_matrix  # pylint: disable=protected-access
+    original_xy_matrix: Callable[..., Any] = (
+        _growth_priors._as_xy_point_matrix
+    )  # pylint: disable=protected-access
     if not getattr(original_xy_matrix, _PATCH_MARKER, False):
 
         @wraps(original_xy_matrix)
@@ -33,7 +37,9 @@ def install_growth_coordinate_validation() -> None:
             peer_values: Any | None = None,
         ) -> np.ndarray:
             points = original_xy_matrix(values, name=name, peer_values=peer_values)
-            _require_finite_array(points, name=name, value_description="finite xy coordinates")
+            _require_finite_array(
+                points, name=name, value_description="finite xy coordinates"
+            )
             return np.ascontiguousarray(points, dtype=float)
 
         _mark_patched(as_xy_point_matrix_with_coordinate_validation, original_xy_matrix)
@@ -55,12 +61,16 @@ def install_growth_coordinate_validation() -> None:
                 affine=_normalize_affine_matrix(affine, name="affine"),
             )
 
-        _mark_patched(affine_growth_residuals_with_coordinate_validation, original_residuals)
+        _mark_patched(
+            affine_growth_residuals_with_coordinate_validation, original_residuals
+        )
         _growth_priors.affine_growth_residuals = (
             affine_growth_residuals_with_coordinate_validation
         )
 
-    original_affine_penalty: Callable[..., Any] = _growth_priors.affine_growth_penalty_matrix
+    original_affine_penalty: Callable[..., Any] = (
+        _growth_priors.affine_growth_penalty_matrix
+    )
     if not getattr(original_affine_penalty, _PATCH_MARKER, False):
 
         @wraps(original_affine_penalty)
@@ -86,7 +96,9 @@ def install_growth_coordinate_validation() -> None:
             affine_growth_penalty_matrix_with_coordinate_validation
         )
 
-    original_radial_penalty: Callable[..., Any] = _growth_priors.radial_growth_penalty_matrix
+    original_radial_penalty: Callable[..., Any] = (
+        _growth_priors.radial_growth_penalty_matrix
+    )
     if not getattr(original_radial_penalty, _PATCH_MARKER, False):
 
         @wraps(original_radial_penalty)
@@ -145,7 +157,9 @@ def _normalize_xy_vector(values: Any, *, name: str) -> np.ndarray:
     return np.ascontiguousarray(vector, dtype=float)
 
 
-def _require_finite_array(array: np.ndarray, *, name: str, value_description: str) -> None:
+def _require_finite_array(
+    array: np.ndarray, *, name: str, value_description: str
+) -> None:
     if not np.all(np.isfinite(np.asarray(array, dtype=float))):
         raise ValueError(f"{name} must contain {value_description}")
 

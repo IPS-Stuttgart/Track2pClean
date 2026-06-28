@@ -45,9 +45,13 @@ def test_empty_registered_roi_mask_still_accepts_binary_numeric_masks() -> None:
 
 def test_empty_registered_roi_core_mask_helper_rejects_string_truthiness() -> None:
     with pytest.raises(ValueError, match="empty_registered_rois"):
-        dynamic_edge_priors_module._column_mask_for_cost_shape(["False", "True"], (1, 2))
+        dynamic_edge_priors_module._column_mask_for_cost_shape(
+            ["False", "True"], (1, 2)
+        )
 
 
-def test_empty_registered_roi_core_mask_helper_rejects_non_binary_numeric_values() -> None:
+def test_empty_registered_roi_core_mask_helper_rejects_non_binary_numeric_values() -> (
+    None
+):
     with pytest.raises(ValueError, match="empty_registered_rois"):
         dynamic_edge_priors_module._column_mask_for_cost_shape([0, 2], (1, 2))

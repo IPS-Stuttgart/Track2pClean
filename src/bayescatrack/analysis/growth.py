@@ -70,7 +70,9 @@ class RadialDisplacementRow:
             "radial_displacement": float(self.radial_displacement),
             "tangential_displacement": float(self.tangential_displacement),
             "displacement_norm": float(self.displacement_norm),
-            "radial_alignment": None if self.radial_alignment is None else float(self.radial_alignment),
+            "radial_alignment": (
+                None if self.radial_alignment is None else float(self.radial_alignment)
+            ),
         }
 
 
@@ -109,8 +111,16 @@ class RadialGrowthSummary:
             "mean_radial_displacement": float(self.mean_radial_displacement),
             "median_radial_displacement": float(self.median_radial_displacement),
             "mean_displacement_norm": float(self.mean_displacement_norm),
-            "mean_radial_alignment": None if self.mean_radial_alignment is None else float(self.mean_radial_alignment),
-            "outward_sign_p_value": None if self.outward_sign_p_value is None else float(self.outward_sign_p_value),
+            "mean_radial_alignment": (
+                None
+                if self.mean_radial_alignment is None
+                else float(self.mean_radial_alignment)
+            ),
+            "outward_sign_p_value": (
+                None
+                if self.outward_sign_p_value is None
+                else float(self.outward_sign_p_value)
+            ),
         }
 
 
@@ -159,8 +169,12 @@ class AffineGrowthSummary:
             "singular_value_min": float(self.singular_value_min),
             "singular_value_max": float(self.singular_value_max),
             "residual_rmse": float(self.residual_rmse),
-            "fixed_point_x": None if self.fixed_point_x is None else float(self.fixed_point_x),
-            "fixed_point_y": None if self.fixed_point_y is None else float(self.fixed_point_y),
+            "fixed_point_x": (
+                None if self.fixed_point_x is None else float(self.fixed_point_x)
+            ),
+            "fixed_point_y": (
+                None if self.fixed_point_y is None else float(self.fixed_point_y)
+            ),
         }
 
 
@@ -180,8 +194,14 @@ def radial_displacement_rows(
     sessions = tuple(sessions)
     matrix = _normalize_track_matrix(track_matrix, n_sessions=len(sessions))
     source_session = _validate_session_index(source_session, len(sessions))
-    target_sessions = _target_sessions(n_sessions=len(sessions), source_session=source_session, target_sessions=target_sessions)
-    centroid_lookups = _roi_centroid_lookups(sessions, order=order, weighted_centroids=weighted_centroids)
+    target_sessions = _target_sessions(
+        n_sessions=len(sessions),
+        source_session=source_session,
+        target_sessions=target_sessions,
+    )
+    centroid_lookups = _roi_centroid_lookups(
+        sessions, order=order, weighted_centroids=weighted_centroids
+    )
 
     rows: list[RadialDisplacementRow] = []
     for target_session in target_sessions:
@@ -209,9 +229,15 @@ def radial_displacement_rows(
             radial_unit = radius_vector / radius
             displacement = target_xy - source_xy
             radial_displacement = float(np.dot(displacement, radial_unit))
-            tangential_displacement = float(radial_unit[0] * displacement[1] - radial_unit[1] * displacement[0])
+            tangential_displacement = float(
+                radial_unit[0] * displacement[1] - radial_unit[1] * displacement[0]
+            )
             displacement_norm = float(np.linalg.norm(displacement))
-            radial_alignment = None if displacement_norm <= 0.0 else float(radial_displacement / displacement_norm)
+            radial_alignment = (
+                None
+                if displacement_norm <= 0.0
+                else float(radial_displacement / displacement_norm)
+            )
             rows.append(
                 RadialDisplacementRow(
                     track_index=track_index,
@@ -240,19 +266,37 @@ def radial_displacement_rows(
     return rows
 
 
-def radial_growth_summaries(rows: Sequence[RadialDisplacementRow]) -> list[RadialGrowthSummary]:
+def radial_growth_summaries(
+    rows: Sequence[RadialDisplacementRow],
+) -> list[RadialGrowthSummary]:
     """Summarize radial displacement rows by target session."""
 
     grouped: dict[tuple[int, int, str, str], list[RadialDisplacementRow]] = {}
     for row in rows:
-        key = (row.source_session_index, row.target_session_index, row.source_session, row.target_session)
+        key = (
+            row.source_session_index,
+            row.target_session_index,
+            row.source_session,
+            row.target_session,
+        )
         grouped.setdefault(key, []).append(row)
 
     summaries: list[RadialGrowthSummary] = []
-    for (source_index, target_index, source_name, target_name), group_rows in sorted(grouped.items(), key=lambda item: item[0][:2]):
-        radial = np.asarray([row.radial_displacement for row in group_rows], dtype=float)
+    for (source_index, target_index, source_name, target_name), group_rows in sorted(
+        grouped.items(), key=lambda item: item[0][:2]
+    ):
+        radial = np.asarray(
+            [row.radial_displacement for row in group_rows], dtype=float
+        )
         norms = np.asarray([row.displacement_norm for row in group_rows], dtype=float)
-        alignments = np.asarray([row.radial_alignment for row in group_rows if row.radial_alignment is not None], dtype=float)
+        alignments = np.asarray(
+            [
+                row.radial_alignment
+                for row in group_rows
+                if row.radial_alignment is not None
+            ],
+            dtype=float,
+        )
         outward = int(np.sum(radial > 0.0))
         inward = int(np.sum(radial < 0.0))
         zero = int(radial.size - outward - inward)
@@ -269,10 +313,16 @@ def radial_growth_summaries(rows: Sequence[RadialDisplacementRow]) -> list[Radia
                 zero_radial_tracks=zero,
                 outward_fraction=_safe_ratio(outward, int(radial.size)),
                 mean_radial_displacement=float(np.mean(radial)) if radial.size else 0.0,
-                median_radial_displacement=float(np.median(radial)) if radial.size else 0.0,
+                median_radial_displacement=(
+                    float(np.median(radial)) if radial.size else 0.0
+                ),
                 mean_displacement_norm=float(np.mean(norms)) if norms.size else 0.0,
-                mean_radial_alignment=None if alignments.size == 0 else float(np.mean(alignments)),
-                outward_sign_p_value=None if nonzero == 0 else _one_sided_binomial_tail(outward, nonzero),
+                mean_radial_alignment=(
+                    None if alignments.size == 0 else float(np.mean(alignments))
+                ),
+                outward_sign_p_value=(
+                    None if nonzero == 0 else _one_sided_binomial_tail(outward, nonzero)
+                ),
             )
         )
     return summaries
@@ -292,12 +342,23 @@ def affine_growth_summaries(
     sessions = tuple(sessions)
     matrix = _normalize_track_matrix(track_matrix, n_sessions=len(sessions))
     source_session = _validate_session_index(source_session, len(sessions))
-    target_sessions = _target_sessions(n_sessions=len(sessions), source_session=source_session, target_sessions=target_sessions)
-    centroid_lookups = _roi_centroid_lookups(sessions, order=order, weighted_centroids=weighted_centroids)
+    target_sessions = _target_sessions(
+        n_sessions=len(sessions),
+        source_session=source_session,
+        target_sessions=target_sessions,
+    )
+    centroid_lookups = _roi_centroid_lookups(
+        sessions, order=order, weighted_centroids=weighted_centroids
+    )
 
     summaries: list[AffineGrowthSummary] = []
     for target_session in target_sessions:
-        pairs = _matched_track_points(matrix, centroid_lookups, source_session=source_session, target_session=target_session)
+        pairs = _matched_track_points(
+            matrix,
+            centroid_lookups,
+            source_session=source_session,
+            target_session=target_session,
+        )
         if len(pairs) < 3:
             continue
         source_points = np.vstack([pair[3] for pair in pairs])
@@ -323,8 +384,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         description="Analyze global displacement and growth fields from longitudinal track tables.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    _add_common_args(subparsers.add_parser("radial", help="Project tracked-cell displacements onto radial directions"))
-    affine = subparsers.add_parser("affine", help="Fit global affine expansion maps between sessions")
+    _add_common_args(
+        subparsers.add_parser(
+            "radial", help="Project tracked-cell displacements onto radial directions"
+        )
+    )
+    affine = subparsers.add_parser(
+        "affine", help="Fit global affine expansion maps between sessions"
+    )
     _add_subject_track_args(affine)
     _add_output_args(affine)
     return parser
@@ -354,7 +421,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         radial_summaries = radial_growth_summaries(rows)
         if args.rows_output is not None:
             _write_dict_rows([row.to_dict() for row in rows], args.rows_output, "csv")
-        _write_result([summary.to_dict() for summary in radial_summaries], args.output, args.format, title="Radial Growth Summary")
+        _write_result(
+            [summary.to_dict() for summary in radial_summaries],
+            args.output,
+            args.format,
+            title="Radial Growth Summary",
+        )
         return 0
 
     affine_summaries = affine_growth_summaries(
@@ -365,7 +437,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         order=args.order,
         weighted_centroids=args.weighted_centroids,
     )
-    _write_result([summary.to_dict() for summary in affine_summaries], args.output, args.format, title="Affine Growth Summary")
+    _write_result(
+        [summary.to_dict() for summary in affine_summaries],
+        args.output,
+        args.format,
+        title="Affine Growth Summary",
+    )
     return 0
 
 
@@ -379,31 +456,69 @@ def _add_common_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--center-x", type=float, default=None)
     parser.add_argument("--center-y", type=float, default=None)
-    parser.add_argument("--rows-output", type=Path, default=None, help="Optional CSV path for per-track radial displacement rows")
+    parser.add_argument(
+        "--rows-output",
+        type=Path,
+        default=None,
+        help="Optional CSV path for per-track radial displacement rows",
+    )
     _add_output_args(parser)
 
 
 def _add_subject_track_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--subject", required=True, type=Path, help="Track2p-style subject directory")
-    parser.add_argument("--tracks", required=True, type=Path, help="CSV track table with Suite2p ROI indices")
-    parser.add_argument("--plane", dest="plane_name", default="plane0", help="Plane name such as plane0")
-    parser.add_argument("--input-format", default="auto", choices=("auto", "suite2p", "npy"), help="Input format for loading sessions")
+    parser.add_argument(
+        "--subject", required=True, type=Path, help="Track2p-style subject directory"
+    )
+    parser.add_argument(
+        "--tracks",
+        required=True,
+        type=Path,
+        help="CSV track table with Suite2p ROI indices",
+    )
+    parser.add_argument(
+        "--plane", dest="plane_name", default="plane0", help="Plane name such as plane0"
+    )
+    parser.add_argument(
+        "--input-format",
+        default="auto",
+        choices=("auto", "suite2p", "npy"),
+        help="Input format for loading sessions",
+    )
     parser.add_argument("--source-session", type=int, default=0)
-    parser.add_argument("--target-sessions", default=None, help="Comma-separated target session indices; defaults to every non-source session")
+    parser.add_argument(
+        "--target-sessions",
+        default=None,
+        help="Comma-separated target session indices; defaults to every non-source session",
+    )
     parser.add_argument("--order", default="xy", choices=("xy", "yx"))
     parser.add_argument("--weighted-centroids", action="store_true")
-    parser.add_argument("--include-non-cells", action=argparse.BooleanOptionalAction, default=True, help="Keep Suite2p ROIs that fail iscell filtering")
+    parser.add_argument(
+        "--include-non-cells",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Keep Suite2p ROIs that fail iscell filtering",
+    )
     parser.add_argument("--cell-probability-threshold", type=float, default=0.5)
     parser.add_argument("--weighted-masks", action="store_true")
-    parser.add_argument("--exclude-overlapping-pixels", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--exclude-overlapping-pixels",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
 
 
 def _add_output_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--output", type=Path, default=None, help="Optional output path")
-    parser.add_argument("--format", choices=("markdown", "table", "json", "csv"), default="markdown")
+    parser.add_argument(
+        "--output", type=Path, default=None, help="Optional output path"
+    )
+    parser.add_argument(
+        "--format", choices=("markdown", "table", "json", "csv"), default="markdown"
+    )
 
 
-def _load_cli_inputs(args: argparse.Namespace) -> tuple[list[Track2pSession], TrackTable]:
+def _load_cli_inputs(
+    args: argparse.Namespace,
+) -> tuple[list[Track2pSession], TrackTable]:
     sessions = load_track2p_subject(
         args.subject,
         plane_name=args.plane_name,
@@ -416,7 +531,9 @@ def _load_cli_inputs(args: argparse.Namespace) -> tuple[list[Track2pSession], Tr
     )
     if not sessions:
         raise ValueError(f"No sessions were loaded from {args.subject}")
-    tracks = load_track_table_csv(args.tracks, session_names=tuple(session.session_name for session in sessions))
+    tracks = load_track_table_csv(
+        args.tracks, session_names=tuple(session.session_name for session in sessions)
+    )
     return sessions, tracks
 
 
@@ -436,12 +553,18 @@ def _roi_centroid_lookups(
     for session in sessions:
         plane = session.plane_data
         centroids = plane.centroids(order=order, weighted=weighted_centroids).T
-        roi_indices = np.asarray(plane.roi_indices, dtype=int) if plane.roi_indices is not None else np.arange(plane.n_rois, dtype=int)
+        roi_indices = (
+            np.asarray(plane.roi_indices, dtype=int)
+            if plane.roi_indices is not None
+            else np.arange(plane.n_rois, dtype=int)
+        )
         lookup: dict[int, np.ndarray] = {}
         for detection_index, roi_index in enumerate(roi_indices):
             roi_index = int(roi_index)
             if roi_index in lookup:
-                raise ValueError(f"Session {session.session_name!r} has duplicate ROI index {roi_index}")
+                raise ValueError(
+                    f"Session {session.session_name!r} has duplicate ROI index {roi_index}"
+                )
             lookup[roi_index] = np.asarray(centroids[detection_index], dtype=float)
         lookups.append(lookup)
     return tuple(lookups)
@@ -521,12 +644,17 @@ def _fit_affine_summary(
     source_session_index: int,
     target_session_index: int,
 ) -> AffineGrowthSummary:
-    design = np.column_stack([source_points[:, 0], source_points[:, 1], np.ones(source_points.shape[0])])
+    design = np.column_stack(
+        [source_points[:, 0], source_points[:, 1], np.ones(source_points.shape[0])]
+    )
     coefficients, _, rank, _ = np.linalg.lstsq(design, target_points, rcond=None)
     predicted = design @ coefficients
     residual = target_points - predicted
     matrix = np.asarray(
-        [[coefficients[0, 0], coefficients[1, 0]], [coefficients[0, 1], coefficients[1, 1]]],
+        [
+            [coefficients[0, 0], coefficients[1, 0]],
+            [coefficients[0, 1], coefficients[1, 1]],
+        ],
         dtype=float,
     )
     translation = np.asarray(coefficients[2, :], dtype=float)
@@ -556,17 +684,23 @@ def _fit_affine_summary(
     )
 
 
-def _affine_fixed_point(matrix: np.ndarray, translation: np.ndarray) -> np.ndarray | None:
+def _affine_fixed_point(
+    matrix: np.ndarray, translation: np.ndarray
+) -> np.ndarray | None:
     system = np.eye(2) - matrix
     if abs(float(np.linalg.det(system))) < 1.0e-12:
         return None
     return np.linalg.solve(system, translation)
 
 
-def _target_sessions(*, n_sessions: int, source_session: int, target_sessions: Sequence[int] | None) -> tuple[int, ...]:
+def _target_sessions(
+    *, n_sessions: int, source_session: int, target_sessions: Sequence[int] | None
+) -> tuple[int, ...]:
     if target_sessions is None:
         return tuple(index for index in range(n_sessions) if index != source_session)
-    targets = tuple(_validate_session_index(index, n_sessions) for index in target_sessions)
+    targets = tuple(
+        _validate_session_index(index, n_sessions) for index in target_sessions
+    )
     if source_session in targets:
         raise ValueError("target_sessions must not include source_session")
     return targets
@@ -586,7 +720,9 @@ def _validate_session_index(index: int, n_sessions: int) -> int:
     else:
         raise ValueError(f"session index must be integer-like, got {index!r}")
     if session_index < 0 or session_index >= n_sessions:
-        raise IndexError(f"session index {session_index} out of bounds for {n_sessions} sessions")
+        raise IndexError(
+            f"session index {session_index} out of bounds for {n_sessions} sessions"
+        )
     return session_index
 
 
@@ -613,7 +749,9 @@ def _normalize_track_matrix(track_matrix: Any, *, n_sessions: int) -> np.ndarray
     if matrix.ndim != 2:
         raise ValueError("track_matrix must have shape (n_tracks, n_sessions)")
     if matrix.shape[1] != n_sessions:
-        raise ValueError(f"track_matrix has {matrix.shape[1]} sessions, but {n_sessions} sessions were loaded")
+        raise ValueError(
+            f"track_matrix has {matrix.shape[1]} sessions, but {n_sessions} sessions were loaded"
+        )
     return matrix
 
 
@@ -679,7 +817,9 @@ def _one_sided_binomial_tail(successes: int, trials: int) -> float:
     successes = int(successes)
     trials = int(trials)
     if trials <= 200:
-        numerator = sum(math.comb(trials, count) for count in range(successes, trials + 1))
+        numerator = sum(
+            math.comb(trials, count) for count in range(successes, trials + 1)
+        )
         return float(numerator / (2**trials))
     mean = trials / 2.0
     sd = math.sqrt(trials / 4.0)
@@ -693,7 +833,13 @@ def _safe_ratio(numerator: int, denominator: int) -> float:
     return float(numerator / denominator)
 
 
-def _write_result(rows: Sequence[Mapping[str, object]], output_path: Path | None, output_format: OutputFormat, *, title: str) -> None:
+def _write_result(
+    rows: Sequence[Mapping[str, object]],
+    output_path: Path | None,
+    output_format: OutputFormat,
+    *,
+    title: str,
+) -> None:
     if output_path is None:
         if output_format == "json":
             print(json.dumps(list(rows), indent=2))
@@ -707,10 +853,18 @@ def _write_result(rows: Sequence[Mapping[str, object]], output_path: Path | None
     _write_dict_rows(rows, output_path, output_format, title=title)
 
 
-def _write_dict_rows(rows: Sequence[Mapping[str, object]], output_path: Path, output_format: OutputFormat, *, title: str | None = None) -> None:
+def _write_dict_rows(
+    rows: Sequence[Mapping[str, object]],
+    output_path: Path,
+    output_format: OutputFormat,
+    *,
+    title: str | None = None,
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
-        output_path.write_text(json.dumps(list(rows), indent=2) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(list(rows), indent=2) + "\n", encoding="utf-8"
+        )
         return
     if output_format == "csv":
         with output_path.open("w", encoding="utf-8", newline="") as handle:
@@ -718,16 +872,29 @@ def _write_dict_rows(rows: Sequence[Mapping[str, object]], output_path: Path, ou
             writer.writeheader()
             writer.writerows(rows)
         return
-    output_path.write_text(_format_markdown(rows, title="Growth Summary" if title is None else title) + "\n", encoding="utf-8")
+    output_path.write_text(
+        _format_markdown(rows, title="Growth Summary" if title is None else title)
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _format_markdown(rows: Sequence[Mapping[str, object]], *, title: str) -> str:
     if not rows:
         return f"## {title}\n\nNo rows."
     fieldnames = _fieldnames(rows)
-    lines = [f"## {title}", "", "| " + " | ".join(fieldnames) + " |", "| " + " | ".join("---" for _ in fieldnames) + " |"]
+    lines = [
+        f"## {title}",
+        "",
+        "| " + " | ".join(fieldnames) + " |",
+        "| " + " | ".join("---" for _ in fieldnames) + " |",
+    ]
     for row in rows:
-        lines.append("| " + " | ".join(_format_value(row.get(fieldname)) for fieldname in fieldnames) + " |")
+        lines.append(
+            "| "
+            + " | ".join(_format_value(row.get(fieldname)) for fieldname in fieldnames)
+            + " |"
+        )
     return "\n".join(lines)
 
 
@@ -763,7 +930,9 @@ def _fieldnames(rows: Sequence[Mapping[str, object]]) -> list[str]:
         "fixed_point_y",
     ]
     row_keys = {str(key) for row in rows for key in row}
-    return [key for key in preferred if key in row_keys] + sorted(row_keys - set(preferred))
+    return [key for key in preferred if key in row_keys] + sorted(
+        row_keys - set(preferred)
+    )
 
 
 def _format_value(value: object) -> str:

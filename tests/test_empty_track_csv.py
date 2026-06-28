@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.ground_truth_eval import (
     TrackTable,
     evaluate_track_table_prediction,
@@ -27,7 +26,9 @@ def test_header_only_prediction_csv_scores_as_zero_predicted_tracks(tmp_path):
         tracks=np.asarray([[3, 7]], dtype=int),
     )
 
-    prediction = load_track_table_csv(csv_path, session_names=ground_truth.session_names)
+    prediction = load_track_table_csv(
+        csv_path, session_names=ground_truth.session_names
+    )
     evaluation = evaluate_track_table_prediction(ground_truth, prediction)
 
     assert evaluation.n_predicted_tracks == 0
