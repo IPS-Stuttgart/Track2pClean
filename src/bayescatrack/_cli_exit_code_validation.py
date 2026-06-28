@@ -14,12 +14,20 @@ import numpy as np
 
 
 _EXIT_CODE_ERROR = "CLI delegates must return None or an integer exit code between 0 and 255"
+_PATCH_MARKER = "_bayescatrack_cli_exit_code_validation_patch"
 
 
 def install_cli_exit_code_validation(cli_module: Any) -> None:
     """Patch ``bayescatrack.cli`` so delegate return values become exit codes."""
 
-    if getattr(cli_module, "_track2pclean_exit_code_validation_installed", False):
+    current_main = getattr(cli_module, "main", None)
+    current_handle_benchmark = getattr(cli_module, "_handle_benchmark", None)
+    if getattr(current_main, _PATCH_MARKER, False) and getattr(
+        current_handle_benchmark,
+        _PATCH_MARKER,
+        False,
+    ):
+        cli_module._track2pclean_exit_code_validation_installed = True
         return
 
     def main(argv: list[str] | None = None) -> int:
@@ -63,6 +71,11 @@ def install_cli_exit_code_validation(cli_module: Any) -> None:
 
         module = importlib.import_module(command.module)
         return _coerce_exit_code(module.main(args[1:]))
+
+    setattr(main, _PATCH_MARKER, True)
+    setattr(main, "_bayescatrack_original", current_main)
+    setattr(handle_benchmark, _PATCH_MARKER, True)
+    setattr(handle_benchmark, "_bayescatrack_original", current_handle_benchmark)
 
     cli_module.main = main
     cli_module._handle_benchmark = handle_benchmark
