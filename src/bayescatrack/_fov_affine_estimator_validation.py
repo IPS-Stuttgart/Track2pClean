@@ -13,6 +13,14 @@ _SUBTRACT_MEAN_ERROR = "subtract_mean must be a boolean"
 _GRID_SHAPE_ERROR = "grid_shape must contain exactly two positive integer dimensions"
 _MIN_TILE_SIZE_ERROR = "min_tile_size must be a positive integer"
 _MAX_SHIFT_FRACTION_ERROR = "max_shift_fraction must be a finite non-negative scalar"
+_LOW_INFORMATION_FOV_MESSAGES = (
+    "constant or empty FOV images",
+    "spatial variation for phase-correlation registration",
+)
+_IDENTITY_AFFINE_XY = np.asarray(
+    [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+    dtype=float,
+)
 
 
 def install_fov_affine_estimator_validation() -> None:
@@ -34,14 +42,26 @@ def install_fov_affine_estimator_validation() -> None:
         min_tile_size: Any = 32,
         max_shift_fraction: Any = 0.55,
     ) -> Any:
-        return original(
-            reference_fov,
-            measurement_fov,
-            subtract_mean=_normalize_bool(subtract_mean, _SUBTRACT_MEAN_ERROR),
-            grid_shape=_normalize_grid_shape(grid_shape),
-            min_tile_size=_normalize_positive_int(min_tile_size, _MIN_TILE_SIZE_ERROR),
-            max_shift_fraction=_normalize_nonnegative_float(max_shift_fraction),
+        normalized_subtract_mean = _normalize_bool(subtract_mean, _SUBTRACT_MEAN_ERROR)
+        normalized_grid_shape = _normalize_grid_shape(grid_shape)
+        normalized_min_tile_size = _normalize_positive_int(
+            min_tile_size,
+            _MIN_TILE_SIZE_ERROR,
         )
+        normalized_max_shift_fraction = _normalize_nonnegative_float(max_shift_fraction)
+        try:
+            return original(
+                reference_fov,
+                measurement_fov,
+                subtract_mean=normalized_subtract_mean,
+                grid_shape=normalized_grid_shape,
+                min_tile_size=normalized_min_tile_size,
+                max_shift_fraction=normalized_max_shift_fraction,
+            )
+        except ValueError as exc:
+            if not _is_low_information_fov_error(exc):
+                raise
+            return _identity_fallback_estimate(_fov_affine_registration)
 
     setattr(estimate_fov_affine_transform_with_validation, _PATCH_MARKER, True)
     setattr(
@@ -52,6 +72,27 @@ def install_fov_affine_estimator_validation() -> None:
     _fov_affine_registration.estimate_fov_affine_transform = (
         estimate_fov_affine_transform_with_validation
     )
+
+
+def _identity_fallback_estimate(affine_registration_module: Any) -> Any:
+    return affine_registration_module.FovAffineEstimate(
+        matrix_xy=_IDENTITY_AFFINE_XY.copy(),
+        inverse_matrix_xy=affine_registration_module.invert_affine_xy(
+            _IDENTITY_AFFINE_XY,
+        ),
+        tile_reference_xy=np.zeros((0, 2), dtype=float),
+        tile_measurement_xy=np.zeros((0, 2), dtype=float),
+        tile_shift_yx=np.zeros((1, 2), dtype=float),
+        tile_peak_correlation=np.zeros((1,), dtype=float),
+        tile_residual_norm=np.zeros((0,), dtype=float),
+        fit_rmse=0.0,
+        fallback_translation=True,
+    )
+
+
+def _is_low_information_fov_error(exc: ValueError) -> bool:
+    message = str(exc)
+    return any(fragment in message for fragment in _LOW_INFORMATION_FOV_MESSAGES)
 
 
 def _normalize_bool(value: Any, error_message: str) -> bool:
