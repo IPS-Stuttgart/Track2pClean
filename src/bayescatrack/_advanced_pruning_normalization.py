@@ -10,6 +10,7 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_advanced_pruning_normalization_patch"
 _ERROR_MESSAGE = "{name} must be a positive integer or None"
+_STRICT_CONFIG_MODULE = "bayescatrack._strict_config_validation"
 
 
 def install_advanced_pruning_normalization() -> None:
@@ -37,6 +38,9 @@ def install_advanced_pruning_normalization() -> None:
         advanced._normalize_optional_positive_int = (
             normalized_optional_positive_int  # pylint: disable=protected-access
         )
+
+    if getattr(advanced.CandidatePruningConfig, "__module__", None) == _STRICT_CONFIG_MODULE:
+        return
 
     original_post_init = advanced.CandidatePruningConfig.__post_init__
     if getattr(original_post_init, _PATCH_MARKER, False):
