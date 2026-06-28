@@ -293,7 +293,7 @@ def state_summary_rows(
 
 
 def _validate_probability(value: Any, field_name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, np.ndarray)):
         raise ValueError(f"{field_name} must be a finite probability in [0, 1]")
     try:
         normalized = float(value)
@@ -307,7 +307,7 @@ def _validate_probability(value: Any, field_name: str) -> float:
 
 
 def _validate_finite_nonnegative(value: Any, field_name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, np.ndarray)):
         raise ValueError(f"{field_name} must be a finite non-negative value")
     try:
         normalized = float(value)
@@ -319,7 +319,7 @@ def _validate_finite_nonnegative(value: Any, field_name: str) -> float:
 
 
 def _validate_positive_int(value: Any, field_name: str) -> int:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, np.ndarray)):
         raise ValueError(f"{field_name} must be a positive integer")
     try:
         normalized = operator.index(value)
