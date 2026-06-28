@@ -115,6 +115,9 @@ from ._pyrecest_shifted_validation import (
 from ._reference_validation import (
     install_reference_validation as _install_reference_validation,
 )
+from ._registration_control_validation import (
+    install_registration_control_validation as _install_registration_control_validation,
+)
 from ._registration_selection_validation import (
     install_registration_selection_validation as _install_registration_selection_validation,
 )
@@ -209,6 +212,7 @@ find_track2p_session_dirs = _bridge.find_track2p_session_dirs
 load_raw_npy_plane = _bridge.load_raw_npy_plane
 load_suite2p_plane = _bridge.load_suite2p_plane
 load_track2p_subject = _bridge.load_track2p_subject
+from . import registration as _registration
 _install_cli_exit_code_validation(_cli)
 main = _cli.main
 summarize_subject = _bridge.summarize_subject
@@ -242,6 +246,7 @@ _install_growth_session_index_validation()
 _install_growth_target_sessions_validation()
 _install_registration_selection_validation()
 _install_registration_warp_validation()
+_install_registration_control_validation(_registration)
 _install_strict_config_validation()
 _strict_config_validation._positive_int = _candidate_prefilter._positive_int
 _install_empty_candidate_gate_margin_fix()
