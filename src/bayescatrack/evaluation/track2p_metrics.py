@@ -13,6 +13,7 @@ from . import complete_track_scores as _complete_track_scores
 from .calibration_metrics import brier_score
 from .complete_track_scores import *  # noqa: F401,F403
 from .complete_track_scores import (
+    TrackLink,
     _normalize_track_matrix_observations,
 )
 from .complete_track_scores import (
