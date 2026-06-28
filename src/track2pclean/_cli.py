@@ -262,6 +262,8 @@ def _coerce_exit_code(result: Any) -> int:
 
     if result is None:
         return 0
+    if isinstance(result, np.ndarray):
+        raise TypeError(_EXIT_CODE_ERROR)
     if isinstance(result, (bool, np.bool_)):
         raise TypeError(_EXIT_CODE_ERROR)
     try:
