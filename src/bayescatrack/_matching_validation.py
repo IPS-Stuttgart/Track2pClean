@@ -11,6 +11,8 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_assignment_layout_validation_patch"
 _FILL_VALUE_PATCH_MARKER = "_bayescatrack_matching_fill_value_validation_patch"
+_SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_session_name_validation_patch"
+_BUNDLE_SESSION_NAMES_PATCH_MARKER = "_bayescatrack_matching_bundle_session_name_validation_patch"
 _FILL_VALUE_ERROR_MESSAGE = "fill_value must be a negative integer sentinel"
 
 
@@ -20,6 +22,8 @@ def install_matching_layout_validation(matching_module: Any) -> None:
     _patch_assignment_solver(matching_module)
     _patch_fill_value_keyword_function(matching_module, "build_track_rows_from_matches")
     _patch_fill_value_keyword_function(matching_module, "build_track_rows_from_bundles")
+    _patch_track_row_session_names(matching_module)
+    _patch_bundle_session_names(matching_module)
 
 
 def _patch_assignment_solver(matching_module: Any) -> None:
@@ -55,6 +59,75 @@ def _patch_fill_value_keyword_function(matching_module: Any, name: str) -> None:
     setattr(function_with_fill_value_validation, _FILL_VALUE_PATCH_MARKER, True)
     setattr(function_with_fill_value_validation, "_bayescatrack_original", original)
     setattr(matching_module, name, function_with_fill_value_validation)
+
+
+def _patch_track_row_session_names(matching_module: Any) -> None:
+    original: Callable[..., Any] = matching_module.build_track_rows_from_matches
+    if getattr(original, _SESSION_NAMES_PATCH_MARKER, False):
+        return
+
+    @wraps(original)
+    def build_track_rows_from_matches_with_session_name_validation(
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        if args:
+            normalized_session_names = _normalize_unique_session_names(
+                args[0],
+                field_name="session_names",
+            )
+            args = (normalized_session_names, *args[1:])
+        elif "session_names" in kwargs:
+            kwargs = dict(kwargs)
+            kwargs["session_names"] = _normalize_unique_session_names(
+                kwargs["session_names"],
+                field_name="session_names",
+            )
+        return original(*args, **kwargs)
+
+    setattr(
+        build_track_rows_from_matches_with_session_name_validation,
+        _SESSION_NAMES_PATCH_MARKER,
+        True,
+    )
+    setattr(
+        build_track_rows_from_matches_with_session_name_validation,
+        "_bayescatrack_original",
+        original,
+    )
+    matching_module.build_track_rows_from_matches = (
+        build_track_rows_from_matches_with_session_name_validation
+    )
+
+
+def _patch_bundle_session_names(matching_module: Any) -> None:
+    original: Callable[..., Any] = matching_module._session_names_from_bundles
+    if getattr(original, _BUNDLE_SESSION_NAMES_PATCH_MARKER, False):
+        return
+
+    @wraps(original)
+    def _session_names_from_bundles_with_session_name_validation(
+        *args: Any,
+        **kwargs: Any,
+    ) -> tuple[str, ...]:
+        return _normalize_unique_session_names(
+            original(*args, **kwargs),
+            field_name="bundle session_names",
+        )
+
+    setattr(
+        _session_names_from_bundles_with_session_name_validation,
+        _BUNDLE_SESSION_NAMES_PATCH_MARKER,
+        True,
+    )
+    setattr(
+        _session_names_from_bundles_with_session_name_validation,
+        "_bayescatrack_original",
+        original,
+    )
+    matching_module._session_names_from_bundles = (  # pylint: disable=protected-access
+        _session_names_from_bundles_with_session_name_validation
+    )
 
 
 def _validate_bundle_assignment_layout(bundle: Any) -> None:
@@ -134,6 +207,38 @@ def _normalize_fill_value(value: Any) -> int:
             "with non-negative ROI indices"
         )
     return integer_value
+
+
+def _normalize_unique_session_names(
+    session_names: Any,
+    *,
+    field_name: str,
+) -> tuple[str, ...]:
+    if isinstance(session_names, (str, bytes)):
+        raise ValueError(
+            f"{field_name} must be a sequence of session-name values, not a bare string"
+        )
+    try:
+        normalized_session_names = tuple(str(name) for name in session_names)
+    except TypeError as exc:
+        raise ValueError(f"{field_name} must be a sequence of session-name values") from exc
+
+    if not normalized_session_names:
+        raise ValueError(f"{field_name} must not be empty")
+
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for session_name in normalized_session_names:
+        if session_name in seen and session_name not in duplicates:
+            duplicates.append(session_name)
+        seen.add(session_name)
+    if duplicates:
+        duplicate_summary = ", ".join(repr(name) for name in duplicates)
+        raise ValueError(
+            f"{field_name} must contain unique session names; "
+            f"duplicate values: {duplicate_summary}"
+        )
+    return normalized_session_names
 
 
 __all__ = ["install_matching_layout_validation"]
