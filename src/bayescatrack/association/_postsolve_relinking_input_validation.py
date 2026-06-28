@@ -64,6 +64,11 @@ def _validate_roi_indices_by_session(
             raise ValueError(
                 f"roi_indices_by_session[{session_index}] must be one-dimensional"
             )
+        normalized = np.asarray(values, dtype=int).reshape(-1)
+        if len(set(normalized.tolist())) != normalized.size:
+            raise ValueError(
+                f"roi_indices_by_session[{session_index}] must contain unique ROI indices"
+            )
 
 
 def _validate_pairwise_cost_matrices(
