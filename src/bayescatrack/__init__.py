@@ -212,7 +212,7 @@ find_track2p_session_dirs = _bridge.find_track2p_session_dirs
 load_raw_npy_plane = _bridge.load_raw_npy_plane
 load_suite2p_plane = _bridge.load_suite2p_plane
 load_track2p_subject = _bridge.load_track2p_subject
-from . import registration as _registration
+from . import registration as _registration  # noqa: E402
 _install_cli_exit_code_validation(_cli)
 main = _cli.main
 summarize_subject = _bridge.summarize_subject
