@@ -13,6 +13,9 @@ from . import matching as _matching
 from ._advanced_weight_validation import (
     install_advanced_weight_validation as _install_advanced_weight_validation,
 )
+from ._aligned_roi_index_validation import (
+    install_aligned_roi_index_validation as _install_aligned_roi_index_validation,
+)
 from ._assignment_bundle_validation import (
     install_assignment_bundle_validation as _install_assignment_bundle_validation,
 )
@@ -229,6 +232,7 @@ _install_advanced_weight_validation()
 _install_assignment_bundle_validation()
 _install_integer_translation_validation()
 _install_reference_validation()
+_install_aligned_roi_index_validation()
 _install_edge_ranking_label_validation(_edge_ranking)
 _install_fov_affine_estimator_validation()
 _install_fov_affine_warp_validation()
