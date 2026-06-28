@@ -48,6 +48,30 @@ def test_fixed_precision_rejects_boolean_track_scores() -> None:
             )
 
 
+@pytest.mark.parametrize(
+    "malformed_score",
+    (
+        np.asarray([0.75]),
+        np.asarray([True], dtype=object),
+    ),
+)
+def test_fixed_precision_rejects_vector_track_score_cells(
+    malformed_score: object,
+) -> None:
+    predicted = np.array([[0, 10]], dtype=object)
+    reference = np.array([[0, 10]], dtype=object)
+    malformed_scores = np.empty((1,), dtype=object)
+    malformed_scores[0] = malformed_score
+
+    with pytest.raises(ValueError, match="track_scores"):
+        score_complete_tracks_at_fixed_precision(
+            predicted,
+            reference,
+            target_precisions=(0.95,),
+            track_scores=malformed_scores,
+        )
+
+
 def test_fixed_precision_keeps_numeric_target_precision_strings() -> None:
     predicted = np.array([[0, 10]], dtype=object)
     reference = np.array([[0, 10]], dtype=object)
@@ -70,6 +94,20 @@ def test_fixed_precision_keeps_numeric_track_score_strings() -> None:
         reference,
         target_precisions=(0.95,),
         track_scores=("0.75",),
+    )
+
+    assert scores["complete_track_score_threshold_at_fixed_precision_0_95"] == 0.75
+
+
+def test_fixed_precision_keeps_scalar_array_track_scores() -> None:
+    predicted = np.array([[0, 10]], dtype=object)
+    reference = np.array([[0, 10]], dtype=object)
+
+    scores = score_complete_tracks_at_fixed_precision(
+        predicted,
+        reference,
+        target_precisions=(0.95,),
+        track_scores=(np.asarray(0.75),),
     )
 
     assert scores["complete_track_score_threshold_at_fixed_precision_0_95"] == 0.75
