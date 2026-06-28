@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -100,12 +101,10 @@ def teacher_edge_masks_from_track_matrix(
     tracks = _normalize_track_matrix(teacher_track_matrix)
     if tracks.shape[1] != len(sessions):
         raise ValueError("teacher_track_matrix must have one column per loaded session: " f"got {tracks.shape[1]} columns for {len(sessions)} sessions")
+    edges = _normalize_session_edges(session_edges, session_count=len(sessions))
     roi_position_by_session = tuple(_suite2p_to_loaded_position(session) for session in sessions)
     masks: dict[SessionEdge, np.ndarray] = {}
-    for edge in session_edges:
-        source, target = (int(edge[0]), int(edge[1]))
-        if source < 0 or target <= source or target >= len(sessions):
-            raise ValueError(f"Invalid teacher-prior session edge {edge!r}")
+    for source, target in edges:
         gap = target - source
         if cfg.consecutive_only and gap != 1:
             continue
@@ -135,6 +134,62 @@ def _suite2p_to_loaded_position(session: Track2pSession) -> dict[int, int]:
     else:
         roi_indices = np.asarray(plane.roi_indices, dtype=int).reshape(-1)
     return {int(suite2p_index): int(position) for position, suite2p_index in enumerate(roi_indices)}
+
+
+def _normalize_session_edges(session_edges: Any, *, session_count: int) -> tuple[SessionEdge, ...]:
+    if isinstance(session_edges, (str, bytes)):
+        raise ValueError("session_edges must be a sequence of two-item session edge pairs")
+    try:
+        raw_edges = tuple(session_edges)
+    except TypeError as exc:
+        raise ValueError("session_edges must be a sequence of two-item session edge pairs") from exc
+
+    normalized = tuple(
+        _normalize_session_edge(edge, context=f"session_edges[{edge_index}]", session_count=session_count)
+        for edge_index, edge in enumerate(raw_edges)
+    )
+    if len(set(normalized)) != len(normalized):
+        raise ValueError("session_edges must not contain duplicate session edges")
+    return normalized
+
+
+def _normalize_session_edge(edge: Any, *, context: str, session_count: int) -> SessionEdge:
+    if isinstance(edge, (str, bytes)):
+        raise ValueError(f"{context} must be a two-item session edge")
+    try:
+        source_raw, target_raw = edge
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{context} must be a two-item session edge") from exc
+
+    source = _normalize_session_index(source_raw, context=f"{context} source", session_count=session_count)
+    target = _normalize_session_index(target_raw, context=f"{context} target", session_count=session_count)
+    if target <= source:
+        raise ValueError(f"{context} must point forward in time")
+    return source, target
+
+
+def _normalize_session_index(value: Any, *, context: str, session_count: int) -> int:
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(f"{context} must be an integer session index")
+        value = value.item()
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{context} must be an integer session index")
+
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if not np.isfinite(numeric) or not numeric.is_integer():
+            raise ValueError(f"{context} must be an integer session index")
+        index = int(numeric)
+    else:
+        try:
+            index = int(operator.index(value))
+        except TypeError as exc:
+            raise ValueError(f"{context} must be an integer session index") from exc
+
+    if index < 0 or index >= session_count:
+        raise ValueError(f"{context} {index} out of bounds for {session_count} sessions")
+    return index
 
 
 def _normalize_track_matrix(track_matrix: Any) -> np.ndarray:
