@@ -57,8 +57,12 @@ def install_cli_exit_code_validation(cli_module: Any) -> None:
     def handle_benchmark(args: list[str]) -> int:
         """Dispatch BayesCaTrack benchmark subcommands with normalized exit codes."""
 
-        if not args or args[0] in {"-h", "--help"}:
-            cli_module._build_benchmark_help_parser().parse_args(args)
+        parser = cli_module._build_benchmark_help_parser()
+        if not args:
+            parser.print_help()
+            return 0
+        if args[0] in {"-h", "--help"}:
+            parser.parse_args(args)
             return 0
 
         command_name = cli_module._BENCHMARK_ALIASES.get(args[0], args[0])
