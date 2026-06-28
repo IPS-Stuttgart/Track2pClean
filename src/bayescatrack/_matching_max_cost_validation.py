@@ -10,10 +10,9 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any, Callable
 
-import numpy as np
+from ._assignment_max_cost_validation import normalize_assignment_max_cost
 
 _PATCH_MARKER = "_bayescatrack_matching_max_cost_validation_patch"
-_ERROR_MESSAGE = "max_cost must be None or a finite non-negative scalar"
 
 
 def install_matching_max_cost_validation(matching_module: Any) -> None:
@@ -61,28 +60,7 @@ def _method_chain_has_patch(method: Any) -> bool:
 
 
 def _normalize_max_cost(value: Any) -> float | None:
-    if value is None:
-        return None
-    if isinstance(value, (bool, np.bool_, str, bytes)):
-        raise ValueError(_ERROR_MESSAGE)
-
-    try:
-        value_array = np.asarray(value, dtype=object)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(_ERROR_MESSAGE) from exc
-    if value_array.shape != ():
-        raise ValueError(_ERROR_MESSAGE)
-
-    scalar = value_array.item()
-    if isinstance(scalar, (bool, np.bool_, str, bytes)):
-        raise ValueError(_ERROR_MESSAGE)
-    try:
-        numeric_value = float(scalar)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(_ERROR_MESSAGE) from exc
-    if not np.isfinite(numeric_value) or numeric_value < 0.0:
-        raise ValueError(_ERROR_MESSAGE)
-    return numeric_value
+    return normalize_assignment_max_cost(value)
 
 
 __all__ = ["install_matching_max_cost_validation"]
