@@ -5,6 +5,16 @@ import pytest
 from bayescatrack.evaluation.edge_ranking import summarize_edge_ranking_rows
 
 
+class _ValueErrorIndex:
+    def __index__(self) -> int:
+        raise ValueError("adapter index failure")
+
+
+class _OverflowIndex:
+    def __index__(self) -> int:
+        raise OverflowError("adapter index overflow")
+
+
 def _edge_row() -> dict[str, float | int | str]:
     return {
         "subject": "jm_test",
@@ -32,6 +42,8 @@ def _edge_row() -> dict[str, float | int | str]:
         (1.5,),
         (np.inf,),
         ("1",),
+        (_ValueErrorIndex(),),
+        (_OverflowIndex(),),
         (1, 1),
     ],
 )
