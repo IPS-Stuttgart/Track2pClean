@@ -213,6 +213,15 @@ def _replace_parser_text(
         if isinstance(help_text, str):
             action.help = help_text.replace(old_text, new_text)
 
+        metavar = getattr(action, "metavar", None)
+        if isinstance(metavar, str):
+            action.metavar = metavar.replace(old_text, new_text)
+        elif isinstance(metavar, tuple):
+            action.metavar = tuple(
+                part.replace(old_text, new_text) if isinstance(part, str) else part
+                for part in metavar
+            )
+
     for child_parser in _iter_child_arg_parsers(parser):
         _replace_parser_text(child_parser, old_text, new_text)
 
