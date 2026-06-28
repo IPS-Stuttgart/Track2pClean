@@ -64,7 +64,7 @@ def install_strict_config_validation() -> None:
     ):
         return
     current_candidate_mask = _advanced_roi_components.candidate_mask_from_cost_matrix
-    if _function_chain_has_strict_config_validation(current_candidate_mask):
+    if getattr(current_candidate_mask, _WRAPPER_MARKER, False):
         _advanced_roi_components.CandidatePruningConfig = CandidatePruningConfig
         setattr(_advanced_roi_components, _PATCH_MARKER, True)
         return
@@ -163,22 +163,6 @@ def _optional_positive_int(value: Any, *, name: str) -> int | None:
         return _positive_int(value, name=name)
     except ValueError as exc:
         raise ValueError(f"{name} must be a positive integer or None") from exc
-
-
-def _function_chain_has_strict_config_validation(function: Callable[..., Any]) -> bool:
-    seen: set[int] = set()
-    current: Callable[..., Any] | None = function
-    while current is not None:
-        current_id = id(current)
-        if current_id in seen:
-            return True
-        seen.add(current_id)
-        if getattr(current, "_bayescatrack_strict_config_original", None) is not None:
-            return True
-        current = getattr(
-            current, "_bayescatrack_empty_candidate_margin_original", None
-        )
-    return False
 
 
 def _positive_int(value: Any, *, name: str) -> int:
