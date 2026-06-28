@@ -11,6 +11,11 @@ from bayescatrack.association.pyrecest_global_assignment import (
 from bayescatrack.core.bridge import CalciumPlaneData
 
 
+class _OverflowingFloat:
+    def __float__(self) -> float:
+        raise OverflowError("too large")
+
+
 def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
     roi_masks = np.asarray(mask, dtype=float).reshape(1, 1, -1)
     return CalciumPlaneData(roi_masks=roi_masks)
@@ -100,6 +105,10 @@ def test_soft_iou_matches_binary_iou_for_boolean_masks() -> None:
             "distance_transform_overlap_weight must be a finite non-negative value",
         ),
         (
+            {"distance_transform_overlap_weight": _OverflowingFloat()},
+            "distance_transform_overlap_weight must be a finite non-negative value",
+        ),
+        (
             {"distance_transform_overlap_weight": True},
             "distance_transform_overlap_weight must be a finite non-negative value",
         ),
@@ -159,6 +168,10 @@ def test_registered_soft_iou_kwargs_reject_invalid_numeric_values(
             "similarity_epsilon must be a finite positive value",
         ),
         ({"large_cost": np.nan}, "large_cost must be a finite positive value"),
+        (
+            {"large_cost": _OverflowingFloat()},
+            "large_cost must be a finite positive value",
+        ),
     ],
 )
 def test_soft_overlap_runtime_rejects_invalid_numeric_values(
