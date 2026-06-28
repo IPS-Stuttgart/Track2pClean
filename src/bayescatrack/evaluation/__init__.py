@@ -21,6 +21,21 @@ def _validate_calibration_probability_label_inputs(probabilities, labels):
 _calibration_diagnostics._validate_probability_label_inputs = (  # pylint: disable=protected-access
     _validate_calibration_probability_label_inputs
 )
+
+_SCORE_EXPORTS = (
+    "complete_track_set",
+    "normalize_track_matrix",
+    "pairwise_track_set",
+    "reference_fragment_counts",
+    "score_complete_tracks",
+    "score_false_continuations",
+    "score_fragmentation",
+    "score_pairwise_tracks",
+    "score_track_matrices",
+    "summarize_tracks",
+    "track_lengths",
+)
+
 _edge_ranking_roi_validation.install_edge_ranking_roi_validation()
 _edge_ranking_feature_name_validation.install_edge_ranking_feature_name_validation()
 _track_matrix_vector_validation.install_track_matrix_vector_input_validation(_scores)
@@ -56,7 +71,7 @@ score_track_matrix_against_reference = (
 
 __all__ = (
     list(_calibration_diagnostics.__all__)
-    + list(_scores.__all__)
+    + list(_SCORE_EXPORTS)
     + list(_track_error_ledger.__all__)
     + [
         "score_track_matrix_against_reference",

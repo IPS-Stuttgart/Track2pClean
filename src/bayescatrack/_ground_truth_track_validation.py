@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import csv
 import operator
 from functools import wraps
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -12,6 +14,7 @@ _PATCH_MARKER = "_bayescatrack_ground_truth_track_validation_patch"
 _ROI_ERROR = "ROI index must be a non-negative integer or -1 missing sentinel"
 _SESSION_NAME_ERROR = "session_names must be unique"
 _MISSING_VALUE_STRINGS = {"", "na", "nan", "none", "null", "-"}
+_EMPTY_ROWS_MESSAGE = "contains no data rows"
 
 
 def install_ground_truth_track_validation() -> None:
@@ -20,34 +23,53 @@ def install_ground_truth_track_validation() -> None:
     from . import ground_truth_eval as module
 
     original_post_init = module.TrackTable.__post_init__
-    if getattr(original_post_init, _PATCH_MARKER, False):
+    original_rows_from_csv = module._rows_from_csv
+    post_init_is_patched = getattr(original_post_init, _PATCH_MARKER, False)
+    rows_from_csv_is_patched = getattr(original_rows_from_csv, _PATCH_MARKER, False)
+    if post_init_is_patched and rows_from_csv_is_patched:
         return
-    original_parse_roi_value = module._parse_roi_value
 
-    @wraps(original_post_init)
-    def checked_post_init(self: Any) -> None:
-        session_names = tuple(str(name) for name in self.session_names)
-        tracks = _normalize_track_matrix(self.tracks)
-        if tracks.ndim != 2:
-            raise ValueError("tracks must have shape (n_tracks, n_sessions)")
-        if tracks.shape[1] != len(session_names):
-            raise ValueError(
-                "tracks second dimension must equal the number of session names"
-            )
-        if len(session_names) == 0:
-            raise ValueError("session_names must not be empty")
-        _validate_unique_session_names(session_names)
-        object.__setattr__(self, "session_names", session_names)
-        object.__setattr__(self, "tracks", tracks)
+    if not post_init_is_patched:
+        original_parse_roi_value = module._parse_roi_value
 
-    @wraps(original_parse_roi_value)
-    def checked_parse_roi_value(value: Any) -> int:
-        return _normalize_roi_index(value)
+        @wraps(original_post_init)
+        def checked_post_init(self: Any) -> None:
+            session_names = tuple(str(name) for name in self.session_names)
+            tracks = _normalize_track_matrix(self.tracks)
+            if tracks.ndim != 2:
+                raise ValueError("tracks must have shape (n_tracks, n_sessions)")
+            if tracks.shape[1] != len(session_names):
+                raise ValueError(
+                    "tracks second dimension must equal the number of session names"
+                )
+            if len(session_names) == 0:
+                raise ValueError("session_names must not be empty")
+            _validate_unique_session_names(session_names)
+            object.__setattr__(self, "session_names", session_names)
+            object.__setattr__(self, "tracks", tracks)
 
-    _mark_patch(checked_post_init, original_post_init)
-    _mark_patch(checked_parse_roi_value, original_parse_roi_value)
-    module.TrackTable.__post_init__ = checked_post_init
-    module._parse_roi_value = checked_parse_roi_value
+        @wraps(original_parse_roi_value)
+        def checked_parse_roi_value(value: Any) -> int:
+            return _normalize_roi_index(value)
+
+        _mark_patch(checked_post_init, original_post_init)
+        _mark_patch(checked_parse_roi_value, original_parse_roi_value)
+        module.TrackTable.__post_init__ = checked_post_init
+        module._parse_roi_value = checked_parse_roi_value
+
+    if not rows_from_csv_is_patched:
+
+        @wraps(original_rows_from_csv)
+        def checked_rows_from_csv(csv_path: str | Path) -> tuple[list[str], list[dict[str, str]]]:
+            try:
+                return original_rows_from_csv(csv_path)
+            except ValueError as exc:
+                if _EMPTY_ROWS_MESSAGE not in str(exc):
+                    raise
+            return _read_header_only_csv(csv_path)
+
+        _mark_patch(checked_rows_from_csv, original_rows_from_csv)
+        module._rows_from_csv = checked_rows_from_csv
 
 
 def _mark_patch(wrapper: Any, original: Any) -> None:
@@ -111,6 +133,15 @@ def _validate_roi_integer(value: int) -> int:
     if normalized_value == -1 or normalized_value >= 0:
         return normalized_value
     raise ValueError(_ROI_ERROR)
+
+
+def _read_header_only_csv(csv_path: str | Path) -> tuple[list[str], list[dict[str, str]]]:
+    csv_path = Path(csv_path)
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError(f"CSV file {csv_path} has no header row")
+        return [str(name) for name in reader.fieldnames], []
 
 
 __all__ = ["install_ground_truth_track_validation"]

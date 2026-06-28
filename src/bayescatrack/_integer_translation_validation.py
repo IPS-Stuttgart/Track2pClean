@@ -87,17 +87,18 @@ def _mark_patch(wrapper: Any, original: Any, marker: str) -> None:
 
 
 def _normalize_integer_shift_yx(shift_yx: Any) -> tuple[int, int]:
+    if isinstance(shift_yx, (str, bytes)):
+        raise ValueError(_SHIFT_ERROR)
     try:
         shift_array = np.asarray(shift_yx, dtype=object)
     except (TypeError, ValueError) as exc:
         raise ValueError(_SHIFT_ERROR) from exc
 
-    flattened_shift = shift_array.reshape(-1)
-    if flattened_shift.size != 2:
+    if shift_array.shape != (2,):
         raise ValueError(_SHIFT_ERROR)
 
     shift_y, shift_x = (
-        _normalize_integer_shift_component(value) for value in flattened_shift.tolist()
+        _normalize_integer_shift_component(value) for value in shift_array.tolist()
     )
     return shift_y, shift_x
 

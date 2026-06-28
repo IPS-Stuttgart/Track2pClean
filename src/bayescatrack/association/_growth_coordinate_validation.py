@@ -139,9 +139,8 @@ def _normalize_xy_vector(values: Any, *, name: str) -> np.ndarray:
         vector = np.asarray(values, dtype=float)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must contain finite xy coordinates") from exc
-    if vector.size != 2:
+    if vector.shape != (2,):
         raise ValueError(f"{name} must have shape (2,)")
-    vector = vector.reshape(2)
     _require_finite_array(vector, name=name, value_description="finite xy coordinates")
     return np.ascontiguousarray(vector, dtype=float)
 

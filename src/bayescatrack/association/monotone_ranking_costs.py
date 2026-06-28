@@ -41,6 +41,14 @@ _DEFAULT_HARDNESS_FEATURES = (
 )
 
 
+def _feature_name_tuple(feature_names: Sequence[str] | str | None) -> tuple[str, ...]:
+    if feature_names is None:
+        return ()
+    if isinstance(feature_names, str):
+        return (feature_names,)
+    return tuple(feature_names)
+
+
 @dataclass(frozen=True)
 class MonotoneRankerOptions:
     """Training knobs for the monotone pairwise ranking model."""
@@ -52,7 +60,7 @@ class MonotoneRankerOptions:
     max_iter: int = 750
     l2_regularization: float = 1.0e-3
     random_seed: int = 0
-    hardness_feature_names: tuple[str, ...] = ()
+    hardness_feature_names: Sequence[str] | str | None = ()
     feature_directions: Mapping[str, float] | None = None
 
     def __post_init__(self) -> None:
@@ -87,11 +95,7 @@ class MonotoneRankerOptions:
         object.__setattr__(
             self,
             "hardness_feature_names",
-            tuple(
-                ()
-                if self.hardness_feature_names is None
-                else self.hardness_feature_names
-            ),
+            _feature_name_tuple(self.hardness_feature_names),
         )
         if self.feature_directions is not None:
             directions = {
@@ -183,7 +187,7 @@ class MonotonePairwiseRanker:
 def fit_monotone_ranked_association_model(
     example_blocks: Sequence[ReferencePairwiseExamples],
     *,
-    feature_names: Sequence[str] | None = None,
+    feature_names: Sequence[str] | str | None = None,
     options: MonotoneRankerOptions | None = None,
 ) -> CalibratedAssociationModel:
     """Fit a calibrated association model from manual-GT ranking constraints."""
@@ -225,12 +229,12 @@ def fit_monotone_ranked_association_model(
 
 
 def _validated_feature_names(
-    blocks: Sequence[ReferencePairwiseExamples], feature_names: Sequence[str] | None
+    blocks: Sequence[ReferencePairwiseExamples], feature_names: Sequence[str] | str | None
 ) -> tuple[str, ...]:
     blocks = tuple(blocks)
     if not blocks:
         raise ValueError("At least one pairwise example block is required")
-    names = tuple(blocks[0].feature_names if feature_names is None else feature_names)
+    names = _feature_name_tuple(blocks[0].feature_names if feature_names is None else feature_names)
     if not names:
         raise ValueError("At least one feature is required")
     for block in blocks:
@@ -335,7 +339,7 @@ def _hardness_score(
     options: MonotoneRankerOptions,
 ) -> np.ndarray:
     if options.hardness_feature_names:
-        names = tuple(options.hardness_feature_names)
+        names = _feature_name_tuple(options.hardness_feature_names)
     else:
         names = tuple(
             name for name in _DEFAULT_HARDNESS_FEATURES if name in feature_names

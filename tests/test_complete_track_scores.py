@@ -236,6 +236,22 @@ def test_fixed_precision_rejects_invalid_track_scores():
         )
 
 
+def test_fixed_precision_rejects_bare_string_sequence_controls():
+    with pytest.raises(ValueError, match="target_precisions"):
+        score_complete_tracks_at_fixed_precision(
+            np.zeros((1, 2)),
+            np.zeros((1, 2)),
+            target_precisions="01",  # type: ignore[arg-type]
+        )
+
+    with pytest.raises(ValueError, match="session_indices"):
+        score_complete_tracks_at_fixed_precision(
+            np.zeros((1, 2)),
+            np.zeros((1, 2)),
+            session_indices="01",  # type: ignore[arg-type]
+        )
+
+
 def test_track2p_reference_scoring_can_filter_curated_rows():
     reference = Track2pReference(
         session_names=("day0", "day1", "day2"),
