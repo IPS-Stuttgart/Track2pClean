@@ -22,7 +22,17 @@ def test_registered_shifted_iou_cost_kwargs_preserve_numeric_inputs():
 
 @pytest.mark.parametrize(
     "bad_radius",
-    [True, np.bool_(False), np.asarray(3), np.asarray([3]), 1.5, "1.5", np.inf, "", object()],
+    [
+        True,
+        np.bool_(False),
+        np.asarray(3),
+        np.asarray([3]),
+        1.5,
+        "1.5",
+        np.inf,
+        "",
+        object(),
+    ],
 )
 def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
     with pytest.raises(ValueError, match="shifted_iou_radius"):

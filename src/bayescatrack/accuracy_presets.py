@@ -93,9 +93,7 @@ def _finite_nonnegative_float_or_none(value: Any, *, name: str) -> float | None:
     try:
         numeric_value = float(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{name} must be a finite non-negative value or None"
-        ) from exc
+        raise ValueError(f"{name} must be a finite non-negative value or None") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{name} must be a finite non-negative value or None")
     return numeric_value
@@ -194,9 +192,7 @@ def build_track2p_accuracy_presets(
             "row_top_k": 24,
             "column_top_k": 24,
             "max_cost": (
-                6.0
-                if normalized_cost_threshold is None
-                else normalized_cost_threshold
+                6.0 if normalized_cost_threshold is None else normalized_cost_threshold
             ),
         },
         track2p_policy_prior_config={

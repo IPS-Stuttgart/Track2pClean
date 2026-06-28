@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.joint_registration_assignment import (
     JointRefinementConfig,
     JointRegistrationAssignmentConfig,
@@ -14,7 +13,9 @@ from bayescatrack.association.joint_registration_assignment import (
 @pytest.mark.parametrize("array_value", [np.array(0.10), np.array([0.10])])
 def test_high_confidence_anchor_edges_rejects_array_quantile(array_value):
     with pytest.raises(ValueError, match="quantile"):
-        high_confidence_anchor_edges(np.array([[1.0]], dtype=float), quantile=array_value)
+        high_confidence_anchor_edges(
+            np.array([[1.0]], dtype=float), quantile=array_value
+        )
 
 
 @pytest.mark.parametrize("array_value", [np.array(1), np.array([1])])

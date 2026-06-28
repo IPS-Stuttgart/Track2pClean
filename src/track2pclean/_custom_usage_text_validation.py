@@ -68,7 +68,9 @@ def _replace_parser_usage_text(
     if isinstance(usage, str):
         parser.usage = usage.replace(old_text, new_text)
 
-    for child_parser in cli_module._iter_child_arg_parsers(  # pylint: disable=protected-access
+    for (
+        child_parser
+    ) in cli_module._iter_child_arg_parsers(  # pylint: disable=protected-access
         parser
     ):
         _replace_parser_usage_text(
@@ -94,7 +96,9 @@ def _replace_subparser_choice_help_text(
             if isinstance(help_text, str):
                 choice_action.help = help_text.replace(old_text, new_text)
 
-    for child_parser in cli_module._iter_child_arg_parsers(  # pylint: disable=protected-access
+    for (
+        child_parser
+    ) in cli_module._iter_child_arg_parsers(  # pylint: disable=protected-access
         parser
     ):
         _replace_subparser_choice_help_text(

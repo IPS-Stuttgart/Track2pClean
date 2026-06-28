@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack import load_suite2p_plane, load_track2p_subject
-
 
 _STRING_LIKE_PROBABILITY_VALUES = [
     "0.5",

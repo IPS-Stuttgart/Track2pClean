@@ -57,7 +57,9 @@ _local_evidence_control_validation.install_local_evidence_control_validation(
 _core_scalar_validation.install_core_scalar_validation_patches(
     _bridge_impl.CalciumPlaneData
 )
-_core_string_scalar_validation.install_core_string_scalar_validation(_core_scalar_validation)
+_core_string_scalar_validation.install_core_string_scalar_validation(
+    _core_scalar_validation
+)
 _with_replaced_masks_fov_validation.install_with_replaced_masks_fov_validation(
     _bridge_impl.CalciumPlaneData
 )

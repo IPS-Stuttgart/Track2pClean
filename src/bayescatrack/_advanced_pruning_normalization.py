@@ -39,7 +39,10 @@ def install_advanced_pruning_normalization() -> None:
             normalized_optional_positive_int  # pylint: disable=protected-access
         )
 
-    if getattr(advanced.CandidatePruningConfig, "__module__", None) == _STRICT_CONFIG_MODULE:
+    if (
+        getattr(advanced.CandidatePruningConfig, "__module__", None)
+        == _STRICT_CONFIG_MODULE
+    ):
         return
 
     original_post_init = advanced.CandidatePruningConfig.__post_init__

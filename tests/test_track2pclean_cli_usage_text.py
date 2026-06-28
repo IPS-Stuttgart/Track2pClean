@@ -39,7 +39,9 @@ def test_track2pclean_module_command_retitles_custom_usage(monkeypatch, capsys):
     assert "BayesCaTrack" not in captured.out
 
 
-def test_track2pclean_module_command_retitles_subparser_choice_help(monkeypatch, capsys):
+def test_track2pclean_module_command_retitles_subparser_choice_help(
+    monkeypatch, capsys
+):
     module = ModuleType("tests.fake_track2pclean_module_subparser_choice_help")
 
     def build_arg_parser():

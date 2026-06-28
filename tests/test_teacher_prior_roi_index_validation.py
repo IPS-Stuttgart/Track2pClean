@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import numpy as np
-
 from bayescatrack import CalciumPlaneData, Track2pSession
 from bayescatrack.association.teacher_priors import teacher_edge_masks_from_track_matrix
 

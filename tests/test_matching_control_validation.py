@@ -69,7 +69,9 @@ def test_build_track_rows_from_matches_normalizes_index_protocol_start_session_i
 def test_build_track_rows_from_matches_normalizes_index_protocol_start_roi_indices(
     bad_index,
 ):
-    with pytest.raises(ValueError, match="start_roi_indices must contain integer ROI indices"):
+    with pytest.raises(
+        ValueError, match="start_roi_indices must contain integer ROI indices"
+    ):
         build_track_rows_from_matches(
             ("s1", "s2"),
             [np.array([[0, 1]], dtype=int)],

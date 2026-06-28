@@ -20,7 +20,9 @@ _STRINGLIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 def install_core_string_scalar_validation(core_scalar_validation_module: Any) -> None:
     """Install an idempotent guard around core finite-scalar validation."""
 
-    original = core_scalar_validation_module._validate_finite_scalar  # pylint: disable=protected-access
+    original = (
+        core_scalar_validation_module._validate_finite_scalar
+    )  # pylint: disable=protected-access
     if getattr(original, _PATCH_MARKER, False):
         return
 

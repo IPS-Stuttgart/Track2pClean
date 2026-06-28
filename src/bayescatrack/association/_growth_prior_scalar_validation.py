@@ -9,14 +9,20 @@ import numpy as np
 
 _FINITE_FLOAT_PATCH_MARKER = "_bayescatrack_growth_prior_finite_float_validation_patch"
 _TRACK_ROW_PATCH_MARKER = "_bayescatrack_growth_prior_track_row_validation_patch"
-_SESSION_COLUMN_PATCH_MARKER = "_bayescatrack_growth_prior_session_column_validation_patch"
-_TRACK_ROW_MESSAGE = "track_rows must contain integer ROI indices or negative missing sentinels"
+_SESSION_COLUMN_PATCH_MARKER = (
+    "_bayescatrack_growth_prior_session_column_validation_patch"
+)
+_TRACK_ROW_MESSAGE = (
+    "track_rows must contain integer ROI indices or negative missing sentinels"
+)
 
 
 def install_growth_prior_scalar_validation() -> None:
     """Install idempotent guards for growth-prior scalar controls."""
 
-    from . import growth_priors as _growth_priors  # pylint: disable=import-outside-toplevel
+    from . import (
+        growth_priors as _growth_priors,  # pylint: disable=import-outside-toplevel
+    )
 
     _install_finite_float_validation(_growth_priors)
     _install_track_row_entry_validation(_growth_priors)
@@ -24,7 +30,9 @@ def install_growth_prior_scalar_validation() -> None:
 
 
 def _install_finite_float_validation(_growth_priors: Any) -> None:
-    original_finite_float = _growth_priors._finite_float  # pylint: disable=protected-access
+    original_finite_float = (
+        _growth_priors._finite_float
+    )  # pylint: disable=protected-access
     if getattr(original_finite_float, _FINITE_FLOAT_PATCH_MARKER, False):
         return
 
@@ -45,12 +53,20 @@ def _install_finite_float_validation(_growth_priors: Any) -> None:
             raise ValueError(message) from exc
 
     setattr(_finite_float_with_scalar_validation, _FINITE_FLOAT_PATCH_MARKER, True)
-    setattr(_finite_float_with_scalar_validation, "_bayescatrack_original", original_finite_float)
-    _growth_priors._finite_float = _finite_float_with_scalar_validation  # pylint: disable=protected-access
+    setattr(
+        _finite_float_with_scalar_validation,
+        "_bayescatrack_original",
+        original_finite_float,
+    )
+    _growth_priors._finite_float = (
+        _finite_float_with_scalar_validation  # pylint: disable=protected-access
+    )
 
 
 def _install_track_row_entry_validation(_growth_priors: Any) -> None:
-    original_entry = _growth_priors._integer_track_row_entry  # pylint: disable=protected-access
+    original_entry = (
+        _growth_priors._integer_track_row_entry
+    )  # pylint: disable=protected-access
     if getattr(original_entry, _TRACK_ROW_PATCH_MARKER, False):
         return
 
@@ -61,13 +77,21 @@ def _install_track_row_entry_validation(_growth_priors: Any) -> None:
         except (ValueError, OverflowError) as exc:
             raise ValueError(_TRACK_ROW_MESSAGE) from exc
 
-    setattr(_integer_track_row_entry_with_error_normalization, _TRACK_ROW_PATCH_MARKER, True)
-    setattr(_integer_track_row_entry_with_error_normalization, "_bayescatrack_original", original_entry)
+    setattr(
+        _integer_track_row_entry_with_error_normalization, _TRACK_ROW_PATCH_MARKER, True
+    )
+    setattr(
+        _integer_track_row_entry_with_error_normalization,
+        "_bayescatrack_original",
+        original_entry,
+    )
     _growth_priors._integer_track_row_entry = _integer_track_row_entry_with_error_normalization  # pylint: disable=protected-access
 
 
 def _install_session_column_validation(_growth_priors: Any) -> None:
-    original_column = _growth_priors._normalize_session_column  # pylint: disable=protected-access
+    original_column = (
+        _growth_priors._normalize_session_column
+    )  # pylint: disable=protected-access
     if getattr(original_column, _SESSION_COLUMN_PATCH_MARKER, False):
         return
 
@@ -80,8 +104,16 @@ def _install_session_column_validation(_growth_priors: Any) -> None:
         except (ValueError, OverflowError) as exc:
             raise ValueError(f"{name} must be an integer session column") from exc
 
-    setattr(_normalize_session_column_with_error_normalization, _SESSION_COLUMN_PATCH_MARKER, True)
-    setattr(_normalize_session_column_with_error_normalization, "_bayescatrack_original", original_column)
+    setattr(
+        _normalize_session_column_with_error_normalization,
+        _SESSION_COLUMN_PATCH_MARKER,
+        True,
+    )
+    setattr(
+        _normalize_session_column_with_error_normalization,
+        "_bayescatrack_original",
+        original_column,
+    )
     _growth_priors._normalize_session_column = _normalize_session_column_with_error_normalization  # pylint: disable=protected-access
 
 
