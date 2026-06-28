@@ -75,7 +75,7 @@ def _finite_positive_float(value: Any, *, name: str) -> float:
 
 
 def _finite_float(value: Any, *, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, np.ndarray)):
         raise ValueError(f"{name} must be a finite numeric value")
     try:
         numeric_value = float(value)
@@ -88,6 +88,8 @@ def _finite_float(value: Any, *, name: str) -> float:
 
 def _integer_like(value: Any, *, name: str, minimum: int) -> int:
     if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, np.ndarray):
         raise ValueError(f"{name} must be an integer")
     if isinstance(value, (int, np.integer)):
         integer_value = int(value)
