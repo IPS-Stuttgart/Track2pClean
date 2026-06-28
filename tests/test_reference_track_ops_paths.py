@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -37,3 +38,38 @@ def test_load_track2p_reference_uses_session_parent_for_plane_level_paths(
     reference = load_track2p_reference(track2p_dir, plane_name="plane0")
 
     assert reference.session_names == ("2024-05-01_a", "2024-05-02_a")
+
+
+def test_load_track2p_reference_normalizes_windows_track_ops_paths(tmp_path: Path):
+    track2p_dir = tmp_path / "track2p"
+    track2p_dir.mkdir()
+
+    track_ops = {
+        "all_ds_path": np.array(
+            [
+                r"C:\data\jm001\2024-05-01_a\suite2p\plane0",
+                r"D:\other\jm001\2024-05-02_a\data_npy\plane0",
+                r"E:\other\jm001\2024-05-03_a",
+            ],
+            dtype=object,
+        ),
+    }
+    np.save(track2p_dir / "track_ops.npy", track_ops, allow_pickle=True)
+    np.save(
+        track2p_dir / "plane0_suite2p_indices.npy",
+        np.array([[0, 1, 2]], dtype=object),
+        allow_pickle=True,
+    )
+
+    reference = load_track2p_reference(track2p_dir, plane_name="plane0")
+
+    assert reference.session_names == (
+        "2024-05-01_a",
+        "2024-05-02_a",
+        "2024-05-03_a",
+    )
+    assert reference.session_dates == (
+        date(2024, 5, 1),
+        date(2024, 5, 2),
+        date(2024, 5, 3),
+    )
