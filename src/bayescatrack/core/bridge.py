@@ -8,6 +8,7 @@ from . import _association_bundle_bool_validation as _association_bundle_bool_va
 from . import _cell_probability_validation as _cell_probability_validation
 from . import _core_scalar_validation as _core_scalar_validation
 from . import _export_bool_validation as _export_bool_validation
+from . import _feature_name_validation as _feature_name_validation
 from . import _iscell_value_validation as _iscell_value_validation
 from . import _loader_bool_validation as _loader_bool_validation
 from . import _loader_validation as _loader_validation
@@ -26,6 +27,7 @@ _association_bundle_bool_validation.install_association_bundle_bool_validation(
 )
 _cell_probability_validation.install_cell_probability_cost_patch(_bridge_impl)
 _export_bool_validation.install_subject_export_bool_validation(_bridge_impl)
+_feature_name_validation.install_feature_name_string_normalization(_bridge_impl)
 _loader_bool_validation.install_numpy_bool_loader_validation()
 _loader_validation.install_loader_validation_patches(_bridge_impl)
 _suite2p_coordinate_value_validation.install_suite2p_coordinate_value_validation(
