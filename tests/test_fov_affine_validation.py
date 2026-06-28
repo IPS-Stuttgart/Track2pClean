@@ -110,8 +110,14 @@ def test_estimate_fov_affine_transform_returns_identity_for_constant_fovs():
 
     np.testing.assert_allclose(estimate.matrix_xy, _AFFINE_IDENTITY_XY)
     np.testing.assert_allclose(estimate.inverse_matrix_xy, _AFFINE_IDENTITY_XY)
-    np.testing.assert_allclose(estimate.tile_shift_yx, np.zeros((1, 2), dtype=float))
-    np.testing.assert_allclose(estimate.tile_peak_correlation, np.zeros((1,), dtype=float))
+    np.testing.assert_allclose(
+        estimate.tile_shift_yx,
+        np.zeros((1, 2), dtype=float),
+    )
+    np.testing.assert_allclose(
+        estimate.tile_peak_correlation,
+        np.zeros((1,), dtype=float),
+    )
     assert estimate.tile_reference_xy.shape == (0, 2)
     assert estimate.tile_measurement_xy.shape == (0, 2)
     assert estimate.fit_rmse == 0.0
