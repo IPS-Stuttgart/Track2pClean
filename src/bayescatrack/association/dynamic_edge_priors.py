@@ -390,7 +390,7 @@ def _dense_vector_ranks(values: np.ndarray, *, large_cost: float) -> np.ndarray:
 
 
 def _column_mask_for_cost_shape(mask: Any, shape: tuple[int, int]) -> np.ndarray:
-    """Return a column mask aligned to a compact or full cost matrix.
+    """Return a validated column mask aligned to a compact or full cost matrix.
 
     Registered ROI masks are often computed in the original measurement-ROI
     layout, while costs are built on a compact non-empty subset and expanded only
@@ -399,13 +399,33 @@ def _column_mask_for_cost_shape(mask: Any, shape: tuple[int, int]) -> np.ndarray
     there are no empty columns left to penalize at this stage.
     """
 
-    column_mask = np.asarray(mask, dtype=bool).reshape(-1)
+    column_mask = _strict_binary_column_mask(mask, name="empty_registered_rois")
     if column_mask.shape == (shape[1],):
         return column_mask
     compact_column_count = int(column_mask.size - np.count_nonzero(column_mask))
     if compact_column_count == shape[1]:
         return np.zeros((shape[1],), dtype=bool)
     raise ValueError("empty_registered_rois must align with compact or full columns")
+
+
+def _strict_binary_column_mask(mask: Any, *, name: str) -> np.ndarray:
+    message = f"{name} must be a boolean or binary numeric mask"
+    try:
+        values = np.asarray(mask).reshape(-1)
+    except ValueError as exc:
+        raise ValueError(message) from exc
+
+    if values.dtype.kind == "b":
+        return np.ascontiguousarray(values, dtype=bool)
+    if values.dtype.kind in {"i", "u"}:
+        if np.any((values != 0) & (values != 1)):
+            raise ValueError(message)
+        return np.ascontiguousarray(values.astype(bool, copy=False), dtype=bool)
+    if values.dtype.kind == "f":
+        if not np.all(np.isfinite(values)) or np.any((values != 0.0) & (values != 1.0)):
+            raise ValueError(message)
+        return np.ascontiguousarray(values.astype(bool, copy=False), dtype=bool)
+    raise ValueError(message)
 
 
 def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:

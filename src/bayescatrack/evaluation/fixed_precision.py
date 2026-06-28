@@ -282,24 +282,49 @@ def _validate_target_precisions(
         raise ValueError(
             "target_precisions must be a sequence of finite numeric values between 0 and 1, not a bare string-like value"
         )
+    try:
+        iterator = iter(target_precisions)
+    except TypeError as exc:
+        raise ValueError(
+            "target_precisions must be a sequence of finite numeric values between 0 and 1"
+        ) from exc
+
     targets: list[float] = []
-    for target_precision in target_precisions:
-        if isinstance(target_precision, (bool, np.bool_)):
-            raise ValueError(
-                "target precisions must be finite numeric values between 0 and 1"
-            )
-        try:
-            target = float(target_precision)
-        except (TypeError, ValueError, OverflowError) as exc:
-            raise ValueError(
-                "target precisions must be finite numeric values between 0 and 1"
-            ) from exc
+    for target_precision in iterator:
+        target = _coerce_target_precision(target_precision)
         if not np.isfinite(target) or not 0.0 <= target <= 1.0:
             raise ValueError(
                 "target precisions must be finite numeric values between 0 and 1"
             )
         targets.append(target)
     return tuple(targets)
+
+
+def _coerce_target_precision(value: object) -> float:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(
+            "target precisions must be finite numeric values between 0 and 1"
+        )
+    try:
+        array_value = np.asarray(value, dtype=object)
+    except (TypeError, ValueError, OverflowError):
+        scalar_value = value
+    else:
+        if array_value.shape != ():
+            raise ValueError(
+                "target precisions must be scalar finite numeric values between 0 and 1"
+            )
+        scalar_value = array_value.item()
+        if isinstance(scalar_value, (bool, np.bool_)):
+            raise ValueError(
+                "target precisions must be finite numeric values between 0 and 1"
+            )
+    try:
+        return float(scalar_value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            "target precisions must be finite numeric values between 0 and 1"
+        ) from exc
 
 
 def _fixed_precision_metric_suffix(target_precision: float) -> str:
