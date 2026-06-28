@@ -37,6 +37,22 @@ def _identity_estimate() -> SimpleNamespace:
 @pytest.mark.parametrize(
     ("kwarg", "value"),
     [
+        ("grid_shape", (1, 3)),
+        ("grid_shape", (3,)),
+        ("grid_shape", (3, 4, 5)),
+        ("grid_shape", (3.5, 4)),
+        ("grid_shape", ("3", 4)),
+        ("grid_shape", np.array([[3], [4]])),
+        ("min_tile_size", True),
+        ("min_tile_size", np.array([24])),
+        ("min_tile_size", 24.5),
+        ("min_tile_size", 0),
+        ("min_tile_size", -1),
+        ("max_shift_fraction", True),
+        ("max_shift_fraction", "0.75"),
+        ("max_shift_fraction", np.nan),
+        ("max_shift_fraction", np.array([0.75])),
+        ("max_shift_fraction", -0.1),
         ("tps_regularization", True),
         ("tps_regularization", np.nan),
         ("tps_regularization", -1.0e-3),
@@ -83,6 +99,9 @@ def test_nonrigid_registration_accepts_valid_numpy_scalar_controls() -> None:
         registration = register_measurement_plane_by_nonrigid_fov(
             reference,
             measurement,
+            grid_shape=np.asarray([3, 3], dtype=np.int64),
+            min_tile_size=np.int64(2),
+            max_shift_fraction=np.float64(0.75),
             tps_regularization=np.asarray(0.0),
             bspline_regularization=np.float64(0.01),
             optical_flow_iterations=np.int64(0),
@@ -108,10 +127,10 @@ def test_nonrigid_registration_public_pair_route_uses_control_validation() -> No
         "bayescatrack.nonrigid_registration.estimate_fov_affine_transform",
         side_effect=AssertionError("estimator should not run for invalid controls"),
     ):
-        with pytest.raises(ValueError, match="optical_flow_alpha"):
+        with pytest.raises(ValueError, match="grid_shape"):
             register_plane_pair(
                 reference,
                 measurement,
                 transform_type="bspline",
-                registration_options={"optical_flow_alpha": np.nan},
+                registration_options={"grid_shape": (3, 4, 5)},
             )
