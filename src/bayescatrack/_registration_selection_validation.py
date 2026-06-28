@@ -194,12 +194,15 @@ def _finite_nonnegative_scalar(value: Any, field_name: str) -> float:
 def _finite_scalar(value: Any, field_name: str, detail: str) -> float:
     if isinstance(value, (bool, np.bool_, str, bytes)):
         raise ValueError(f"{field_name} {detail}")
-    array = np.asarray(value)
+    try:
+        array = np.asarray(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{field_name} {detail}") from exc
     if array.shape != ():
         raise ValueError(f"{field_name} {detail}")
     try:
         converted = float(array)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{field_name} {detail}") from exc
     if not np.isfinite(converted):
         raise ValueError(f"{field_name} {detail}")
