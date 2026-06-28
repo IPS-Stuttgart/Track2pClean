@@ -29,6 +29,23 @@ def test_validated_numeric_float_rejects_uncoercible_values_as_value_error(value
 @pytest.mark.parametrize(
     "value",
     [
+        "0.5",
+        b"0.5",
+        bytearray(b"0.5"),
+        np.str_("0.5"),
+        np.bytes_(b"0.5"),
+        np.asarray("0.5"),
+        np.asarray(b"0.5"),
+    ],
+)
+def test_validated_numeric_float_rejects_string_like_numeric_values(value):
+    with pytest.raises(ValueError, match="control must be finite"):
+        validated_numeric_float(value, name="control")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
         [1.0],
         (1.0,),
         np.asarray([1.0]),
