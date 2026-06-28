@@ -67,6 +67,10 @@ def _finite_float(
     min_inclusive: bool = True,
     max_inclusive: bool = True,
 ) -> float:
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(f"{name} must be a finite float")
+        value = value.item()
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a finite float, not boolean")
     try:
