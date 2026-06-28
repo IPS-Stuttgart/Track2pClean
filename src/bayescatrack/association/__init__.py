@@ -9,6 +9,9 @@ from . import (
     _activity_similarity_control_validation as _activity_similarity_control_validation,
 )
 from . import (
+    _advanced_uncertainty_array_validation as _advanced_uncertainty_array_validation,
+)
+from . import (
     _calibrated_mahalanobis_bundle_patch as _calibrated_mahalanobis_bundle_patch,
 )
 from . import _calibrated_roi_stat_feature_patch as _calibrated_roi_stat_feature_patch
@@ -53,6 +56,7 @@ _absence_config_scalar_validation.install_absence_config_scalar_validation(
 _absence_roi_count_validation.install_absence_roi_count_validation(_absence_model)
 _absence_cue_shape_validation.install_absence_cue_shape_validation(_absence_model)
 _activity_similarity_control_validation.install_activity_similarity_control_validation()
+_advanced_uncertainty_array_validation.install_advanced_uncertainty_array_validation()
 _neuropil_ratio_shape_validation.install_neuropil_ratio_shape_validation()
 _session_edge_pair_validation.install_session_edge_pair_validation()
 _triplet_support_validation.install_triplet_support_validation()
@@ -77,6 +81,7 @@ _PATCH_MODULES = (
     _absence_cue_shape_validation,
     _absence_roi_count_validation,
     _activity_similarity_control_validation,
+    _advanced_uncertainty_array_validation,
     _calibrated_mahalanobis_bundle_patch,
     _calibrated_roi_stat_feature_patch,
     _calibrated_session_gap_validation,
