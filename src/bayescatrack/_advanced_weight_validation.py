@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import Any
 
 import numpy as np
@@ -48,6 +49,7 @@ def install_advanced_weight_validation() -> None:
 
     _install_advanced_pruning_normalization()
     _install_advanced_candidate_empty_validation()
+    _install_advanced_improvement_numeric_validation()
 
     original = CalciumPlaneData.build_pairwise_cost_matrix
     if _pairwise_method_chain_has_patch(
@@ -77,6 +79,13 @@ def install_advanced_weight_validation() -> None:
     CalciumPlaneData.build_pairwise_cost_matrix = (  # type: ignore[method-assign]
         _build_pairwise_cost_matrix_with_advanced_weight_validation
     )
+
+
+def _install_advanced_improvement_numeric_validation() -> None:
+    validation = importlib.import_module(
+        "bayescatrack.experiments._advanced_improvement_numeric_validation"
+    )
+    validation.install_advanced_improvement_numeric_validation()
 
 
 def _validated_advanced_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
