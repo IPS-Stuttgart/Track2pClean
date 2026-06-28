@@ -114,7 +114,7 @@ def _positive_int(value: Any, *, name: str) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{name} must be an integer") from exc
     if integer_value < 1:
         raise ValueError(f"{name} must be at least 1")
