@@ -70,7 +70,7 @@ def _integer_like(value: Any, *, name: str) -> int:
         return int(numeric_value)
     try:
         return int(operator.index(value))
-    except TypeError as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be an integer") from exc
 
 
