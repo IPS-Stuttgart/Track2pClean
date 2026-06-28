@@ -8,6 +8,7 @@ legacy ``bayescatrack`` command name.
 
 from __future__ import annotations
 
+import argparse
 from typing import Any
 
 _PATCH_MARKER = "_track2pclean_custom_usage_text_validation_patch"
@@ -21,18 +22,43 @@ def install_custom_usage_text_validation(cli_module: Any) -> None:
         return
 
     def _replace_parser_text_with_usage(
-        parser: Any,
+        parser: argparse.ArgumentParser,
         old_text: str,
         new_text: str,
     ) -> None:
         original_replace_parser_text(parser, old_text, new_text)
-        usage = getattr(parser, "usage", None)
-        if isinstance(usage, str):
-            parser.usage = usage.replace(old_text, new_text)
+        _replace_parser_usage_text(
+            parser,
+            old_text=old_text,
+            new_text=new_text,
+            cli_module=cli_module,
+        )
 
     setattr(_replace_parser_text_with_usage, _PATCH_MARKER, True)
     setattr(_replace_parser_text_with_usage, "_track2pclean_original", original_replace_parser_text)
     cli_module._replace_parser_text = _replace_parser_text_with_usage  # pylint: disable=protected-access
+
+
+def _replace_parser_usage_text(
+    parser: argparse.ArgumentParser,
+    *,
+    old_text: str,
+    new_text: str,
+    cli_module: Any,
+) -> None:
+    """Recursively rewrite explicit ``usage`` strings on parser trees."""
+
+    usage = getattr(parser, "usage", None)
+    if isinstance(usage, str):
+        parser.usage = usage.replace(old_text, new_text)
+
+    for child_parser in cli_module._iter_child_arg_parsers(parser):  # pylint: disable=protected-access
+        _replace_parser_usage_text(
+            child_parser,
+            old_text=old_text,
+            new_text=new_text,
+            cli_module=cli_module,
+        )
 
 
 __all__ = ["install_custom_usage_text_validation"]
