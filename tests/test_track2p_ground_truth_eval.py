@@ -42,6 +42,21 @@ def test_track_table_rejects_numpy_boolean_roi_indices():
         )
 
 
+def test_track_table_row_tuples_validates_controls():
+    table = TrackTable(
+        session_names=("s1", "s2"),
+        tracks=np.array([[1, -1]], dtype=int),
+    )
+
+    with pytest.raises(ValueError, match="horizon"):
+        table.row_tuples(horizon=True)
+    with pytest.raises(ValueError, match="require_complete"):
+        table.row_tuples(require_complete=1)
+    assert table.row_tuples(horizon=np.int64(2), require_complete=np.bool_(False)) == [
+        (1, -1)
+    ]
+
+
 def test_empty_ground_truth_and_prediction_scores_as_vacuously_complete():
     ground_truth = TrackTable(
         session_names=("s1", "s2", "s3"),
