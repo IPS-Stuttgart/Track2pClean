@@ -10,6 +10,7 @@ from . import (
 )
 from . import _calibrated_roi_stat_feature_patch as _calibrated_roi_stat_feature_patch
 from . import _calibrated_session_gap_validation as _calibrated_session_gap_validation
+from . import _dynamic_activity_component_validation as _dynamic_activity_component_validation
 from . import _dynamic_edge_prior_validation as _dynamic_edge_prior_validation
 from . import _global_assignment_input_validation as _global_assignment_input_validation
 from . import _global_solver_track_validation as _global_solver_track_validation
@@ -45,6 +46,7 @@ _roi_aware_local_validation.install_roi_aware_local_validation()
 _registered_component_shape_validation.install_registered_component_shape_validation()
 _shifted_iou_preset_validation.install_shifted_iou_preset_validation()
 _dynamic_edge_prior_validation.install_dynamic_edge_prior_bool_validation()
+_dynamic_activity_component_validation.install_dynamic_activity_component_shape_validation()
 _track2p_policy_session_gap_validation.install_track2p_policy_session_gap_validation()
 _track_refinement_fill_value_validation.install_track_refinement_fill_value_validation()
 _track_refinement_numeric_control_validation.install_track_refinement_numeric_control_validation()
@@ -59,6 +61,7 @@ _PATCH_MODULES = (
     _calibrated_mahalanobis_bundle_patch,
     _calibrated_roi_stat_feature_patch,
     _calibrated_session_gap_validation,
+    _dynamic_activity_component_validation,
     _dynamic_edge_prior_validation,
     _global_assignment_input_validation,
     _global_solver_track_validation,
