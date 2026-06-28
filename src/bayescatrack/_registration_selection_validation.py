@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_registration_selection_validation_patch"
+_STRING_LIKE_TYPES = (str, bytes, bytearray)
 
 
 def install_registration_selection_validation() -> None:
@@ -196,21 +197,29 @@ def _finite_nonnegative_scalar(value: Any, field_name: str) -> float:
 
 
 def _finite_scalar(value: Any, field_name: str, detail: str) -> float:
-    if isinstance(value, (bool, np.bool_, str, bytes)):
+    if _is_disallowed_scalar_control(value):
         raise ValueError(f"{field_name} {detail}")
     try:
-        array = np.asarray(value)
+        array = np.asarray(value, dtype=object)
     except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{field_name} {detail}") from exc
     if array.shape != ():
         raise ValueError(f"{field_name} {detail}")
+
+    scalar = array.item()
+    if _is_disallowed_scalar_control(scalar):
+        raise ValueError(f"{field_name} {detail}")
     try:
-        converted = float(array)
+        converted = float(scalar)
     except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{field_name} {detail}") from exc
     if not np.isfinite(converted):
         raise ValueError(f"{field_name} {detail}")
     return converted
+
+
+def _is_disallowed_scalar_control(value: Any) -> bool:
+    return isinstance(value, (bool, np.bool_)) or isinstance(value, _STRING_LIKE_TYPES)
 
 
 __all__ = ["install_registration_selection_validation"]
