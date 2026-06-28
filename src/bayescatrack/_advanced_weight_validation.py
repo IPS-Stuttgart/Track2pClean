@@ -15,7 +15,7 @@ from ._advanced_pruning_normalization import (
 )
 from .core.bridge import CalciumPlaneData
 
-_NONNULL_NEGATIVE_WEIGHT_KWARGS = (
+_NONNEGATIVE_WEIGHT_KWARGS = (
     "centroid_weight",
     "iou_weight",
     "mask_cosine_weight",
@@ -29,7 +29,6 @@ _NONNULL_NEGATIVE_WEIGHT_KWARGS = (
     "border_proximity_weight",
     "ambiguity_margin_weight",
 )
-_NONNEGATIVE_WEIGHT_KWARGS = _NONNULL_NEGATIVE_WEIGHT_KWARGS
 _POSITIVE_FLOAT_KWARGS = (
     "large_cost",
     "similarity_epsilon",
