@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Iterable
 
 import numpy as np
 
 _PATCH_ATTR = "_bayescatrack_reference_validation_patch"
+_TRACK_OPS_PATH_PATCH_ATTR = "_bayescatrack_reference_track_ops_path_patch"
 
 
 def install_reference_validation(reference_module: ModuleType | None = None) -> None:
@@ -22,6 +24,7 @@ def install_reference_validation(reference_module: ModuleType | None = None) -> 
     _install_curated_mask_validation(reference_module)
     _install_curated_only_validation(reference_module)
     _install_session_index_validation(reference_module)
+    _install_track_ops_session_path_normalization(reference_module)
     _install_complete_track_vector_normalization(reference_module)
     _install_track_label_fill_value_validation(reference_module)
 
@@ -174,6 +177,68 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
     reference_module._validate_session_index = (
         _validate_session_index_with_validation  # pylint: disable=protected-access
     )
+
+
+def _install_track_ops_session_path_normalization(reference_module: ModuleType) -> None:
+    original_session_names_from_track_ops = (
+        reference_module._session_names_from_track_ops
+    )  # pylint: disable=protected-access
+    if getattr(original_session_names_from_track_ops, _TRACK_OPS_PATH_PATCH_ATTR, False):
+        return
+
+    def _session_names_from_track_ops_with_plane_path_support(
+        track_ops: dict[str, Any],
+        n_sessions: int,
+    ) -> tuple[str, ...]:
+        if "all_ds_path" not in track_ops:
+            raise KeyError("track_ops.npy does not contain all_ds_path")
+        path_list = [
+            Path(str(path))
+            for path in np.asarray(track_ops["all_ds_path"], dtype=object)
+            .reshape(-1)
+            .tolist()
+        ]
+        if len(path_list) != n_sessions:
+            raise ValueError(
+                "The number of paths in track_ops.all_ds_path does not match the number of sessions"
+            )
+        return tuple(
+            _session_name_from_track_ops_path(path, reference_module)
+            for path in path_list
+        )
+
+    setattr(
+        _session_names_from_track_ops_with_plane_path_support,
+        _TRACK_OPS_PATH_PATCH_ATTR,
+        True,
+    )
+    setattr(
+        _session_names_from_track_ops_with_plane_path_support,
+        "_bayescatrack_original",
+        original_session_names_from_track_ops,
+    )
+    reference_module._session_names_from_track_ops = (  # pylint: disable=protected-access
+        _session_names_from_track_ops_with_plane_path_support
+    )
+
+
+def _session_name_from_track_ops_path(path: Path, reference_module: ModuleType) -> str:
+    if not path.name:
+        return str(path)
+
+    plane_name_pattern = reference_module._PLANE_NAME_PATTERN  # pylint: disable=protected-access
+    if plane_name_pattern.match(path.name):
+        parent = path.parent
+        if parent.name in {"suite2p", "data_npy"}:
+            if parent.parent.name:
+                return parent.parent.name
+            return path.name
+        if parent.name:
+            return parent.name
+
+    if path.name in {"suite2p", "data_npy"} and path.parent.name:
+        return path.parent.name
+    return path.name
 
 
 def _install_complete_track_vector_normalization(reference_module: ModuleType) -> None:
