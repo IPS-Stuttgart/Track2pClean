@@ -40,6 +40,9 @@ def _strict_finite_float(
     qualifier = "positive" if positive else "non-negative"
     if isinstance(value, (bool, np.bool_, bytes, bytearray)):
         raise ValueError(f"{name} must be a finite {qualifier} value")
+    array_value = np.asarray(value)
+    if array_value.ndim > 0:
+        raise ValueError(f"{name} must be a finite {qualifier} value")
     try:
         numeric_value = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
