@@ -29,6 +29,8 @@ def _write_suite2p_stat(tmp_path, *, ypix: object, xpix: object) -> None:
         ([np.nan], [0], "ypix"),
         ([True], [0], "ypix"),
         (["1"], [0], "ypix"),
+        ([[0, 1]], [[2, 3]], "ypix.*one-dimensional"),
+        ([0, 1], [[2, 3]], "xpix.*one-dimensional"),
         ([0], [1.5], "xpix"),
     ],
 )
