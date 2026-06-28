@@ -19,6 +19,7 @@ from . import _dynamic_edge_prior_validation as _dynamic_edge_prior_validation
 from . import _global_assignment_input_validation as _global_assignment_input_validation
 from . import _global_solver_track_validation as _global_solver_track_validation
 from . import _growth_coordinate_validation as _growth_coordinate_validation
+from . import _growth_prior_scalar_validation as _growth_prior_scalar_validation
 from . import _monotone_ranker_feature_validation as _monotone_ranker_feature_validation
 from . import _neuropil_ratio_shape_validation as _neuropil_ratio_shape_validation
 from . import (
@@ -66,6 +67,7 @@ _track_refinement_fill_value_validation.install_track_refinement_fill_value_vali
 _track_refinement_numeric_control_validation.install_track_refinement_numeric_control_validation()
 _track_refinement_row_sentinel_validation.install_track_refinement_row_sentinel_validation()
 _growth_coordinate_validation.install_growth_coordinate_validation()
+_growth_prior_scalar_validation.install_growth_prior_scalar_validation()
 _postsolve_relinking_input_validation.install_postsolve_relinking_input_validation()
 
 _PATCH_MODULES = (
@@ -80,6 +82,7 @@ _PATCH_MODULES = (
     _global_assignment_input_validation,
     _global_solver_track_validation,
     _growth_coordinate_validation,
+    _growth_prior_scalar_validation,
     _monotone_ranker_feature_validation,
     _neuropil_ratio_shape_validation,
     _postsolve_relinking_input_validation,
