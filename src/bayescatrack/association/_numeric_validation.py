@@ -7,6 +7,9 @@ from typing import Any
 import numpy as np
 
 
+_TEXT_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+
+
 def validated_numeric_float(value: Any, *, name: str) -> float:
     try:
         scalar_value = _numeric_scalar_candidate(value, name=name)
@@ -18,8 +21,12 @@ def validated_numeric_float(value: Any, *, name: str) -> float:
     return numeric
 
 
+def _is_text_scalar(value: Any) -> bool:
+    return isinstance(value, _TEXT_SCALAR_TYPES)
+
+
 def _numeric_scalar_candidate(value: Any, *, name: str) -> Any:
-    if isinstance(value, (bool, np.bool_, str)):
+    if isinstance(value, (bool, np.bool_)) or _is_text_scalar(value):
         raise ValueError(f"{name} must be finite")
 
     try:
@@ -31,7 +38,7 @@ def _numeric_scalar_candidate(value: Any, *, name: str) -> Any:
         raise ValueError(f"{name} must be finite")
 
     scalar_value = array_value.item()
-    if isinstance(scalar_value, (bool, np.bool_, str)):
+    if isinstance(scalar_value, (bool, np.bool_)) or _is_text_scalar(scalar_value):
         raise ValueError(f"{name} must be finite")
     return scalar_value
 
