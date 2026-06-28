@@ -169,6 +169,8 @@ def _normalize_issue_index(value: Any, *, name: str) -> int:
 def _normalize_fill_value(value: Any) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(_ERROR_MESSAGE)
+    if isinstance(value, np.ndarray):
+        raise ValueError(_ERROR_MESSAGE)
 
     if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
