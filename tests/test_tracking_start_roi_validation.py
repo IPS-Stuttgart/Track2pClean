@@ -9,6 +9,21 @@ import pytest
 from bayescatrack.tracking import run_registered_subject_tracking
 
 
+class _BadIndex:
+    def __index__(self):
+        raise ValueError("bad index adapter")
+
+
+class _HugeIndex:
+    def __index__(self):
+        raise OverflowError("index adapter overflow")
+
+
+class _TooLargeIndex:
+    def __index__(self):
+        return 10**100
+
+
 def _write_single_session_subject(subject_dir: Path) -> None:
     plane_dir = subject_dir / "2024-05-01_a" / "data_npy" / "plane0"
     plane_dir.mkdir(parents=True)
@@ -88,6 +103,45 @@ def test_tracking_start_roi_restriction_rejects_invalid_seed_indices(
             track_rows,
             start_roi_indices=bad_start_roi_indices,
             start_session_index=0,
+            fill_value=-1,
+        )
+
+
+@pytest.mark.parametrize(
+    "bad_start_roi_indices",
+    [[_BadIndex()], [_HugeIndex()], [_TooLargeIndex()]],
+)
+def test_tracking_start_roi_restriction_normalizes_bad_index_protocol_seed_indices(
+    bad_start_roi_indices,
+):
+    track_rows = np.asarray([[0, 10], [1, 11]], dtype=int)
+
+    with pytest.raises(
+        ValueError,
+        match="start_roi_indices must contain integer ROI indices",
+    ):
+        tracking._restrict_track_rows_to_start_rois(
+            track_rows,
+            start_roi_indices=bad_start_roi_indices,
+            start_session_index=0,
+            fill_value=-1,
+        )
+
+
+@pytest.mark.parametrize("bad_start_session_index", [_BadIndex(), _HugeIndex()])
+def test_tracking_start_roi_restriction_normalizes_bad_index_protocol_session_index(
+    bad_start_session_index,
+):
+    track_rows = np.asarray([[0, 10], [1, 11]], dtype=int)
+
+    with pytest.raises(
+        ValueError,
+        match="start_session_index must be an integer session index",
+    ):
+        tracking._restrict_track_rows_to_start_rois(
+            track_rows,
+            start_roi_indices=[0, 1],
+            start_session_index=bad_start_session_index,
             fill_value=-1,
         )
 
