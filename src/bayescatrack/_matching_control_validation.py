@@ -166,23 +166,15 @@ def _normalize_session_index(value: Any, n_sessions: int) -> int:
 
 
 def _normalize_integer_control(value: Any, field_name: str) -> int:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{field_name} must be an integer, not boolean")
+    if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
+        raise ValueError(f"{field_name} must be an integer")
 
     try:
         return int(operator.index(value))
     except TypeError:
         pass
 
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            raise ValueError(f"{field_name} must be an integer")
-        try:
-            numeric_value = float(text)
-        except ValueError as exc:
-            raise ValueError(f"{field_name} must be an integer") from exc
-    elif isinstance(value, (float, np.floating)):
+    if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
     else:
         raise ValueError(f"{field_name} must be an integer")
