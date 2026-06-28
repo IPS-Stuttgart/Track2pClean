@@ -1,4 +1,4 @@
-"""Validation patch for array-valued advanced-uncertainty controls."""
+"""Validation patch for malformed advanced-uncertainty scalar controls."""
 
 from __future__ import annotations
 
@@ -12,20 +12,26 @@ from . import advanced_uncertainty as _advanced_uncertainty
 
 _PATCH_MARKER = "_bayescatrack_advanced_uncertainty_array_validation_patch"
 _ORIGINAL_ATTR = "_bayescatrack_advanced_uncertainty_array_validation_original"
+_STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray)
 
 
 def install_advanced_uncertainty_array_validation() -> None:
-    """Require numeric uncertainty/pruning controls to be scalar values."""
+    """Require numeric uncertainty/pruning controls to be numeric scalars."""
 
     original = _advanced_uncertainty._validated_float
     if _method_chain_has_patch(original):
         return
 
     def validated_float(value: Any, *, name: str) -> float:
+        if isinstance(value, _STRING_LIKE_SCALAR_TYPES):
+            raise ValueError(f"{name} must be a numeric scalar")
         value_array = np.asarray(value)
         if value_array.shape != ():
             raise ValueError(f"{name} must be a finite scalar")
-        return original(value_array.item(), name=name)
+        scalar = value_array.item()
+        if isinstance(scalar, _STRING_LIKE_SCALAR_TYPES):
+            raise ValueError(f"{name} must be a numeric scalar")
+        return original(scalar, name=name)
 
     validated_float.__name__ = original.__name__
     validated_float.__qualname__ = original.__qualname__
