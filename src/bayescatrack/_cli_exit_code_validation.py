@@ -12,14 +12,19 @@ import numpy as np
 
 # pylint: disable=protected-access
 
-
+_PATCH_MARKER = "_track2pclean_exit_code_validation_patch"
 _EXIT_CODE_ERROR = "CLI delegates must return None or an integer exit code between 0 and 255"
 
 
 def install_cli_exit_code_validation(cli_module: Any) -> None:
     """Patch ``bayescatrack.cli`` so delegate return values become exit codes."""
 
-    if getattr(cli_module, "_track2pclean_exit_code_validation_installed", False):
+    if (
+        _method_chain_has_patch(getattr(cli_module, "main", None))
+        and _method_chain_has_patch(getattr(cli_module, "_handle_benchmark", None))
+        and getattr(cli_module, "_coerce_exit_code", None) is _coerce_exit_code
+    ):
+        cli_module._track2pclean_exit_code_validation_installed = True
         return
 
     def main(argv: list[str] | None = None) -> int:
@@ -64,10 +69,33 @@ def install_cli_exit_code_validation(cli_module: Any) -> None:
         module = importlib.import_module(command.module)
         return _coerce_exit_code(module.main(args[1:]))
 
+    setattr(main, _PATCH_MARKER, True)
+    setattr(main, "_track2pclean_original", getattr(cli_module, "main", None))
+    setattr(handle_benchmark, _PATCH_MARKER, True)
+    setattr(
+        handle_benchmark,
+        "_track2pclean_original",
+        getattr(cli_module, "_handle_benchmark", None),
+    )
+
     cli_module.main = main
     cli_module._handle_benchmark = handle_benchmark
     cli_module._coerce_exit_code = _coerce_exit_code
     cli_module._track2pclean_exit_code_validation_installed = True
+
+
+def _method_chain_has_patch(method: Any) -> bool:
+    seen: set[int] = set()
+    current: Any = method
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, _PATCH_MARKER, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_track2pclean_original", None)
+    return False
 
 
 def _coerce_exit_code(result: Any) -> int:
