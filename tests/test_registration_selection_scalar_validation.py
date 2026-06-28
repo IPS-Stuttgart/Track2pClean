@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack._registration_selection_validation import (
     _finite_nonnegative_scalar,
     _finite_unit_interval_scalar,
