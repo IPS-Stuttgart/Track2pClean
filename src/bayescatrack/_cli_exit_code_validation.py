@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import operator
 import sys
 from typing import Any
+
+import numpy as np
 
 # pylint: disable=protected-access
 
 
+_EXIT_CODE_ERROR = "CLI delegates must return None or an integer exit code"
+
+
 def install_cli_exit_code_validation(cli_module: Any) -> None:
-    """Patch ``bayescatrack.cli`` so ``None`` delegate results map to success."""
+    """Patch ``bayescatrack.cli`` so delegate return values become exit codes."""
 
     if getattr(cli_module, "_track2pclean_exit_code_validation_installed", False):
         return
@@ -69,7 +75,12 @@ def _coerce_exit_code(result: Any) -> int:
 
     if result is None:
         return 0
-    return int(result)
+    if isinstance(result, (bool, np.bool_)):
+        raise TypeError(_EXIT_CODE_ERROR)
+    try:
+        return int(operator.index(result))
+    except TypeError as exc:
+        raise TypeError(_EXIT_CODE_ERROR) from exc
 
 
 __all__ = ["install_cli_exit_code_validation"]
