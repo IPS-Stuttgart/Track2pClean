@@ -29,13 +29,17 @@ def _validated_hit_k(value: Any) -> int:
     return integer_value
 
 
-def install_edge_ranking_hit_k_validation(edge_ranking_module: Any | None = None) -> None:
+def install_edge_ranking_hit_k_validation(
+    edge_ranking_module: Any | None = None,
+) -> None:
     """Normalize exotic ``__index__`` failures for ``hit_ks`` cutoffs."""
 
     if edge_ranking_module is None:
         from . import edge_ranking as edge_ranking_module
 
-    edge_ranking_module._validated_hit_k = _validated_hit_k  # pylint: disable=protected-access
+    edge_ranking_module._validated_hit_k = (
+        _validated_hit_k  # pylint: disable=protected-access
+    )
 
 
 __all__ = ["install_edge_ranking_hit_k_validation"]
