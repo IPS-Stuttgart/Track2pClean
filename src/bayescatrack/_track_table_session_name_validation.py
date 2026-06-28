@@ -15,6 +15,7 @@ from typing import Any, Sequence
 _TRACK_TABLE_PATCH_MARKER = "_bayescatrack_track_table_session_name_validation_patch"
 _REFERENCE_PATCH_MARKER = "_bayescatrack_reference_session_name_validation_patch"
 _GROUND_TRUTH_LOADER_PATCH_MARKER = "_bayescatrack_ground_truth_loader_session_name_validation_patch"
+_STRING_LIKE_SESSION_NAMES = (str, bytes, bytearray)
 
 
 def install_track_table_session_name_validation() -> None:
@@ -147,8 +148,8 @@ def _normalize_unique_session_names(
     *,
     field_name: str,
 ) -> tuple[str, ...]:
-    if isinstance(session_names, (str, bytes)):
-        raise ValueError(f"{field_name} must be a sequence of session-name values, not a bare string")
+    if isinstance(session_names, _STRING_LIKE_SESSION_NAMES):
+        raise ValueError(f"{field_name} must be a sequence of session-name values, not a bare string-like value")
     try:
         normalized_session_names = tuple(str(name) for name in session_names)
     except TypeError as exc:
