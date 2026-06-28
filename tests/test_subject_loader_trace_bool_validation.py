@@ -42,9 +42,9 @@ def _entrypoint_call_args(tmp_path, extra_args):
 def test_load_track2p_subject_accepts_numpy_bool_trace_controls(tmp_path, flag_name):
     _write_minimal_suite2p_plane(tmp_path / "2024-01-01" / "suite2p" / "plane0")
 
-    subject = load_track2p_subject(tmp_path, **{flag_name: np.bool_(False)})
+    sessions = load_track2p_subject(tmp_path, **{flag_name: np.bool_(False)})
 
-    assert len(subject.sessions) == 1
+    assert len(sessions) == 1
 
 
 @pytest.mark.parametrize("flag_name", _TRACE_FLAG_NAMES)
