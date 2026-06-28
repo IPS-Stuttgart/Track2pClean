@@ -24,6 +24,11 @@ PresetFactory = Callable[..., dict[str, Any]]
             "similarity_epsilon must be a finite positive value",
         ),
         (
+            registered_iou_cost_kwargs,
+            {"similarity_epsilon": np.asarray([1.0])},
+            "similarity_epsilon must be a finite positive value",
+        ),
+        (
             registered_shifted_iou_cost_kwargs,
             {"shifted_iou_radius": True},
             "shifted_iou_radius must be a non-negative integer",
@@ -31,6 +36,11 @@ PresetFactory = Callable[..., dict[str, Any]]
         (
             registered_shifted_iou_cost_kwargs,
             {"shifted_iou_radius": 1.5},
+            "shifted_iou_radius must be a non-negative integer",
+        ),
+        (
+            registered_shifted_iou_cost_kwargs,
+            {"shifted_iou_radius": np.asarray(2)},
             "shifted_iou_radius must be a non-negative integer",
         ),
         (
@@ -50,6 +60,11 @@ PresetFactory = Callable[..., dict[str, Any]]
         ),
         (
             roi_aware_local_cost_kwargs,
+            {"weighted_dice_weight": np.asarray([1.0])},
+            "weighted_dice_weight must be a finite non-negative value",
+        ),
+        (
+            roi_aware_local_cost_kwargs,
             {"patch_radius": False},
             "patch_radius must be a non-negative integer",
         ),
@@ -59,8 +74,18 @@ PresetFactory = Callable[..., dict[str, Any]]
             "neighbor_k must be a positive integer",
         ),
         (
+            roi_aware_local_cost_kwargs,
+            {"neighbor_k": np.asarray([5])},
+            "neighbor_k must be a positive integer",
+        ),
+        (
             roi_aware_shifted_cost_kwargs,
             {"shifted_iou_shift_penalty_weight": True},
+            "shifted_iou_shift_penalty_weight must be a finite non-negative value",
+        ),
+        (
+            roi_aware_shifted_cost_kwargs,
+            {"shifted_iou_shift_penalty_weight": np.asarray([0.25])},
             "shifted_iou_shift_penalty_weight must be a finite non-negative value",
         ),
     ],
