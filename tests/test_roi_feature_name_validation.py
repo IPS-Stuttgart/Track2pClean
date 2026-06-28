@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from bayescatrack import CalciumPlaneData
@@ -20,7 +22,7 @@ def _two_roi_plane(feature_values: tuple[float, float]) -> CalciumPlaneData:
 def _feature_only_cost(
     reference: CalciumPlaneData,
     measurement: CalciumPlaneData,
-    feature_names: object,
+    feature_names: str | Sequence[str],
 ) -> np.ndarray:
     return reference.build_pairwise_cost_matrix(
         measurement,
