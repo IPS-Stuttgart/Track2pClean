@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from bayescatrack.ground_truth_eval import (
     TrackTable,
     complete_tracks_score,
@@ -23,6 +24,22 @@ def test_evaluate_track_table_prediction_scores_exact_tracks():
     assert evaluation.n_exact_full_track_matches == 1
     assert evaluation.complete_tracks == 0.5
     assert evaluation.proportion_correct_by_horizon[2] == 0.5
+
+
+def test_track_table_rejects_python_boolean_roi_indices():
+    with pytest.raises(ValueError, match="boolean ROI index"):
+        TrackTable(
+            session_names=("s1", "s2"),
+            tracks=np.array([[True, 2]], dtype=object),
+        )
+
+
+def test_track_table_rejects_numpy_boolean_roi_indices():
+    with pytest.raises(ValueError, match="boolean ROI index"):
+        TrackTable(
+            session_names=("s1", "s2"),
+            tracks=np.array([[np.bool_(False), 2]], dtype=object),
+        )
 
 
 def test_empty_ground_truth_and_prediction_scores_as_vacuously_complete():
