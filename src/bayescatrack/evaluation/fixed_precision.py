@@ -191,6 +191,10 @@ def _score_array_for_track_matrix(
 ) -> np.ndarray:
     if track_scores is None:
         return np.ones((matrix.shape[0],), dtype=float)
+    if isinstance(track_scores, (str, bytes, _MUTABLE_BYTES_TYPE)):
+        raise ValueError(
+            "track_scores must be a sequence of finite real-valued scores, not a bare string-like value"
+        )
     raw_scores = np.asarray(track_scores, dtype=object)
     if raw_scores.ndim != 1 or raw_scores.shape[0] != matrix.shape[0]:
         raise ValueError(
@@ -200,7 +204,7 @@ def _score_array_for_track_matrix(
         raise ValueError("track_scores must contain finite real-valued scores")
     try:
         scores = np.asarray(raw_scores, dtype=float)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError("track_scores must contain finite real-valued scores") from exc
     if scores.ndim != 1 or scores.shape[0] != matrix.shape[0]:
         raise ValueError(
@@ -284,7 +288,12 @@ def _validate_target_precisions(
             raise ValueError(
                 "target precisions must be finite numeric values between 0 and 1"
             )
-        target = float(target_precision)
+        try:
+            target = float(target_precision)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                "target precisions must be finite numeric values between 0 and 1"
+            ) from exc
         if not np.isfinite(target) or not 0.0 <= target <= 1.0:
             raise ValueError(
                 "target precisions must be finite numeric values between 0 and 1"
