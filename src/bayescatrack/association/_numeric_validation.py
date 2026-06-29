@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import operator
 from typing import Any
 
 import numpy as np
 
 _TEXT_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_INDEX = getattr(operator, "index")
+_CONVERSION_ERRORS = (TypeError, ValueError, OverflowError, ArithmeticError)
 
 
 def validated_numeric_float(value: Any, *, name: str) -> float:
     try:
         scalar_value = _numeric_scalar_candidate(value, name=name)
         numeric = float(scalar_value)
-    except (TypeError, ValueError, OverflowError) as exc:
+    except _CONVERSION_ERRORS as exc:
         raise ValueError(f"{name} must be finite") from exc
     if not np.isfinite(numeric):
         raise ValueError(f"{name} must be finite")
@@ -30,7 +33,7 @@ def _numeric_scalar_candidate(value: Any, *, name: str) -> Any:
 
     try:
         array_value = np.asarray(value)
-    except (TypeError, ValueError, OverflowError):
+    except _CONVERSION_ERRORS:
         return value
 
     if array_value.ndim != 0:
@@ -40,6 +43,42 @@ def _numeric_scalar_candidate(value: Any, *, name: str) -> Any:
     if isinstance(scalar_value, (bool, np.bool_)) or _is_text_scalar(scalar_value):
         raise ValueError(f"{name} must be finite")
     return scalar_value
+
+
+def _integer_scalar_candidate(value: Any, *, message: str) -> Any:
+    if isinstance(value, (bool, np.bool_)) or _is_text_scalar(value):
+        raise ValueError(message)
+
+    try:
+        array_value = np.asarray(value)
+    except _CONVERSION_ERRORS:
+        scalar_value = value
+    else:
+        if array_value.ndim != 0:
+            raise ValueError(message)
+        scalar_value = array_value.item()
+
+    if isinstance(scalar_value, (bool, np.bool_)) or _is_text_scalar(scalar_value):
+        raise ValueError(message)
+    return scalar_value
+
+
+def _integer_exact(value: Any, *, message: str) -> int:
+    scalar_value = _integer_scalar_candidate(value, message=message)
+    try:
+        return int(_INDEX(scalar_value))
+    except TypeError:
+        pass
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
+
+    try:
+        numeric = float(scalar_value)
+    except _CONVERSION_ERRORS as exc:
+        raise ValueError(message) from exc
+    if not np.isfinite(numeric) or not numeric.is_integer():
+        raise ValueError(message)
+    return int(numeric)
 
 
 def finite_positive_float(value: Any, *, name: str) -> float:
@@ -73,21 +112,18 @@ def probability(value: Any, *, name: str, allow_zero: bool = True) -> float:
 
 
 def integer(value: Any, *, name: str) -> int:
-    numeric = validated_numeric_float(value, name=name)
-    if not numeric.is_integer():
-        raise ValueError(f"{name} must be an integer")
-    return int(numeric)
+    return _integer_exact(value, message=f"{name} must be an integer")
 
 
 def positive_integer(value: Any, *, name: str) -> int:
-    numeric = validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 1.0:
+    integer_value = _integer_exact(value, message=f"{name} must be a positive integer")
+    if integer_value < 1:
         raise ValueError(f"{name} must be a positive integer")
-    return int(numeric)
+    return integer_value
 
 
 def nonnegative_integer(value: Any, *, name: str) -> int:
-    numeric = validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 0.0:
+    integer_value = _integer_exact(value, message=f"{name} must be a non-negative integer")
+    if integer_value < 0:
         raise ValueError(f"{name} must be a non-negative integer")
-    return int(numeric)
+    return integer_value

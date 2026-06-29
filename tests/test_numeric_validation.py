@@ -4,10 +4,28 @@ import numpy as np
 import pytest
 from bayescatrack.association._numeric_validation import (
     finite_positive_float,
+    integer,
     nonnegative_integer,
+    positive_integer,
     probability,
     validated_numeric_float,
 )
+
+
+class _BadIndexWithFloatFallback:
+    def __float__(self) -> float:
+        return 1.0
+
+
+def _dunder(name: str) -> str:
+    return "_" * 2 + name + "_" * 2
+
+
+def _raise_bad_index(_self: object) -> int:
+    raise OverflowError("too large")
+
+
+setattr(_BadIndexWithFloatFallback, _dunder("index"), _raise_bad_index)
 
 
 @pytest.mark.parametrize(
@@ -83,3 +101,18 @@ def test_validated_numeric_float_accepts_zero_dimensional_numeric_arrays(value):
 def test_derived_numeric_validators_preserve_named_value_errors(validator):
     with pytest.raises(ValueError, match="custom_name"):
         validator("not-a-number", name="custom_name")
+
+
+@pytest.mark.parametrize(
+    ("validator", "message"),
+    [
+        (integer, "control must be an integer"),
+        (positive_integer, "control must be a positive integer"),
+        (nonnegative_integer, "control must be a non-negative integer"),
+    ],
+)
+def test_integer_validators_normalize_bad_index_errors_before_float_fallback(
+    validator, message: str
+):
+    with pytest.raises(ValueError, match=message):
+        validator(_BadIndexWithFloatFallback(), name="control")

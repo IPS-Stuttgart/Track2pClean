@@ -14,6 +14,8 @@ from typing import Any
 
 import numpy as np
 
+from ._reference_scalar_validation import install_reference_scalar_validation
+
 _PATCH_MARKER = "_bayescatrack_reference_empty_prediction_validation_patch"
 
 
@@ -21,6 +23,8 @@ def install_reference_empty_prediction_validation() -> None:
     """Install idempotent empty-prediction handling for reference scorers."""
 
     from . import reference  # pylint: disable=import-outside-toplevel
+
+    install_reference_scalar_validation(reference)
 
     original = reference.score_complete_tracks_against_reference
     if getattr(original, _PATCH_MARKER, False):
