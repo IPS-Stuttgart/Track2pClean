@@ -9,6 +9,11 @@ from bayescatrack.fov_registration import (
 )
 
 
+class _OverflowingIndex:
+    def __index__(self) -> int:
+        raise OverflowError("index too large")
+
+
 def test_apply_integer_image_translation_accepts_integer_like_float_shift():
     image = np.arange(9).reshape(3, 3)
 
@@ -41,6 +46,13 @@ def test_apply_integer_image_translation_rejects_malformed_shift(shift_yx):
 
     with pytest.raises(ValueError, match="shift_yx"):
         apply_integer_image_translation(image, shift_yx)
+
+
+def test_apply_integer_image_translation_rejects_overflowing_index_component():
+    image = np.arange(9).reshape(3, 3)
+
+    with pytest.raises(ValueError, match="shift_yx"):
+        apply_integer_image_translation(image, (_OverflowingIndex(), 0))
 
 
 def test_apply_integer_roi_mask_translation_rejects_fractional_shift():
