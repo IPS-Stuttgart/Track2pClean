@@ -112,7 +112,7 @@ def install_matching_control_validation() -> None:
                 f"{field_name} must contain integer ROI indices"
             ) from exc
         except ValueError as exc:
-            if _is_matching_roi_index_value_error(exc, field_name):
+            if _is_matching_index_value_error(exc, field_name):
                 raise
             raise ValueError(
                 f"{field_name} must contain integer ROI indices"
@@ -127,11 +127,18 @@ def install_matching_control_validation() -> None:
     ) -> int:
         if isinstance(value, np.ndarray):
             raise ValueError(f"{field_name} must be an integer session index")
-        return original_normalize_session_index(
-            value,
-            field_name,
-            num_sessions=num_sessions,
-        )
+        try:
+            return original_normalize_session_index(
+                value,
+                field_name,
+                num_sessions=num_sessions,
+            )
+        except OverflowError as exc:
+            raise ValueError(f"{field_name} must be an integer session index") from exc
+        except ValueError as exc:
+            if _is_matching_index_value_error(exc, field_name):
+                raise
+            raise ValueError(f"{field_name} must be an integer session index") from exc
 
     _mark_patch(solve_bundle_linear_assignment_with_control_validation, original_solve)
     _mark_patch(
@@ -263,7 +270,7 @@ def _normalize_integer_control(value: Any, field_name: str) -> int:
     return int(numeric_value)
 
 
-def _is_matching_roi_index_value_error(error: ValueError, field_name: str) -> bool:
+def _is_matching_index_value_error(error: ValueError, field_name: str) -> bool:
     return str(error).startswith(field_name)
 
 
