@@ -84,6 +84,9 @@ def _normalize_fill_value(value: Any) -> int:
 
 
 def _normalize_integer_like(value: Any, *, error_message: str) -> int:
+    if isinstance(value, np.ndarray):
+        raise ValueError(error_message)
+
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(error_message)
 
