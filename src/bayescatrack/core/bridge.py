@@ -18,6 +18,9 @@ from . import _loader_probability_validation as _loader_probability_validation
 from . import _loader_validation as _loader_validation
 from . import _local_evidence as _local_evidence
 from . import _local_evidence_control_validation as _local_evidence_control_validation
+from . import (
+    _local_evidence_roi_feature_short_circuit as _local_evidence_roi_feature_short_circuit,
+)
 from . import _mahalanobis as _mahalanobis
 from . import _roi_index_validation as _roi_index_validation
 from . import _roi_stat_features as _roi_stat_features
@@ -53,6 +56,9 @@ _roi_stat_features.install_split_roi_stat_pairwise_features(
     _bridge_impl.CalciumPlaneData
 )
 _local_evidence.install_local_evidence_pairwise_features(_bridge_impl.CalciumPlaneData)
+_local_evidence_roi_feature_short_circuit.install_roi_feature_zero_weight_short_circuit(
+    _bridge_impl.CalciumPlaneData
+)
 _local_evidence_control_validation.install_local_evidence_control_validation(
     _bridge_impl.CalciumPlaneData
 )
