@@ -102,7 +102,7 @@ def _positive_int(value: Any, *, name: str) -> int:
             raise ValueError(f"{name} must be a positive integer")
         try:
             numeric_value = float(text)
-        except ValueError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{name} must be a positive integer") from exc
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
             raise ValueError(f"{name} must be a positive integer")
@@ -110,7 +110,7 @@ def _positive_int(value: Any, *, name: str) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{name} must be a positive integer") from exc
     if integer_value < 1:
         raise ValueError(f"{name} must be a positive integer")
@@ -128,7 +128,7 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite non-negative value")
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite non-negative value") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{name} must be a finite non-negative value")
