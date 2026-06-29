@@ -5,6 +5,16 @@ from bayescatrack.registration import RegisteredConsecutiveBundles
 from bayescatrack.tracking import SubjectTrackingResult, _coerce_global_track_rows
 
 
+class _IndexValueError:
+    def __index__(self) -> int:
+        raise ValueError("invalid index conversion")
+
+
+class _IndexOverflowError:
+    def __index__(self) -> int:
+        raise OverflowError("invalid index conversion")
+
+
 @pytest.mark.parametrize(
     "bad_fill_value",
     [
@@ -18,6 +28,8 @@ from bayescatrack.tracking import SubjectTrackingResult, _coerce_global_track_ro
         np.nan,
         np.inf,
         "-1",
+        _IndexValueError(),
+        _IndexOverflowError(),
     ],
 )
 def test_subject_tracking_result_rejects_malformed_or_colliding_fill_value(
