@@ -9,6 +9,8 @@ from typing import Any
 
 import numpy as np
 
+_TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+
 
 @dataclass(frozen=True)
 class AbsenceModelConfig:
@@ -63,22 +65,25 @@ def absence_cost_vector(
 
     cell_probabilities = getattr(plane, "cell_probabilities", None)
     if cell_probabilities is not None:
-        probabilities = np.asarray(cell_probabilities, dtype=float).reshape(-1)
-        if probabilities.shape == (n_rois,):
-            valid_probabilities = np.isfinite(probabilities)
-            if np.any(valid_probabilities):
-                probs = np.clip(probabilities[valid_probabilities], 0.0, 1.0)
-                costs[valid_probabilities] -= cfg.low_cell_probability_discount * (
-                    1.0 - probs
-                )
+        probabilities = _validated_optional_float_vector(
+            "plane.cell_probabilities",
+            cell_probabilities,
+            n_rois,
+        )
+        valid_probabilities = np.isfinite(probabilities)
+        if np.any(valid_probabilities):
+            probs = np.clip(probabilities[valid_probabilities], 0.0, 1.0)
+            costs[valid_probabilities] -= cfg.low_cell_probability_discount * (
+                1.0 - probs
+            )
 
     if registered_empty_mask is not None:
         empty = _validated_registered_empty_mask(registered_empty_mask, n_rois)
         costs[empty] -= cfg.empty_registered_mask_discount
 
     if local_density is not None:
-        density = np.asarray(local_density, dtype=float).reshape(-1)
-        if density.shape == (n_rois,) and density.size:
+        density = _validated_optional_float_vector("local_density", local_density, n_rois)
+        if density.size:
             finite_density = density[np.isfinite(density)]
             if finite_density.size:
                 scale = float(np.percentile(finite_density, 90.0))
@@ -268,18 +273,45 @@ def _validated_absence_cost_vector(
     return values
 
 
-def _validated_registered_empty_mask(raw_values: Any, n_rois: int) -> np.ndarray:
-    message = "registered_empty_mask must be a boolean or binary numeric mask"
+def _validated_optional_float_vector(name: str, raw_values: Any, n_rois: int) -> np.ndarray:
+    message = f"{name} must be a numeric vector matching plane.n_rois"
+    raw_array = _validated_object_vector(raw_values, n_rois, message=message)
+    if _contains_text_values(raw_array):
+        raise ValueError(message)
     try:
-        values = np.asarray(raw_values).reshape(-1)
+        return np.asarray(raw_array, dtype=float)
     except (TypeError, ValueError) as exc:
         raise ValueError(message) from exc
 
+
+def _validated_object_vector(
+    raw_values: Any,
+    n_rois: int,
+    *,
+    message: str,
+) -> np.ndarray:
+    try:
+        values = np.asarray(raw_values, dtype=object).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
     if values.shape != (n_rois,):
-        raise ValueError(
-            "registered_empty_mask must contain one value per ROI; "
-            f"expected {n_rois}, got {values.size}"
-        )
+        raise ValueError(message)
+    return values
+
+
+def _contains_text_values(values: np.ndarray) -> bool:
+    return any(isinstance(value, _TEXT_TYPES) for value in values.reshape(-1))
+
+
+def _validated_registered_empty_mask(raw_values: Any, n_rois: int) -> np.ndarray:
+    message = "registered_empty_mask must be a boolean or binary numeric mask"
+    raw_array = _validated_object_vector(raw_values, n_rois, message=message)
+    if _contains_text_values(raw_array):
+        raise ValueError(message)
+    try:
+        values = np.asarray(raw_array).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
 
     if values.dtype.kind == "b":
         return values.astype(bool, copy=False)

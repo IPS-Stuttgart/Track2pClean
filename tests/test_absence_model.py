@@ -273,24 +273,33 @@ def test_absence_cost_vector_rejects_optional_cue_length_mismatch(
 
 
 @pytest.mark.parametrize(
-    "cell_probabilities",
-    ("0.5", np.asarray(["0.5"], dtype=object)),
+    ("plane_kwargs", "call_kwargs", "message"),
+    (
+        ({"cell_probabilities": "0.5"}, {}, "plane.cell_probabilities"),
+        (
+            {"cell_probabilities": np.asarray(["0.5"], dtype=object)},
+            {},
+            "plane.cell_probabilities",
+        ),
+        ({}, {"registered_empty_mask": "false"}, "registered_empty_mask"),
+        (
+            {},
+            {"registered_empty_mask": np.asarray(["False"], dtype=object)},
+            "registered_empty_mask",
+        ),
+        ({}, {"local_density": "0.5"}, "local_density"),
+        ({}, {"local_density": np.asarray(["0.5"], dtype=object)}, "local_density"),
+    ),
 )
-def test_absence_cost_vector_rejects_text_cell_probabilities(
-    cell_probabilities: object,
+def test_absence_cost_vector_rejects_text_optional_cues(
+    plane_kwargs,
+    call_kwargs,
+    message,
 ) -> None:
-    plane = _plane(1, cell_probabilities=cell_probabilities)
+    plane = _plane(1, **plane_kwargs)
 
-    with pytest.raises(ValueError, match="plane.cell_probabilities"):
-        absence_cost_vector(plane)
-
-
-@pytest.mark.parametrize("local_density", ("0.5", np.asarray(["0.5"], dtype=object)))
-def test_absence_cost_vector_rejects_text_local_density(local_density: object) -> None:
-    plane = _plane(1)
-
-    with pytest.raises(ValueError, match="local_density"):
-        absence_cost_vector(plane, local_density=local_density)
+    with pytest.raises(ValueError, match=message):
+        absence_cost_vector(plane, **call_kwargs)
 
 
 def test_gap_penalty_matrix_rejects_registered_empty_mask_length_mismatch() -> None:
