@@ -29,6 +29,26 @@ def _session(name: str) -> Track2pSession:
     )
 
 
+def _session_with_rois(name: str, roi_indices: list[int]) -> Track2pSession:
+    return Track2pSession(
+        session_dir=Path(name),
+        session_name=name,
+        session_date=None,
+        plane_data=_plane_with_rois(roi_indices),
+    )
+
+
+def _plane_with_rois(roi_indices: list[int]) -> CalciumPlaneData:
+    masks = np.zeros((len(roi_indices), 8, 8), dtype=bool)
+    for row, roi_index in enumerate(roi_indices):
+        masks[row, 1 + row, 1 + (roi_index % 5)] = True
+    return CalciumPlaneData(
+        roi_masks=masks,
+        roi_indices=np.asarray(roi_indices, dtype=int),
+        source="association_plane_validation",
+    )
+
+
 @pytest.mark.parametrize(
     "builder",
     [
@@ -94,3 +114,43 @@ def test_pairwise_cost_return_components_key_cannot_leak_tuple_cost_matrix() -> 
     assert isinstance(bundle.pairwise_cost_matrix, np.ndarray)
     assert bundle.pairwise_cost_matrix.shape == (1, 1)
     assert bundle.pairwise_components == {}
+
+
+def test_session_pair_association_bundle_rejects_wrong_transformed_roi_count() -> None:
+    reference = _session_with_rois("2024-01-01", [0])
+    measurement = _session_with_rois("2024-01-02", [10, 11])
+    transformed = _plane_with_rois([10])
+
+    with pytest.raises(ValueError, match="preserve the measurement session ROI count"):
+        build_session_pair_association_bundle(
+            reference,
+            measurement,
+            measurement_plane_in_reference_frame=transformed,
+        )
+
+
+def test_session_pair_association_bundle_rejects_wrong_transformed_roi_ids() -> None:
+    reference = _session_with_rois("2024-01-01", [0])
+    measurement = _session_with_rois("2024-01-02", [10, 11])
+    transformed = _plane_with_rois([10, 12])
+
+    with pytest.raises(ValueError, match="preserve the measurement session ROI identities"):
+        build_session_pair_association_bundle(
+            reference,
+            measurement,
+            measurement_plane_in_reference_frame=transformed,
+        )
+
+
+def test_session_pair_association_bundle_accepts_permuted_transformed_roi_ids() -> None:
+    reference = _session_with_rois("2024-01-01", [0])
+    measurement = _session_with_rois("2024-01-02", [10, 11])
+    transformed = _plane_with_rois([11, 10])
+
+    bundle = build_session_pair_association_bundle(
+        reference,
+        measurement,
+        measurement_plane_in_reference_frame=transformed,
+    )
+
+    np.testing.assert_array_equal(bundle.measurement_roi_indices, np.asarray([11, 10]))
