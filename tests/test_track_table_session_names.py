@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from bayescatrack._ground_truth_track_validation import install_ground_truth_track_validation
 from bayescatrack.ground_truth_eval import (
     TrackTable,
     load_track2p_ground_truth_csv,
@@ -28,6 +29,16 @@ def test_track_table_rejects_duplicate_session_names_after_string_normalization(
 def test_track_table_rejects_bare_string_like_session_names(session_names) -> None:
     with pytest.raises(ValueError, match="bare string"):
         TrackTable(session_names, [[1, 2, 3, 4]])
+
+
+@pytest.mark.parametrize("session_names", _TWO_SESSION_STRING_LIKE_VALUES)
+def test_track_table_rejects_bare_string_like_session_names_after_ground_truth_reinstall(
+    session_names,
+) -> None:
+    install_ground_truth_track_validation()
+
+    with pytest.raises(ValueError, match="bare string"):
+        TrackTable(session_names, [[1, 2]])
 
 
 def test_track_table_alignment_rejects_duplicate_target_session_names() -> None:
