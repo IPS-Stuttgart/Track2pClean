@@ -29,7 +29,7 @@ bayescatrack = "bayescatrack:main"
 track2pclean = "track2pclean:main"
 
 [project.urls]
-Repository = "https://github.com/IPS-Stuttgart/BayesCaTrack"
+Repository = "https://github.com/IPS-Stuttgart/Track2pClean"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
