@@ -205,5 +205,24 @@ def test_mahalanobis_pairwise_cost_rejects_invalid_controls(
         _build_cost_matrix(reference, measurement, **kwargs)
 
 
+def test_zero_weight_cost_skips_disabled_diagnostics_for_empty_masks() -> None:
+    reference = CalciumPlaneData(roi_masks=np.zeros((1, 5, 5), dtype=bool))
+    measurement = CalciumPlaneData(roi_masks=np.zeros((1, 5, 5), dtype=bool))
+
+    cost = _build_cost_matrix(
+        reference,
+        measurement,
+        centroid_weight=0.0,
+        iou_weight=0.0,
+        mask_cosine_weight=0.0,
+        area_weight=0.0,
+        roi_feature_weight=0.0,
+        cell_probability_weight=0.0,
+        mahalanobis_weight=0.0,
+    )
+
+    np.testing.assert_allclose(cost, np.zeros((1, 1), dtype=float))
+
+
 def test_default_association_features_include_mahalanobis_centroid_distance() -> None:
     assert "mahalanobis_centroid_distance" in DEFAULT_ASSOCIATION_FEATURES
