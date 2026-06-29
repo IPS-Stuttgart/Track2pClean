@@ -75,6 +75,8 @@ def _validate_roi_indices_by_session(
 def _normalize_roi_index(value: Any, field_name: str) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{field_name} must contain integer ROI indices")
+    if isinstance(value, np.ndarray):
+        raise ValueError(f"{field_name} must contain integer ROI indices")
     if isinstance(value, (float, np.floating)):
         numeric = float(value)
         if not np.isfinite(numeric) or not numeric.is_integer():

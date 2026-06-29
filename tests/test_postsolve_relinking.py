@@ -105,6 +105,9 @@ def test_relink_rejects_duplicate_roi_index_vectors():
         [np.bool_(False), 21],
         [-1, 21],
         ["20", 21],
+        [np.asarray(20), 21],
+        [np.asarray(-1), 21],
+        [np.asarray([20]), 21],
     ],
 )
 def test_relink_rejects_non_integral_roi_index_vectors(bad_roi_indices):
