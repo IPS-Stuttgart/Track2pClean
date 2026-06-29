@@ -216,7 +216,7 @@ def _integer_value(
         raise ValueError(f"{name} must be {qualifier}")
     try:
         return int(operator.index(value))
-    except TypeError:
+    except (TypeError, ValueError, OverflowError):
         pass
     candidate: Any = value
     if isinstance(value, str):
