@@ -10,7 +10,8 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_global_assignment_track_row_validation_patch"
 _ERROR_MESSAGE = (
-    "global assignment track matrix must contain integer ROI indices or missing values"
+    "global assignment track matrix must contain integer ROI indices "
+    "or the configured missing fill_value"
 )
 _FILL_VALUE_ERROR = "fill_value must be a negative integer sentinel"
 
@@ -60,8 +61,10 @@ def _normalize_global_track_value(value: Any, *, fill_value: int) -> int:
         integer_value = _normalize_integer_like(value)
     except ValueError as exc:
         raise ValueError(_ERROR_MESSAGE) from exc
-    if integer_value < 0:
+    if integer_value == fill_value:
         return fill_value
+    if integer_value < 0:
+        raise ValueError(_ERROR_MESSAGE)
     return integer_value
 
 
