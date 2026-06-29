@@ -12,6 +12,7 @@ from . import _core_scalar_validation as _core_scalar_validation
 from . import _core_string_scalar_validation as _core_string_scalar_validation
 from . import _export_bool_validation as _export_bool_validation
 from . import _feature_name_validation as _feature_name_validation
+from . import _input_format_validation as _input_format_validation
 from . import _iscell_value_validation as _iscell_value_validation
 from . import _loader_bool_validation as _loader_bool_validation
 from . import _loader_probability_validation as _loader_probability_validation
@@ -75,6 +76,7 @@ _core_string_scalar_validation.install_core_string_scalar_validation(
 _with_replaced_masks_fov_validation.install_with_replaced_masks_fov_validation(
     _bridge_impl.CalciumPlaneData
 )
+_input_format_validation.install_subject_input_format_validation(_bridge_impl)
 
 CalciumPlaneData = _bridge_impl.CalciumPlaneData
 SessionAssociationBundle = _bridge_impl.SessionAssociationBundle
