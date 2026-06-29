@@ -1,5 +1,7 @@
 import importlib.resources
 import importlib.util
+import pathlib
+import tomllib
 
 import bayescatrack
 from bayescatrack import association
@@ -8,6 +10,9 @@ from bayescatrack import reference, registration, track2p_registration, tracking
 from bayescatrack.core import bridge as bayescatrack_bridge
 from bayescatrack.datasets import track2p as bayescatrack_track2p
 from tests._support import run_module
+
+
+_EXPECTED_REPOSITORY_URL = "https://github.com/IPS-Stuttgart/BayesCaTrack"
 
 
 def test_root_package_exports_expected_public_api():
@@ -30,6 +35,13 @@ def test_bayescatrack_is_marked_as_typed_package():
     marker = importlib.resources.files("bayescatrack") / "py.typed"
 
     assert marker.is_file()
+
+
+def test_project_repository_metadata_points_to_this_repository():
+    pyproject_path = pathlib.Path(__file__).resolve().parents[1] / "pyproject.toml"
+    pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+
+    assert pyproject["project"]["urls"]["Repository"] == _EXPECTED_REPOSITORY_URL
 
 
 def test_bayescatrack_module_entry_point_help():
