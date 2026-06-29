@@ -93,11 +93,13 @@ def _strict_nonnegative_int(value: Any, *, name: str) -> int:
     else:
         try:
             return _reject_negative_int(operator.index(scalar_value), name=name)
-        except (TypeError, ValueError, OverflowError):
+        except TypeError:
             try:
                 numeric_candidate = float(scalar_value)
             except (TypeError, ValueError, OverflowError) as exc:
                 raise ValueError(message) from exc
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(message) from exc
     try:
         numeric_value = float(numeric_candidate)
     except (TypeError, ValueError, OverflowError) as exc:
@@ -115,6 +117,5 @@ def _reject_negative_int(integer_value: int, *, name: str) -> int:
 
 setattr(_strict_finite_float, _PATCH_MARKER, True)
 setattr(_strict_nonnegative_int, _PATCH_MARKER, True)
-
 
 __all__ = ["install_soft_overlap_numeric_validation"]
