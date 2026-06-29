@@ -13,13 +13,19 @@ _PLATFORM_INT_MIN = int(np.iinfo(np.intp).min)
 _PLATFORM_INT_MAX = int(np.iinfo(np.intp).max)
 
 
-def install_reference_scalar_validation(reference_module: ModuleType | None = None) -> None:
+def install_reference_scalar_validation(
+    reference_module: ModuleType | None = None,
+) -> None:
     """Install an exact, range-checked parser for reference integer scalars."""
 
     if reference_module is None:
-        from . import reference as reference_module  # pylint: disable=import-outside-toplevel,reimported
+        from . import (  # pylint: disable=import-outside-toplevel,reimported
+            reference as reference_module,
+        )
 
-    original_parse_integer_scalar = reference_module._parse_integer_scalar  # pylint: disable=protected-access
+    original_parse_integer_scalar = (
+        reference_module._parse_integer_scalar  # pylint: disable=protected-access
+    )
     if getattr(original_parse_integer_scalar, _PATCH_ATTR, False):
         return
 
@@ -43,7 +49,9 @@ def install_reference_scalar_validation(reference_module: ModuleType | None = No
         "_bayescatrack_original",
         original_parse_integer_scalar,
     )
-    reference_module._parse_integer_scalar = _parse_integer_scalar_with_exact_validation  # pylint: disable=protected-access
+    reference_module._parse_integer_scalar = (  # pylint: disable=protected-access
+        _parse_integer_scalar_with_exact_validation
+    )
 
 
 def _parse_integer_scalar_exact(
@@ -115,11 +123,17 @@ def _coerce_scalar_to_integer(
         try:
             return int(scalar, 10)
         except ValueError:
-            return _coerce_float_to_integer(_finite_float(scalar, message=message), message=message)
+            return _coerce_float_to_integer(
+                _finite_float(scalar, message=message),
+                message=message,
+            )
     try:
         return int(operator.index(scalar))
     except (TypeError, ValueError, OverflowError):
-        return _coerce_float_to_integer(_finite_float(scalar, message=message), message=message)
+        return _coerce_float_to_integer(
+            _finite_float(scalar, message=message),
+            message=message,
+        )
 
 
 def _finite_float(value: Any, *, message: str) -> float:
