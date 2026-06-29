@@ -229,10 +229,88 @@ load_raw_npy_plane = _bridge.load_raw_npy_plane
 load_suite2p_plane = _bridge.load_suite2p_plane
 load_track2p_subject = _bridge.load_track2p_subject
 from . import registration as _registration  # noqa: E402
+from . import fov_affine_registration as _fov_affine_registration  # noqa: E402
 
 _install_cli_exit_code_validation(_cli)
 main = _cli.main
 summarize_subject = _bridge.summarize_subject
+
+
+def _install_fov_affine_choice_validation() -> None:
+    from functools import wraps as _wraps
+
+    import numpy as _np
+
+    image_marker = "_bayescatrack_fov_affine_image_choice_validation_patch"
+    mask_marker = "_bayescatrack_fov_affine_mask_choice_validation_patch"
+    allowed = {"nearest", "bilinear"}
+
+    def normalize(value, error_message: str) -> str:
+        if isinstance(value, _np.ndarray):
+            if value.shape != ():
+                raise ValueError(error_message)
+            value = value.item()
+        if isinstance(value, _np.str_):
+            value = str(value)
+        if not isinstance(value, str) or value not in allowed:
+            raise ValueError(error_message)
+        return value
+
+    original_image_warp = _fov_affine_registration.apply_affine_image_warp
+    if not getattr(original_image_warp, image_marker, False):
+
+        @_wraps(original_image_warp)
+        def apply_affine_image_warp_with_choice_validation(
+            image,
+            matrix_xy,
+            *args,
+            **kwargs,
+        ):
+            normalized_kwargs = dict(kwargs)
+            if "interpolation" in normalized_kwargs:
+                normalized_kwargs["interpolation"] = normalize(
+                    normalized_kwargs["interpolation"],
+                    "interpolation must be either 'nearest' or 'bilinear'",
+                )
+            return original_image_warp(image, matrix_xy, *args, **normalized_kwargs)
+
+        setattr(apply_affine_image_warp_with_choice_validation, image_marker, True)
+        setattr(
+            apply_affine_image_warp_with_choice_validation,
+            "_bayescatrack_original",
+            original_image_warp,
+        )
+        _fov_affine_registration.apply_affine_image_warp = (
+            apply_affine_image_warp_with_choice_validation
+        )
+
+    original_mask_warp = _fov_affine_registration.apply_affine_roi_mask_warp
+    if not getattr(original_mask_warp, mask_marker, False):
+
+        @_wraps(original_mask_warp)
+        def apply_affine_roi_mask_warp_with_choice_validation(
+            roi_masks,
+            matrix_xy,
+            *args,
+            **kwargs,
+        ):
+            normalized_kwargs = dict(kwargs)
+            if "mode" in normalized_kwargs:
+                normalized_kwargs["mode"] = normalize(
+                    normalized_kwargs["mode"],
+                    "mode must be either 'nearest' or 'bilinear'",
+                )
+            return original_mask_warp(roi_masks, matrix_xy, *args, **normalized_kwargs)
+
+        setattr(apply_affine_roi_mask_warp_with_choice_validation, mask_marker, True)
+        setattr(
+            apply_affine_roi_mask_warp_with_choice_validation,
+            "_bayescatrack_original",
+            original_mask_warp,
+        )
+        _fov_affine_registration.apply_affine_roi_mask_warp = (
+            apply_affine_roi_mask_warp_with_choice_validation
+        )
 
 _install_confidence_ordered_strict_gap_cli(_cli)
 _install_matching_layout_validation(_matching)
@@ -257,6 +335,7 @@ _install_aligned_roi_index_validation()
 _install_edge_ranking_label_validation(_edge_ranking)
 _install_fov_affine_estimator_validation()
 _install_fov_affine_warp_validation()
+_install_fov_affine_choice_validation()
 _install_fov_translation_output_shape_validation()
 _install_fov_subpixel_shift_validation()
 _install_nonrigid_fov_image_validation()
