@@ -157,12 +157,11 @@ def _normalize_output_shape(output_shape: Any) -> tuple[int, int]:
     except (TypeError, ValueError) as exc:
         raise ValueError(_OUTPUT_SHAPE_ERROR) from exc
 
-    flat_shape = shape_array.reshape(-1)
-    if flat_shape.size != 2:
+    if shape_array.shape != (2,):
         raise ValueError(_OUTPUT_SHAPE_ERROR)
 
     height, width = (
-        _normalize_output_shape_component(value) for value in flat_shape.tolist()
+        _normalize_output_shape_component(value) for value in shape_array.tolist()
     )
     return height, width
 
@@ -206,12 +205,11 @@ def _normalize_grid_shape(grid_shape: Any) -> tuple[int, int]:
         shape_array = np.asarray(grid_shape, dtype=object)
     except (TypeError, ValueError) as exc:
         raise ValueError(_GRID_SHAPE_ERROR) from exc
-    flat_shape = shape_array.reshape(-1)
-    if flat_shape.size != 2:
+    if shape_array.shape != (2,):
         raise ValueError(_GRID_SHAPE_ERROR)
     rows, cols = (
         _normalize_positive_integer(value, _GRID_SHAPE_ERROR)
-        for value in flat_shape.tolist()
+        for value in shape_array.tolist()
     )
     return rows, cols
 
@@ -260,28 +258,29 @@ def _normalize_nonnegative_float(value: Any, error_message: str) -> float:
 
 
 def _normalize_affine_matrix_xy(matrix_xy: Any) -> np.ndarray:
+    if isinstance(matrix_xy, _TEXT_OR_BYTES_LIKE_TYPES):
+        raise ValueError(_MATRIX_ERROR)
     try:
-        object_matrix = np.asarray(matrix_xy, dtype=object)
+        matrix_array = np.asarray(matrix_xy, dtype=object)
     except (TypeError, ValueError) as exc:
         raise ValueError(_MATRIX_ERROR) from exc
-
-    if object_matrix.shape != (2, 3):
+    if matrix_array.shape != (2, 3):
         raise ValueError(_MATRIX_ERROR)
-
-    for value in object_matrix.reshape(-1).tolist():
-        if isinstance(value, (bool, np.bool_)) or isinstance(
-            value, _TEXT_OR_BYTES_LIKE_TYPES
-        ):
-            raise ValueError(_MATRIX_ERROR)
-
+    if _contains_text_or_bytes_like(matrix_array):
+        raise ValueError(_MATRIX_ERROR)
     try:
-        matrix = np.asarray(object_matrix, dtype=float)
-    except (TypeError, ValueError) as exc:
+        numeric_matrix = np.asarray(matrix_array, dtype=float)
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(_MATRIX_ERROR) from exc
-
-    if not np.all(np.isfinite(matrix)):
+    if not np.all(np.isfinite(numeric_matrix)):
         raise ValueError(_MATRIX_ERROR)
-    return matrix
+    return numeric_matrix
+
+
+def _contains_text_or_bytes_like(values: np.ndarray) -> bool:
+    return any(
+        isinstance(value, _TEXT_OR_BYTES_LIKE_TYPES) for value in values.reshape(-1)
+    )
 
 
 __all__ = ["install_fov_affine_warp_validation"]
