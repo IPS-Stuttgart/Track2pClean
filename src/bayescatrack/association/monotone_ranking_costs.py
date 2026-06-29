@@ -41,6 +41,12 @@ _DEFAULT_HARDNESS_FEATURES = (
 )
 
 
+def _nonnegative_integer_finite_bool(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    return _nonnegative_integer(value, name=name)
+
+
 def _feature_name_tuple(feature_names: Sequence[str] | str | None) -> tuple[str, ...]:
     if feature_names is None:
         return ()
@@ -66,7 +72,9 @@ class MonotoneRankerOptions:
     def __post_init__(self) -> None:
         for name in ("row_negatives_per_positive", "column_negatives_per_positive"):
             object.__setattr__(
-                self, name, _nonnegative_integer(getattr(self, name), name=name)
+                self,
+                name,
+                _nonnegative_integer_finite_bool(getattr(self, name), name=name),
             )
         if self.max_preference_pairs is not None:
             object.__setattr__(

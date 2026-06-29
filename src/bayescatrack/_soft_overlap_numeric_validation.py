@@ -1,11 +1,12 @@
-"""Strict numeric validation for soft-overlap controls.
+"""Strict numeric validation for soft-overlap and registered-mask controls.
 
 The soft-overlap wrappers historically used bare ``float(...)`` coercion for
 runtime and preset controls.  That lets byte-like values such as ``b"0.5"``
 through as valid numbers and leaks raw conversion exceptions for opaque objects
 or overflowing numeric adapters.  Patch the shared helpers so these public
 controls fail with the same ``ValueError`` contract used by the rest of the
-package validators.
+package validators.  The registered-mask helpers use the same large-cost control
+in global registered-pairwise pipelines, so they are patched here as well.
 """
 
 from __future__ import annotations
@@ -22,10 +23,12 @@ def install_soft_overlap_numeric_validation() -> None:
     """Install idempotent strict scalar validation for soft-overlap modules."""
 
     from . import soft_overlap_costs  # pylint: disable=import-outside-toplevel
+    from .association import registered_masks  # pylint: disable=import-outside-toplevel
     from .association import soft_overlap  # pylint: disable=import-outside-toplevel
 
     _patch_module(soft_overlap_costs)
     _patch_module(soft_overlap)
+    _patch_registered_mask_module(registered_masks)
 
 
 def _patch_module(module: Any) -> None:
@@ -36,6 +39,12 @@ def _patch_module(module: Any) -> None:
     current_int = getattr(module, "_nonnegative_int", None)
     if current_int is not None and not getattr(current_int, _PATCH_MARKER, False):
         setattr(module, "_nonnegative_int", _strict_nonnegative_int)
+
+
+def _patch_registered_mask_module(module: Any) -> None:
+    current_float = getattr(module, "_finite_positive_float", None)
+    if current_float is not None and not getattr(current_float, _PATCH_MARKER, False):
+        setattr(module, "_finite_positive_float", _strict_finite_positive_float)
 
 
 def _strict_numeric_scalar(value: Any, *, message: str) -> Any:
@@ -80,6 +89,10 @@ def _strict_finite_float(
     return numeric_value
 
 
+def _strict_finite_positive_float(value: Any, *, name: str) -> float:
+    return _strict_finite_float(value, name=name, lower_bound=0.0, positive=True)
+
+
 def _strict_nonnegative_int(value: Any, *, name: str) -> int:
     message = f"{name} must be an integer"
     scalar_value = _strict_numeric_scalar(value, message=message)
@@ -92,12 +105,16 @@ def _strict_nonnegative_int(value: Any, *, name: str) -> int:
         numeric_candidate = scalar_value
     else:
         try:
-            return _reject_negative_int(operator.index(scalar_value), name=name)
-        except (TypeError, ValueError, OverflowError):
+            integer_value = operator.index(scalar_value)
+        except TypeError:
             try:
                 numeric_candidate = float(scalar_value)
             except (TypeError, ValueError, OverflowError) as exc:
                 raise ValueError(message) from exc
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(message) from exc
+        else:
+            return _reject_negative_int(integer_value, name=name)
     try:
         numeric_value = float(numeric_candidate)
     except (TypeError, ValueError, OverflowError) as exc:
@@ -114,7 +131,7 @@ def _reject_negative_int(integer_value: int, *, name: str) -> int:
 
 
 setattr(_strict_finite_float, _PATCH_MARKER, True)
+setattr(_strict_finite_positive_float, _PATCH_MARKER, True)
 setattr(_strict_nonnegative_int, _PATCH_MARKER, True)
-
 
 __all__ = ["install_soft_overlap_numeric_validation"]
