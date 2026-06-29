@@ -200,7 +200,7 @@ def _finite_costs(costs: np.ndarray, *, large_cost: float) -> np.ndarray:
 
 
 def _validate_session_edge_key(edge: Any) -> SessionEdge:
-    if isinstance(edge, (str, bytes)):
+    if isinstance(edge, (str, bytes, bytearray)):
         raise ValueError("pairwise_costs keys must be length-2 session-edge pairs")
     try:
         values = tuple(edge)
@@ -211,9 +211,15 @@ def _validate_session_edge_key(edge: Any) -> SessionEdge:
     if len(values) != 2:
         raise ValueError("pairwise_costs keys must be length-2 session-edge pairs")
     return (
-        _nonnegative_int(values[0], name="session edge source"),
-        _nonnegative_int(values[1], name="session edge target"),
+        _nonnegative_session_index(values[0], name="session edge source"),
+        _nonnegative_session_index(values[1], name="session edge target"),
     )
+
+
+def _nonnegative_session_index(value: Any, *, name: str) -> int:
+    if isinstance(value, (str, bytes, bytearray)):
+        raise ValueError(f"{name} must be a non-negative integer")
+    return _nonnegative_int(value, name=name)
 
 
 def _validate_edge_cost_matrix(
