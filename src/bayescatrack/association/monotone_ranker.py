@@ -18,6 +18,12 @@ from ._numeric_validation import finite_nonnegative_float as _finite_nonnegative
 from ._numeric_validation import finite_positive_float as _finite_positive_float
 from ._numeric_validation import positive_integer as _positive_integer
 
+
+def _positive_integer_training_knob(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    return _positive_integer(value, name=name)
+
 DEFAULT_MONOTONE_BADNESS_FEATURES = tuple(
     name
     for name in DEFAULT_ASSOCIATION_FEATURES
@@ -62,7 +68,9 @@ class MonotoneRankerOptions:
         if not self.include_row_negatives and not self.include_column_negatives:
             raise ValueError("At least one negative source must be enabled")
         object.__setattr__(
-            self, "max_iter", _positive_integer(self.max_iter, name="max_iter")
+            self,
+            "max_iter",
+            _positive_integer_training_knob(self.max_iter, name="max_iter"),
         )
         object.__setattr__(
             self,

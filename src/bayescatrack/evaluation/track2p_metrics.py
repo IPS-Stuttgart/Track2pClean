@@ -22,6 +22,8 @@ from .complete_track_scores import (
 from .track_error_ledger import *  # noqa: F401,F403
 from .track_error_ledger import __all__ as _track_error_ledger_exports
 
+TrackLink = _complete_track_scores.TrackLink
+
 _COMPLETE_TRACK_SCORE_EXPORTS = (
     "TrackLink",
     "complete_track_set",
