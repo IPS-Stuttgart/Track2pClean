@@ -125,11 +125,14 @@ def _load_suite2p_ops_image_shape(path: Path) -> tuple[int, int] | None:
 
 def _validate_positive_image_dimension(value: Any, *, name: str) -> int:
     message = f"Suite2p ops {name} must be a positive integer image dimension"
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_)) or _is_string_like_scalar(value):
+        raise ValueError(message)
+    array_value = np.asarray(value)
+    if array_value.ndim > 0:
         raise ValueError(message)
     try:
         numeric = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(message) from exc
     if not np.isfinite(numeric) or numeric <= 0.0 or numeric != np.floor(numeric):
         raise ValueError(message)
