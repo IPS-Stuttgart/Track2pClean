@@ -245,7 +245,7 @@ def _normalize_fill_value(value: Any) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(_FILL_VALUE_ERROR_MESSAGE) from exc
 
     integer_value = int(integer_value)
