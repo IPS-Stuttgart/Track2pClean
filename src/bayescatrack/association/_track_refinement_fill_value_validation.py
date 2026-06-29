@@ -174,7 +174,7 @@ def _normalize_issue_index(value: Any, *, name: str) -> int:
 
     try:
         return int(operator.index(value))
-    except TypeError as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be an integer") from exc
 
 
@@ -192,7 +192,7 @@ def _normalize_fill_value(value: Any) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(_ERROR_MESSAGE) from exc
 
     integer_value = int(integer_value)
