@@ -17,6 +17,16 @@ class _Bundle:
         self.measurement_roi_indices = np.array([1])
 
 
+class _BadIndexValueError:
+    def __index__(self) -> int:
+        raise ValueError("bad index")
+
+
+class _BadIndexOverflowError:
+    def __index__(self) -> int:
+        raise OverflowError("too large")
+
+
 def test_build_track_rows_from_matches_rejects_string_start_session_index() -> None:
     with pytest.raises(ValueError, match="start_session_index must be an integer"):
         build_track_rows_from_matches(
@@ -39,6 +49,22 @@ def test_build_track_rows_from_matches_rejects_string_fill_value() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "fill_value",
+    [_BadIndexValueError(), _BadIndexOverflowError()],
+)
+def test_build_track_rows_from_matches_normalizes_bad_index_fill_value(
+    fill_value: object,
+) -> None:
+    with pytest.raises(ValueError, match="fill_value must be an integer"):
+        build_track_rows_from_matches(
+            ("s1",),
+            [],
+            start_roi_indices=np.array([0]),
+            fill_value=fill_value,  # type: ignore[arg-type]
+        )
+
+
 def test_build_track_rows_from_bundles_rejects_string_fill_value() -> None:
     with pytest.raises(
         ValueError, match="fill_value must be a negative integer sentinel"
@@ -46,4 +72,18 @@ def test_build_track_rows_from_bundles_rejects_string_fill_value() -> None:
         build_track_rows_from_bundles(
             [_Bundle([[100.0]])],
             fill_value="-1",  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize(
+    "fill_value",
+    [_BadIndexValueError(), _BadIndexOverflowError()],
+)
+def test_build_track_rows_from_bundles_normalizes_bad_index_fill_value(
+    fill_value: object,
+) -> None:
+    with pytest.raises(ValueError, match="fill_value must be an integer"):
+        build_track_rows_from_bundles(
+            [_Bundle([[100.0]])],
+            fill_value=fill_value,  # type: ignore[arg-type]
         )
