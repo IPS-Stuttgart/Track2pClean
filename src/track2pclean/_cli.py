@@ -212,6 +212,15 @@ def _replace_parser_text(
         if isinstance(value, str):
             setattr(parser, attribute_name, value.replace(old_text, new_text))
 
+    for group in (
+        *getattr(parser, "_action_groups", ()),
+        *getattr(parser, "_mutually_exclusive_groups", ()),
+    ):
+        for attribute_name in ("title", "description"):
+            value = getattr(group, attribute_name, None)
+            if isinstance(value, str):
+                setattr(group, attribute_name, value.replace(old_text, new_text))
+
     for action in parser._actions:  # pylint: disable=protected-access
         help_text = getattr(action, "help", None)
         if isinstance(help_text, str):
