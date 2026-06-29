@@ -297,7 +297,7 @@ def _validate_probability(value: Any, field_name: str) -> float:
         raise ValueError(f"{field_name} must be a finite probability in [0, 1]")
     try:
         normalized = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(
             f"{field_name} must be a finite probability in [0, 1]"
         ) from exc
@@ -311,7 +311,7 @@ def _validate_finite_nonnegative(value: Any, field_name: str) -> float:
         raise ValueError(f"{field_name} must be a finite non-negative value")
     try:
         normalized = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{field_name} must be a finite non-negative value") from exc
     if not np.isfinite(normalized) or normalized < 0.0:
         raise ValueError(f"{field_name} must be a finite non-negative value")
@@ -323,7 +323,7 @@ def _validate_positive_int(value: Any, field_name: str) -> int:
         raise ValueError(f"{field_name} must be a positive integer")
     try:
         normalized = operator.index(value)
-    except TypeError as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{field_name} must be a positive integer") from exc
     normalized = int(normalized)
     if normalized < 1:
