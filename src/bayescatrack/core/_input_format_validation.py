@@ -65,7 +65,11 @@ def _patch_input_format_keyword_function(module: ModuleType, function_name: str)
             "_bayescatrack_auto_fallback_patch",
             True,
         )
-    setattr(subject_like_with_input_format_validation, "_bayescatrack_original", original)
+    setattr(
+        subject_like_with_input_format_validation,
+        "_bayescatrack_original",
+        original,
+    )
     setattr(module, function_name, subject_like_with_input_format_validation)
 
 
