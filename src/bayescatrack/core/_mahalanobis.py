@@ -103,24 +103,35 @@ def install_mahalanobis_pairwise_features(calcium_plane_cls: type[Any]) -> None:
             mahalanobis_weight,
         )
 
+        base_cost_kwargs = {
+            "order": order,
+            "weighted_centroids": weighted_centroids,
+            "centroid_weight": centroid_weight,
+            "centroid_scale": centroid_scale,
+            "max_centroid_distance": max_centroid_distance,
+            "iou_weight": iou_weight,
+            "mask_cosine_weight": mask_cosine_weight,
+            "area_weight": area_weight,
+            "roi_feature_weight": roi_feature_weight,
+            "feature_names": feature_names,
+            "cell_probability_weight": cell_probability_weight,
+            "soft_iou": soft_iou,
+            "large_cost": large_cost,
+            "similarity_epsilon": similarity_epsilon,
+        }
+        if mahalanobis_weight == 0.0 and not return_components:
+            return original_build_pairwise_cost_matrix(
+                self,
+                other,
+                return_components=False,
+                **base_cost_kwargs,
+            )
+
         base_cost, components = original_build_pairwise_cost_matrix(
             self,
             other,
-            order=order,
-            weighted_centroids=weighted_centroids,
-            centroid_weight=centroid_weight,
-            centroid_scale=centroid_scale,
-            max_centroid_distance=max_centroid_distance,
-            iou_weight=iou_weight,
-            mask_cosine_weight=mask_cosine_weight,
-            area_weight=area_weight,
-            roi_feature_weight=roi_feature_weight,
-            feature_names=feature_names,
-            cell_probability_weight=cell_probability_weight,
-            soft_iou=soft_iou,
-            large_cost=large_cost,
-            similarity_epsilon=similarity_epsilon,
             return_components=True,
+            **base_cost_kwargs,
         )
         components = dict(components)
 
