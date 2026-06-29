@@ -18,7 +18,13 @@ def test_track2pclean_summarize_subject_strict_missing_plane_errors(tmp_path):
         summarize_subject(tmp_path, strict=True)
 
 
-def test_track2pclean_summary_parser_accepts_strict(tmp_path):
+def test_track2pclean_summary_and_export_parsers_accept_strict(tmp_path):
     parser = bridge_module._bridge_impl._build_arg_parser()  # pylint: disable=protected-access
-    args = parser.parse_args(["summary", str(tmp_path), "--strict"])
-    assert args.strict is True
+
+    summary_args = parser.parse_args(["summary", str(tmp_path), "--strict"])
+    export_args = parser.parse_args(
+        ["export", str(tmp_path), str(tmp_path / "subject.npz"), "--strict"]
+    )
+
+    assert summary_args.strict is True
+    assert export_args.strict is True
