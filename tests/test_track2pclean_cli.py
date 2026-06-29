@@ -1,6 +1,7 @@
 import argparse
 import importlib
 import importlib.resources
+import subprocess
 import sys
 from types import ModuleType
 
@@ -15,6 +16,21 @@ def test_track2pclean_module_help_uses_native_program_name():
     assert "usage: track2pclean" in proc.stdout
     assert "track2pclean <command> --help" in proc.stdout
     assert "bayescatrack <command> --help" not in proc.stdout
+
+
+def test_track2pclean_unknown_top_level_command_shows_full_native_command_set():
+    with pytest.raises(subprocess.CalledProcessError) as exc_info:
+        run_module("-m", "track2pclean", "summry")
+
+    proc = exc_info.value
+    assert proc.returncode == 2
+    assert (
+        "usage: track2pclean {summary,export,benchmark,growth,advanced} ..."
+        in proc.stderr
+    )
+    assert "unknown command 'summry'" in proc.stderr
+    assert "track2pclean {summary,export}" not in proc.stderr
+    assert "bayescatrack" not in proc.stderr
 
 
 def test_track2pclean_cli_module_reexports_native_main():

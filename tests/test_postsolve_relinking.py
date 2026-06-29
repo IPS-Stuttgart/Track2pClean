@@ -97,6 +97,32 @@ def test_relink_rejects_duplicate_roi_index_vectors():
         )
 
 
+@pytest.mark.parametrize(
+    "bad_roi_indices",
+    [
+        [20.5, 21],
+        [True, 21],
+        [np.bool_(False), 21],
+        [-1, 21],
+        ["20", 21],
+        [np.asarray(20), 21],
+        [np.asarray(-1), 21],
+        [np.asarray([20]), 21],
+    ],
+)
+def test_relink_rejects_non_integral_roi_index_vectors(bad_roi_indices):
+    rows = np.array([[10, 21]], dtype=int)
+
+    with pytest.raises(ValueError, match=r"roi_indices_by_session\[1\].*ROI indices"):
+        relink_tracks_at_geometry_issues(
+            rows,
+            [_issue()],
+            {(0, 1): np.array([[0.1, 0.2]], dtype=float)},
+            roi_indices_by_session=([10], bad_roi_indices),
+            config=PostSolveRelinkingConfig(max_edge_cost=None),
+        )
+
+
 def test_relink_rejects_non_matrix_pairwise_costs():
     rows = np.array([[10, 21]], dtype=int)
 
@@ -117,10 +143,12 @@ def test_relink_rejects_non_matrix_pairwise_costs():
         ("max_edge_cost", float("nan")),
         ("max_edge_cost", float("inf")),
         ("max_edge_cost", -0.1),
+        ("max_edge_cost", np.array([6.0])),
         ("min_cost_improvement", False),
         ("min_cost_improvement", float("nan")),
         ("min_cost_improvement", float("inf")),
         ("min_cost_improvement", -0.1),
+        ("min_cost_improvement", np.array([0.25])),
         ("enforce_unique_session_rois", 1),
         ("fill_value", True),
         ("fill_value", 0),
@@ -130,6 +158,7 @@ def test_relink_rejects_non_matrix_pairwise_costs():
         ("bidirectional_next_weight", float("nan")),
         ("bidirectional_next_weight", float("inf")),
         ("bidirectional_next_weight", -0.1),
+        ("bidirectional_next_weight", np.array([1.0])),
     ],
 )
 def test_postsolve_relinking_config_rejects_invalid_controls(

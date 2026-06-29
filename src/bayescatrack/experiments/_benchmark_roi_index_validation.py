@@ -36,7 +36,7 @@ def _is_nonnegative_integral_roi_index(value: object) -> bool:
 
     try:
         return operator.index(value) >= 0  # type: ignore[arg-type]
-    except TypeError:
+    except (TypeError, ValueError, OverflowError):
         pass
 
     if isinstance(value, (float, np.floating)):
