@@ -5,6 +5,14 @@ import pytest
 from bayescatrack import CalciumPlaneData
 
 
+class _BadIndex:
+    def __init__(self, exception: Exception) -> None:
+        self._exception = exception
+
+    def __index__(self) -> int:
+        raise self._exception
+
+
 def _plane() -> CalciumPlaneData:
     roi_masks = np.zeros((1, 3, 3), dtype=bool)
     roi_masks[0, 1, 1] = True
@@ -62,6 +70,24 @@ def test_pairwise_local_evidence_rejects_array_control_values(kwargs, message):
     plane = _plane()
     with pytest.raises(ValueError, match=message):
         plane.build_pairwise_cost_matrix(plane, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("control_name", "bad_value"),
+    [
+        ("patch_radius", _BadIndex(ValueError("bad integer protocol"))),
+        ("patch_radius", _BadIndex(OverflowError("bad integer protocol"))),
+        ("neighbor_k", _BadIndex(ValueError("bad integer protocol"))),
+        ("neighbor_k", _BadIndex(OverflowError("bad integer protocol"))),
+    ],
+)
+def test_pairwise_local_evidence_normalizes_bad_integer_protocols(
+    control_name, bad_value
+):
+    plane = _plane()
+
+    with pytest.raises(ValueError, match=f"{control_name} must be an integer"):
+        plane.build_pairwise_cost_matrix(plane, **{control_name: bad_value})
 
 
 def test_pairwise_local_evidence_accepts_zero_dimensional_numeric_controls():
