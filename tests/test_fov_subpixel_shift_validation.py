@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fractions import Fraction
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -36,6 +38,16 @@ def test_apply_subpixel_image_translation_rejects_boolean_shift_values(shift_yx)
 def test_apply_subpixel_image_translation_rejects_malformed_shift_shapes(shift_yx):
     with pytest.raises(ValueError, match="shift_yx"):
         apply_subpixel_image_translation(np.zeros((4, 4), dtype=float), shift_yx)
+
+
+def test_apply_subpixel_image_translation_rejects_overflowing_shift_values():
+    overflowing_shift = Fraction(10**400, 1)
+
+    with pytest.raises(ValueError, match="shift_yx"):
+        apply_subpixel_image_translation(
+            np.zeros((4, 4), dtype=float),
+            [overflowing_shift, 0.0],
+        )
 
 
 def test_apply_subpixel_image_translation_preserves_numeric_shifts():
