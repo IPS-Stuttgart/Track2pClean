@@ -2,4 +2,7 @@ import operator
 
 
 def f(value):
-    return int(operator.index(value)) + 1
+    try:
+        return int(operator.index(value))
+    except TypeError:
+        return 0
