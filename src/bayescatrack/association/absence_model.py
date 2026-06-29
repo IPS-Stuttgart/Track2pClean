@@ -267,9 +267,14 @@ def _validated_non_negative_finite_float(name: str, raw_value: Any) -> float:
 def _validated_absence_cost_vector(
     name: str, raw_values: Any, n_rois: int
 ) -> np.ndarray:
-    values = np.asarray(raw_values, dtype=float).reshape(-1)
+    message = "absence cost vectors must match plane ROI counts"
+    try:
+        values = np.asarray(raw_values, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
     if values.shape != (n_rois,):
-        raise ValueError("absence cost vectors must match plane ROI counts")
+        raise ValueError(message)
+    values = values.reshape(-1)
     if not np.all(np.isfinite(values)) or np.any(values < 0.0):
         raise ValueError(f"{name} must contain finite non-negative values")
     return values
@@ -295,12 +300,12 @@ def _validated_object_vector(
     message: str,
 ) -> np.ndarray:
     try:
-        values = np.asarray(raw_values, dtype=object).reshape(-1)
+        values = np.asarray(raw_values, dtype=object)
     except (TypeError, ValueError) as exc:
         raise ValueError(message) from exc
     if values.shape != (n_rois,):
         raise ValueError(message)
-    return values
+    return values.reshape(-1)
 
 
 def _contains_text_values(values: np.ndarray) -> bool:
