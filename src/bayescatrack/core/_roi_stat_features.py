@@ -64,11 +64,23 @@ def install_split_roi_stat_pairwise_features(calcium_plane_cls: type[Any]) -> No
         if similarity_epsilon <= 0.0:
             raise ValueError("similarity_epsilon must be strictly positive")
 
+        normalized_feature_names = _normalize_roi_feature_names(feature_names)
+        if not return_components:
+            return original_build_pairwise_cost_matrix(
+                self,
+                other,
+                *args,
+                feature_names=normalized_feature_names,
+                similarity_epsilon=similarity_epsilon,
+                return_components=False,
+                **kwargs,
+            )
+
         result = original_build_pairwise_cost_matrix(
             self,
             other,
             *args,
-            feature_names=_normalize_roi_feature_names(feature_names),
+            feature_names=normalized_feature_names,
             similarity_epsilon=similarity_epsilon,
             return_components=True,
             **kwargs,
@@ -84,9 +96,7 @@ def install_split_roi_stat_pairwise_features(calcium_plane_cls: type[Any]) -> No
             )
         )
 
-        if return_components:
-            return total_cost, components
-        return total_cost
+        return total_cost, components
 
     calcium_plane_cls.build_pairwise_cost_matrix = build_pairwise_cost_matrix
     setattr(calcium_plane_cls, _ROI_STAT_FEATURES_INSTALLED_ATTR, True)
