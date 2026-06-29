@@ -11,6 +11,7 @@ import numpy as np
 from .complete_track_scores import complete_track_set, normalize_track_matrix
 
 _MUTABLE_BYTES_TYPE = getattr(builtins, "byte" "array")
+_STRING_LIKE_TYPES = (str, bytes, _MUTABLE_BYTES_TYPE)
 
 DEFAULT_COMPLETE_TRACK_FIXED_PRECISIONS = (0.9, 0.95, 0.99)
 _MISSING_OBSERVATION_STRINGS = frozenset({"", "none", "nan", "null"})
@@ -191,7 +192,7 @@ def _score_array_for_track_matrix(
 ) -> np.ndarray:
     if track_scores is None:
         return np.ones((matrix.shape[0],), dtype=float)
-    if isinstance(track_scores, (str, bytes, _MUTABLE_BYTES_TYPE)):
+    if isinstance(track_scores, _STRING_LIKE_TYPES):
         raise ValueError(
             "track_scores must be a sequence of finite real-valued scores, not a bare string-like value"
         )
@@ -219,7 +220,9 @@ def _coerce_track_score(score: object) -> float:
     if score_array.shape != ():
         raise ValueError("track_scores must contain scalar finite real-valued scores")
     scalar_score = score_array.item()
-    if isinstance(scalar_score, (bool, np.bool_)):
+    if isinstance(scalar_score, (bool, np.bool_)) or isinstance(
+        scalar_score, _STRING_LIKE_TYPES
+    ):
         raise ValueError("track_scores must contain finite real-valued scores")
     try:
         converted = float(scalar_score)
@@ -235,7 +238,7 @@ def _resolve_session_indices(
 ) -> list[int]:
     if session_indices is None:
         return list(range(num_sessions))
-    if isinstance(session_indices, (str, bytes, _MUTABLE_BYTES_TYPE)):
+    if isinstance(session_indices, _STRING_LIKE_TYPES):
         raise ValueError(
             "session_indices must be a sequence of integer-like indices, not a bare string-like value"
         )
@@ -292,7 +295,7 @@ def _coerce_session_index(value: object) -> int:
 def _validate_target_precisions(
     target_precisions: Sequence[float],
 ) -> tuple[float, ...]:
-    if isinstance(target_precisions, (str, bytes, _MUTABLE_BYTES_TYPE)):
+    if isinstance(target_precisions, _STRING_LIKE_TYPES):
         raise ValueError(
             "target_precisions must be a sequence of finite numeric values between 0 and 1, not a bare string-like value"
         )
@@ -315,7 +318,7 @@ def _validate_target_precisions(
 
 
 def _coerce_target_precision(value: object) -> float:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_)) or isinstance(value, _STRING_LIKE_TYPES):
         raise ValueError(
             "target precisions must be finite numeric values between 0 and 1"
         )
@@ -329,7 +332,9 @@ def _coerce_target_precision(value: object) -> float:
                 "target precisions must be scalar finite numeric values between 0 and 1"
             )
         scalar_value = array_value.item()
-        if isinstance(scalar_value, (bool, np.bool_)):
+        if isinstance(scalar_value, (bool, np.bool_)) or isinstance(
+            scalar_value, _STRING_LIKE_TYPES
+        ):
             raise ValueError(
                 "target precisions must be finite numeric values between 0 and 1"
             )
