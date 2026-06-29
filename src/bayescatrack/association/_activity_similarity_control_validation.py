@@ -68,11 +68,13 @@ def _validated_plane_roi_count(plane: Any, plane_name: str) -> int:
     except TypeError:
         try:
             numeric_count = float(raw_count)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(message) from exc
         if not np.isfinite(numeric_count) or not numeric_count.is_integer():
             raise ValueError(message)
         count = int(numeric_count)
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
 
     if count < 0:
         raise ValueError(message)

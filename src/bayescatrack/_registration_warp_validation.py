@@ -8,9 +8,9 @@ and boolean thresholds would be reinterpreted as numeric ``0.0``/``1.0``.
 The registration warps also thread ``output_shape`` into NumPy allocation and
 index-grid helpers.  Values such as ``True`` or fractional floats can otherwise be
 silently reinterpreted, changing the registered image/mask geometry rather than
-failing fast at the call boundary.  The hook below preserves valid integer-like
-shape components while rejecting ambiguous runtime controls before registered
-images or masks are changed.
+failing fast at the call boundary.  Transform matrices and offsets are similarly
+normalized here so non-finite or malformed affine controls cannot reach the
+sampler and produce invalid registered images or masks.
 """
 
 from __future__ import annotations
@@ -25,6 +25,12 @@ _IMAGE_PATCH_MARKER = "_bayescatrack_registration_image_warp_validation_patch"
 _ROI_MASK_PATCH_MARKER = "_bayescatrack_registration_roi_mask_warp_validation_patch"
 _OUTPUT_SHAPE_ERROR = (
     "output_shape must contain exactly two non-negative integer values"
+)
+_TRANSFORM_MATRIX_ERROR = (
+    "reference_to_measurement_matrix must have shape (2, 2) with finite numeric values"
+)
+_TRANSFORM_OFFSET_ERROR = (
+    "reference_to_measurement_offset must contain exactly two finite numeric values"
 )
 _STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 
@@ -47,10 +53,14 @@ def install_registration_warp_validation() -> None:
             *args: Any,
             **kwargs: Any,
         ) -> np.ndarray:
-            return original_image_warp(
-                image,
+            normalized_matrix, normalized_offset = _normalize_transform_inputs(
                 reference_to_measurement_matrix,
                 reference_to_measurement_offset,
+            )
+            return original_image_warp(
+                image,
+                normalized_matrix,
+                normalized_offset,
                 *args,
                 **_normalize_common_warp_kwargs(kwargs),
             )
@@ -75,11 +85,15 @@ def install_registration_warp_validation() -> None:
             *args: Any,
             **kwargs: Any,
         ) -> np.ndarray:
+            normalized_matrix, normalized_offset = _normalize_transform_inputs(
+                reference_to_measurement_matrix,
+                reference_to_measurement_offset,
+            )
             normalized_kwargs = _normalize_registration_mask_warp_kwargs(kwargs)
             return original_roi_mask_warp(
                 roi_masks,
-                reference_to_measurement_matrix,
-                reference_to_measurement_offset,
+                normalized_matrix,
+                normalized_offset,
                 *args,
                 **normalized_kwargs,
             )
@@ -121,6 +135,55 @@ def _normalize_registration_mask_warp_kwargs(kwargs: dict[str, Any]) -> dict[str
             name="threshold",
         )
     return normalized_kwargs
+
+
+def _normalize_transform_inputs(
+    reference_to_measurement_matrix: Any,
+    reference_to_measurement_offset: Any,
+) -> tuple[np.ndarray, np.ndarray]:
+    return (
+        _normalize_transform_matrix(reference_to_measurement_matrix),
+        _normalize_transform_offset(reference_to_measurement_offset),
+    )
+
+
+def _normalize_transform_matrix(value: Any) -> np.ndarray:
+    try:
+        raw_matrix = np.asarray(value, dtype=object)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(_TRANSFORM_MATRIX_ERROR) from exc
+    if raw_matrix.shape != (2, 2) or _contains_ambiguous_scalar(raw_matrix):
+        raise ValueError(_TRANSFORM_MATRIX_ERROR)
+    try:
+        matrix = np.asarray(raw_matrix, dtype=float)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(_TRANSFORM_MATRIX_ERROR) from exc
+    if not np.all(np.isfinite(matrix)):
+        raise ValueError(_TRANSFORM_MATRIX_ERROR)
+    return matrix
+
+
+def _normalize_transform_offset(value: Any) -> np.ndarray:
+    try:
+        raw_offset = np.asarray(value, dtype=object)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(_TRANSFORM_OFFSET_ERROR) from exc
+    if raw_offset.size != 2 or _contains_ambiguous_scalar(raw_offset):
+        raise ValueError(_TRANSFORM_OFFSET_ERROR)
+    try:
+        offset = np.asarray(raw_offset, dtype=float).reshape(-1)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(_TRANSFORM_OFFSET_ERROR) from exc
+    if not np.all(np.isfinite(offset)):
+        raise ValueError(_TRANSFORM_OFFSET_ERROR)
+    return offset
+
+
+def _contains_ambiguous_scalar(values: np.ndarray) -> bool:
+    return any(
+        isinstance(value, (bool, np.bool_, *_STRING_LIKE_SCALAR_TYPES))
+        for value in values.reshape(-1).tolist()
+    )
 
 
 def _normalize_output_shape(output_shape: Any) -> tuple[int, int]:
