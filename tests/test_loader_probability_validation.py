@@ -14,6 +14,11 @@ _STRING_LIKE_PROBABILITY_VALUES = [
 ]
 
 
+class _ArithmeticFloat:
+    def __float__(self) -> float:
+        raise ArithmeticError("bad numeric conversion")
+
+
 def _write_minimal_suite2p_plane(plane_dir):
     plane_dir.mkdir(parents=True)
     stat = np.empty(1, dtype=object)
@@ -84,3 +89,16 @@ def test_load_suite2p_plane_accepts_zero_dimensional_probability_threshold(tmp_p
     plane = load_suite2p_plane(plane_dir, cell_probability_threshold=np.array(0.5))
 
     assert plane.n_rois == 1
+
+
+def test_load_suite2p_plane_wraps_arithmetic_probability_threshold(tmp_path):
+    plane_dir = tmp_path / "plane0"
+    _write_minimal_suite2p_plane(plane_dir)
+
+    with pytest.raises(
+        ValueError, match="cell_probability_threshold must be a finite probability"
+    ):
+        load_suite2p_plane(
+            plane_dir,
+            cell_probability_threshold=_ArithmeticFloat(),
+        )
