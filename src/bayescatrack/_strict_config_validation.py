@@ -3,8 +3,8 @@
 This module centralizes integer-like and finite-float validation for optional
 configuration paths that are often exercised from YAML/CLI sweeps. The
 validation is installed from :mod:`bayescatrack.__init__` so existing imports keep
-using the public advanced-component module while rejecting ambiguous values such
-as booleans, fractional top-k counts, NaN and infinity.
+using the public advanced-component module while rejecting ambiguous values
+such as booleans, fractional top-k counts, NaN and infinity.
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ def candidate_mask_from_cost_matrix(
     cost_matrix: np.ndarray,
     *,
     top_k: int | None,
-    include_columns: bool = True,
+    include_columns: bool = False,
     gate_margin: float | None = None,
     large_cost: float = 1.0e6,
 ) -> np.ndarray:
