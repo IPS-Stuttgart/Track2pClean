@@ -4,6 +4,7 @@
 
 from .._exports import BRIDGE_PUBLIC_NAMES
 from . import _association_bundle_bool_validation as _association_bundle_bool_validation
+from . import _association_plane_validation as _association_plane_validation
 from . import (
     _bridge_impl,
 )
@@ -38,6 +39,7 @@ _loader_probability_validation.install_loader_probability_validation(_loader_val
 _association_bundle_bool_validation.install_association_bundle_bool_validation(
     _bridge_impl
 )
+_association_plane_validation.install_association_plane_validation(_bridge_impl)
 _cell_probability_validation.install_cell_probability_cost_patch(_bridge_impl)
 _feature_name_validation.install_feature_name_string_normalization(_bridge_impl)
 _loader_bool_validation.install_numpy_bool_loader_validation()
