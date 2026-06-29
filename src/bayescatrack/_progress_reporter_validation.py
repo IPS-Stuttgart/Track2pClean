@@ -7,7 +7,6 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_progress_reporter_validation_patch"
-_TOTAL_ERROR = "total must be a positive integer"
 
 
 def install_progress_reporter_validation() -> None:
@@ -50,30 +49,31 @@ def _strict_bool(value: Any, *, name: str) -> bool:
 
 
 def _positive_integer(value: Any, *, name: str) -> int:
+    error_message = f"{name} must be a positive integer"
     if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
-        raise ValueError(_TOTAL_ERROR if name == "total" else f"{name} must be a positive integer")
+        raise ValueError(error_message)
 
     if isinstance(value, np.ndarray):
         if value.shape != ():
-            raise ValueError(_TOTAL_ERROR if name == "total" else f"{name} must be a positive integer")
+            raise ValueError(error_message)
         value = value.item()
 
     if isinstance(value, (float, np.floating)):
         numeric = float(value)
         if not np.isfinite(numeric) or not numeric.is_integer():
-            raise ValueError(_TOTAL_ERROR if name == "total" else f"{name} must be a positive integer")
+            raise ValueError(error_message)
         normalized = int(numeric)
     else:
         try:
             normalized = operator.index(value)
         except TypeError as exc:
-            raise ValueError(_TOTAL_ERROR if name == "total" else f"{name} must be a positive integer") from exc
+            raise ValueError(error_message) from exc
         except (ValueError, OverflowError) as exc:
-            raise ValueError(_TOTAL_ERROR if name == "total" else f"{name} must be a positive integer") from exc
+            raise ValueError(error_message) from exc
 
     normalized = int(normalized)
     if normalized <= 0:
-        raise ValueError(_TOTAL_ERROR if name == "total" else f"{name} must be a positive integer")
+        raise ValueError(error_message)
     return normalized
 
 
