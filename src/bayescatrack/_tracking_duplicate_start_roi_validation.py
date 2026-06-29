@@ -125,7 +125,7 @@ def _coerce_integer(value: Any) -> int:
 
     try:
         return int(operator.index(value))
-    except TypeError as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError("value must be integer-like") from exc
 
 
