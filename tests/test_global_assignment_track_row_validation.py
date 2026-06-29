@@ -16,13 +16,15 @@ import pytest
         np.nan,
         "2",
         np.asarray([1]),
+        -1,
+        np.int64(-3),
     ],
 )
 def test_global_assignment_track_rows_reject_malformed_roi_values(bad_value):
     with pytest.raises(ValueError, match="global assignment track matrix.*ROI indices"):
         tracking._coerce_global_track_rows(  # pylint: disable=protected-access
             np.asarray([[0, bad_value]], dtype=object),
-            fill_value=-1,
+            fill_value=-9,
         )
 
 
@@ -31,8 +33,8 @@ def test_global_assignment_track_rows_preserve_missing_and_integer_values():
         np.asarray(
             [
                 [None, 2],
-                [-1, np.int64(4)],
-                [5.0, -3],
+                [-9, np.int64(4)],
+                [5.0, 6],
             ],
             dtype=object,
         ),
@@ -45,7 +47,7 @@ def test_global_assignment_track_rows_preserve_missing_and_integer_values():
             [
                 [-9, 2],
                 [-9, 4],
-                [5, -9],
+                [5, 6],
             ],
             dtype=int,
         ),
