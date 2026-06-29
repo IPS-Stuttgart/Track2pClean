@@ -1,2 +1,2 @@
 def test_probe():
-    assert True
+    assert b'ab'
