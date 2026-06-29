@@ -194,7 +194,7 @@ def _validate_positive_image_dimension(value: Any, *, name: str) -> int:
         raise ValueError(message)
     try:
         numeric = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(message) from exc
     if not np.isfinite(numeric) or numeric <= 0.0 or numeric != np.floor(numeric):
         raise ValueError(message)
@@ -251,7 +251,7 @@ def _validate_coordinate_array(
 
     try:
         numeric = np.asarray(array, dtype=float)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(_invalid_coordinate_message(roi_index, name)) from exc
 
     if not np.all(np.isfinite(numeric)) or not np.all(numeric == np.floor(numeric)):
@@ -308,7 +308,7 @@ def _finite_probability(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite probability")
     try:
         numeric = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite probability") from exc
     if not np.isfinite(numeric) or numeric < 0.0 or numeric > 1.0:
         raise ValueError(f"{name} must be a finite probability")
