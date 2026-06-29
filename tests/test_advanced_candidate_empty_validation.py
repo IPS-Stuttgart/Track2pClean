@@ -23,9 +23,7 @@ def _stale_candidate_mask(
         safe = np.where(np.isfinite(costs), costs, large_cost)
         row_best = np.min(safe, axis=1, keepdims=True)
         col_best = np.min(safe, axis=0, keepdims=True)
-        admitted &= (safe <= row_best + gate_margin) | (
-            safe <= col_best + gate_margin
-        )
+        admitted &= (safe <= row_best + gate_margin) | (safe <= col_best + gate_margin)
     return admitted
 
 

@@ -24,6 +24,7 @@ def _positive_integer_training_knob(value: Any, *, name: str) -> int:
         raise ValueError(f"{name} must be finite")
     return _positive_integer(value, name=name)
 
+
 DEFAULT_MONOTONE_BADNESS_FEATURES = tuple(
     name
     for name in DEFAULT_ASSOCIATION_FEATURES

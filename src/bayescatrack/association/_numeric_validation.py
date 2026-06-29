@@ -123,7 +123,9 @@ def positive_integer(value: Any, *, name: str) -> int:
 
 
 def nonnegative_integer(value: Any, *, name: str) -> int:
-    integer_value = _integer_exact(value, message=f"{name} must be a non-negative integer")
+    integer_value = _integer_exact(
+        value, message=f"{name} must be a non-negative integer"
+    )
     if integer_value < 0:
         raise ValueError(f"{name} must be a non-negative integer")
     return integer_value
