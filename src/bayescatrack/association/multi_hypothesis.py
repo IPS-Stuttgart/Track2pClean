@@ -18,6 +18,12 @@ from ._numeric_validation import validated_numeric_float as _validated_numeric_f
 Edge = tuple[int, int, int, int]
 
 
+def _positive_integer_finite_bool(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite")
+    return _positive_integer(value, name=name)
+
+
 @dataclass(frozen=True)
 class HypothesisConfig:
     """Beam-search and consensus options."""
@@ -142,7 +148,7 @@ def top_k_edge_candidates(
 ) -> tuple[Edge, ...]:
     """Return top-k target candidates for each source row on one session edge."""
 
-    row_top_k = _positive_integer(row_top_k, name="row_top_k")
+    row_top_k = _positive_integer_finite_bool(row_top_k, name="row_top_k")
     if max_cost is not None:
         max_cost = _finite_nonnegative_float(max_cost, name="max_cost")
     costs = np.asarray(cost_matrix, dtype=float)

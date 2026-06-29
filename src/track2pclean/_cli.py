@@ -29,6 +29,7 @@ commands:
 
 Run 'track2pclean <command> --help' for command-specific options.
 """
+_CORE_COMMANDS = frozenset({"summary", "export"})
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -55,8 +56,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             program_name="track2pclean advanced",
             legacy_program_name="python -m bayescatrack.experiments.advanced_improvement_workbench",
         )
+    if args[0] in _CORE_COMMANDS:
+        return _run_with_program_name("track2pclean", _legacy_cli.main, args)
 
-    return _run_with_program_name("track2pclean", _legacy_cli.main, args)
+    return _handle_unknown_command(args[0])
 
 
 def _handle_benchmark(args: list[str]) -> int:
@@ -159,6 +162,16 @@ def _handle_module_command(
         setattr(module, "build_arg_parser", original_build_arg_parser)
 
 
+def _handle_unknown_command(command_name: str) -> int:
+    parser = argparse.ArgumentParser(
+        prog="track2pclean",
+        usage="track2pclean {summary,export,benchmark,growth,advanced} ...",
+        description="Track2pClean command line tools.",
+    )
+    parser.error(f"unknown command {command_name!r}")
+    return 2
+
+
 def _retitle_arg_parser(
     parser: argparse.ArgumentParser,
     *,
@@ -212,6 +225,15 @@ def _replace_parser_text(
         if isinstance(value, str):
             setattr(parser, attribute_name, value.replace(old_text, new_text))
 
+    for group in (
+        *getattr(parser, "_action_groups", ()),
+        *getattr(parser, "_mutually_exclusive_groups", ()),
+    ):
+        for attribute_name in ("title", "description"):
+            value = getattr(group, attribute_name, None)
+            if isinstance(value, str):
+                setattr(group, attribute_name, value.replace(old_text, new_text))
+
     for action in parser._actions:  # pylint: disable=protected-access
         help_text = getattr(action, "help", None)
         if isinstance(help_text, str):
@@ -225,6 +247,11 @@ def _replace_parser_text(
                 part.replace(old_text, new_text) if isinstance(part, str) else part
                 for part in metavar
             )
+
+        for choice_action in getattr(action, "_choices_actions", ()):  # pylint: disable=protected-access
+            help_text = getattr(choice_action, "help", None)
+            if isinstance(help_text, str):
+                choice_action.help = help_text.replace(old_text, new_text)
 
     for child_parser in _iter_child_arg_parsers(parser):
         _replace_parser_text(child_parser, old_text, new_text)

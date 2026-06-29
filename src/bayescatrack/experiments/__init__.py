@@ -22,6 +22,9 @@ from . import (
 from ._benchmark_roi_index_validation import (
     install_benchmark_roi_index_validation,
 )
+from ._benchmark_suite2p_defaults import (
+    install_benchmark_suite2p_defaults,
+)
 from ._calibration_feature_registry_integration import (
     install_calibration_feature_registry_integration,
 )
@@ -42,6 +45,7 @@ _triplet_support_benchmark_integration.install_track2p_benchmark_triplet_support
 _assignment_prior_sweep_validation.install_assignment_prior_sweep_validation()
 _seed_session_validation.install_seed_session_validation()
 install_benchmark_roi_index_validation()
+install_benchmark_suite2p_defaults()
 install_seed_sensitivity_audit_validation()
 install_calibration_feature_registry_integration()
 _teacher_rescue_manifest_integration.install_teacher_rescue_manifest_integration()
