@@ -99,29 +99,43 @@ def install_global_cost_preset_validation() -> None:
                 weighted_dice_weight=_finite_nonnegative_float(
                     weighted_dice_weight,
                     name="weighted_dice_weight",
+                    allow_scalar_array=True,
                 ),
                 overlap_fraction_weight=_finite_nonnegative_float(
                     overlap_fraction_weight,
                     name="overlap_fraction_weight",
+                    allow_scalar_array=True,
                 ),
                 distance_transform_weight=_finite_nonnegative_float(
                     distance_transform_weight,
                     name="distance_transform_weight",
+                    allow_scalar_array=True,
                 ),
                 image_patch_weight=_finite_nonnegative_float(
                     image_patch_weight,
                     name="image_patch_weight",
+                    allow_scalar_array=True,
                 ),
                 neighbor_constellation_weight=_finite_nonnegative_float(
                     neighbor_constellation_weight,
                     name="neighbor_constellation_weight",
+                    allow_scalar_array=True,
                 ),
                 centroid_rank_weight=_finite_nonnegative_float(
                     centroid_rank_weight,
                     name="centroid_rank_weight",
+                    allow_scalar_array=True,
                 ),
-                patch_radius=_nonnegative_int(patch_radius, name="patch_radius"),
-                neighbor_k=_positive_int(neighbor_k, name="neighbor_k"),
+                patch_radius=_nonnegative_int(
+                    patch_radius,
+                    name="patch_radius",
+                    allow_scalar_array=True,
+                ),
+                neighbor_k=_positive_int(
+                    neighbor_k,
+                    name="neighbor_k",
+                    allow_scalar_array=True,
+                ),
             )
 
         _mark_wrapper(roi_aware_local_cost_kwargs, original_roi_aware_local)
@@ -165,23 +179,37 @@ def _mark_wrapper(wrapper: Any, original: Any) -> None:
     setattr(wrapper, "_bayescatrack_original", original)
 
 
-def _nonnegative_int(value: Any, *, name: str) -> int:
-    normalized = _integer_value(value, name=name, qualifier="a non-negative integer")
+def _nonnegative_int(
+    value: Any, *, name: str, allow_scalar_array: bool = False
+) -> int:
+    normalized = _integer_value(
+        value,
+        name=name,
+        qualifier="a non-negative integer",
+        allow_scalar_array=allow_scalar_array,
+    )
     if normalized < 0:
         raise ValueError(f"{name} must be a non-negative integer")
     return normalized
 
 
-def _positive_int(value: Any, *, name: str) -> int:
-    normalized = _integer_value(value, name=name, qualifier="a positive integer")
+def _positive_int(value: Any, *, name: str, allow_scalar_array: bool = False) -> int:
+    normalized = _integer_value(
+        value,
+        name=name,
+        qualifier="a positive integer",
+        allow_scalar_array=allow_scalar_array,
+    )
     if normalized <= 0:
         raise ValueError(f"{name} must be a positive integer")
     return normalized
 
 
-def _integer_value(value: Any, *, name: str, qualifier: str) -> int:
+def _integer_value(
+    value: Any, *, name: str, qualifier: str, allow_scalar_array: bool = False
+) -> int:
     if isinstance(value, np.ndarray):
-        if value.shape != ():
+        if not allow_scalar_array or value.shape != ():
             raise ValueError(f"{name} must be {qualifier}")
         value = value.item()
     if isinstance(value, (bool, np.bool_, bytes, bytearray)):
@@ -204,20 +232,41 @@ def _integer_value(value: Any, *, name: str, qualifier: str) -> int:
     return int(numeric_value)
 
 
-def _finite_nonnegative_float(value: Any, *, name: str) -> float:
-    return _finite_float(value, name=name, lower_bound=0.0, positive=False)
+def _finite_nonnegative_float(
+    value: Any, *, name: str, allow_scalar_array: bool = False
+) -> float:
+    return _finite_float(
+        value,
+        name=name,
+        lower_bound=0.0,
+        positive=False,
+        allow_scalar_array=allow_scalar_array,
+    )
 
 
-def _finite_positive_float(value: Any, *, name: str) -> float:
-    return _finite_float(value, name=name, lower_bound=0.0, positive=True)
+def _finite_positive_float(
+    value: Any, *, name: str, allow_scalar_array: bool = False
+) -> float:
+    return _finite_float(
+        value,
+        name=name,
+        lower_bound=0.0,
+        positive=True,
+        allow_scalar_array=allow_scalar_array,
+    )
 
 
 def _finite_float(
-    value: Any, *, name: str, lower_bound: float, positive: bool
+    value: Any,
+    *,
+    name: str,
+    lower_bound: float,
+    positive: bool,
+    allow_scalar_array: bool = False,
 ) -> float:
     qualifier = "positive" if positive else "non-negative"
     if isinstance(value, np.ndarray):
-        if value.shape != ():
+        if not allow_scalar_array or value.shape != ():
             raise ValueError(f"{name} must be a finite {qualifier} value")
         value = value.item()
     if isinstance(value, (bool, np.bool_, bytes, bytearray)):
