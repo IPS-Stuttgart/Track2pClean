@@ -308,25 +308,18 @@ def _validated_registered_empty_mask(raw_values: Any, n_rois: int) -> np.ndarray
     raw_array = _validated_object_vector(raw_values, n_rois, message=message)
     if _contains_text_values(raw_array):
         raise ValueError(message)
+
+    if all(isinstance(value, (bool, np.bool_)) for value in raw_array):
+        return np.asarray(raw_array, dtype=bool).reshape(-1)
+
     try:
-        values = np.asarray(raw_array).reshape(-1)
+        values = np.asarray(raw_array, dtype=float).reshape(-1)
     except (TypeError, ValueError) as exc:
         raise ValueError(message) from exc
 
-    if values.dtype.kind == "b":
-        return values.astype(bool, copy=False)
-
-    if values.dtype.kind in {"i", "u"}:
-        if np.any((values != 0) & (values != 1)):
-            raise ValueError(message)
-        return values.astype(bool)
-
-    if values.dtype.kind == "f":
-        if not np.all(np.isfinite(values)) or np.any((values != 0.0) & (values != 1.0)):
-            raise ValueError(message)
-        return values.astype(bool)
-
-    raise ValueError(message)
+    if not np.all(np.isfinite(values)) or np.any((values != 0.0) & (values != 1.0)):
+        raise ValueError(message)
+    return values.astype(bool)
 
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:

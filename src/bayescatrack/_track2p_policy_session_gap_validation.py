@@ -54,7 +54,7 @@ def _positive_integer_like(value: Any, *, name: str) -> int:
 
     try:
         integer_value = int(operator.index(value))
-    except TypeError:
+    except (TypeError, ValueError, OverflowError):
         if isinstance(value, str):
             text = value.strip()
             if not text:

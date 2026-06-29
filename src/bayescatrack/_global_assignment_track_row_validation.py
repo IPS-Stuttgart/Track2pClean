@@ -80,9 +80,7 @@ def _normalize_fill_value(value: Any) -> int:
 
 def _normalize_integer_like(value: Any) -> int:
     if isinstance(value, np.ndarray):
-        if value.shape != ():
-            raise ValueError("value must be an integer")
-        value = value.item()
+        raise ValueError("value must be an integer")
     if isinstance(value, (bool, np.bool_)):
         raise ValueError("value must be an integer")
     if isinstance(value, (float, np.floating)):
