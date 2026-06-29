@@ -20,7 +20,9 @@ _IMAGE_PATCH_MARKER = "_bayescatrack_fov_affine_image_warp_validation_patch"
 _MASK_PATCH_MARKER = "_bayescatrack_fov_affine_roi_mask_warp_validation_patch"
 _ESTIMATE_PATCH_MARKER = "_bayescatrack_fov_affine_estimate_control_validation_patch"
 _MATRIX_ERROR = "matrix_xy must be a finite 2-by-3 affine matrix"
-_OUTPUT_SHAPE_ERROR = "output_shape must contain exactly two positive integer dimensions"
+_OUTPUT_SHAPE_ERROR = (
+    "output_shape must contain exactly two positive integer dimensions"
+)
 _SUBTRACT_MEAN_ERROR = "subtract_mean must be a boolean"
 _GRID_SHAPE_ERROR = "grid_shape must contain exactly two positive integer dimensions"
 _MIN_TILE_SIZE_ERROR = "min_tile_size must be a positive integer"

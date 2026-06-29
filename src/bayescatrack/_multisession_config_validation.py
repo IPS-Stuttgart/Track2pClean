@@ -7,8 +7,8 @@ because Python treats ``True`` as ``1`` and comparisons with ``NaN`` are false.
 
 from __future__ import annotations
 
-from decimal import DecimalException
 import operator
+from decimal import DecimalException
 from functools import wraps
 from typing import Any
 
