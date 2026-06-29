@@ -21,6 +21,15 @@ _PATCH_MARKER = "_bayescatrack_fov_translation_output_shape_validation_patch"
 _OUTPUT_SHAPE_ERROR = (
     "output_shape must contain exactly two positive integer dimensions"
 )
+_INVALID_OUTPUT_SHAPE_TYPES = (str, bytes, bytearray, memoryview)
+_INVALID_OUTPUT_SHAPE_DIMENSION_TYPES = (
+    bool,
+    np.bool_,
+    str,
+    bytes,
+    bytearray,
+    memoryview,
+)
 
 
 def install_fov_translation_output_shape_validation() -> None:
@@ -74,7 +83,7 @@ def _normalize_output_shape_kwarg(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_output_shape(output_shape: Any) -> tuple[int, int]:
-    if isinstance(output_shape, (str, bytes)):
+    if isinstance(output_shape, _INVALID_OUTPUT_SHAPE_TYPES):
         raise ValueError(_OUTPUT_SHAPE_ERROR)
     try:
         shape_array = np.asarray(output_shape, dtype=object)
@@ -89,7 +98,7 @@ def _normalize_output_shape(output_shape: Any) -> tuple[int, int]:
 
 
 def _normalize_output_shape_dimension(value: Any) -> int:
-    if isinstance(value, (bool, np.bool_, str, bytes)):
+    if isinstance(value, _INVALID_OUTPUT_SHAPE_DIMENSION_TYPES):
         raise ValueError(_OUTPUT_SHAPE_ERROR)
 
     try:
