@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fractions import Fraction
+
 import numpy as np
 import pytest
 from bayescatrack import load_suite2p_plane
@@ -28,9 +30,11 @@ def _write_suite2p_stat(tmp_path, *, ypix: object, xpix: object) -> None:
         ([np.nan], [0], "ypix"),
         ([True], [0], "ypix"),
         (["1"], [0], "ypix"),
+        ([Fraction(10**400, 1)], [0], "ypix"),
         ([[0, 1]], [[2, 3]], "ypix.*one-dimensional"),
         ([0, 1], [[2, 3]], "xpix.*one-dimensional"),
         ([0], [1.5], "xpix"),
+        ([0], [Fraction(10**400, 1)], "xpix"),
     ],
 )
 def test_load_suite2p_plane_rejects_malformed_pixel_coordinates(
