@@ -160,6 +160,30 @@ def test_adaptive_edge_priors_reject_malformed_edge_key_shape(make_track2p_sessi
         apply_adaptive_edge_priors({"01": np.zeros((1, 1))}, sessions)
 
 
+@pytest.mark.parametrize(
+    ("edge", "message"),
+    [
+        (("0", 1), "session edge source must be a non-negative integer"),
+        ((0, "1"), "session edge target must be a non-negative integer"),
+        ((b"0", 1), "session edge source must be a non-negative integer"),
+        ((0, b"1"), "session edge target must be a non-negative integer"),
+    ],
+)
+def test_adaptive_edge_priors_reject_text_session_edge_endpoints(
+    make_track2p_session,
+    edge: tuple[object, object],
+    message: str,
+) -> None:
+    masks = np.ones((1, 2, 2), dtype=bool)
+    sessions = (
+        make_track2p_session("2024-01-01_a", masks),
+        make_track2p_session("2024-01-02_a", masks),
+    )
+
+    with pytest.raises(ValueError, match=message):
+        apply_adaptive_edge_priors({edge: np.zeros((1, 1))}, sessions)
+
+
 @pytest.mark.parametrize("edge", [(0, 0), (1, 0), (0, 2), (2, 3)])
 def test_adaptive_edge_priors_reject_invalid_session_edge_when_disabled(
     make_track2p_session,
