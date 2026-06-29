@@ -388,6 +388,8 @@ def _nonnegative_int(value: Any, *, name: str) -> int:
                 numeric_candidate = float(value)
             except (TypeError, ValueError, OverflowError) as float_exc:
                 raise ValueError(message) from float_exc
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(message) from exc
     try:
         numeric_value = float(numeric_candidate)
     except (TypeError, ValueError, OverflowError) as exc:

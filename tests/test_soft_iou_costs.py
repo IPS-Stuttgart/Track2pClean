@@ -11,6 +11,11 @@ from bayescatrack.association.pyrecest_global_assignment import (
 from bayescatrack.core.bridge import CalciumPlaneData
 
 
+class _BrokenIndex:
+    def __index__(self) -> int:
+        raise ValueError("broken index")
+
+
 def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
     roi_masks = np.asarray(mask, dtype=float).reshape(1, 1, -1)
     return CalciumPlaneData(roi_masks=roi_masks)
@@ -84,6 +89,10 @@ def test_soft_iou_matches_binary_iou_for_boolean_masks() -> None:
         ({"soft_iou_radius": 1.5}, "soft_iou_radius must be an integer"),
         ({"soft_iou_radius": -1}, "soft_iou_radius must be non-negative"),
         (
+            {"soft_iou_radius": _BrokenIndex()},
+            "soft_iou_radius must be an integer",
+        ),
+        (
             {"distance_transform_overlap_radius": False},
             "distance_transform_overlap_radius must be an integer",
         ),
@@ -94,6 +103,10 @@ def test_soft_iou_matches_binary_iou_for_boolean_masks() -> None:
         (
             {"distance_transform_overlap_radius": -1},
             "distance_transform_overlap_radius must be non-negative",
+        ),
+        (
+            {"distance_transform_overlap_radius": _BrokenIndex()},
+            "distance_transform_overlap_radius must be an integer",
         ),
         (
             {"distance_transform_overlap_weight": np.nan},
@@ -142,12 +155,17 @@ def test_registered_soft_iou_kwargs_reject_invalid_numeric_values(
         ({"soft_iou_radius": True}, "soft_iou_radius must be an integer"),
         ({"soft_iou_radius": 1.5}, "soft_iou_radius must be an integer"),
         ({"soft_iou_radius": -1}, "soft_iou_radius must be non-negative"),
+        ({"soft_iou_radius": _BrokenIndex()}, "soft_iou_radius must be an integer"),
         (
             {"distance_transform_overlap_weight": np.nan},
             "distance_transform_overlap_weight must be a finite non-negative value",
         ),
         (
             {"distance_transform_overlap_radius": "1.5"},
+            "distance_transform_overlap_radius must be an integer",
+        ),
+        (
+            {"distance_transform_overlap_radius": _BrokenIndex()},
             "distance_transform_overlap_radius must be an integer",
         ),
         (
