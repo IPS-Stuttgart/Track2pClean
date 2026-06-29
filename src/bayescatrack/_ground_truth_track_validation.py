@@ -20,6 +20,7 @@ _HORIZON_ERROR = "horizon must be an integer between 1 and the number of session
 _REQUIRE_COMPLETE_ERROR = "require_complete must be a boolean"
 _MISSING_VALUE_STRINGS = {"", "na", "nan", "none", "null", "-"}
 _EMPTY_ROWS_MESSAGE = "contains no data rows"
+_STRING_LIKE_SESSION_NAMES = (str, bytes, bytearray)
 
 
 def install_ground_truth_track_validation() -> None:
@@ -43,7 +44,7 @@ def install_ground_truth_track_validation() -> None:
 
         @wraps(original_post_init)
         def checked_post_init(self: Any) -> None:
-            session_names = tuple(str(name) for name in self.session_names)
+            session_names = _normalize_session_names(self.session_names)
             tracks = _normalize_track_matrix(self.tracks)
             if tracks.ndim != 2:
                 raise ValueError("tracks must have shape (n_tracks, n_sessions)")
@@ -51,9 +52,6 @@ def install_ground_truth_track_validation() -> None:
                 raise ValueError(
                     "tracks second dimension must equal the number of session names"
                 )
-            if len(session_names) == 0:
-                raise ValueError("session_names must not be empty")
-            _validate_unique_session_names(session_names)
             object.__setattr__(self, "session_names", session_names)
             object.__setattr__(self, "tracks", tracks)
 
@@ -109,6 +107,21 @@ def install_ground_truth_track_validation() -> None:
 def _mark_patch(wrapper: Any, original: Any) -> None:
     setattr(wrapper, _PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
+
+
+def _normalize_session_names(session_names: Any) -> tuple[str, ...]:
+    if isinstance(session_names, _STRING_LIKE_SESSION_NAMES):
+        raise ValueError(
+            "session_names must be a sequence of session-name values, not a bare string-like value"
+        )
+    try:
+        normalized = tuple(str(name) for name in session_names)
+    except TypeError as exc:
+        raise ValueError("session_names must be a sequence of session-name values") from exc
+    if len(normalized) == 0:
+        raise ValueError("session_names must not be empty")
+    _validate_unique_session_names(normalized)
+    return normalized
 
 
 def _validate_unique_session_names(session_names: tuple[str, ...]) -> None:
