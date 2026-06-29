@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import operator
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 from pathlib import Path
 from typing import Any
@@ -178,12 +179,12 @@ def _normalize_roi_index_string(value: str) -> int:
     if text.lower().replace(" ", "_") in _MISSING_VALUE_STRINGS:
         return -1
     try:
-        numeric_value = float(text)
-    except ValueError as exc:
+        numeric_value = Decimal(text)
+    except InvalidOperation as exc:
         raise ValueError(_ROI_ERROR) from exc
-    if np.isnan(numeric_value):
+    if numeric_value.is_nan():
         return -1
-    if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+    if not numeric_value.is_finite() or numeric_value != numeric_value.to_integral_value():
         raise ValueError(_ROI_ERROR)
     return _validate_roi_integer(int(numeric_value))
 
