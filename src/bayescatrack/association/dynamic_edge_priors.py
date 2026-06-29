@@ -74,6 +74,11 @@ def dynamic_edge_prior_config_from_mapping(
         return None
     if isinstance(value, DynamicEdgePriorConfig):
         return value
+    if not isinstance(value, Mapping):
+        raise ValueError(
+            "config must be None, a DynamicEdgePriorConfig, or a mapping of "
+            "DynamicEdgePriorConfig fields"
+        )
     return DynamicEdgePriorConfig(**dict(value))
 
 
