@@ -42,17 +42,19 @@ class ConsensusPriorConfig:
         object.__setattr__(
             self,
             "min_votes",
-            positive_integer(self.min_votes, name="min_votes"),
+            positive_integer(_numeric_text_scalar(self.min_votes), name="min_votes"),
         )
         object.__setattr__(
             self,
             "relief",
-            finite_nonnegative_float(self.relief, name="relief"),
+            finite_nonnegative_float(_numeric_text_scalar(self.relief), name="relief"),
         )
         object.__setattr__(
             self,
             "max_relief",
-            finite_nonnegative_float(self.max_relief, name="max_relief"),
+            finite_nonnegative_float(
+                _numeric_text_scalar(self.max_relief), name="max_relief"
+            ),
         )
         object.__setattr__(
             self,
@@ -62,7 +64,9 @@ class ConsensusPriorConfig:
         object.__setattr__(
             self,
             "large_cost",
-            finite_positive_float(self.large_cost, name="large_cost"),
+            finite_positive_float(
+                _numeric_text_scalar(self.large_cost), name="large_cost"
+            ),
         )
 
 
@@ -182,6 +186,19 @@ def _normalize_variant_costs(values: Sequence[str] | str) -> tuple[str, ...]:
     if not variant_costs or any(not value for value in variant_costs):
         raise ValueError("variant_costs must contain non-empty names")
     return variant_costs
+
+
+
+def _numeric_text_scalar(value: Any) -> Any:
+    if isinstance(value, (str, np.str_)):
+        text = value.strip()
+        if not text:
+            return value
+        try:
+            return float(text)
+        except ValueError:
+            return value
+    return value
 
 
 def _strict_bool(value: Any, *, name: str) -> bool:
