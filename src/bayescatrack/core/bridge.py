@@ -21,6 +21,7 @@ from . import _local_evidence_control_validation as _local_evidence_control_vali
 from . import _mahalanobis as _mahalanobis
 from . import _roi_index_validation as _roi_index_validation
 from . import _roi_stat_features as _roi_stat_features
+from . import _strict_subject_loading as _strict_subject_loading
 from . import (
     _suite2p_coordinate_value_validation as _suite2p_coordinate_value_validation,
 )
@@ -63,6 +64,7 @@ _core_string_scalar_validation.install_core_string_scalar_validation(
 _with_replaced_masks_fov_validation.install_with_replaced_masks_fov_validation(
     _bridge_impl.CalciumPlaneData
 )
+_strict_subject_loading.install_strict_subject_loading(_bridge_impl)
 
 CalciumPlaneData = _bridge_impl.CalciumPlaneData
 SessionAssociationBundle = _bridge_impl.SessionAssociationBundle
