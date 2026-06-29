@@ -9,6 +9,11 @@ from bayescatrack.matching import (
 OVERFLOWING_INTEGER = 10**5000
 
 
+class _BadFloat:
+    def __float__(self) -> float:
+        raise ArithmeticError("bad numeric conversion")
+
+
 class _Bundle:
     def __init__(self, costs):
         self.pairwise_cost_matrix = np.asarray(costs, dtype=float)
@@ -35,6 +40,7 @@ class _Bundle:
             np.array(OVERFLOWING_INTEGER, dtype=object),
             id="overflowing-object-scalar",
         ),
+        pytest.param(_BadFloat(), id="arithmetic-float"),
     ],
 )
 def test_solve_bundle_linear_assignment_rejects_boolean_max_cost(bad_max_cost):
@@ -52,6 +58,7 @@ def test_solve_bundle_linear_assignment_rejects_boolean_max_cost(bad_max_cost):
         np.bool_(False),
         bytearray(b"1.0"),
         pytest.param(OVERFLOWING_INTEGER, id="overflowing-integer"),
+        pytest.param(_BadFloat(), id="arithmetic-float"),
     ],
 )
 def test_build_track_rows_from_bundles_rejects_boolean_max_cost(bad_max_cost):
