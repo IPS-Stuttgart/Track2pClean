@@ -24,37 +24,49 @@ _PATCH_MARKER = "_bayescatrack_subject_input_format_validation_patch"
 def install_subject_input_format_validation(bridge_impl: ModuleType) -> None:
     """Install an idempotent validator around subject loading."""
 
-    original_loader = bridge_impl.load_track2p_subject
-    if getattr(original_loader, _PATCH_MARKER, False):
+    _patch_input_format_keyword_function(bridge_impl, "load_track2p_subject")
+
+
+def install_subject_like_input_format_validation(bridge_module: ModuleType) -> None:
+    """Install input-format validation around public subject-like entrypoints."""
+
+    for function_name in (
+        "load_track2p_subject",
+        "export_subject_to_npz",
+        "summarize_subject",
+    ):
+        if hasattr(bridge_module, function_name):
+            _patch_input_format_keyword_function(bridge_module, function_name)
+
+
+def _patch_input_format_keyword_function(module: ModuleType, function_name: str) -> None:
+    original = getattr(module, function_name)
+    if getattr(original, _PATCH_MARKER, False):
         return
 
-    @wraps(original_loader)
-    def load_track2p_subject_with_input_format_validation(
+    @wraps(original)
+    def subject_like_with_input_format_validation(
         subject_dir: str | Path,
         *args: Any,
         input_format: Any = "auto",
         **kwargs: Any,
     ) -> Any:
-        return original_loader(
+        return original(
             subject_dir,
             *args,
             input_format=_normalize_input_format(input_format),
             **kwargs,
         )
 
-    setattr(load_track2p_subject_with_input_format_validation, _PATCH_MARKER, True)
-    if getattr(original_loader, "_bayescatrack_auto_fallback_patch", False):
+    setattr(subject_like_with_input_format_validation, _PATCH_MARKER, True)
+    if getattr(original, "_bayescatrack_auto_fallback_patch", False):
         setattr(
-            load_track2p_subject_with_input_format_validation,
+            subject_like_with_input_format_validation,
             "_bayescatrack_auto_fallback_patch",
             True,
         )
-    setattr(
-        load_track2p_subject_with_input_format_validation,
-        "_bayescatrack_original",
-        original_loader,
-    )
-    bridge_impl.load_track2p_subject = load_track2p_subject_with_input_format_validation
+    setattr(subject_like_with_input_format_validation, "_bayescatrack_original", original)
+    setattr(module, function_name, subject_like_with_input_format_validation)
 
 
 def _normalize_input_format(value: Any) -> str:
@@ -67,4 +79,7 @@ def _normalize_input_format(value: Any) -> str:
     return value
 
 
-__all__ = ["install_subject_input_format_validation"]
+__all__ = [
+    "install_subject_input_format_validation",
+    "install_subject_like_input_format_validation",
+]
