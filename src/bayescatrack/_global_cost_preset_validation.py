@@ -180,11 +180,15 @@ def _positive_int(value: Any, *, name: str) -> int:
 
 
 def _integer_value(value: Any, *, name: str, qualifier: str) -> int:
-    if isinstance(value, (bool, np.bool_, bytes, bytearray, np.ndarray)):
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(f"{name} must be {qualifier}")
+        value = value.item()
+    if isinstance(value, (bool, np.bool_, bytes, bytearray)):
         raise ValueError(f"{name} must be {qualifier}")
     try:
         return int(operator.index(value))
-    except TypeError:
+    except (TypeError, ValueError, OverflowError):
         pass
     candidate: Any = value
     if isinstance(value, str):
