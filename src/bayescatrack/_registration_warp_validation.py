@@ -259,7 +259,7 @@ def _finite_unit_interval_float(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite scalar value in [0, 1]")
     try:
         value_array = np.asarray(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite scalar value in [0, 1]") from exc
     if value_array.shape != ():
         raise ValueError(f"{name} must be a finite scalar value in [0, 1]")
@@ -270,7 +270,7 @@ def _finite_unit_interval_float(value: Any, *, name: str) -> float:
 
     try:
         numeric_value = float(scalar_value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite scalar value in [0, 1]") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0 or numeric_value > 1.0:
         raise ValueError(f"{name} must be a finite scalar value in [0, 1]")
