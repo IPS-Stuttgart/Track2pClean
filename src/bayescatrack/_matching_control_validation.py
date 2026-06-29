@@ -105,7 +105,18 @@ def install_matching_control_validation() -> None:
     def normalize_roi_index_with_array_validation(value: Any, field_name: str) -> int:
         if isinstance(value, np.ndarray):
             raise ValueError(f"{field_name} must contain integer ROI indices")
-        return original_normalize_roi_index(value, field_name)
+        try:
+            return original_normalize_roi_index(value, field_name)
+        except OverflowError as exc:
+            raise ValueError(
+                f"{field_name} must contain integer ROI indices"
+            ) from exc
+        except ValueError as exc:
+            if _is_matching_roi_index_value_error(exc, field_name):
+                raise
+            raise ValueError(
+                f"{field_name} must contain integer ROI indices"
+            ) from exc
 
     @wraps(original_normalize_session_index)
     def normalize_session_index_with_array_validation(
@@ -239,6 +250,8 @@ def _normalize_integer_control(value: Any, field_name: str) -> int:
         return int(operator.index(value))
     except TypeError:
         pass
+    except (OverflowError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be an integer") from exc
 
     if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
@@ -248,6 +261,10 @@ def _normalize_integer_control(value: Any, field_name: str) -> int:
     if not np.isfinite(numeric_value) or not numeric_value.is_integer():
         raise ValueError(f"{field_name} must be an integer")
     return int(numeric_value)
+
+
+def _is_matching_roi_index_value_error(error: ValueError, field_name: str) -> bool:
+    return str(error).startswith(field_name)
 
 
 __all__ = ["install_matching_control_validation"]
