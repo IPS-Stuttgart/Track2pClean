@@ -8,6 +8,11 @@ from bayescatrack.association.activity_tie_breaker import (
 )
 
 
+class _OverflowingFloat:
+    def __float__(self) -> float:
+        raise OverflowError("cannot convert to finite float")
+
+
 def test_activity_tie_breaker_masks_unavailable_activity_pairs() -> None:
     components = {
         "activity_tiebreaker_cost": np.array(
@@ -49,6 +54,7 @@ def test_activity_tie_breaker_masks_unavailable_activity_pairs() -> None:
         np.inf,
         "0.1",
         [0.1],
+        _OverflowingFloat(),
     ],
 )
 def test_activity_tie_breaker_rejects_malformed_weight(bad_weight) -> None:
