@@ -6,11 +6,18 @@ from bayescatrack._progress_reporter_validation import install_progress_reporter
 from bayescatrack.experiments.track2p_benchmark import ProgressReporter
 
 
-def test_progress_reporter_rejects_text_enabled() -> None:
+@pytest.mark.parametrize(
+    "invalid_enabled",
+    [
+        "value",
+        np.array(True),
+    ],
+)
+def test_progress_reporter_rejects_non_boolean_enabled(invalid_enabled: object) -> None:
     install_progress_reporter_validation()
 
     with pytest.raises(ValueError, match="enabled must be a boolean"):
-        ProgressReporter(1, enabled="value", label="demo")
+        ProgressReporter(1, enabled=invalid_enabled, label="demo")
 
 
 @pytest.mark.parametrize(
@@ -19,6 +26,8 @@ def test_progress_reporter_rejects_text_enabled() -> None:
         0,
         -1,
         True,
+        np.array(True),
+        np.asarray(True, dtype=object),
         "3",
         b"3",
         1.5,
