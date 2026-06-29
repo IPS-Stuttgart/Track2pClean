@@ -135,7 +135,7 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
     value = _validated_numeric_scalar(value, message=message)
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(message) from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(message)
@@ -147,7 +147,7 @@ def _finite_positive_float(value: Any, *, name: str) -> float:
     value = _validated_numeric_scalar(value, message=message)
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(message) from exc
     if not np.isfinite(numeric_value) or numeric_value <= 0.0:
         raise ValueError(message)
