@@ -15,6 +15,14 @@ _STRING_LIKE_SESSION_NAMES = ["day0", b"day0", bytearray(b"day0")]
 _TWO_SESSION_STRING_LIKE_VALUES = ["ab", b"ab", bytearray(b"ab")]
 
 
+class _BadIndex:
+    def __init__(self, exc_type: type[Exception]) -> None:
+        self._exc_type = exc_type
+
+    def __index__(self) -> int:
+        raise self._exc_type("bad index adapter")
+
+
 def test_track_table_rejects_duplicate_session_names() -> None:
     with pytest.raises(ValueError, match="unique session names"):
         TrackTable(("day0", "day0"), [[1, 2]])
@@ -41,6 +49,24 @@ def test_track_table_rejects_bare_string_like_session_names_after_ground_truth_r
 
     with pytest.raises(ValueError, match="bare string"):
         TrackTable(session_names, [[1, 2]])
+
+
+@pytest.mark.parametrize("exc_type", (ValueError, OverflowError))
+def test_track_table_roi_values_normalize_bad_index_protocol_errors(
+    exc_type: type[Exception],
+) -> None:
+    with pytest.raises(ValueError, match="ROI index"):
+        TrackTable(("day0",), [[_BadIndex(exc_type)]])
+
+
+@pytest.mark.parametrize("exc_type", (ValueError, OverflowError))
+def test_track_table_horizon_normalizes_bad_index_protocol_errors(
+    exc_type: type[Exception],
+) -> None:
+    table = TrackTable(("day0", "day1"), [[1, 2]])
+
+    with pytest.raises(ValueError, match="horizon"):
+        table.row_tuples(horizon=_BadIndex(exc_type))
 
 
 def test_track_table_alignment_rejects_duplicate_target_session_names() -> None:
