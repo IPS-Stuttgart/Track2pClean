@@ -11,6 +11,10 @@ silently reinterpreted, changing the registered image/mask geometry rather than
 failing fast at the call boundary.  Transform matrices and offsets are similarly
 normalized here so non-finite or malformed affine controls cannot reach the
 sampler and produce invalid registered images or masks.
+
+Coordinate order is likewise commonly threaded through configs.  Reject
+array-valued order controls at the wrapper boundary so they cannot reach the
+internal membership check and fail with a raw ``TypeError``.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ _TRANSFORM_MATRIX_ERROR = (
 _TRANSFORM_OFFSET_ERROR = (
     "reference_to_measurement_offset must contain exactly two finite numeric values"
 )
+_ORDER_ERROR = "order must be either 'xy' or 'yx'"
 _STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 
 
@@ -119,6 +124,10 @@ def _normalize_common_warp_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
         normalized_kwargs["output_shape"] = _normalize_output_shape(
             normalized_kwargs["output_shape"]
         )
+    if "order" in normalized_kwargs:
+        normalized_kwargs["order"] = _normalize_coordinate_order(
+            normalized_kwargs["order"]
+        )
     return normalized_kwargs
 
 
@@ -135,6 +144,18 @@ def _normalize_registration_mask_warp_kwargs(kwargs: dict[str, Any]) -> dict[str
             name="threshold",
         )
     return normalized_kwargs
+
+
+def _normalize_coordinate_order(order: Any) -> str:
+    if isinstance(order, np.ndarray):
+        if order.shape != ():
+            raise ValueError(_ORDER_ERROR)
+        order = order.item()
+    if isinstance(order, np.str_):
+        order = str(order)
+    if not isinstance(order, str) or order not in {"xy", "yx"}:
+        raise ValueError(_ORDER_ERROR)
+    return order
 
 
 def _normalize_transform_inputs(
