@@ -9,21 +9,33 @@ from bayescatrack.association.track_refinement import (
 )
 
 
-@pytest.mark.parametrize(
-    "bad_fill_value",
-    [
-        True,
-        np.bool_(False),
-        np.asarray(-1),
-        0,
-        1,
-        0.5,
-        -1.5,
-        np.nan,
-        np.inf,
-        "-1",
-    ],
-)
+class _IndexValueError:
+    def __index__(self) -> int:
+        raise ValueError("invalid index")
+
+
+class _IndexOverflowError:
+    def __index__(self) -> int:
+        raise OverflowError("invalid index")
+
+
+_BAD_FILL_VALUES = [
+    True,
+    np.bool_(False),
+    np.asarray(-1),
+    0,
+    1,
+    0.5,
+    -1.5,
+    np.nan,
+    np.inf,
+    "-1",
+    _IndexValueError(),
+    _IndexOverflowError(),
+]
+
+
+@pytest.mark.parametrize("bad_fill_value", _BAD_FILL_VALUES)
 def test_track_smoothing_config_rejects_malformed_or_colliding_fill_value(
     bad_fill_value,
 ):
@@ -31,21 +43,7 @@ def test_track_smoothing_config_rejects_malformed_or_colliding_fill_value(
         TrackSmoothingConfig(fill_value=bad_fill_value)
 
 
-@pytest.mark.parametrize(
-    "bad_fill_value",
-    [
-        True,
-        np.bool_(False),
-        np.asarray(-1),
-        0,
-        1,
-        0.5,
-        -1.5,
-        np.nan,
-        np.inf,
-        "-1",
-    ],
-)
+@pytest.mark.parametrize("bad_fill_value", _BAD_FILL_VALUES)
 def test_smoothed_track_positions_rejects_malformed_or_colliding_fill_value(
     bad_fill_value,
 ):
@@ -57,21 +55,7 @@ def test_smoothed_track_positions_rejects_malformed_or_colliding_fill_value(
         )
 
 
-@pytest.mark.parametrize(
-    "bad_fill_value",
-    [
-        True,
-        np.bool_(False),
-        np.asarray(-1),
-        0,
-        1,
-        0.5,
-        -1.5,
-        np.nan,
-        np.inf,
-        "-1",
-    ],
-)
+@pytest.mark.parametrize("bad_fill_value", _BAD_FILL_VALUES)
 def test_split_tracks_at_issues_rejects_malformed_or_colliding_fill_value(
     bad_fill_value,
 ):
@@ -86,6 +70,24 @@ def test_split_tracks_at_issues_rejects_malformed_or_colliding_fill_value(
 def test_split_tracks_at_issues_rejects_array_valued_issue_index():
     issue = TrackGeometryIssue(
         track_index=np.asarray(0),
+        session_index=0,
+        roi_index=1,
+        residual=9.0,
+        robust_z=4.0,
+        suggested_action="split_or_relink",
+    )
+
+    with pytest.raises(ValueError, match="issue.track_index must be an integer"):
+        split_tracks_at_issues(
+            np.array([[0, 1]], dtype=int),
+            [issue],
+        )
+
+
+@pytest.mark.parametrize("bad_index", [_IndexValueError(), _IndexOverflowError()])
+def test_split_tracks_at_issues_normalizes_issue_index_protocol_failures(bad_index):
+    issue = TrackGeometryIssue(
+        track_index=bad_index,
         session_index=0,
         roi_index=1,
         residual=9.0,
