@@ -97,6 +97,29 @@ def test_relink_rejects_duplicate_roi_index_vectors():
         )
 
 
+@pytest.mark.parametrize(
+    "bad_roi_indices",
+    [
+        [20.5, 21],
+        [True, 21],
+        [np.bool_(False), 21],
+        [-1, 21],
+        ["20", 21],
+    ],
+)
+def test_relink_rejects_non_integral_roi_index_vectors(bad_roi_indices):
+    rows = np.array([[10, 21]], dtype=int)
+
+    with pytest.raises(ValueError, match=r"roi_indices_by_session\[1\].*ROI indices"):
+        relink_tracks_at_geometry_issues(
+            rows,
+            [_issue()],
+            {(0, 1): np.array([[0.1, 0.2]], dtype=float)},
+            roi_indices_by_session=([10], bad_roi_indices),
+            config=PostSolveRelinkingConfig(max_edge_cost=None),
+        )
+
+
 def test_relink_rejects_non_matrix_pairwise_costs():
     rows = np.array([[10, 21]], dtype=int)
 
