@@ -105,14 +105,16 @@ def _strict_nonnegative_int(value: Any, *, name: str) -> int:
         numeric_candidate = scalar_value
     else:
         try:
-            return _reject_negative_int(operator.index(scalar_value), name=name)
+            integer_value = operator.index(scalar_value)
         except TypeError:
             try:
                 numeric_candidate = float(scalar_value)
             except (TypeError, ValueError, OverflowError) as exc:
                 raise ValueError(message) from exc
-        except (ValueError, OverflowError) as exc:
+        except OverflowError as exc:
             raise ValueError(message) from exc
+        else:
+            return _reject_negative_int(integer_value, name=name)
     try:
         numeric_value = float(numeric_candidate)
     except (TypeError, ValueError, OverflowError) as exc:
