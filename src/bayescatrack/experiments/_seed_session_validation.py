@@ -100,7 +100,7 @@ def _integer_value(value: Any, *, field_name: str) -> int:
         return int(numeric_value)
     try:
         return int(operator.index(value))
-    except TypeError as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{field_name} must contain integer session indices") from exc
 
 
