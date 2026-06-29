@@ -80,3 +80,41 @@ def test_run_track2p_accuracy_presets_validates_unknown_names_before_running(
         )
 
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    "preset_names",
+    [b"registered-shifted-iou-safe", bytearray(b"registered-shifted-iou-safe")],
+)
+def test_run_track2p_accuracy_presets_rejects_byte_like_preset_names(
+    monkeypatch,
+    preset_names: object,
+) -> None:
+    calls: list[str] = []
+    preset = AccuracyPreset(
+        name="registered-shifted-iou-safe",
+        description="synthetic preset",
+        config=_fake_config(),
+    )
+
+    def fake_run(selected: AccuracyPreset) -> list[SubjectBenchmarkResult]:
+        calls.append(str(selected.name))
+        return [_fake_result()]
+
+    monkeypatch.setattr(
+        module,
+        "build_track2p_accuracy_presets",
+        lambda *args, **kwargs: (preset,),
+    )
+    monkeypatch.setattr(module, "_run_accuracy_preset", fake_run)
+
+    with pytest.raises(
+        ValueError,
+        match="preset_names must be a preset name or an iterable of preset names",
+    ):
+        run_track2p_accuracy_presets(
+            "/data/track2p",
+            preset_names=preset_names,  # type: ignore[arg-type]
+        )
+
+    assert calls == []

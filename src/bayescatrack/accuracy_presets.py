@@ -465,7 +465,7 @@ def _normalize_accuracy_preset_names(
         return None
     if isinstance(preset_names, str):
         return {preset_names}
-    if isinstance(preset_names, bytes):
+    if isinstance(preset_names, (bytes, bytearray)):
         raise ValueError(
             "preset_names must be a preset name or an iterable of preset names"
         )
