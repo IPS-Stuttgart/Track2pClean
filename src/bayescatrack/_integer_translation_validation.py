@@ -111,6 +111,8 @@ def _normalize_integer_shift_component(value: Any) -> int:
         return int(operator.index(value))
     except TypeError:
         pass
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(_SHIFT_ERROR) from exc
 
     if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
