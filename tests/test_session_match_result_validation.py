@@ -29,6 +29,28 @@ def test_session_match_result_rejects_fractional_roi_indices():
         _valid_match_result(reference_roi_indices=np.asarray([10.5], dtype=float))
 
 
+def test_session_match_result_rejects_duplicate_reference_roi_indices():
+    with pytest.raises(ValueError, match="reference_roi_indices.*unique ROI indices"):
+        _valid_match_result(
+            reference_positions=np.asarray([0, 1], dtype=int),
+            measurement_positions=np.asarray([0, 1], dtype=int),
+            reference_roi_indices=np.asarray([10, 10], dtype=int),
+            measurement_roi_indices=np.asarray([20, 21], dtype=int),
+            costs=np.asarray([1.0, 1.25], dtype=float),
+        )
+
+
+def test_session_match_result_rejects_duplicate_measurement_roi_indices():
+    with pytest.raises(ValueError, match="measurement_roi_indices.*unique ROI indices"):
+        _valid_match_result(
+            reference_positions=np.asarray([0, 1], dtype=int),
+            measurement_positions=np.asarray([0, 1], dtype=int),
+            reference_roi_indices=np.asarray([10, 11], dtype=int),
+            measurement_roi_indices=np.asarray([20, 20], dtype=int),
+            costs=np.asarray([1.0, 1.25], dtype=float),
+        )
+
+
 def test_session_match_result_rejects_boolean_positions():
     with pytest.raises(ValueError, match="reference_positions"):
         _valid_match_result(reference_positions=np.asarray([True], dtype=object))

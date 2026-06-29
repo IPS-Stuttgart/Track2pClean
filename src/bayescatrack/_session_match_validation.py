@@ -37,6 +37,14 @@ def install_session_match_result_validation() -> None:
             "costs",
             _finite_cost_array(getattr(self, "costs"), "costs"),
         )
+        _reject_duplicate_roi_indices(
+            getattr(self, "reference_roi_indices"),
+            "reference_roi_indices",
+        )
+        _reject_duplicate_roi_indices(
+            getattr(self, "measurement_roi_indices"),
+            "measurement_roi_indices",
+        )
 
     setattr(
         _validated_post_init, "_bayescatrack_original_post_init", original_post_init
@@ -101,6 +109,23 @@ def _finite_cost_array(values: Any, field_name: str) -> np.ndarray:
     if not np.all(np.isfinite(array)):
         raise ValueError(f"{field_name} must contain finite numeric assignment costs")
     return array
+
+
+def _reject_duplicate_roi_indices(values: Any, field_name: str) -> None:
+    array = np.asarray(values, dtype=int)
+    seen: set[int] = set()
+    duplicates: list[int] = []
+    for value in array.tolist():
+        roi_index = int(value)
+        if roi_index in seen and roi_index not in duplicates:
+            duplicates.append(roi_index)
+        seen.add(roi_index)
+    if duplicates:
+        duplicate_summary = ", ".join(str(value) for value in duplicates)
+        raise ValueError(
+            f"{field_name} must contain unique ROI indices; "
+            f"duplicate values: {duplicate_summary}"
+        )
 
 
 __all__ = ["install_session_match_result_validation"]
