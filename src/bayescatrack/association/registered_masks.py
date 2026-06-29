@@ -328,7 +328,7 @@ def _finite_positive_float(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite positive value")
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite positive value") from exc
     if not np.isfinite(numeric_value) or numeric_value <= 0.0:
         raise ValueError(f"{name} must be a finite positive value")
