@@ -75,16 +75,23 @@ def test_synthetic_track2p_subject_exercises_non_cell_stat_row_validation(tmp_pa
         ),
     )
 
-    config = Track2pBenchmarkConfig(
+    default_config = Track2pBenchmarkConfig(
         data=generated.subject_dir,
         method="track2p-baseline",
         input_format="suite2p",
         include_behavior=False,
     )
-    with pytest.raises(ValueError, match="--include-non-cells"):
-        run_track2p_benchmark(config)
+    default_result = run_track2p_benchmark(default_config)[0].to_dict()
+    assert default_result["reference_source"] == "ground_truth_csv"
+    assert default_result["pairwise_f1"] == pytest.approx(1.0)
+    assert default_result["complete_track_f1"] == pytest.approx(1.0)
 
-    result = _run_baseline_benchmark(generated)
-    assert result["reference_source"] == "ground_truth_csv"
-    assert result["pairwise_f1"] == pytest.approx(1.0)
-    assert result["complete_track_f1"] == pytest.approx(1.0)
+    filtered_config = Track2pBenchmarkConfig(
+        data=generated.subject_dir,
+        method="track2p-baseline",
+        input_format="suite2p",
+        include_behavior=False,
+        include_non_cells=False,
+    )
+    with pytest.raises(ValueError, match="--include-non-cells"):
+        run_track2p_benchmark(filtered_config)
