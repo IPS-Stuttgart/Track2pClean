@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.context_descriptors import fov_patch_moment_descriptors
 
 

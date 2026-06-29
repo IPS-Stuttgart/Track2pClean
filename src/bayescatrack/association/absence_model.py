@@ -82,7 +82,9 @@ def absence_cost_vector(
         costs[empty] -= cfg.empty_registered_mask_discount
 
     if local_density is not None:
-        density = _validated_optional_float_vector("local_density", local_density, n_rois)
+        density = _validated_optional_float_vector(
+            "local_density", local_density, n_rois
+        )
         if density.size:
             finite_density = density[np.isfinite(density)]
             if finite_density.size:
@@ -273,7 +275,9 @@ def _validated_absence_cost_vector(
     return values
 
 
-def _validated_optional_float_vector(name: str, raw_values: Any, n_rois: int) -> np.ndarray:
+def _validated_optional_float_vector(
+    name: str, raw_values: Any, n_rois: int
+) -> np.ndarray:
     message = f"{name} must be a numeric vector matching plane.n_rois"
     raw_array = _validated_object_vector(raw_values, n_rois, message=message)
     if _contains_text_values(raw_array):

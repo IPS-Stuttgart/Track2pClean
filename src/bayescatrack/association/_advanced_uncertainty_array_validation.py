@@ -13,7 +13,9 @@ from . import advanced_uncertainty as _advanced_uncertainty
 _PATCH_MARKER = "_bayescatrack_advanced_uncertainty_array_validation_patch"
 _ORIGINAL_ATTR = "_bayescatrack_advanced_uncertainty_array_validation_original"
 _POSTERIOR_PATCH_MARKER = "_bayescatrack_advanced_uncertainty_empty_probability_patch"
-_POSTERIOR_ORIGINAL_ATTR = "_bayescatrack_advanced_uncertainty_empty_probability_original"
+_POSTERIOR_ORIGINAL_ATTR = (
+    "_bayescatrack_advanced_uncertainty_empty_probability_original"
+)
 _STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray)
 
 

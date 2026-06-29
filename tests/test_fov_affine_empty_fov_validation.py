@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-
 from bayescatrack.fov_affine_registration import estimate_fov_affine_transform
 
 _AFFINE_IDENTITY_XY = np.asarray(

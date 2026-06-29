@@ -116,7 +116,9 @@ def _normalize_session_names(session_names: Any) -> tuple[str, ...]:
     try:
         normalized = tuple(str(name) for name in session_names)
     except TypeError as exc:
-        raise ValueError("session_names must be a sequence of session-name values") from exc
+        raise ValueError(
+            "session_names must be a sequence of session-name values"
+        ) from exc
     if len(normalized) == 0:
         raise ValueError("session_names must not be empty")
     _validate_unique_session_names(normalized)
@@ -206,7 +208,10 @@ def _normalize_roi_index_string(value: str) -> int:
         raise ValueError(_ROI_ERROR) from exc
     if numeric_value.is_nan():
         return -1
-    if not numeric_value.is_finite() or numeric_value != numeric_value.to_integral_value():
+    if (
+        not numeric_value.is_finite()
+        or numeric_value != numeric_value.to_integral_value()
+    ):
         raise ValueError(_ROI_ERROR)
     return _validate_roi_integer(int(numeric_value))
 

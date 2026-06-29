@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from bayescatrack._assignment_bundle_validation import _normalize_roi_index_array
 
 

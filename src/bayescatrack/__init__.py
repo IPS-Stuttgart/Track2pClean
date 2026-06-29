@@ -228,8 +228,8 @@ find_track2p_session_dirs = _bridge.find_track2p_session_dirs
 load_raw_npy_plane = _bridge.load_raw_npy_plane
 load_suite2p_plane = _bridge.load_suite2p_plane
 load_track2p_subject = _bridge.load_track2p_subject
-from . import registration as _registration  # noqa: E402
 from . import fov_affine_registration as _fov_affine_registration  # noqa: E402
+from . import registration as _registration  # noqa: E402
 
 _install_cli_exit_code_validation(_cli)
 main = _cli.main
@@ -311,6 +311,7 @@ def _install_fov_affine_choice_validation() -> None:
         _fov_affine_registration.apply_affine_roi_mask_warp = (
             apply_affine_roi_mask_warp_with_choice_validation
         )
+
 
 _install_confidence_ordered_strict_gap_cli(_cli)
 _install_matching_layout_validation(_matching)

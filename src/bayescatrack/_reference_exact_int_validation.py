@@ -23,20 +23,30 @@ _PLATFORM_INT_MIN = int(np.iinfo(np.intp).min)
 _PLATFORM_INT_MAX = int(np.iinfo(np.intp).max)
 
 
-def install_reference_exact_int_validation(reference_module: ModuleType | None = None) -> None:
+def install_reference_exact_int_validation(
+    reference_module: ModuleType | None = None,
+) -> None:
     """Install idempotent exact parsing for reference ROI/index scalars."""
 
     if reference_module is None:
-        from . import reference as reference_module  # pylint: disable=import-outside-toplevel,reimported
+        from . import (
+            reference as reference_module,  # pylint: disable=import-outside-toplevel,reimported
+        )
 
     _install_parse_integer_scalar_exact(reference_module)
 
-    original_parse_optional_int = reference_module._parse_optional_int  # pylint: disable=protected-access
+    original_parse_optional_int = (
+        reference_module._parse_optional_int
+    )  # pylint: disable=protected-access
     if getattr(original_parse_optional_int, _OPTIONAL_PATCH_ATTR, False):
         return
 
-    missing_strings = frozenset(reference_module._MISSING_STRINGS)  # pylint: disable=protected-access
-    error_message = reference_module._optional_int_error_message  # pylint: disable=protected-access
+    missing_strings = frozenset(
+        reference_module._MISSING_STRINGS
+    )  # pylint: disable=protected-access
+    error_message = (
+        reference_module._optional_int_error_message
+    )  # pylint: disable=protected-access
 
     def _parse_optional_int_with_exact_text(value: Any) -> int | None:
         if isinstance(value, bytes):
@@ -58,11 +68,15 @@ def install_reference_exact_int_validation(reference_module: ModuleType | None =
         "_bayescatrack_original",
         original_parse_optional_int,
     )
-    reference_module._parse_optional_int = _parse_optional_int_with_exact_text  # pylint: disable=protected-access
+    reference_module._parse_optional_int = (
+        _parse_optional_int_with_exact_text  # pylint: disable=protected-access
+    )
 
 
 def _install_parse_integer_scalar_exact(reference_module: ModuleType) -> None:
-    original_parse_integer_scalar = reference_module._parse_integer_scalar  # pylint: disable=protected-access
+    original_parse_integer_scalar = (
+        reference_module._parse_integer_scalar
+    )  # pylint: disable=protected-access
     if getattr(original_parse_integer_scalar, _SCALAR_PATCH_ATTR, False):
         return
 
@@ -86,7 +100,9 @@ def _install_parse_integer_scalar_exact(reference_module: ModuleType) -> None:
         "_bayescatrack_original",
         original_parse_integer_scalar,
     )
-    reference_module._parse_integer_scalar = _parse_integer_scalar_with_exact_validation  # pylint: disable=protected-access
+    reference_module._parse_integer_scalar = (
+        _parse_integer_scalar_with_exact_validation  # pylint: disable=protected-access
+    )
 
 
 def _parse_integer_scalar_exact(
@@ -205,7 +221,10 @@ def _parse_decimal_integer(text: str, *, error_message: Any) -> int:
         raise ValueError(error_message(text)) from exc
     if numeric_value.is_nan():
         return -1
-    if not numeric_value.is_finite() or numeric_value != numeric_value.to_integral_value():
+    if (
+        not numeric_value.is_finite()
+        or numeric_value != numeric_value.to_integral_value()
+    ):
         raise ValueError(error_message(text))
     return int(numeric_value)
 
