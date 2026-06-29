@@ -1,2 +1,6 @@
+import pytest
+
+
 def test_probe():
-    assert memoryview(b'ab')
+    with pytest.raises(ValueError):
+        int('x')
