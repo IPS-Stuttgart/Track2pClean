@@ -79,7 +79,7 @@ def _finite_float(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite numeric value")
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite numeric value") from exc
     if not np.isfinite(numeric_value):
         raise ValueError(f"{name} must be finite")
@@ -104,7 +104,7 @@ def _integer_like(value: Any, *, name: str, minimum: int) -> int:
             raise ValueError(f"{name} must be an integer")
         try:
             numeric_value = float(stripped)
-        except ValueError as exc:
+        except (ValueError, OverflowError) as exc:
             raise ValueError(f"{name} must be an integer") from exc
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
             raise ValueError(f"{name} must be an integer")
@@ -112,7 +112,7 @@ def _integer_like(value: Any, *, name: str, minimum: int) -> int:
     else:
         try:
             integer_value = int(operator.index(value))
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{name} must be an integer") from exc
 
     if integer_value < minimum:
