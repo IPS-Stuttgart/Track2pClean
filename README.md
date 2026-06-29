@@ -87,9 +87,15 @@ track2pclean benchmark track2p \
   --reference-kind manual-gt
 ```
 
-If a subject directory contains `ground_truth.csv`, the benchmark can use it as the reference automatically. You can also point `--reference` at a `ground_truth.csv` file or at a separate ground-truth root and declare `--reference-kind manual-gt`. Ground-truth ROI indices are validated against the loaded Suite2p ROI indices. The benchmark keeps all Suite2p `stat.npy` rows by default and lets calibrated costs use Suite2p `iscell` probability as a soft feature rather than discarding low-confidence ROIs before association. Pass `--no-include-non-cells` only for a legacy hard-filtered ablation; validation will fail clearly if such filtering removes any referenced ROI.
+If a subject directory contains `ground_truth.csv`, the benchmark can use it as the reference automatically. You can also point `--reference` at a `ground_truth.csv` file or at a separate ground-truth root and declare `--reference-kind manual-gt`.
 
-The benchmark refuses Track2p outputs and already row-aligned Suite2p rows as references by default because those are not independent evidence for a paper-facing comparison. For plumbing checks only, pass `--allow-track2p-as-reference-for-smoke-test`. Sparse manual ground truth is handled by scoring only predicted tracks whose seed-session ROI appears in the reference seed set; this avoids counting unlabelled cells as false positives.
+Ground-truth ROI indices are validated against the loaded Suite2p ROI indices. The benchmark keeps all Suite2p `stat.npy` rows by default and lets calibrated costs use Suite2p `iscell` probability as a soft feature rather than discarding low-confidence ROIs before association.
+
+Pass `--no-include-non-cells` only for a legacy hard-filtered ablation; validation will fail clearly if such filtering removes any referenced ROI.
+
+The benchmark refuses Track2p outputs and already row-aligned Suite2p rows as references by default because those are not independent evidence for a paper-facing comparison. For plumbing checks only, pass `--allow-track2p-as-reference-for-smoke-test`.
+
+Sparse manual ground truth is handled by scoring only predicted tracks whose seed-session ROI appears in the reference seed set; this avoids counting unlabelled cells as false positives.
 
 Install the optional Track2p/elastix registration backend when running affine or rigid registration:
 
