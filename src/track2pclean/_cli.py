@@ -248,6 +248,11 @@ def _replace_parser_text(
                 for part in metavar
             )
 
+        for choice_action in getattr(action, "_choices_actions", ()):  # pylint: disable=protected-access
+            help_text = getattr(choice_action, "help", None)
+            if isinstance(help_text, str):
+                choice_action.help = help_text.replace(old_text, new_text)
+
     for child_parser in _iter_child_arg_parsers(parser):
         _replace_parser_text(child_parser, old_text, new_text)
 
