@@ -13,7 +13,7 @@ def test_project_metadata_matches_repository():
 
     assert project["name"] == "Track2pClean"
     assert (
-        project["urls"]["Repository"] == "https://github.com/IPS-Stuttgart/Track2pClean"
+        project["urls"]["Repository"] == "https://github.com/IPS-Stuttgart/BayesCaTrack"
     )
     assert project["scripts"]["bayescatrack"] == "bayescatrack:main"
     assert project["scripts"]["track2pclean"] == "track2pclean:main"

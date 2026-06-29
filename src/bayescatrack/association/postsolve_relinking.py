@@ -338,7 +338,19 @@ def _finite_nonnegative_float_or_none(value: Any, name: str) -> float | None:
 def _finite_nonnegative_float(value: Any, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite and non-negative")
-    numeric = float(value)
+    try:
+        array_value = np.asarray(value, dtype=object)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be finite and non-negative") from exc
+    if array_value.shape != ():
+        raise ValueError(f"{name} must be finite and non-negative")
+    scalar_value = array_value.item()
+    if isinstance(scalar_value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be finite and non-negative")
+    try:
+        numeric = float(scalar_value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be finite and non-negative") from exc
     if not np.isfinite(numeric) or numeric < 0.0:
         raise ValueError(f"{name} must be finite and non-negative")
     return numeric

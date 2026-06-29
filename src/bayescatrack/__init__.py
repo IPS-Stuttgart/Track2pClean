@@ -58,6 +58,9 @@ from ._fov_subpixel_shift_validation import (
 from ._fov_translation_output_shape_validation import (
     install_fov_translation_output_shape_validation as _install_fov_translation_output_shape_validation,
 )
+from ._global_assignment_track_row_validation import (
+    install_global_assignment_track_row_validation as _install_global_assignment_track_row_validation,
+)
 from ._global_cost_preset_validation import (
     install_global_cost_preset_validation as _install_global_cost_preset_validation,
 )
@@ -288,6 +291,7 @@ _install_track2p_policy_session_gap_validation(_track2p_policy_priors)
 _install_global_track_row_validation()
 _install_tracking_fill_value_validation()
 _install_tracking_result_matrix_validation()
+_install_global_assignment_track_row_validation()
 _install_return_components_validation(_bridge)
 _core_scalar_validation.install_core_scalar_validation_patches(CalciumPlaneData)
 

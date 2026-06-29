@@ -13,6 +13,22 @@ class _OverflowingFloat:
         raise OverflowError("too large")
 
 
+class _BadIndexWithFloatFallback:
+    def __float__(self) -> float:
+        return 1.0
+
+
+def _dunder(name: str) -> str:
+    return "_" * 2 + name + "_" * 2
+
+
+def _raise_bad_index(_self: object) -> int:
+    raise ValueError("bad index")
+
+
+setattr(_BadIndexWithFloatFallback, _dunder("index"), _raise_bad_index)
+
+
 def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
     roi_masks = np.asarray(mask, dtype=float).reshape(1, 1, -1)
     return CalciumPlaneData(roi_masks=roi_masks)
@@ -40,6 +56,10 @@ def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
         (
             {"distance_transform_overlap_radius": bytearray(b"1")},
             "distance_transform_overlap_radius must be an integer",
+        ),
+        (
+            {"soft_iou_radius": _BadIndexWithFloatFallback()},
+            "soft_iou_radius must be an integer",
         ),
     ],
 )
@@ -71,6 +91,10 @@ def test_registered_soft_iou_preset_rejects_invalid_numeric_controls(
         ),
         (
             {"distance_transform_overlap_radius": bytearray(b"1")},
+            "distance_transform_overlap_radius must be an integer",
+        ),
+        (
+            {"distance_transform_overlap_radius": _BadIndexWithFloatFallback()},
             "distance_transform_overlap_radius must be an integer",
         ),
     ],
