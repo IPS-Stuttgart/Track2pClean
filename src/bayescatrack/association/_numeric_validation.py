@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 
 _TEXT_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_INDEX = getattr(operator, "index")
 
 
 def validated_numeric_float(value: Any, *, name: str) -> float:
@@ -64,9 +65,11 @@ def _integer_scalar_candidate(value: Any, *, message: str) -> Any:
 def _integer_exact(value: Any, *, message: str) -> int:
     scalar_value = _integer_scalar_candidate(value, message=message)
     try:
-        return int(operator.index(scalar_value))
+        return int(_INDEX(scalar_value))
     except TypeError:
         pass
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
 
     try:
         numeric = float(scalar_value)
