@@ -9,7 +9,10 @@ def test_reference_rejects_out_of_range_integer_observations_as_value_error():
     huge_roi = 10**1000
 
     with pytest.raises(ValueError, match="ROI index must be integer-like"):
-        score_pairwise_matches(np.array([[huge_roi, 0]], dtype=object), np.array([[1, 0]], dtype=object))
+        score_pairwise_matches(
+            np.array([[huge_roi, 0]], dtype=object),
+            np.array([[1, 0]], dtype=object),
+        )
 
 
 def test_reference_rejects_out_of_range_roi_count_as_value_error():
