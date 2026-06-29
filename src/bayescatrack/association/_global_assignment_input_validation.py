@@ -169,7 +169,7 @@ def _finite_nonnegative_float(value: Any, *, context: str) -> float:
         raise ValueError(f"{context} must be a finite non-negative value")
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{context} must be a finite non-negative value") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{context} must be a finite non-negative value")
@@ -224,7 +224,7 @@ def _coerce_integer_like(value: Any, *, context: str, allow_zero: bool) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(f"{context} must be an integer") from exc
 
     minimum = 0 if allow_zero else 1
