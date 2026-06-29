@@ -64,7 +64,7 @@ def _normalize_global_track_value(value: Any, *, fill_value: int) -> int:
     if integer_value == fill_value:
         return fill_value
     if integer_value < 0:
-        return fill_value
+        raise ValueError(_ERROR_MESSAGE)
     return integer_value
 
 
