@@ -115,6 +115,9 @@ from ._nonrigid_registration_control_validation import (
 from ._pairwise_return_components_validation import (
     install_return_components_validation as _install_return_components_validation,
 )
+from ._progress_reporter_validation import (
+    install_progress_reporter_validation as _install_progress_reporter_validation,
+)
 from ._pyrecest_shifted_validation import (
     install_pyrecest_shifted_validation as _install_pyrecest_shifted_validation,
 )
@@ -376,6 +379,7 @@ _install_global_track_row_validation()
 _install_tracking_fill_value_validation()
 _install_tracking_result_matrix_validation()
 _install_global_assignment_track_row_validation()
+_install_progress_reporter_validation()
 _install_return_components_validation(_bridge)
 _core_scalar_validation.install_core_scalar_validation_patches(CalciumPlaneData)
 
