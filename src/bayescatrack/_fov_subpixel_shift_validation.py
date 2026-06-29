@@ -2,7 +2,7 @@
 
 The wrappers normalize public subpixel shift vectors before low-level resampling
 so malformed, boolean, non-finite, and string-like values fail with ``ValueError``.
-They also validate mask-interpolation controls before delegation.
+They also validate mask-interpolation and output-shape controls before delegation.
 """
 
 from __future__ import annotations
@@ -21,15 +21,19 @@ _MASK_INTERPOLATION_ERROR = "mask_interpolation must be either 'nearest' or 'bil
 
 
 def install_fov_subpixel_shift_validation() -> None:
-    """Install idempotent validation around FOV subpixel translation controls."""
+    """Install idempotent validation around FOV translation controls."""
 
     from . import (
         fov_registration as _fov_registration,  # pylint: disable=import-outside-toplevel
+    )
+    from ._fov_translation_bytes_shape_validation import (  # pylint: disable=import-outside-toplevel
+        install_fov_translation_bytes_shape_validation,
     )
 
     _wrap_shift_argument(_fov_registration, "apply_subpixel_image_translation")
     _wrap_shift_argument(_fov_registration, "apply_subpixel_roi_mask_translation")
     _wrap_mask_interpolation_validation(_fov_registration)
+    install_fov_translation_bytes_shape_validation()
 
 
 def _wrap_shift_argument(module: Any, function_name: str) -> None:
