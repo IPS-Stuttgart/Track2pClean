@@ -13,6 +13,9 @@ from ._advanced_candidate_empty_validation import (
 from ._advanced_pruning_normalization import (
     install_advanced_pruning_normalization as _install_advanced_pruning_normalization,
 )
+from ._strict_index_protocol_validation import (
+    install_strict_index_protocol_validation as _install_strict_index_protocol_validation,
+)
 from .core.bridge import CalciumPlaneData
 
 _NONNEGATIVE_WEIGHT_KWARGS = (
@@ -49,6 +52,7 @@ def install_advanced_weight_validation() -> None:
     """Install idempotent validation around pairwise-cost kwargs."""
 
     _install_advanced_pruning_normalization()
+    _install_strict_index_protocol_validation()
     _install_advanced_candidate_empty_validation()
     _install_advanced_improvement_numeric_validation()
 
