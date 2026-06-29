@@ -15,7 +15,6 @@ _PATCH_MARKER = "_bayescatrack_ground_truth_track_validation_patch"
 _ROW_TUPLES_PATCH_MARKER = "_bayescatrack_ground_truth_row_tuples_validation_patch"
 _ROI_ERROR = "ROI index must be a non-negative integer or -1 missing sentinel"
 _BOOLEAN_ROI_ERROR = "boolean ROI index is not a valid ground-truth ROI value"
-_SESSION_NAME_ERROR = "session_names must be unique"
 _HORIZON_ERROR = "horizon must be an integer between 1 and the number of sessions"
 _REQUIRE_COMPLETE_ERROR = "require_complete must be a boolean"
 _MISSING_VALUE_STRINGS = {"", "na", "nan", "none", "null", "-"}
@@ -125,8 +124,18 @@ def _normalize_session_names(session_names: Any) -> tuple[str, ...]:
 
 
 def _validate_unique_session_names(session_names: tuple[str, ...]) -> None:
-    if len(set(session_names)) != len(session_names):
-        raise ValueError(_SESSION_NAME_ERROR)
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for session_name in session_names:
+        if session_name in seen and session_name not in duplicates:
+            duplicates.append(session_name)
+        seen.add(session_name)
+    if duplicates:
+        duplicate_summary = ", ".join(repr(name) for name in duplicates)
+        raise ValueError(
+            "session_names must contain unique session names; "
+            f"duplicate values: {duplicate_summary}"
+        )
 
 
 def _normalize_horizon(value: Any | None, *, num_sessions: int) -> int | None:
