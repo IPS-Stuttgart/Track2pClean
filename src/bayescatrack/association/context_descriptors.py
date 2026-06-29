@@ -240,8 +240,12 @@ def fov_patch_moment_descriptors(
     global_min = float(np.min(finite))
     global_max = float(np.max(finite))
     bin_edges = np.linspace(global_min, global_max + 1.0e-12, int(histogram_bins) + 1)
-    grad_y, grad_x = np.gradient(np.nan_to_num(img, nan=float(np.mean(finite))))
-    grad_mag = np.sqrt(grad_x * grad_x + grad_y * grad_y)
+    filled_img = np.nan_to_num(img, nan=float(np.mean(finite)))
+    if min(img.shape) < 2:
+        grad_mag = np.zeros_like(filled_img, dtype=float)
+    else:
+        grad_y, grad_x = np.gradient(filled_img)
+        grad_mag = np.sqrt(grad_x * grad_x + grad_y * grad_y)
     for roi_index, (x_coord, y_coord) in enumerate(centroids):
         patch = _crop_patch(img, x_coord, y_coord, radius=patch_radius)
         grad_patch = _crop_patch(grad_mag, x_coord, y_coord, radius=patch_radius)
