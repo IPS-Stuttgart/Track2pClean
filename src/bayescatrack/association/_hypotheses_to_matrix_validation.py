@@ -43,7 +43,9 @@ def install_hypotheses_to_matrix_validation() -> None:
     module.hypotheses_to_matrix = hypotheses_to_matrix_with_validation
 
 
-def _normalize_hypothesis_rows(hypotheses: Sequence[Any]) -> tuple[tuple[int, ...], ...]:
+def _normalize_hypothesis_rows(
+    hypotheses: Sequence[Any],
+) -> tuple[tuple[int, ...], ...]:
     try:
         hypothesis_tuple = tuple(hypotheses)
     except TypeError as exc:

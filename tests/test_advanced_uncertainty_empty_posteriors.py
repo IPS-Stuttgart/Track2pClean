@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.advanced_uncertainty import (
     posterior_probability_matrix,
     uncertainty_aware_cost_matrix,
@@ -17,7 +16,9 @@ def test_posterior_probabilities_accept_empty_candidate_columns() -> None:
 
 
 def test_posterior_probabilities_validate_empty_candidate_reliability_shape() -> None:
-    with pytest.raises(ValueError, match="reliability_matrix must match cost_matrix shape"):
+    with pytest.raises(
+        ValueError, match="reliability_matrix must match cost_matrix shape"
+    ):
         posterior_probability_matrix(
             np.zeros((3, 0), dtype=float),
             reliability_matrix=np.zeros((3, 1), dtype=float),

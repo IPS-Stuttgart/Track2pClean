@@ -26,7 +26,9 @@ def test_reference_preserves_large_textual_decimal_roi_indices():
         reference.suite2p_indices,
         np.array([[first_roi, second_roi]], dtype=object),
     )
-    npt.assert_array_equal(reference.pairwise_matches(0, 1), np.array([[first_roi, second_roi]]))
+    npt.assert_array_equal(
+        reference.pairwise_matches(0, 1), np.array([[first_roi, second_roi]])
+    )
 
 
 def test_score_complete_tracks_preserves_large_textual_decimal_indices():

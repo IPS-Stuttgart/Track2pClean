@@ -25,9 +25,7 @@ from . import _global_assignment_input_validation as _global_assignment_input_va
 from . import _global_solver_track_validation as _global_solver_track_validation
 from . import _growth_coordinate_validation as _growth_coordinate_validation
 from . import _growth_prior_scalar_validation as _growth_prior_scalar_validation
-from . import (
-    _hypotheses_to_matrix_validation as _hypotheses_to_matrix_validation,
-)
+from . import _hypotheses_to_matrix_validation as _hypotheses_to_matrix_validation
 from . import _monotone_ranker_feature_validation as _monotone_ranker_feature_validation
 from . import _neuropil_ratio_shape_validation as _neuropil_ratio_shape_validation
 from . import (

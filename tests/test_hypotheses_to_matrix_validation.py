@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from bayescatrack.association.multi_hypothesis import TrackHypothesis, hypotheses_to_matrix
+from bayescatrack.association.multi_hypothesis import (
+    TrackHypothesis,
+    hypotheses_to_matrix,
+)
 
 
 def test_hypotheses_to_matrix_preserves_valid_equal_width_rows() -> None:

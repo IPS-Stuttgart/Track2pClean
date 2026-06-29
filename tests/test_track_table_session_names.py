@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from bayescatrack._ground_truth_track_validation import install_ground_truth_track_validation
+from bayescatrack._ground_truth_track_validation import (
+    install_ground_truth_track_validation,
+)
 from bayescatrack.ground_truth_eval import (
     TrackTable,
     load_track2p_ground_truth_csv,
