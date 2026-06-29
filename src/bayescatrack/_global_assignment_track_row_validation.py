@@ -9,7 +9,9 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_global_assignment_track_row_validation_patch"
-_ERROR_MESSAGE = "global assignment track matrix must contain integer ROI indices or missing values"
+_ERROR_MESSAGE = (
+    "global assignment track matrix must contain integer ROI indices or missing values"
+)
 _FILL_VALUE_ERROR = "fill_value must be a negative integer sentinel"
 
 
@@ -23,7 +25,9 @@ def install_global_assignment_track_row_validation() -> None:
         return
 
     @wraps(original)
-    def coerce_global_track_rows_with_validation(track_rows: Any, *, fill_value: Any) -> np.ndarray:
+    def coerce_global_track_rows_with_validation(
+        track_rows: Any, *, fill_value: Any
+    ) -> np.ndarray:
         normalized_fill_value = _normalize_fill_value(fill_value)
         return original(
             _normalize_global_track_rows(track_rows, fill_value=normalized_fill_value),
@@ -31,8 +35,12 @@ def install_global_assignment_track_row_validation() -> None:
         )
 
     setattr(coerce_global_track_rows_with_validation, _PATCH_MARKER, True)
-    setattr(coerce_global_track_rows_with_validation, "_bayescatrack_original", original)
-    _tracking._coerce_global_track_rows = coerce_global_track_rows_with_validation  # pylint: disable=protected-access
+    setattr(
+        coerce_global_track_rows_with_validation, "_bayescatrack_original", original
+    )
+    _tracking._coerce_global_track_rows = (
+        coerce_global_track_rows_with_validation  # pylint: disable=protected-access
+    )
 
 
 def _normalize_global_track_rows(values: Any, *, fill_value: int) -> np.ndarray:

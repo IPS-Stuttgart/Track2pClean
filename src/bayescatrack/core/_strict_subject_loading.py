@@ -21,7 +21,9 @@ import numpy as np
 # pylint: disable=protected-access,too-many-arguments,too-many-locals
 
 _PATCH_MARKER = "_bayescatrack_strict_subject_loading_patch"
-_STRICT_HELP = "Raise instead of skipping recognized sessions that lack the requested plane"
+_STRICT_HELP = (
+    "Raise instead of skipping recognized sessions that lack the requested plane"
+)
 
 
 def install_strict_subject_loading(bridge_impl: ModuleType) -> None:
@@ -208,7 +210,11 @@ def _export_loaded_sessions_to_npz(
         ),
         "session_dates": np.asarray(
             [
-                session.session_date.isoformat() if session.session_date is not None else ""
+                (
+                    session.session_date.isoformat()
+                    if session.session_date is not None
+                    else ""
+                )
                 for session in sessions
             ],
             dtype=np.str_,

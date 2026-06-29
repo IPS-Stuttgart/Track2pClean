@@ -53,7 +53,9 @@ def test_global_assignment_track_rows_preserve_missing_and_integer_values():
 
 
 def test_global_assignment_track_rows_reject_invalid_fill_value():
-    with pytest.raises(ValueError, match="fill_value must be a negative integer sentinel"):
+    with pytest.raises(
+        ValueError, match="fill_value must be a negative integer sentinel"
+    ):
         tracking._coerce_global_track_rows(  # pylint: disable=protected-access
             np.asarray([[0, None]], dtype=object),
             fill_value=0,

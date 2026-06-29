@@ -108,15 +108,11 @@ def install_matching_control_validation() -> None:
         try:
             return original_normalize_roi_index(value, field_name)
         except OverflowError as exc:
-            raise ValueError(
-                f"{field_name} must contain integer ROI indices"
-            ) from exc
+            raise ValueError(f"{field_name} must contain integer ROI indices") from exc
         except ValueError as exc:
             if _is_matching_index_value_error(exc, field_name):
                 raise
-            raise ValueError(
-                f"{field_name} must contain integer ROI indices"
-            ) from exc
+            raise ValueError(f"{field_name} must contain integer ROI indices") from exc
 
     @wraps(original_normalize_session_index)
     def normalize_session_index_with_array_validation(
