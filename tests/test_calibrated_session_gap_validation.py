@@ -23,6 +23,12 @@ def test_calibrated_session_gap_rejects_nonfinite_and_boolean_values(
         with_session_gap_component(_components(), session_gap=session_gap)
 
 
+@pytest.mark.parametrize("session_gap", ["2", np.str_("2")])
+def test_calibrated_session_gap_rejects_text_values(session_gap: object) -> None:
+    with pytest.raises(ValueError, match=r"session_gap must.*positive"):
+        with_session_gap_component(_components(), session_gap=session_gap)
+
+
 def test_calibrated_session_gap_accepts_positive_integer_like_values() -> None:
     components = with_session_gap_component(_components(), session_gap=np.float64(2.0))
 

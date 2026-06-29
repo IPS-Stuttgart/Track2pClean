@@ -45,7 +45,7 @@ def install_calibrated_session_gap_validation() -> None:
 
 
 def _finite_positive_session_gap(value: Any) -> float:
-    if isinstance(value, (bool, np.bool_)):
+    if isinstance(value, (bool, np.bool_, str, np.str_)):
         raise ValueError("session_gap must be a finite positive value")
     try:
         numeric = float(value)
