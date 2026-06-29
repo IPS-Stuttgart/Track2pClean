@@ -8,6 +8,9 @@ from functools import wraps
 import numpy as np
 
 from . import advanced_roi_components as _advanced_roi_components
+from ._registration_control_overflow_validation import (
+    install_registration_control_overflow_validation as _install_registration_control_overflow_validation,
+)
 
 _ORIGINAL_ATTR = "_bayescatrack_empty_candidate_margin_original"
 _PATCH_MARKER = "_bayescatrack_empty_candidate_margin_fix"
@@ -17,6 +20,7 @@ _VALIDATION_SENTINEL_COSTS = np.zeros((1, 1), dtype=float)
 def install_empty_candidate_gate_margin_fix() -> None:
     """Install an idempotent guard for empty margin-gated candidate masks."""
 
+    _install_registration_control_overflow_validation()
     current = _advanced_roi_components.candidate_mask_from_cost_matrix
     if _candidate_mask_chain_has_empty_margin_fix(current):
         setattr(_advanced_roi_components, _PATCH_MARKER, True)
