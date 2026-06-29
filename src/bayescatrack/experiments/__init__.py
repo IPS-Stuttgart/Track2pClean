@@ -28,6 +28,7 @@ from ._benchmark_suite2p_defaults import (
 from ._calibration_feature_registry_integration import (
     install_calibration_feature_registry_integration,
 )
+from ._progress_reporter_validation import install_progress_reporter_validation
 from ._seed_sensitivity_validation import (
     install_seed_sensitivity_audit_validation,
 )
@@ -57,6 +58,7 @@ _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
 _diag_defaults.install_diagnostic_suite2p_defaults()
 _mask_input_sweep_option_validation.install_mask_input_sweep_option_validation()
 _tracklet_graph_mask_cache_validation.install_tracklet_graph_mask_cache_validation()
+install_progress_reporter_validation()
 install_raw_benchmark_exclude_subjects_validation()
 
 __all__: list[str] = []
