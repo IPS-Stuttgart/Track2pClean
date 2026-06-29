@@ -248,11 +248,13 @@ def _nonnegative_int(value: Any, *, name: str) -> int:
     else:
         try:
             return _reject_negative_int(operator.index(value), name=name)
-        except (TypeError, ValueError, OverflowError):
+        except TypeError:
             try:
                 numeric_candidate = float(value)
             except (TypeError, ValueError, OverflowError) as exc:
                 raise ValueError(message) from exc
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(message) from exc
     try:
         numeric_value = float(numeric_candidate)
     except (TypeError, ValueError, OverflowError) as exc:
