@@ -238,7 +238,7 @@ def _validate_integer_pixel_coordinate_array(value: Any, *, name: str) -> np.nda
 
     try:
         numeric = np.asarray(array, dtype=float)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(
             f"Suite2p ROI {name} must contain finite integer pixel coordinates"
         ) from exc
