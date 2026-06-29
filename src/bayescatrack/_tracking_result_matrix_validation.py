@@ -118,7 +118,9 @@ def _patch_global_track_row_coercion(module: Any) -> None:
         return
 
     @wraps(original)
-    def coerce_global_track_rows_with_validation(track_rows: Any, *, fill_value: Any) -> Any:
+    def coerce_global_track_rows_with_validation(
+        track_rows: Any, *, fill_value: Any
+    ) -> Any:
         fill_value = _normalize_fill_value(fill_value)
         return original(
             _normalize_global_track_rows(track_rows, fill_value=fill_value),
@@ -176,10 +178,17 @@ def _normalize_global_track_rows(values: Any, *, fill_value: int) -> np.ndarray:
             normalized[index] = fill_value
             continue
         try:
-            roi_index = _normalize_integer_like(value, field_name="global assignment track matrix")
+            roi_index = _normalize_integer_like(
+                value, field_name="global assignment track matrix"
+            )
         except ValueError as exc:
             raise ValueError(_GLOBAL_TRACK_ROWS_ERROR) from exc
-        normalized[index] = fill_value if roi_index < 0 else roi_index
+        if roi_index == fill_value:
+            normalized[index] = fill_value
+        elif roi_index < 0:
+            raise ValueError(_GLOBAL_TRACK_ROWS_ERROR)
+        else:
+            normalized[index] = roi_index
     return normalized
 
 
