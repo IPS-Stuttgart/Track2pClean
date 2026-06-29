@@ -174,7 +174,11 @@ def _coerce_scalar_to_integer(
         try:
             return int(scalar, 10)
         except ValueError:
-            return _parse_decimal_integer(scalar, error_message=lambda _text: message)
+            return _parse_decimal_integer(
+                scalar,
+                error_message=lambda _text: message,
+                nan_is_missing=False,
+            )
     try:
         return int(operator.index(scalar))
     except (TypeError, ValueError, OverflowError):
@@ -207,20 +211,31 @@ def _parse_textual_integer_like_roi(
     try:
         integer_value = int(text, 10)
     except ValueError:
-        integer_value = _parse_decimal_integer(text, error_message=error_message)
+        integer_value = _parse_decimal_integer(
+            text,
+            error_message=error_message,
+            nan_is_missing=True,
+        )
 
     if integer_value < 0:
         return None
     return integer_value
 
 
-def _parse_decimal_integer(text: str, *, error_message: Any) -> int:
+def _parse_decimal_integer(
+    text: str,
+    *,
+    error_message: Any,
+    nan_is_missing: bool = False,
+) -> int:
     try:
         numeric_value = Decimal(text)
     except InvalidOperation as exc:
         raise ValueError(error_message(text)) from exc
     if numeric_value.is_nan():
-        return -1
+        if nan_is_missing:
+            return -1
+        raise ValueError(error_message(text))
     if (
         not numeric_value.is_finite()
         or numeric_value != numeric_value.to_integral_value()
