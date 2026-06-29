@@ -3,8 +3,8 @@
 This module centralizes integer-like and finite-float validation for optional
 configuration paths that are often exercised from YAML/CLI sweeps. The
 validation is installed from :mod:`bayescatrack.__init__` so existing imports keep
-using the public advanced-component module while rejecting ambiguous values
-such as booleans, fractional top-k counts, NaN and infinity.
+using the public advanced-component module while rejecting ambiguous values such
+as booleans, fractional top-k counts, NaN and infinity.
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ def candidate_mask_from_cost_matrix(
     cost_matrix: np.ndarray,
     *,
     top_k: int | None,
-    include_columns: bool = False,
+    include_columns: bool = True,
     gate_margin: float | None = None,
     large_cost: float = 1.0e6,
 ) -> np.ndarray:
@@ -101,17 +101,38 @@ def candidate_mask_from_cost_matrix(
     if gate_margin is not None:
         gate_margin = _finite_nonnegative_float(gate_margin, name="gate_margin")
     large_cost = _finite_positive_float(large_cost, name="large_cost")
-    original = _original_function(
-        candidate_mask_from_cost_matrix,
-        "candidate_mask_from_cost_matrix",
-    )
-    return original(
-        cost_matrix,
-        top_k=top_k,
-        include_columns=include_columns,
-        gate_margin=gate_margin,
-        large_cost=large_cost,
-    )
+
+    costs = np.asarray(cost_matrix, dtype=float)
+    if costs.ndim != 2:
+        raise ValueError("cost_matrix must be two-dimensional")
+
+    admitted = np.isfinite(costs) & (costs < large_cost)
+    if top_k is not None:
+        top_mask = np.zeros(costs.shape, dtype=bool)
+        for row_index in range(costs.shape[0]):
+            candidates = np.flatnonzero(admitted[row_index])
+            if candidates.size:
+                order = np.argsort(costs[row_index, candidates], kind="stable")
+                top_mask[row_index, candidates[order[:top_k]]] = True
+        if include_columns:
+            for column_index in range(costs.shape[1]):
+                candidates = np.flatnonzero(admitted[:, column_index])
+                if candidates.size:
+                    order = np.argsort(costs[candidates, column_index], kind="stable")
+                    top_mask[candidates[order[:top_k]], column_index] = True
+        admitted &= top_mask
+
+    if gate_margin is not None:
+        if 0 in costs.shape:
+            return np.zeros(costs.shape, dtype=bool)
+        safe = np.where(np.isfinite(costs), costs, large_cost)
+        row_best = np.min(safe, axis=1, keepdims=True)
+        col_best = np.min(safe, axis=0, keepdims=True)
+        margin_mask = (safe <= row_best + gate_margin) | (
+            safe <= col_best + gate_margin
+        )
+        admitted &= margin_mask
+    return admitted
 
 
 def mask_shape_descriptors(
