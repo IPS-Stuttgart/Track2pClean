@@ -180,7 +180,11 @@ def _positive_int(value: Any, *, name: str) -> int:
 
 
 def _integer_value(value: Any, *, name: str, qualifier: str) -> int:
-    if isinstance(value, (bool, np.bool_, bytes, bytearray, np.ndarray)):
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(f"{name} must be {qualifier}")
+        value = value.item()
+    if isinstance(value, (bool, np.bool_, bytes, bytearray)):
         raise ValueError(f"{name} must be {qualifier}")
     try:
         return int(operator.index(value))
@@ -212,7 +216,11 @@ def _finite_float(
     value: Any, *, name: str, lower_bound: float, positive: bool
 ) -> float:
     qualifier = "positive" if positive else "non-negative"
-    if isinstance(value, (bool, np.bool_, bytes, bytearray, np.ndarray)):
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(f"{name} must be a finite {qualifier} value")
+        value = value.item()
+    if isinstance(value, (bool, np.bool_, bytes, bytearray)):
         raise ValueError(f"{name} must be a finite {qualifier} value")
     try:
         numeric_value = float(value)
