@@ -60,7 +60,7 @@ def _validated_plane_roi_count(plane: Any, plane_name: str) -> int:
             raise ValueError(message)
         raw_count = raw_count.item()
 
-    if isinstance(raw_count, (bool, np.bool_)):
+    if isinstance(raw_count, (bool, np.bool_, *_TEXT_TYPES)):
         raise ValueError(message)
 
     try:
