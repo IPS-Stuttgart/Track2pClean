@@ -1,2 +1,2 @@
 def test_probe():
-    assert bytearray(b'ab')
+    assert memoryview(b'ab')
