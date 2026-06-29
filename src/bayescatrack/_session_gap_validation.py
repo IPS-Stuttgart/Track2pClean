@@ -116,7 +116,7 @@ def _integer_like(value: Any, *, name: str) -> int:
 
     try:
         return int(operator.index(value))
-    except TypeError:
+    except (TypeError, ValueError, OverflowError):
         pass
 
     if isinstance(value, str):
