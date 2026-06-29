@@ -12,6 +12,11 @@ from bayescatrack.association.registered_masks import (
 )
 
 
+class _OverflowingFloat:
+    def __float__(self) -> float:
+        raise OverflowError("too large")
+
+
 def _pairwise_components() -> dict[str, np.ndarray]:
     return {
         "pairwise_cost_matrix": np.array([[0.0, 1.0]]),
@@ -91,7 +96,20 @@ def test_empty_registered_roi_mask_rejects_non_boolean_vectors(
         )
 
 
-@pytest.mark.parametrize("large_cost", [True, False, 0.0, -1.0, np.nan, np.inf, "bad"])
+@pytest.mark.parametrize(
+    "large_cost",
+    [
+        True,
+        False,
+        0.0,
+        -1.0,
+        np.nan,
+        np.inf,
+        "bad",
+        np.array([1.0]),
+        _OverflowingFloat(),
+    ],
+)
 def test_registered_mask_large_cost_rejects_invalid_values(large_cost: object) -> None:
     with pytest.raises(ValueError, match="large_cost must be a finite positive value"):
         mask_invalid_registered_roi_columns(
