@@ -18,6 +18,7 @@ _GROUND_TRUTH_LOADER_PATCH_MARKER = (
     "_bayescatrack_ground_truth_loader_session_name_validation_patch"
 )
 _STRING_LIKE_SESSION_NAMES = (str, bytes, bytearray)
+_SESSION_NAME_VALUE_ERROR = "{field_name} must contain non-empty string session names"
 
 
 def install_track_table_session_name_validation() -> None:
@@ -165,11 +166,15 @@ def _normalize_unique_session_names(
             f"{field_name} must be a sequence of session-name values, not a bare string-like value"
         )
     try:
-        normalized_session_names = tuple(str(name) for name in session_names)
+        raw_session_names = tuple(session_names)
     except TypeError as exc:
         raise ValueError(
             f"{field_name} must be a sequence of session-name values"
         ) from exc
+    normalized_session_names = tuple(
+        _normalize_session_name_value(name, field_name=field_name)
+        for name in raw_session_names
+    )
     seen: set[str] = set()
     duplicates: list[str] = []
     for session_name in normalized_session_names:
@@ -184,6 +189,12 @@ def _normalize_unique_session_names(
         )
         raise ValueError(message)
     return normalized_session_names
+
+
+def _normalize_session_name_value(value: Any, *, field_name: str) -> str:
+    if not isinstance(value, str) or value == "":
+        raise ValueError(_SESSION_NAME_VALUE_ERROR.format(field_name=field_name))
+    return value
 
 
 __all__ = ["install_track_table_session_name_validation"]
