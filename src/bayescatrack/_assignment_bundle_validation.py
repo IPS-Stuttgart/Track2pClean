@@ -96,7 +96,10 @@ def _normalize_roi_index_array(values: Any, field_name: str) -> np.ndarray:
     )
     if len(set(normalized)) != len(normalized):
         raise ValueError(f"{field_name} must contain unique ROI indices")
-    return np.asarray(normalized, dtype=int)
+    try:
+        return np.asarray(normalized, dtype=int)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{field_name} must contain integer ROI indices") from exc
 
 
 def _normalize_roi_index(value: Any, field_name: str) -> int:
@@ -112,6 +115,8 @@ def _normalize_roi_index(value: Any, field_name: str) -> int:
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
             raise ValueError(f"{field_name} must contain integer ROI indices")
         integer_value = int(numeric_value)
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(f"{field_name} must contain integer ROI indices") from exc
 
     if integer_value < 0:
         raise ValueError(f"{field_name} must contain non-negative ROI indices")
