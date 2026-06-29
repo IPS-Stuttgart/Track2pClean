@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.advanced_uncertainty import (
     EdgeUncertaintyConfig,
     candidate_mask_from_posteriors,

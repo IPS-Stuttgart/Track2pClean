@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_start_roi_validation_patch"
+_MAX_TRACKING_INDEX = int(np.iinfo(np.int_).max)
 
 
 def install_tracking_start_roi_validation() -> None:
@@ -101,7 +102,8 @@ def _normalize_start_roi_indices(values: Any) -> tuple[int, ...]:
     array = np.asarray(values, dtype=object)
     if array.ndim != 1:
         raise ValueError(
-            "start_roi_indices must be a one-dimensional sequence of integer ROI indices"
+            "start_roi_indices must be a one-dimensional sequence "
+            "of integer ROI indices"
         )
 
     normalized = tuple(_normalize_start_roi_index(value) for value in array.tolist())
@@ -114,20 +116,23 @@ def _normalize_start_roi_index(value: Any) -> int:
     if isinstance(value, (bool, np.bool_, np.ndarray)):
         raise ValueError("start_roi_indices must contain integer ROI indices")
 
-    try:
-        integer_value = int(operator.index(value))
-    except TypeError:
-        if not isinstance(value, (float, np.floating)):
-            raise ValueError(
-                "start_roi_indices must contain integer ROI indices"
-            ) from None
+    if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
             raise ValueError("start_roi_indices must contain integer ROI indices")
         integer_value = int(numeric_value)
+    else:
+        try:
+            integer_value = int(operator.index(value))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                "start_roi_indices must contain integer ROI indices"
+            ) from exc
 
     if integer_value < 0:
         raise ValueError("start_roi_indices must contain non-negative ROI indices")
+    if integer_value > _MAX_TRACKING_INDEX:
+        raise ValueError("start_roi_indices must contain integer ROI indices")
     return integer_value
 
 
@@ -157,7 +162,7 @@ def _normalize_start_session_index(
     else:
         try:
             normalized = int(operator.index(value))
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError(
                 "start_session_index must be an integer session index"
             ) from exc
@@ -166,7 +171,8 @@ def _normalize_start_session_index(
         raise IndexError(f"start_session_index {normalized} out of bounds")
     if num_sessions is not None and normalized >= num_sessions:
         raise IndexError(
-            f"start_session_index {normalized} out of bounds for {num_sessions} sessions"
+            f"start_session_index {normalized} out of bounds for "
+            f"{num_sessions} sessions"
         )
     return normalized
 

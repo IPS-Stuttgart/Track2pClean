@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
 from bayescatrack.accuracy_presets import (
     AccuracyPreset,
     accuracy_preset_metadata,
@@ -11,6 +12,21 @@ from bayescatrack.accuracy_presets import (
     run_track2p_accuracy_presets,
 )
 from bayescatrack.experiments.track2p_benchmark import SubjectBenchmarkResult
+
+
+class _MalformedIndex:
+    def __index__(self) -> int:
+        raise ValueError("bad integer adapter")
+
+
+class _OverflowingIndex:
+    def __index__(self) -> int:
+        raise OverflowError("integer adapter overflow")
+
+
+class _OverflowingFloat:
+    def __float__(self) -> float:
+        raise OverflowError("float adapter overflow")
 
 
 def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() -> None:
@@ -131,6 +147,34 @@ def test_build_track2p_accuracy_presets_exposes_stronger_structural_configs() ->
         "cleanup_config_kwargs"
     ]
     assert isinstance(completing_rescue_cleanup_kwargs, dict)
+
+
+@pytest.mark.parametrize(
+    "max_gap",
+    [_MalformedIndex(), _OverflowingIndex(), _OverflowingFloat()],
+)
+def test_build_track2p_accuracy_presets_normalizes_invalid_max_gap_adapters(
+    max_gap: object,
+) -> None:
+    with pytest.raises(ValueError, match="max_gap must be a positive integer"):
+        build_track2p_accuracy_presets(
+            "/data/track2p",
+            max_gap=max_gap,  # type: ignore[arg-type]
+            progress=False,
+        )
+
+
+def test_build_track2p_accuracy_presets_normalizes_invalid_cost_threshold_adapter() -> (
+    None
+):
+    with pytest.raises(
+        ValueError, match="cost_threshold must be a finite non-negative value or None"
+    ):
+        build_track2p_accuracy_presets(
+            "/data/track2p",
+            cost_threshold=_OverflowingFloat(),  # type: ignore[arg-type]
+            progress=False,
+        )
 
 
 def test_accuracy_preset_metadata_is_compact_and_serializable() -> None:

@@ -16,6 +16,7 @@ from ._numeric_validation import (
 
 SessionEdge = tuple[int, int]
 TrackEdge = tuple[int, int, int, int]
+_TEXT_CONFIG_TYPES = (str, np.str_)
 
 
 @dataclass(frozen=True)
@@ -42,17 +43,17 @@ class ConsensusPriorConfig:
         object.__setattr__(
             self,
             "min_votes",
-            positive_integer(self.min_votes, name="min_votes"),
+            _positive_integer_config(self.min_votes, name="min_votes"),
         )
         object.__setattr__(
             self,
             "relief",
-            finite_nonnegative_float(self.relief, name="relief"),
+            _finite_nonnegative_float_config(self.relief, name="relief"),
         )
         object.__setattr__(
             self,
             "max_relief",
-            finite_nonnegative_float(self.max_relief, name="max_relief"),
+            _finite_nonnegative_float_config(self.max_relief, name="max_relief"),
         )
         object.__setattr__(
             self,
@@ -62,7 +63,7 @@ class ConsensusPriorConfig:
         object.__setattr__(
             self,
             "large_cost",
-            finite_positive_float(self.large_cost, name="large_cost"),
+            _finite_positive_float_config(self.large_cost, name="large_cost"),
         )
 
 
@@ -182,6 +183,30 @@ def _normalize_variant_costs(values: Sequence[str] | str) -> tuple[str, ...]:
     if not variant_costs or any(not value for value in variant_costs):
         raise ValueError("variant_costs must contain non-empty names")
     return variant_costs
+
+
+def _positive_integer_config(value: Any, *, name: str) -> int:
+    return positive_integer(_numeric_config_value(value, name=name), name=name)
+
+
+def _finite_nonnegative_float_config(value: Any, *, name: str) -> float:
+    return finite_nonnegative_float(_numeric_config_value(value, name=name), name=name)
+
+
+def _finite_positive_float_config(value: Any, *, name: str) -> float:
+    return finite_positive_float(_numeric_config_value(value, name=name), name=name)
+
+
+def _numeric_config_value(value: Any, *, name: str) -> Any:
+    if not isinstance(value, _TEXT_CONFIG_TYPES):
+        return value
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"{name} must be finite")
+    try:
+        return float(text)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be finite") from exc
 
 
 def _strict_bool(value: Any, *, name: str) -> bool:

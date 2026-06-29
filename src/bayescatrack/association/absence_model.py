@@ -284,17 +284,6 @@ def _validated_optional_float_vector(name: str, raw_values: Any, n_rois: int) ->
         raise ValueError(message) from exc
 
 
-def _validated_registered_empty_mask(raw_mask: Any, n_rois: int) -> np.ndarray:
-    message = "registered_empty_mask must be a boolean vector matching plane.n_rois"
-    raw_array = _validated_object_vector(raw_mask, n_rois, message=message)
-    if _contains_text_values(raw_array):
-        raise ValueError(message)
-    try:
-        return np.asarray(raw_array, dtype=bool)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(message) from exc
-
-
 def _validated_object_vector(
     raw_values: Any,
     n_rois: int,
@@ -312,6 +301,32 @@ def _validated_object_vector(
 
 def _contains_text_values(values: np.ndarray) -> bool:
     return any(isinstance(value, _TEXT_TYPES) for value in values.reshape(-1))
+
+
+def _validated_registered_empty_mask(raw_values: Any, n_rois: int) -> np.ndarray:
+    message = "registered_empty_mask must be a boolean or binary numeric mask"
+    raw_array = _validated_object_vector(raw_values, n_rois, message=message)
+    if _contains_text_values(raw_array):
+        raise ValueError(message)
+    try:
+        values = np.asarray(raw_array).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+
+    if values.dtype.kind == "b":
+        return values.astype(bool, copy=False)
+
+    if values.dtype.kind in {"i", "u"}:
+        if np.any((values != 0) & (values != 1)):
+            raise ValueError(message)
+        return values.astype(bool)
+
+    if values.dtype.kind == "f":
+        if not np.all(np.isfinite(values)) or np.any((values != 0.0) & (values != 1.0)):
+            raise ValueError(message)
+        return values.astype(bool)
+
+    raise ValueError(message)
 
 
 def _validated_session_gap_offset(session_gap: int | float) -> float:
