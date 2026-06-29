@@ -16,6 +16,7 @@ import bayescatrack.tracking as tracking
         np.nan,
         "2",
         np.array([2]),
+        -2,
     ],
 )
 def test_global_track_row_coercion_rejects_malformed_solver_entries(bad_value):
@@ -26,7 +27,7 @@ def test_global_track_row_coercion_rejects_malformed_solver_entries(bad_value):
 
 
 def test_global_track_row_coercion_preserves_missing_and_integer_entries():
-    track_rows = np.asarray([[0, None, -2, np.int64(3), 4.0]], dtype=object)
+    track_rows = np.asarray([[0, None, -1, np.int64(3), 4.0]], dtype=object)
 
     coerced = tracking._coerce_global_track_rows(track_rows, fill_value=-1)
 
