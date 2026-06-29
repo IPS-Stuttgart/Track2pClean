@@ -88,7 +88,7 @@ def _normalize_subpixel_shift_component(value: Any) -> float:
         raise ValueError(_SHIFT_ERROR)
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(_SHIFT_ERROR) from exc
     if not np.isfinite(numeric_value):
         raise ValueError(_SHIFT_ERROR)
