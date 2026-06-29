@@ -98,7 +98,7 @@ def _normalize_integer_like(value: Any, *, error_message: str) -> int:
 
     try:
         return int(operator.index(value))
-    except TypeError as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(error_message) from exc
 
 
