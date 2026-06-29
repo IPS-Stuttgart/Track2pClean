@@ -69,6 +69,8 @@ def _integer_value(value: Any, *, name: str) -> int:
         return int(operator.index(value))
     except TypeError:
         pass
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be a positive integer") from exc
 
     if isinstance(value, str):
         candidate = value.strip()
@@ -78,7 +80,7 @@ def _integer_value(value: Any, *, name: str) -> int:
         candidate = value
     try:
         numeric_value = float(candidate)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a positive integer") from exc
     if not np.isfinite(numeric_value) or not numeric_value.is_integer():
         raise ValueError(f"{name} must be a positive integer")
@@ -92,7 +94,7 @@ def _finite_nonnegative_float_or_none(value: Any, *, name: str) -> float | None:
         raise ValueError(f"{name} must be a finite non-negative value or None")
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite non-negative value or None") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{name} must be a finite non-negative value or None")
