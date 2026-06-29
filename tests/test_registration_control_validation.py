@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+from fractions import Fraction
+
 import numpy as np
 import pytest
 from bayescatrack.registration import register_measurement_plane_to_reference
+
+
+class _OverflowingIndex:
+    def __index__(self) -> int:
+        raise OverflowError("index adapter overflowed")
 
 
 @pytest.mark.parametrize(
@@ -15,16 +22,20 @@ from bayescatrack.registration import register_measurement_plane_to_reference
         ({"registration_max_cost": -1.0}, "registration_max_cost"),
         ({"registration_max_cost": np.nan}, "registration_max_cost"),
         ({"registration_max_cost": [1.0, 2.0]}, "registration_max_cost"),
+        ({"registration_max_cost": Fraction(10) ** 400}, "registration_max_cost"),
         ({"registration_max_iterations": True}, "registration_max_iterations"),
         ({"registration_max_iterations": 0}, "registration_max_iterations"),
         ({"registration_max_iterations": 1.5}, "registration_max_iterations"),
+        ({"registration_max_iterations": _OverflowingIndex()}, "registration_max_iterations"),
         ({"registration_tolerance": True}, "registration_tolerance"),
         ({"registration_tolerance": -1.0}, "registration_tolerance"),
         ({"registration_tolerance": np.inf}, "registration_tolerance"),
         ({"registration_tolerance": [1.0e-8]}, "registration_tolerance"),
+        ({"registration_tolerance": Fraction(10) ** 400}, "registration_tolerance"),
         ({"min_matches": True}, "min_matches"),
         ({"min_matches": 0}, "min_matches"),
         ({"min_matches": 1.5}, "min_matches"),
+        ({"min_matches": _OverflowingIndex()}, "min_matches"),
     ],
 )
 def test_register_measurement_plane_rejects_invalid_registration_controls(
