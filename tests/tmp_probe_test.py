@@ -1,2 +1,2 @@
 def test_probe():
-    assert b'ab'
+    assert bytearray(b'ab')
