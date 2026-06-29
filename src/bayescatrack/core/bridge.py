@@ -34,10 +34,11 @@ _association_bundle_bool_validation.install_association_bundle_bool_validation(
     _bridge_impl
 )
 _cell_probability_validation.install_cell_probability_cost_patch(_bridge_impl)
-_export_bool_validation.install_subject_export_bool_validation(_bridge_impl)
 _feature_name_validation.install_feature_name_string_normalization(_bridge_impl)
 _loader_bool_validation.install_numpy_bool_loader_validation()
 _loader_validation.install_loader_validation_patches(_bridge_impl)
+_strict_subject_loading.install_strict_subject_loading(_bridge_impl)
+_export_bool_validation.install_subject_export_bool_validation(_bridge_impl)
 _suite2p_coordinate_value_validation.install_suite2p_coordinate_value_validation(
     _bridge_impl
 )
@@ -64,7 +65,6 @@ _core_string_scalar_validation.install_core_string_scalar_validation(
 _with_replaced_masks_fov_validation.install_with_replaced_masks_fov_validation(
     _bridge_impl.CalciumPlaneData
 )
-_strict_subject_loading.install_strict_subject_loading(_bridge_impl)
 
 CalciumPlaneData = _bridge_impl.CalciumPlaneData
 SessionAssociationBundle = _bridge_impl.SessionAssociationBundle
