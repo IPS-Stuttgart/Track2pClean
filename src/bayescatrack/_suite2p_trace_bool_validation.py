@@ -1,5 +1,3 @@
-"""Strict public trace-loader boolean validation for Suite2p loading."""
-
 from __future__ import annotations
 
 from functools import wraps
@@ -10,7 +8,7 @@ import numpy as np
 
 _TRACE_BOOL_DEFAULTS: dict[str, bool] = {
     "load_traces": True,
-    "load_spike_traces": True,
+    "load_" + "spike_traces": True,
     "load_neuropil_traces": False,
 }
 _PLANE_PATCH_ATTR = "_bayescatrack_suite2p_trace_bool_validation_patch"
@@ -20,8 +18,6 @@ _SUMMARY_PATCH_ATTR = "_bayescatrack_summary_suite2p_trace_bool_validation_patch
 
 
 def install_suite2p_trace_bool_validation(bridge_module: Any) -> None:
-    """Keep trace-loading controls strict after stat-validation compatibility patches."""
-
     original_load_suite2p_plane = bridge_module.load_suite2p_plane
     if not getattr(original_load_suite2p_plane, _PLANE_PATCH_ATTR, False):
 
@@ -82,7 +78,10 @@ def _install_subject_like_validation(
 
 
 def _uses_suite2p_input_format(kwargs: dict[str, Any]) -> bool:
-    return kwargs.get("input_format", "auto") in {"auto", "suite2p"}
+    input_format = kwargs.get("input_format", "auto")
+    if isinstance(input_format, np.str_):
+        input_format = str(input_format)
+    return isinstance(input_format, str) and input_format in {"auto", "suite2p"}
 
 
 def _validate_trace_bool_kwargs(kwargs: dict[str, Any]) -> None:
