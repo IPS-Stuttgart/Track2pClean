@@ -27,6 +27,19 @@ def test_benchmark_roi_predicate_rejects_fractional_boolean_and_textual_indices(
         assert not benchmark._is_valid_roi_index(value)
 
 
+def test_benchmark_roi_predicate_rejects_broken_index_adapters() -> None:
+    class ValueErrorIndex:
+        def __index__(self) -> int:
+            raise ValueError("invalid index")
+
+    class OverflowErrorIndex:
+        def __index__(self) -> int:
+            raise OverflowError("index overflow")
+
+    for value in (ValueErrorIndex(), OverflowErrorIndex()):
+        assert not benchmark._is_valid_roi_index(value)
+
+
 def test_reference_seed_roi_set_does_not_truncate_corrupt_indices() -> None:
     reference_matrix = np.asarray(
         [[0.0], [1.5], [True], [np.float64(2.0)], ["3"], [-1], [np.nan]],
