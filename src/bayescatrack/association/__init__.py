@@ -17,6 +17,7 @@ from . import (
 )
 from . import _calibrated_roi_stat_feature_patch as _calibrated_roi_stat_feature_patch
 from . import _calibrated_session_gap_validation as _calibrated_session_gap_validation
+from . import _consensus_integer_validation as _consensus_integer_validation
 from . import (
     _dynamic_activity_component_validation as _dynamic_activity_component_validation,
 )
@@ -60,6 +61,7 @@ _absence_cue_shape_validation.install_absence_cue_shape_validation(_absence_mode
 _absence_session_gap_validation.install_absence_session_gap_validation(_absence_model)
 _activity_similarity_control_validation.install_activity_similarity_control_validation()
 _advanced_uncertainty_array_validation.install_advanced_uncertainty_array_validation()
+_consensus_integer_validation.install_consensus_integer_validation()
 _neuropil_ratio_shape_validation.install_neuropil_ratio_shape_validation()
 _session_edge_pair_validation.install_session_edge_pair_validation()
 _triplet_support_validation.install_triplet_support_validation()
