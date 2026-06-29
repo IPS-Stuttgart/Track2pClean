@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -58,6 +60,18 @@ def test_activity_similarity_rejects_invalid_event_threshold(
             measurement,
             event_threshold=event_threshold,  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.parametrize(
+    "n_rois",
+    ["1", b"1", bytearray(b"1"), np.str_("1"), np.bytes_(b"1"), np.array("1")],
+)
+def test_activity_similarity_rejects_text_like_plane_roi_counts(n_rois: object) -> None:
+    reference = SimpleNamespace(n_rois=n_rois)
+    measurement = SimpleNamespace(n_rois=1)
+
+    with pytest.raises(ValueError, match="reference_plane.n_rois"):
+        activity_similarity_components(reference, measurement)
 
 
 def test_activity_similarity_add_hook_validates_controls() -> None:
