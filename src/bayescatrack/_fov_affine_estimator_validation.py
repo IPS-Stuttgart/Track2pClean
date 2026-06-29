@@ -49,6 +49,8 @@ def install_fov_affine_estimator_validation() -> None:
             _MIN_TILE_SIZE_ERROR,
         )
         normalized_max_shift_fraction = _normalize_nonnegative_float(max_shift_fraction)
+        if _is_empty_2d_fov(reference_fov) or _is_empty_2d_fov(measurement_fov):
+            return _identity_fallback_estimate(_fov_affine_registration)
         try:
             return original(
                 reference_fov,
@@ -93,6 +95,14 @@ def _identity_fallback_estimate(affine_registration_module: Any) -> Any:
 def _is_low_information_fov_error(exc: ValueError) -> bool:
     message = str(exc)
     return any(fragment in message for fragment in _LOW_INFORMATION_FOV_MESSAGES)
+
+
+def _is_empty_2d_fov(value: Any) -> bool:
+    try:
+        array = np.asarray(value)
+    except (TypeError, ValueError):
+        return False
+    return array.ndim == 2 and (array.shape[0] == 0 or array.shape[1] == 0)
 
 
 def _normalize_bool(value: Any, error_message: str) -> bool:
