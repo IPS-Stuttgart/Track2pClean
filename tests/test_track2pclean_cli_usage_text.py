@@ -118,3 +118,32 @@ def test_track2pclean_module_command_retitles_subparser_choice_help(
     assert "Run Track2pClean diagnostics with track2pclean defaults" in captured.out
     assert "BayesCaTrack diagnostics" not in captured.out
     assert "bayescatrack defaults" not in captured.out
+
+
+def test_track2pclean_core_parser_text_retitles_subparser_choice_help(capsys):
+    replace_parser_text = getattr(
+        track2pclean_cli._replace_parser_text,
+        "_track2pclean_original",
+        track2pclean_cli._replace_parser_text,
+    )
+    parser = argparse.ArgumentParser(
+        prog="bayescatrack fake",
+        description="BayesCaTrack helper from bayescatrack",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser(
+        "diagnose",
+        help="Run BayesCaTrack diagnostics with bayescatrack defaults",
+    )
+
+    replace_parser_text(parser, "BayesCaTrack", "Track2pClean")
+    replace_parser_text(parser, "bayescatrack", "track2pclean")
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["--help"])
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 0
+    assert "Run Track2pClean diagnostics with track2pclean defaults" in captured.out
+    assert "BayesCaTrack diagnostics" not in captured.out
+    assert "bayescatrack defaults" not in captured.out
