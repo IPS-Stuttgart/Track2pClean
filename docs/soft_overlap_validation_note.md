@@ -1,1 +1,0 @@
-Soft-overlap validation note.
