@@ -188,7 +188,6 @@ def _normalize_variant_costs(values: Sequence[str] | str) -> tuple[str, ...]:
     return variant_costs
 
 
-
 def _numeric_text_scalar(value: Any) -> Any:
     if isinstance(value, (str, np.str_)):
         text = value.strip()
