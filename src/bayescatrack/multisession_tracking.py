@@ -20,6 +20,7 @@ import inspect
 import json
 import sys
 from dataclasses import dataclass
+from decimal import DecimalException
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -55,15 +56,43 @@ class MultisessionTrackingConfig:  # pylint: disable=too-many-instance-attribute
             raise ValueError("max_session_gap must be at least 1")
         if self.order not in {"xy", "yx"}:
             raise ValueError("order must be either 'xy' or 'yx'")
-        if self.velocity_variance < 0.0:
-            raise ValueError("velocity_variance must be non-negative")
-        if self.regularization < 0.0:
-            raise ValueError("regularization must be non-negative")
+        for attribute_name in (
+            "velocity_variance",
+            "regularization",
+            "start_cost",
+            "end_cost",
+            "gap_penalty",
+        ):
+            object.__setattr__(
+                self,
+                attribute_name,
+                _finite_nonnegative_config_value(
+                    getattr(self, attribute_name),
+                    name=attribute_name,
+                ),
+            )
         for attribute_name in ("start_cost", "end_cost", "gap_penalty"):
             if getattr(self, attribute_name) < 0.0:
                 raise ValueError(f"{attribute_name} must be non-negative")
-        if self.cost_threshold is not None and self.cost_threshold < 0.0:
-            raise ValueError("cost_threshold must be non-negative when specified")
+        if self.cost_threshold is not None:
+            object.__setattr__(
+                self,
+                "cost_threshold",
+                _finite_nonnegative_config_value(
+                    self.cost_threshold,
+                    name="cost_threshold",
+                ),
+            )
+
+
+def _finite_nonnegative_config_value(value: Any, *, name: str) -> float:
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError, OverflowError, DecimalException) as exc:
+        raise ValueError(f"{name} must be a finite non-negative value") from exc
+    if not np.isfinite(numeric_value) or numeric_value < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative value")
+    return numeric_value
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,7 @@ because Python treats ``True`` as ``1`` and comparisons with ``NaN`` are false.
 
 from __future__ import annotations
 
+from decimal import DecimalException
 import operator
 from functools import wraps
 from typing import Any
@@ -128,7 +129,7 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite non-negative value")
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, DecimalException) as exc:
         raise ValueError(f"{name} must be a finite non-negative value") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{name} must be a finite non-negative value")

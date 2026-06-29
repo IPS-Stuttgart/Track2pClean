@@ -72,31 +72,29 @@ def test_fixed_precision_rejects_vector_track_score_cells(
         )
 
 
-def test_fixed_precision_keeps_numeric_target_precision_strings() -> None:
+def test_fixed_precision_rejects_numeric_target_precision_strings() -> None:
     predicted = np.array([[0, 10]], dtype=object)
     reference = np.array([[0, 10]], dtype=object)
 
-    scores = score_complete_tracks_at_fixed_precision(
-        predicted,
-        reference,
-        target_precisions=("0.95",),
-    )
+    with pytest.raises(ValueError, match="target precisions"):
+        score_complete_tracks_at_fixed_precision(
+            predicted,
+            reference,
+            target_precisions=("0.95",),
+        )
 
-    assert scores["complete_tracks_at_fixed_precision_0_95"] == 1
 
-
-def test_fixed_precision_keeps_numeric_track_score_strings() -> None:
+def test_fixed_precision_rejects_numeric_track_score_strings() -> None:
     predicted = np.array([[0, 10]], dtype=object)
     reference = np.array([[0, 10]], dtype=object)
 
-    scores = score_complete_tracks_at_fixed_precision(
-        predicted,
-        reference,
-        target_precisions=(0.95,),
-        track_scores=("0.75",),
-    )
-
-    assert scores["complete_track_score_threshold_at_fixed_precision_0_95"] == 0.75
+    with pytest.raises(ValueError, match="track_scores"):
+        score_complete_tracks_at_fixed_precision(
+            predicted,
+            reference,
+            target_precisions=(0.95,),
+            track_scores=("0.75",),
+        )
 
 
 def test_fixed_precision_keeps_scalar_array_track_scores() -> None:
