@@ -10,6 +10,9 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_tracking_result_matrix_validation_patch"
 _FILL_VALUE_ERROR = "fill_value must be a negative integer sentinel"
+_GLOBAL_TRACK_ROWS_ERROR = (
+    "global assignment track matrix must contain integer ROI indices or missing values"
+)
 
 
 def install_tracking_result_matrix_validation() -> None:
@@ -58,6 +61,7 @@ def install_tracking_result_matrix_validation() -> None:
     _patch_track_rows_first_arg(_tracking, "_restrict_track_rows_to_start_rois")
     _patch_track_rows_third_arg(_tracking, "_build_global_link_cost_matrices")
     _patch_track_rows_third_arg(_tracking, "_global_assignment_edge_match_results")
+    _patch_global_track_row_coercion(_tracking)
 
 
 def _patch_track_rows_first_arg(module: Any, name: str) -> None:
@@ -108,6 +112,23 @@ def _patch_track_rows_third_arg(module: Any, name: str) -> None:
     setattr(module, name, function_with_track_row_validation)
 
 
+def _patch_global_track_row_coercion(module: Any) -> None:
+    original = getattr(module, "_coerce_global_track_rows")
+    if getattr(original, _PATCH_MARKER, False):
+        return
+
+    @wraps(original)
+    def coerce_global_track_rows_with_validation(track_rows: Any, *, fill_value: Any) -> Any:
+        fill_value = _normalize_fill_value(fill_value)
+        return original(
+            _normalize_global_track_rows(track_rows, fill_value=fill_value),
+            fill_value=fill_value,
+        )
+
+    _mark_patch(coerce_global_track_rows_with_validation, original)
+    module._coerce_global_track_rows = coerce_global_track_rows_with_validation  # pylint: disable=protected-access
+
+
 def _mark_patch(wrapper: Any, original: Any) -> None:
     setattr(wrapper, _PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
@@ -142,6 +163,23 @@ def _normalize_track_rows(values: Any, *, fill_value: int) -> np.ndarray:
         normalized[index] = _normalize_roi_or_fill_value(
             value, field_name="track_rows", fill_value=fill_value
         )
+    return normalized
+
+
+def _normalize_global_track_rows(values: Any, *, fill_value: int) -> np.ndarray:
+    array = np.asarray(values, dtype=object)
+    if array.ndim != 2:
+        raise ValueError("global assignment track matrix must be two-dimensional")
+    normalized = np.empty(array.shape, dtype=int)
+    for index, value in np.ndenumerate(array):
+        if value is None:
+            normalized[index] = fill_value
+            continue
+        try:
+            roi_index = _normalize_integer_like(value, field_name="global assignment track matrix")
+        except ValueError as exc:
+            raise ValueError(_GLOBAL_TRACK_ROWS_ERROR) from exc
+        normalized[index] = fill_value if roi_index < 0 else roi_index
     return normalized
 
 
