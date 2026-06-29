@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from typing import Any
 
 import numpy as np
@@ -42,6 +43,40 @@ def _numeric_scalar_candidate(value: Any, *, name: str) -> Any:
     return scalar_value
 
 
+def _integer_scalar_candidate(value: Any, *, message: str) -> Any:
+    if isinstance(value, (bool, np.bool_)) or _is_text_scalar(value):
+        raise ValueError(message)
+
+    try:
+        array_value = np.asarray(value)
+    except (TypeError, ValueError, OverflowError):
+        scalar_value = value
+    else:
+        if array_value.ndim != 0:
+            raise ValueError(message)
+        scalar_value = array_value.item()
+
+    if isinstance(scalar_value, (bool, np.bool_)) or _is_text_scalar(scalar_value):
+        raise ValueError(message)
+    return scalar_value
+
+
+def _integer_exact(value: Any, *, message: str) -> int:
+    scalar_value = _integer_scalar_candidate(value, message=message)
+    try:
+        return int(operator.index(scalar_value))
+    except TypeError:
+        pass
+
+    try:
+        numeric = float(scalar_value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
+    if not np.isfinite(numeric) or not numeric.is_integer():
+        raise ValueError(message)
+    return int(numeric)
+
+
 def finite_positive_float(value: Any, *, name: str) -> float:
     numeric = validated_numeric_float(value, name=name)
     if numeric <= 0.0:
@@ -73,21 +108,18 @@ def probability(value: Any, *, name: str, allow_zero: bool = True) -> float:
 
 
 def integer(value: Any, *, name: str) -> int:
-    numeric = validated_numeric_float(value, name=name)
-    if not numeric.is_integer():
-        raise ValueError(f"{name} must be an integer")
-    return int(numeric)
+    return _integer_exact(value, message=f"{name} must be an integer")
 
 
 def positive_integer(value: Any, *, name: str) -> int:
-    numeric = validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 1.0:
+    integer_value = _integer_exact(value, message=f"{name} must be a positive integer")
+    if integer_value < 1:
         raise ValueError(f"{name} must be a positive integer")
-    return int(numeric)
+    return integer_value
 
 
 def nonnegative_integer(value: Any, *, name: str) -> int:
-    numeric = validated_numeric_float(value, name=name)
-    if not numeric.is_integer() or numeric < 0.0:
+    integer_value = _integer_exact(value, message=f"{name} must be a non-negative integer")
+    if integer_value < 0:
         raise ValueError(f"{name} must be a non-negative integer")
-    return int(numeric)
+    return integer_value
