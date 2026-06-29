@@ -66,5 +66,11 @@ def _reject_ambiguous_numeric_value(value: Any, field_name: str) -> None:
     if value_array.shape != ():
         raise ValueError(f"{field_name} must be a numeric scalar")
 
+    scalar_value = value_array.item()
+    if isinstance(scalar_value, (bool, np.bool_)):
+        raise ValueError(f"{field_name} must be numeric, not boolean")
+    if isinstance(scalar_value, (str, bytes, np.str_, np.bytes_)):
+        raise ValueError(f"{field_name} must be numeric, not text")
+
 
 __all__ = ["install_dynamic_edge_prior_bool_validation"]
