@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -59,16 +60,35 @@ def _validate_roi_indices_by_session(
     roi_indices_by_session: Sequence[Sequence[int]],
 ) -> None:
     for session_index, values in enumerate(roi_indices_by_session):
-        array = np.asarray(values)
+        field_name = f"roi_indices_by_session[{session_index}]"
+        array = np.asarray(values, dtype=object)
         if array.ndim != 1:
-            raise ValueError(
-                f"roi_indices_by_session[{session_index}] must be one-dimensional"
-            )
-        normalized = np.asarray(values, dtype=int).reshape(-1)
+            raise ValueError(f"{field_name} must be one-dimensional")
+        normalized = np.asarray(
+            [_normalize_roi_index(value, field_name) for value in array.tolist()],
+            dtype=int,
+        )
         if len(set(normalized.tolist())) != normalized.size:
-            raise ValueError(
-                f"roi_indices_by_session[{session_index}] must contain unique ROI indices"
-            )
+            raise ValueError(f"{field_name} must contain unique ROI indices")
+
+
+def _normalize_roi_index(value: Any, field_name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{field_name} must contain integer ROI indices")
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if not np.isfinite(numeric) or not numeric.is_integer():
+            raise ValueError(f"{field_name} must contain integer ROI indices")
+        normalized = int(numeric)
+    else:
+        try:
+            normalized = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(f"{field_name} must contain integer ROI indices") from exc
+    normalized = int(normalized)
+    if normalized < 0:
+        raise ValueError(f"{field_name} must contain non-negative ROI indices")
+    return normalized
 
 
 def _validate_pairwise_cost_matrices(
