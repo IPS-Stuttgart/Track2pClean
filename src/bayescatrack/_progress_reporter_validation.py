@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_progress_reporter_validation_patch"
+_REJECTED_INTEGER_SCALAR_TYPES = (bool, np.bool_, str, bytes, bytearray)
 
 
 def install_progress_reporter_validation() -> None:
@@ -50,13 +51,15 @@ def _strict_bool(value: Any, *, name: str) -> bool:
 
 def _positive_integer(value: Any, *, name: str) -> int:
     error_message = f"{name} must be a positive integer"
-    if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
+    if isinstance(value, _REJECTED_INTEGER_SCALAR_TYPES):
         raise ValueError(error_message)
 
     if isinstance(value, np.ndarray):
         if value.shape != ():
             raise ValueError(error_message)
         value = value.item()
+        if isinstance(value, _REJECTED_INTEGER_SCALAR_TYPES):
+            raise ValueError(error_message)
 
     if isinstance(value, (float, np.floating)):
         numeric = float(value)
