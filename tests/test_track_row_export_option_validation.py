@@ -3,6 +3,14 @@ import pytest
 from bayescatrack.matching import export_track_rows_csv
 
 
+class _BadIndex:
+    def __init__(self, exc_type: type[Exception]) -> None:
+        self.exc_type = exc_type
+
+    def __index__(self) -> int:
+        raise self.exc_type("bad index")
+
+
 def test_export_track_rows_csv_respects_numpy_boolean_false(tmp_path):
     output_path = tmp_path / "tracks.csv"
 
@@ -54,6 +62,16 @@ def test_export_track_rows_csv_rejects_malformed_positional_track_rows(
             tmp_path / "tracks.csv",
             ("s1", "s2"),
             malformed_track_rows,
+        )
+
+
+@pytest.mark.parametrize("exc_type", [ValueError, OverflowError])
+def test_export_track_rows_csv_normalizes_bad_index_protocol_errors(tmp_path, exc_type):
+    with pytest.raises(ValueError, match="track_rows must contain integer"):
+        export_track_rows_csv(
+            tmp_path / "tracks.csv",
+            ("s1", "s2"),
+            [[_BadIndex(exc_type), -1]],
         )
 
 
