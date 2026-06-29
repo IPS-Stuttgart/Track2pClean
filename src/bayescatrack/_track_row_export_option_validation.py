@@ -88,7 +88,7 @@ def _validate_export_track_row_value(value: Any) -> None:
 
     try:
         operator.index(value)
-    except TypeError as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(_TRACK_ROWS_ERROR_MESSAGE) from exc
 
 
