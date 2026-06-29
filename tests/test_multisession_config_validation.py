@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import numpy as np
 import pytest
 from bayescatrack.multisession_tracking import MultisessionTrackingConfig
@@ -45,3 +47,19 @@ def test_multisession_config_normalizes_numpy_scalar_controls():
     assert config.gap_penalty == 0.3
     assert config.cost_threshold == 1.5
     assert config.return_pairwise_components is False
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "velocity_variance",
+        "regularization",
+        "start_cost",
+        "end_cost",
+        "gap_penalty",
+        "cost_threshold",
+    ],
+)
+def test_multisession_config_normalizes_decimal_overflow_controls(field_name):
+    with pytest.raises(ValueError, match=rf"{field_name} must be a finite non-negative value"):
+        MultisessionTrackingConfig(**{field_name: Decimal("1e999999999999999999999")})
