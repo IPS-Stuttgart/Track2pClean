@@ -459,7 +459,7 @@ def _safe_int(value: Any, *, default: int) -> int:
         if isinstance(value, float) and not np.isfinite(value):
             return int(default)
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return int(default)
 
 
@@ -488,7 +488,7 @@ def _validated_hit_k(value: Any) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError("hit_ks must contain positive integer cutoffs") from exc
     integer_value = int(integer_value)
     if integer_value <= 0:
@@ -499,7 +499,7 @@ def _validated_hit_k(value: Any) -> int:
 def _finite_float(value: Any) -> float:
     try:
         numeric = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return np.nan
     return numeric if np.isfinite(numeric) else np.nan
 
