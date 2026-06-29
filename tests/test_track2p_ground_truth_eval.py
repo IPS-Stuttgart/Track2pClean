@@ -94,6 +94,24 @@ def test_load_track2p_ground_truth_csv_supports_semicolon_encoded_rows(tmp_path)
     )
 
 
+def test_load_track2p_ground_truth_csv_preserves_large_textual_roi_indices(tmp_path):
+    first_roi = 2**53 + 1
+    second_roi = first_roi + 2
+    ground_truth_path = tmp_path / "ground_truth.csv"
+    ground_truth_path.write_text(
+        f"s1,s2\n{first_roi},{second_roi}.0\n",
+        encoding="utf-8",
+    )
+
+    table = load_track2p_ground_truth_csv(ground_truth_path)
+
+    assert table.session_names == ("s1", "s2")
+    np.testing.assert_array_equal(
+        table.tracks,
+        np.array([[first_roi, second_roi]], dtype=int),
+    )
+
+
 def test_load_track2p_ground_truth_csv_infers_semicolon_width_without_session_names(
     tmp_path,
 ):
