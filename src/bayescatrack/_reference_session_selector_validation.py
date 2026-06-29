@@ -6,6 +6,8 @@ from functools import wraps
 from types import ModuleType
 from typing import Any
 
+from ._reference_scalar_validation import install_reference_scalar_validation
+
 _PATCH_ATTR = "_bayescatrack_reference_session_selector_validation_patch"
 _ERROR_MESSAGE = "session_indices must be an iterable of integer session indices"
 _BYTES_LIKE_SELECTOR_TYPES = (bytearray, memoryview)
@@ -20,6 +22,8 @@ def install_reference_session_selector_validation(
         from . import (
             reference as reference_module,  # pylint: disable=import-outside-toplevel,reimported
         )
+
+    install_reference_scalar_validation(reference_module)
 
     original_normalize_session_indices = (
         reference_module._normalize_session_indices

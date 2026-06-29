@@ -29,6 +29,7 @@ commands:
 
 Run 'track2pclean <command> --help' for command-specific options.
 """
+_CORE_COMMANDS = frozenset({"summary", "export"})
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -55,8 +56,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             program_name="track2pclean advanced",
             legacy_program_name="python -m bayescatrack.experiments.advanced_improvement_workbench",
         )
+    if args[0] in _CORE_COMMANDS:
+        return _run_with_program_name("track2pclean", _legacy_cli.main, args)
 
-    return _run_with_program_name("track2pclean", _legacy_cli.main, args)
+    return _handle_unknown_command(args[0])
 
 
 def _handle_benchmark(args: list[str]) -> int:
@@ -157,6 +160,16 @@ def _handle_module_command(
         return _run_with_program_name(program_name, module.main, args)
     finally:
         setattr(module, "build_arg_parser", original_build_arg_parser)
+
+
+def _handle_unknown_command(command_name: str) -> int:
+    parser = argparse.ArgumentParser(
+        prog="track2pclean",
+        usage="track2pclean {summary,export,benchmark,growth,advanced} ...",
+        description="Track2pClean command line tools.",
+    )
+    parser.error(f"unknown command {command_name!r}")
+    return 2
 
 
 def _retitle_arg_parser(
