@@ -38,7 +38,10 @@ def _install_scalar_control_validation() -> None:
     def validated_float(value: Any, *, name: str) -> float:
         if isinstance(value, _STRING_LIKE_SCALAR_TYPES):
             raise ValueError(f"{name} must be a numeric scalar")
-        value_array = np.asarray(value)
+        try:
+            value_array = np.asarray(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(f"{name} must be a finite scalar") from exc
         if value_array.shape != ():
             raise ValueError(f"{name} must be a finite scalar")
         scalar = value_array.item()

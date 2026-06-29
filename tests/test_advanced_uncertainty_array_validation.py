@@ -9,6 +9,11 @@ from bayescatrack.association.advanced_uncertainty import (
 )
 
 
+class _OverflowingArrayLike:
+    def __array__(self, dtype=None, copy=None):  # noqa: ANN001
+        raise OverflowError("array conversion overflow")
+
+
 @pytest.mark.parametrize(
     ("config_kwargs", "message"),
     [
@@ -46,6 +51,11 @@ def test_uncertainty_config_rejects_string_like_runtime_knobs(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         EdgeUncertaintyConfig(**config_kwargs)
+
+
+def test_uncertainty_config_normalizes_array_conversion_overflow() -> None:
+    with pytest.raises(ValueError, match="temperature must be a finite scalar"):
+        EdgeUncertaintyConfig(temperature=_OverflowingArrayLike())
 
 
 def test_posterior_probabilities_reject_singleton_array_temperature() -> None:
@@ -107,3 +117,10 @@ def test_candidate_mask_rejects_string_like_pruning_knobs(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         candidate_mask_from_posteriors(np.asarray([[0.5, 0.25]]), **kwargs)
+
+
+def test_candidate_mask_normalizes_array_conversion_overflow() -> None:
+    with pytest.raises(ValueError, match="row_top_k must be a finite scalar"):
+        candidate_mask_from_posteriors(
+            np.asarray([[0.5, 0.25]]), row_top_k=_OverflowingArrayLike()
+        )
