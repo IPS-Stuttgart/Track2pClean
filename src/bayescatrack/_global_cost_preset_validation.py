@@ -179,9 +179,7 @@ def _mark_wrapper(wrapper: Any, original: Any) -> None:
     setattr(wrapper, "_bayescatrack_original", original)
 
 
-def _nonnegative_int(
-    value: Any, *, name: str, allow_scalar_array: bool = False
-) -> int:
+def _nonnegative_int(value: Any, *, name: str, allow_scalar_array: bool = False) -> int:
     normalized = _integer_value(
         value,
         name=name,
@@ -216,7 +214,7 @@ def _integer_value(
         raise ValueError(f"{name} must be {qualifier}")
     try:
         return int(operator.index(value))
-    except TypeError:
+    except (TypeError, ValueError, OverflowError):
         pass
     candidate: Any = value
     if isinstance(value, str):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,14 +19,31 @@ class ContextDescriptorConfig:
     histogram_bins: int = 8
 
     def __post_init__(self) -> None:
-        if self.patch_radius < 0:
-            raise ValueError("patch_radius must be non-negative")
-        if self.neighbor_k <= 0:
-            raise ValueError("neighbor_k must be positive")
-        if self.density_radius <= 0.0:
-            raise ValueError("density_radius must be positive")
-        if self.histogram_bins <= 1:
-            raise ValueError("histogram_bins must be greater than one")
+        object.__setattr__(
+            self,
+            "patch_radius",
+            _nonnegative_int(self.patch_radius, name="patch_radius"),
+        )
+        object.__setattr__(
+            self,
+            "neighbor_k",
+            _positive_int(self.neighbor_k, name="neighbor_k"),
+        )
+        object.__setattr__(
+            self,
+            "density_radius",
+            _positive_float(self.density_radius, name="density_radius"),
+        )
+        object.__setattr__(
+            self,
+            "histogram_bins",
+            _integer_at_least(
+                self.histogram_bins,
+                minimum=2,
+                name="histogram_bins",
+                message="histogram_bins must be greater than one",
+            ),
+        )
 
 
 def roi_context_descriptors(
@@ -222,8 +240,12 @@ def fov_patch_moment_descriptors(
     global_min = float(np.min(finite))
     global_max = float(np.max(finite))
     bin_edges = np.linspace(global_min, global_max + 1.0e-12, int(histogram_bins) + 1)
-    grad_y, grad_x = np.gradient(np.nan_to_num(img, nan=float(np.mean(finite))))
-    grad_mag = np.sqrt(grad_x * grad_x + grad_y * grad_y)
+    filled_img = np.nan_to_num(img, nan=float(np.mean(finite)))
+    if min(img.shape) < 2:
+        grad_mag = np.zeros_like(filled_img, dtype=float)
+    else:
+        grad_y, grad_x = np.gradient(filled_img)
+        grad_mag = np.sqrt(grad_x * grad_x + grad_y * grad_y)
     for roi_index, (x_coord, y_coord) in enumerate(centroids):
         patch = _crop_patch(img, x_coord, y_coord, radius=patch_radius)
         grad_patch = _crop_patch(grad_mag, x_coord, y_coord, radius=patch_radius)
@@ -244,6 +266,63 @@ def fov_patch_moment_descriptors(
         descriptors[roi_index, 5] = float(values.size)
         descriptors[roi_index, 6:] = hist
     return descriptors
+
+
+def _integer_control(value: Any, *, name: str) -> int:
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    if isinstance(value, (float, np.floating)):
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(f"{name} must be an integer")
+        return int(numeric_value)
+    try:
+        return int(operator.index(value))
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+
+
+def _integer_at_least(
+    value: Any,
+    *,
+    minimum: int,
+    name: str,
+    message: str,
+) -> int:
+    integer_value = _integer_control(value, name=name)
+    if integer_value < minimum:
+        raise ValueError(message)
+    return integer_value
+
+
+def _nonnegative_int(value: Any, *, name: str) -> int:
+    return _integer_at_least(
+        value,
+        minimum=0,
+        name=name,
+        message=f"{name} must be non-negative",
+    )
+
+
+def _positive_int(value: Any, *, name: str) -> int:
+    return _integer_at_least(
+        value,
+        minimum=1,
+        name=name,
+        message=f"{name} must be positive",
+    )
+
+
+def _positive_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
+        raise ValueError(f"{name} must be positive")
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be positive") from exc
+    if not np.isfinite(numeric_value) or numeric_value <= 0.0:
+        raise ValueError(f"{name} must be positive")
+    return numeric_value
 
 
 def _centroids_xy(plane: Any, *, order: str, weighted: bool) -> np.ndarray:

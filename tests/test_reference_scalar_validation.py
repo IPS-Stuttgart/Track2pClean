@@ -21,5 +21,7 @@ def test_reference_rejects_out_of_range_roi_count_as_value_error():
         suite2p_indices=np.array([[0]], dtype=object),
     )
 
-    with pytest.raises(ValueError, match="n_rois_per_session must be an integer scalar"):
+    with pytest.raises(
+        ValueError, match="n_rois_per_session must be an integer scalar"
+    ):
         reference.to_session_track_labels(n_rois_per_session=[10**1000])

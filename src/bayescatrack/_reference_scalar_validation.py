@@ -19,8 +19,8 @@ def install_reference_scalar_validation(
     """Install an exact, range-checked parser for reference integer scalars."""
 
     if reference_module is None:
-        from . import (  # pylint: disable=import-outside-toplevel,reimported
-            reference as reference_module,
+        from . import (
+            reference as reference_module,  # pylint: disable=import-outside-toplevel,reimported
         )
 
     original_parse_integer_scalar = (

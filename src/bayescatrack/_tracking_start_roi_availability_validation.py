@@ -140,9 +140,7 @@ def _normalize_roi_index(value: Any, *, field_name: str) -> int:
         try:
             integer_value = int(operator.index(value))
         except (TypeError, ValueError, OverflowError) as exc:
-            raise ValueError(
-                f"{field_name} must contain integer ROI indices"
-            ) from exc
+            raise ValueError(f"{field_name} must contain integer ROI indices") from exc
 
     if integer_value < 0:
         raise ValueError(f"{field_name} must contain non-negative ROI indices")

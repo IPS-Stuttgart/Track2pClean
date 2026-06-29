@@ -11,7 +11,6 @@ from bayescatrack.core import bridge as bayescatrack_bridge
 from bayescatrack.datasets import track2p as bayescatrack_track2p
 from tests._support import run_module
 
-
 _EXPECTED_REPOSITORY_URL = "https://github.com/IPS-Stuttgart/BayesCaTrack"
 
 

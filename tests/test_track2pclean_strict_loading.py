@@ -40,7 +40,9 @@ def test_track2pclean_export_subject_strict_keeps_bool_validation(tmp_path):
 
 
 def test_track2pclean_summary_and_export_parsers_accept_strict(tmp_path):
-    parser = bridge_module._bridge_impl._build_arg_parser()  # pylint: disable=protected-access
+    parser = (
+        bridge_module._bridge_impl._build_arg_parser()
+    )  # pylint: disable=protected-access
 
     summary_args = parser.parse_args(["summary", str(tmp_path), "--strict"])
     export_args = parser.parse_args(
