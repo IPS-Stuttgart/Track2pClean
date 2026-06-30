@@ -26,7 +26,7 @@ def install_fov_translation_bytes_shape_validation() -> None:
 
 def _wrap_output_shape_kwarg(module: Any, function_name: str) -> None:
     original = getattr(module, function_name)
-    if getattr(original, _PATCH_MARKER, False):
+    if _wrapper_chain_has_marker(original, _PATCH_MARKER):
         return
 
     @wraps(original)
@@ -39,6 +39,20 @@ def _wrap_output_shape_kwarg(module: Any, function_name: str) -> None:
     setattr(wrapper, _PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
     setattr(module, function_name, wrapper)
+
+
+def _wrapper_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 __all__ = ["install_fov_translation_bytes_shape_validation"]
