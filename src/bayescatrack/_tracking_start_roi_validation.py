@@ -3,10 +3,10 @@
 The registered subject tracker accepts optional ``start_roi_indices`` to restrict
 reported tracks to seed ROIs in a selected session.  The global and single-session
 paths used NumPy integer coercion directly, so malformed values such as booleans,
-fractional floats, negatives, duplicates, or scalar array containers could silently
-become different seed tracks.  These hooks make the public runner and the internal
-restriction helper fail fast before that coercion can change the requested benchmark
-population.
+fractional floats, negatives, duplicates, bare bytes-like containers, or scalar
+array containers could silently become different seed tracks.  These hooks make
+the public runner and the internal restriction helper fail fast before that
+coercion can change the requested benchmark population.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_start_roi_validation_patch"
 _MAX_TRACKING_INDEX = int(np.iinfo(np.int_).max)
+_BYTES_LIKE_TYPES = (str, bytes, bytearray, memoryview)
 
 
 def install_tracking_start_roi_validation() -> None:
@@ -94,7 +95,7 @@ def _mark_patch(wrapper: Any, original: Any) -> None:
 
 
 def _normalize_start_roi_indices(values: Any) -> tuple[int, ...]:
-    if isinstance(values, (str, bytes)):
+    if isinstance(values, _BYTES_LIKE_TYPES):
         raise ValueError("start_roi_indices must be a sequence of integer ROI indices")
     if not isinstance(values, Sequence) and not isinstance(values, np.ndarray):
         raise ValueError("start_roi_indices must be a sequence of integer ROI indices")

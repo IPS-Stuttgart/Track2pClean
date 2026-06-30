@@ -37,6 +37,14 @@ def install_session_match_result_validation() -> None:
             "costs",
             _finite_cost_array(getattr(self, "costs"), "costs"),
         )
+        _reject_duplicate_assignment_positions(
+            getattr(self, "reference_positions"),
+            "reference_positions",
+        )
+        _reject_duplicate_assignment_positions(
+            getattr(self, "measurement_positions"),
+            "measurement_positions",
+        )
         _reject_duplicate_roi_indices(
             getattr(self, "reference_roi_indices"),
             "reference_roi_indices",
@@ -111,19 +119,40 @@ def _finite_cost_array(values: Any, field_name: str) -> np.ndarray:
     return array
 
 
+def _reject_duplicate_assignment_positions(values: Any, field_name: str) -> None:
+    _reject_duplicate_integer_values(
+        values,
+        field_name,
+        value_name="assignment positions",
+    )
+
+
 def _reject_duplicate_roi_indices(values: Any, field_name: str) -> None:
+    _reject_duplicate_integer_values(
+        values,
+        field_name,
+        value_name="ROI indices",
+    )
+
+
+def _reject_duplicate_integer_values(
+    values: Any,
+    field_name: str,
+    *,
+    value_name: str,
+) -> None:
     array = np.asarray(values, dtype=int)
     seen: set[int] = set()
     duplicates: list[int] = []
     for value in array.tolist():
-        roi_index = int(value)
-        if roi_index in seen and roi_index not in duplicates:
-            duplicates.append(roi_index)
-        seen.add(roi_index)
+        integer_value = int(value)
+        if integer_value in seen and integer_value not in duplicates:
+            duplicates.append(integer_value)
+        seen.add(integer_value)
     if duplicates:
         duplicate_summary = ", ".join(str(value) for value in duplicates)
         raise ValueError(
-            f"{field_name} must contain unique ROI indices; "
+            f"{field_name} must contain unique {value_name}; "
             f"duplicate values: {duplicate_summary}"
         )
 

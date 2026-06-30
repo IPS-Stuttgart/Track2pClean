@@ -8,6 +8,7 @@ import numpy as np
 
 _PATCH_MARKER = "_track2pclean_edge_label_validation_installed"
 _ERROR_MESSAGE = "labels must contain only 0/1 values"
+_STRING_LIKE_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 
 
 def install_edge_ranking_label_validation(edge_ranking_module: Any) -> None:
@@ -45,7 +46,7 @@ def _parse_label(value: Any) -> bool:
     if isinstance(value, (bool, np.bool_)):
         return bool(value)
 
-    if isinstance(value, str):
+    if isinstance(value, _STRING_LIKE_TYPES):
         raise ValueError(_ERROR_MESSAGE)
 
     try:

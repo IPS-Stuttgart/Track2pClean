@@ -1,3 +1,5 @@
+from fractions import Fraction
+
 import numpy as np
 import pytest
 from bayescatrack.registration import warp_roi_masks_into_reference_frame
@@ -47,6 +49,21 @@ def test_registration_roi_mask_warp_rejects_boolean_scalar_threshold_array():
             output_shape=(4, 4),
             binarize=True,
             threshold=np.array(True),
+        )
+
+
+def test_registration_roi_mask_warp_rejects_overflowing_numeric_threshold():
+    roi_masks = np.ones((1, 4, 4), dtype=float)
+    overflowing_threshold = Fraction(10) ** 400
+
+    with pytest.raises(ValueError, match="threshold"):
+        warp_roi_masks_into_reference_frame(
+            roi_masks,
+            _IDENTITY_MATRIX,
+            _ZERO_OFFSET,
+            output_shape=(4, 4),
+            binarize=True,
+            threshold=overflowing_threshold,
         )
 
 

@@ -6,6 +6,7 @@ from . import (
 )
 from . import _edge_ranking_hit_k_validation as _edge_ranking_hit_k_validation
 from . import _edge_ranking_roi_validation as _edge_ranking_roi_validation
+from . import _track_error_taxonomy_session_pair_validation as _taxonomy_session_pair_validation
 from . import _track_matrix_vector_validation as _track_matrix_vector_validation
 from . import _track_subset_duplicate_validation as _subset_validation
 from . import _track_subset_string_validation as _subset_string_validation
@@ -13,6 +14,7 @@ from . import calibration_diagnostics as _calibration_diagnostics
 from . import complete_track_scores as _scores
 from . import edge_ranking as _edge_ranking
 from . import track_error_ledger as _track_error_ledger
+from . import track_error_taxonomy as _track_error_taxonomy
 
 
 def _validate_calibration_probability_label_inputs(probabilities, labels):
@@ -47,6 +49,9 @@ _edge_ranking_hit_k_validation.install_edge_ranking_hit_k_validation(_edge_ranki
 _track_matrix_vector_validation.install_track_matrix_vector_input_validation(_scores)
 _subset_string_validation.install_track_subset_string_validation(_scores)
 _subset_validation.install_track_subset_duplicate_validation(_scores)
+_taxonomy_session_pair_validation.install_track_error_taxonomy_session_pair_validation(
+    _track_error_taxonomy
+)
 
 # Import facades only after installing score wrappers: track2p_metrics binds
 # score_track_matrices during import and must see the patched implementation.
