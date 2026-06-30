@@ -3,8 +3,8 @@
 This module centralizes integer-like and finite-float validation for optional
 configuration paths that are often exercised from YAML/CLI sweeps. The
 validation is installed from :mod:`bayescatrack.__init__` so existing imports keep
-using the public advanced-component module while rejecting ambiguous values such
-as booleans, fractional top-k counts, NaN and infinity.
+using the public advanced-component module while rejecting ambiguous values
+such as booleans, fractional top-k counts, NaN and infinity.
 """
 
 from __future__ import annotations
@@ -63,25 +63,35 @@ def install_strict_config_validation() -> None:
         and _strict_hooks_active()
     ):
         return
-    current_candidate_mask = _advanced_roi_components.candidate_mask_from_cost_matrix
-    if getattr(current_candidate_mask, _WRAPPER_MARKER, False):
-        _advanced_roi_components.CandidatePruningConfig = CandidatePruningConfig
-        setattr(_advanced_roi_components, _PATCH_MARKER, True)
-        return
-    original_candidate_mask = _current_original(current_candidate_mask)
+
+    original_candidate_mask = _current_original(
+        _advanced_roi_components.candidate_mask_from_cost_matrix
+    )
     original_mask_shape_descriptors = _current_original(
         _advanced_roi_components.mask_shape_descriptors
+    )
+    original_pairwise_cost_margin_components = _current_original(
+        _advanced_roi_components.pairwise_cost_margin_components
     )
     setattr(candidate_mask_from_cost_matrix, _ORIGINAL_ATTR, original_candidate_mask)
     setattr(candidate_mask_from_cost_matrix, _WRAPPER_MARKER, True)
     setattr(mask_shape_descriptors, _ORIGINAL_ATTR, original_mask_shape_descriptors)
     setattr(mask_shape_descriptors, _WRAPPER_MARKER, True)
+    setattr(
+        pairwise_cost_margin_components,
+        _ORIGINAL_ATTR,
+        original_pairwise_cost_margin_components,
+    )
+    setattr(pairwise_cost_margin_components, _WRAPPER_MARKER, True)
 
     _advanced_roi_components.CandidatePruningConfig = CandidatePruningConfig
     _advanced_roi_components.candidate_mask_from_cost_matrix = (
         candidate_mask_from_cost_matrix
     )
     _advanced_roi_components.mask_shape_descriptors = mask_shape_descriptors
+    _advanced_roi_components.pairwise_cost_margin_components = (
+        pairwise_cost_margin_components
+    )
     setattr(_advanced_roi_components, _PATCH_MARKER, True)
 
 
@@ -145,6 +155,21 @@ def mask_shape_descriptors(
     return original(masks, radial_bins=radial_bins)
 
 
+def pairwise_cost_margin_components(
+    cost_matrix: np.ndarray,
+    *,
+    large_cost: float = 1.0e6,
+) -> dict[str, np.ndarray]:
+    """Return row/column rank and ambiguity-margin components after validation."""
+
+    large_cost = _finite_positive_float(large_cost, name="large_cost")
+    original = _original_function(
+        pairwise_cost_margin_components,
+        "pairwise_cost_margin_components",
+    )
+    return original(cost_matrix, large_cost=large_cost)
+
+
 def _strict_hooks_active() -> bool:
     return (
         _advanced_roi_components.CandidatePruningConfig is CandidatePruningConfig
@@ -155,6 +180,11 @@ def _strict_hooks_active() -> bool:
         )
         and getattr(
             _advanced_roi_components.mask_shape_descriptors,
+            _WRAPPER_MARKER,
+            False,
+        )
+        and getattr(
+            _advanced_roi_components.pairwise_cost_margin_components,
             _WRAPPER_MARKER,
             False,
         )
@@ -266,4 +296,5 @@ __all__ = [
     "candidate_mask_from_cost_matrix",
     "install_strict_config_validation",
     "mask_shape_descriptors",
+    "pairwise_cost_margin_components",
 ]
