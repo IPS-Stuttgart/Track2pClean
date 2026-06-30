@@ -19,6 +19,9 @@ from . import (
 from . import (
     _triplet_support_benchmark_integration as _triplet_support_benchmark_integration,
 )
+from ._benchmark_float_validation import (
+    install_benchmark_float_validation,
+)
 from ._benchmark_roi_index_validation import (
     install_benchmark_roi_index_validation,
 )
@@ -55,6 +58,7 @@ _assignment_prior_sweep_validation.install_assignment_prior_sweep_validation()
 _seed_session_validation.install_seed_session_validation()
 install_benchmark_roi_index_validation()
 install_benchmark_suite2p_defaults()
+install_benchmark_float_validation()
 install_seed_sensitivity_audit_validation()
 install_calibration_feature_registry_integration()
 install_comparison_count_validation()
