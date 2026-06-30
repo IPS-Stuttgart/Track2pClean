@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_ATTR = "_track2pclean_roi_cue_length_validation"
-_TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_TEXT_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 
 def install_roi_cue_length_validation(absence_model: ModuleType) -> None:
@@ -63,6 +63,8 @@ def install_roi_cue_length_validation(absence_model: ModuleType) -> None:
 
 
 def _validate_roi_cue_vector(values: Any, field_name: str, n_rois: int) -> None:
+    if isinstance(values, _TEXT_TYPES):
+        raise ValueError(f"{field_name} must contain numeric per-ROI values")
     try:
         vector = np.asarray(values, dtype=object).reshape(-1)
     except (TypeError, ValueError) as exc:
