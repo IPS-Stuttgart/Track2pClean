@@ -93,7 +93,7 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite non-negative value")
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"{name} must be a finite non-negative value") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{name} must be a finite non-negative value")
@@ -112,7 +112,7 @@ def _integer_like(value: Any, *, name: str) -> int:
         raise ValueError(f"{name} must be an integer")
     try:
         return int(operator.index(value))
-    except TypeError:
+    except (TypeError, ValueError, OverflowError):
         pass
 
     if isinstance(value, str):
@@ -121,7 +121,7 @@ def _integer_like(value: Any, *, name: str) -> int:
             raise ValueError(f"{name} must be an integer")
         try:
             numeric_value = float(stripped)
-        except ValueError as exc:
+        except (ValueError, OverflowError) as exc:
             raise ValueError(f"{name} must be an integer") from exc
     elif isinstance(value, (float, np.floating)):
         numeric_value = float(value)
