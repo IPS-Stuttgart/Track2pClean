@@ -1,4 +1,4 @@
-"""Validation patch for Suite2p loader probability controls."""
+"""Normalize Suite2p loader numeric-control conversion failures."""
 
 from __future__ import annotations
 
@@ -7,21 +7,21 @@ from typing import Any
 
 import numpy as np
 
-_PATCH_MARKER = "_bayescatrack_loader_probability_validation_patch"
+_PATCH_MARKER = "_bayescatrack_loader_numeric_conversion_patch"
 _ORIGINAL_ATTR = "_bayescatrack_original"
 _ERROR_TEMPLATE = "{name} must be a finite probability"
 _STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 _TARGET_NAME = "_" + "finite_probability"
 
 
-def install_loader_probability_validation(loader_validation_module: ModuleType) -> None:
-    """Reject ambiguous loader probability controls before loader patch install."""
+def install_loader_numeric_conversion_validation(loader_validation_module: ModuleType) -> None:
+    """Wrap loader probability conversion errors in public ValueError messages."""
 
-    original_finite_probability = getattr(loader_validation_module, _TARGET_NAME)
-    if getattr(original_finite_probability, _PATCH_MARKER, False):
+    original_probability = getattr(loader_validation_module, _TARGET_NAME)
+    if getattr(original_probability, _PATCH_MARKER, False):
         return
 
-    def replacement(value: Any, *, name: str) -> float:
+    def probability(value: Any, *, name: str) -> float:
         if isinstance(value, np.ndarray):
             if value.shape != ():
                 raise ValueError(_ERROR_TEMPLATE.format(name=name))
@@ -38,9 +38,9 @@ def install_loader_probability_validation(loader_validation_module: ModuleType) 
             raise ValueError(_ERROR_TEMPLATE.format(name=name))
         return numeric
 
-    setattr(replacement, _PATCH_MARKER, True)
-    setattr(replacement, _ORIGINAL_ATTR, original_finite_probability)
-    setattr(loader_validation_module, _TARGET_NAME, replacement)
+    setattr(probability, _PATCH_MARKER, True)
+    setattr(probability, _ORIGINAL_ATTR, original_probability)
+    setattr(loader_validation_module, _TARGET_NAME, probability)
 
 
-__all__ = ["install_loader_probability_validation"]
+__all__ = ["install_loader_numeric_conversion_validation"]

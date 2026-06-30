@@ -74,7 +74,7 @@ def _normalize_weight(weight: Any) -> float:
 
     try:
         normalized_weight = float(weight_array.item())
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(_WEIGHT_ERROR) from exc
 
     if not np.isfinite(normalized_weight) or normalized_weight < 0.0:
