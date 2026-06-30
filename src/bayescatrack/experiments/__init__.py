@@ -25,6 +25,9 @@ from . import (
 from ._benchmark_roi_index_validation import (
     install_benchmark_roi_index_validation,
 )
+from ._benchmark_string_list_validation import (
+    install_benchmark_string_list_validation,
+)
 from ._benchmark_suite2p_defaults import (
     install_benchmark_suite2p_defaults,
 )
@@ -58,6 +61,7 @@ _assignment_prior_sweep_validation.install_assignment_prior_sweep_validation()
 _seed_session_validation.install_seed_session_validation()
 install_benchmark_roi_index_validation()
 install_benchmark_suite2p_defaults()
+install_benchmark_string_list_validation()
 install_seed_sensitivity_audit_validation()
 install_calibration_feature_registry_integration()
 install_comparison_count_validation()
