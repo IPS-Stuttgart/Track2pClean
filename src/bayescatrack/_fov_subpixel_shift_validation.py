@@ -20,6 +20,7 @@ _FLOAT_CONTROL_PATCH_MARKER = "_bayescatrack_fov_float_control_validation_patch"
 _INTERPOLATION_ORDER_PATCH_MARKER = (
     "_bayescatrack_fov_interpolation_order_validation_patch"
 )
+_TEXT_OR_BYTES_LIKE_TYPES = (str, bytes, bytearray, memoryview)
 _SHIFT_ERROR = "shift_yx must contain exactly two finite numeric values"
 _MASK_INTERPOLATION_ERROR = "mask_interpolation must be either 'nearest' or 'bilinear'"
 _FLOAT_CONTROL_ERROR = "{name} must be a finite non-negative value"
@@ -107,7 +108,7 @@ def _wrap_finite_nonnegative_float_validation(module: Any) -> None:
 
 
 def _normalize_subpixel_shift_yx(shift_yx: Any) -> np.ndarray:
-    if isinstance(shift_yx, (str, bytes, bytearray)):
+    if isinstance(shift_yx, _TEXT_OR_BYTES_LIKE_TYPES):
         raise ValueError(_SHIFT_ERROR)
     try:
         shift_array = np.asarray(shift_yx, dtype=object)
@@ -128,7 +129,9 @@ def _normalize_subpixel_shift_component(value: Any) -> float:
         if value.shape != ():
             raise ValueError(_SHIFT_ERROR)
         value = value.item()
-    if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
+    if isinstance(value, (bool, np.bool_)) or isinstance(
+        value, _TEXT_OR_BYTES_LIKE_TYPES
+    ):
         raise ValueError(_SHIFT_ERROR)
     try:
         numeric_value = float(value)

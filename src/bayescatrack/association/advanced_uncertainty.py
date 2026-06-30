@@ -12,8 +12,9 @@ matrices and component dictionaries already produced by BayesCaTrack.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 
@@ -94,6 +95,11 @@ def edge_uncertainty_config_from_mapping(
         return None
     if isinstance(value, EdgeUncertaintyConfig):
         return value
+    if not isinstance(value, Mapping):
+        raise ValueError(
+            "config must be None, an EdgeUncertaintyConfig, or a mapping of "
+            "EdgeUncertaintyConfig fields"
+        )
     return EdgeUncertaintyConfig(**dict(value))
 
 
@@ -103,7 +109,7 @@ def uncertainty_aware_cost_matrix(
     *,
     registration_metadata: Mapping[str, Any] | None = None,
     empty_registered_rois: Any | None = None,
-    config: EdgeUncertaintyConfig | None = None,
+    config: EdgeUncertaintyConfig | Mapping[str, Any] | None = None,
 ) -> UncertaintyAwareEdgeResult:
     """Return costs and pseudo-posteriors adjusted by reliability diagnostics.
 
@@ -127,7 +133,7 @@ def uncertainty_aware_cost_matrix(
         Reliability and penalty weights.
     """
 
-    cfg = config or EdgeUncertaintyConfig()
+    cfg = edge_uncertainty_config_from_mapping(config) or EdgeUncertaintyConfig()
     costs = _as_cost_matrix(cost_matrix)
     components = {} if pairwise_components is None else pairwise_components
     reliability = edge_reliability_matrix(
@@ -158,11 +164,11 @@ def edge_reliability_matrix(
     *,
     registration_metadata: Mapping[str, Any] | None = None,
     empty_registered_rois: Any | None = None,
-    config: EdgeUncertaintyConfig | None = None,
+    config: EdgeUncertaintyConfig | Mapping[str, Any] | None = None,
 ) -> np.ndarray:
     """Return a multiplicative reliability matrix in ``[min_reliability, 1]``."""
 
-    cfg = config or EdgeUncertaintyConfig()
+    cfg = edge_uncertainty_config_from_mapping(config) or EdgeUncertaintyConfig()
     n_reference, n_measurement = int(shape[0]), int(shape[1])
     penalty = np.zeros((n_reference, n_measurement), dtype=float)
     components = {} if pairwise_components is None else pairwise_components

@@ -11,12 +11,18 @@ import numpy as np
 _POSTSOLVE_RELINKING_INPUT_VALIDATION_ATTR = (
     "_bayescatrack_postsolve_relinking_input_validation"
 )
+_POSTSOLVE_RELINKING_CONFIG_VALIDATION_ATTR = (
+    "_bayescatrack_postsolve_relinking_config_validation"
+)
+_TEXT_TYPES = (str,)
 
 
 def install_postsolve_relinking_input_validation() -> None:
     """Install idempotent validation for relinking matrix/vector inputs."""
 
     from . import postsolve_relinking as postsolve_relinking_module
+
+    _install_config_scalar_validation(postsolve_relinking_module)
 
     original = postsolve_relinking_module.relink_tracks_at_geometry_issues
     if getattr(original, _POSTSOLVE_RELINKING_INPUT_VALIDATION_ATTR, False):
@@ -54,6 +60,45 @@ def install_postsolve_relinking_input_validation() -> None:
     postsolve_relinking_module.relink_tracks_at_geometry_issues = (
         _relink_tracks_at_geometry_issues_with_input_validation
     )
+
+
+def _install_config_scalar_validation(postsolve_relinking_module: Any) -> None:
+    original = postsolve_relinking_module._finite_nonnegative_float
+    if getattr(original, _POSTSOLVE_RELINKING_CONFIG_VALIDATION_ATTR, False):
+        return
+
+    def _finite_nonnegative_float_with_text_guard(value: Any, name: str) -> float:
+        if _is_text_scalar(value):
+            raise ValueError(f"{name} must be finite and non-negative")
+        return original(value, name)
+
+    setattr(
+        _finite_nonnegative_float_with_text_guard,
+        _POSTSOLVE_RELINKING_CONFIG_VALIDATION_ATTR,
+        True,
+    )
+    setattr(
+        _finite_nonnegative_float_with_text_guard,
+        "_bayescatrack_original",
+        original,
+    )
+    postsolve_relinking_module._finite_nonnegative_float = (  # pylint: disable=protected-access
+        _finite_nonnegative_float_with_text_guard
+    )
+
+
+def _is_text_scalar(value: Any) -> bool:
+    if isinstance(value, _TEXT_TYPES):
+        return True
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            return False
+        try:
+            value = value.item()
+        except ValueError:
+            return False
+        return isinstance(value, _TEXT_TYPES)
+    return False
 
 
 def _validate_roi_indices_by_session(

@@ -8,6 +8,9 @@ from . import _activity_sweep_defaults as _activity_sweep_defaults
 from . import _assignment_prior_sweep_validation as _assignment_prior_sweep_validation
 from . import _cost_sweep_defaults as _cost_sweep_defaults
 from . import _diag_defaults as _diag_defaults
+from . import (
+    _full_mht_sparse_source_index_alignment as _full_mht_sparse_source_index_alignment,
+)
 from . import _mask_input_sweep_option_validation as _mask_input_sweep_option_validation
 from . import _seed_session_validation as _seed_session_validation
 from . import (
@@ -37,6 +40,9 @@ from ._comparison_count_validation import (
 from ._comparison_limit_validation import (
     install_comparison_limit_validation,
 )
+from ._manifest_optional_float_validation import (
+    install_optional_float_manifest_validation,
+)
 from ._seed_sensitivity_validation import (
     install_seed_sensitivity_audit_validation,
 )
@@ -64,6 +70,7 @@ install_calibration_feature_registry_integration()
 install_comparison_count_validation()
 install_comparison_limit_validation()
 _teacher_rescue_manifest_integration.install_teacher_rescue_manifest_integration()
+install_optional_float_manifest_validation()
 install_teacher_rescue_min_side_manifest_validation()
 install_teacher_rescue_edit_cap_manifest_integration()
 install_teacher_rescue_repair_preset_manifest_integration()
@@ -73,6 +80,7 @@ _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
 _diag_defaults.install_diagnostic_suite2p_defaults()
 _mask_input_sweep_option_validation.install_mask_input_sweep_option_validation()
 _tracklet_graph_mask_cache_validation.install_tracklet_graph_mask_cache_validation()
+_full_mht_sparse_source_index_alignment.install_full_mht_sparse_source_index_alignment()
 install_raw_benchmark_exclude_subjects_validation()
 
 __all__: list[str] = []

@@ -15,6 +15,7 @@ from bayescatrack._pyrecest_pairwise_features import (
 from . import calibrated_costs as _calibrated_costs
 
 _ORIGINAL_COMPONENTS_FN_ATTR = "_bayescatrack_original_pairwise_components_from_bundle"
+_TEXT_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 if not hasattr(_calibrated_costs, _ORIGINAL_COMPONENTS_FN_ATTR):
     setattr(
@@ -191,16 +192,24 @@ def _pairwise_covariance_shape_components(
 
 
 def _finite_positive_covariance_epsilon(value: Any) -> float:
-    if isinstance(value, (bool, np.bool_)):
-        raise ValueError("covariance_epsilon must be finite and strictly positive")
+    message = "covariance_epsilon must be a finite positive numeric scalar"
+    if isinstance(value, (bool, np.bool_, *_TEXT_TYPES)):
+        raise ValueError(message)
     try:
-        numeric = float(value)
+        value_array = np.asarray(value, dtype=object)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(message) from exc
+    if value_array.shape != ():
+        raise ValueError(message)
+    scalar_value = value_array.item()
+    if isinstance(scalar_value, (bool, np.bool_, *_TEXT_TYPES)):
+        raise ValueError(message)
+    try:
+        numeric = float(scalar_value)
     except (TypeError, ValueError, OverflowError) as exc:
-        raise ValueError(
-            "covariance_epsilon must be finite and strictly positive"
-        ) from exc
+        raise ValueError(message) from exc
     if not np.isfinite(numeric) or numeric <= 0.0:
-        raise ValueError("covariance_epsilon must be finite and strictly positive")
+        raise ValueError(message)
     return numeric
 
 
