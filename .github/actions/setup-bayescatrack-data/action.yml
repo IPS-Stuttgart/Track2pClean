@@ -160,7 +160,7 @@ runs:
             shutil.rmtree(target)
         target.mkdir(parents=True)
 
-        if len(zips) == 1 and not any(source.rglob("stat.npy")):
+        if len(zips) == 1 and not any(source.rglob(required_file_name)):
             with zipfile.ZipFile(zips[0]) as archive:
                 archive.extractall(target)
         else:
