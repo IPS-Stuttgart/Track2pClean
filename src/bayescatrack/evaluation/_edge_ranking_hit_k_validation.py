@@ -9,7 +9,9 @@ from typing import Any, Callable
 import numpy as np
 
 _ERROR_MESSAGE = "hit_ks must contain positive integer cutoffs"
-_GROUP_KEY_ERROR_MESSAGE = "group_keys must be a sequence of unique, non-empty field names"
+_GROUP_KEY_ERROR_MESSAGE = (
+    "group_keys must be a sequence of unique, non-empty field names"
+)
 _SUMMARY_PATCH_MARKER = "_bayescatrack_edge_ranking_group_key_validation_patch"
 
 
@@ -94,13 +96,19 @@ def install_edge_ranking_hit_k_validation(
         )
         return original(rows, *args, **normalized_kwargs)
 
-    setattr(summarize_edge_ranking_rows_with_group_key_validation, _SUMMARY_PATCH_MARKER, True)
+    setattr(
+        summarize_edge_ranking_rows_with_group_key_validation,
+        _SUMMARY_PATCH_MARKER,
+        True,
+    )
     setattr(
         summarize_edge_ranking_rows_with_group_key_validation,
         "_bayescatrack_original",
         original,
     )
-    edge_ranking_module.summarize_edge_ranking_rows = summarize_edge_ranking_rows_with_group_key_validation
+    edge_ranking_module.summarize_edge_ranking_rows = (
+        summarize_edge_ranking_rows_with_group_key_validation
+    )
 
 
 __all__ = ["install_edge_ranking_hit_k_validation"]

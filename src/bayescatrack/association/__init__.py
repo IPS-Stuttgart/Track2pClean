@@ -28,7 +28,9 @@ from . import _growth_coordinate_validation as _growth_coordinate_validation
 from . import _growth_prior_scalar_validation as _growth_prior_scalar_validation
 from . import _hypotheses_to_matrix_validation as _hypotheses_to_matrix_validation
 from . import _monotone_ranker_feature_validation as _monotone_ranker_feature_validation
-from . import _multi_hypothesis_bytes_like_validation as _multi_hypothesis_bytes_like_validation
+from . import (
+    _multi_hypothesis_bytes_like_validation as _multi_hypothesis_bytes_like_validation,
+)
 from . import _neuropil_ratio_shape_validation as _neuropil_ratio_shape_validation
 from . import (
     _postsolve_relinking_input_validation as _postsolve_relinking_input_validation,

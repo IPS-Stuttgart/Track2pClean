@@ -122,7 +122,9 @@ def _positive_int(value: Any, *, name: str) -> int:
 
 
 def _strict_float_scalar(value: Any, *, message: str) -> float:
-    if isinstance(value, (bool, np.bool_, str, bytes, bytearray, memoryview, np.ndarray)):
+    if isinstance(
+        value, (bool, np.bool_, str, bytes, bytearray, memoryview, np.ndarray)
+    ):
         raise ValueError(message)
     try:
         return float(value)
