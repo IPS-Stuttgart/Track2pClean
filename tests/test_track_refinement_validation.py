@@ -117,6 +117,30 @@ def test_split_tracks_at_issues_rejects_non_integer_track_rows():
         split_tracks_at_issues(np.asarray([[0.0, 1.5]], dtype=float), ())
 
 
+def test_split_tracks_at_issues_rejects_unsigned_row_above_platform_int_range():
+    value = np.iinfo(np.int_).max + 1
+    track_rows = np.asarray([[value]], dtype=np.uint64)
+
+    with pytest.raises(ValueError, match="finite integer ROI indices"):
+        split_tracks_at_issues(track_rows, ())
+
+
+def test_split_tracks_at_issues_rejects_object_row_above_platform_int_range():
+    value = np.iinfo(np.int_).max + 1
+    track_rows = np.asarray([[value]], dtype=object)
+
+    with pytest.raises(ValueError, match="finite integer ROI indices"):
+        split_tracks_at_issues(track_rows, ())
+
+
+def test_split_tracks_at_issues_accepts_unsigned_row_inside_platform_int_range():
+    track_rows = np.asarray([[0, 1]], dtype=np.uint64)
+
+    result = split_tracks_at_issues(track_rows, ())
+
+    assert result.tolist() == [[0, 1]]
+
+
 @pytest.mark.parametrize(
     "position_tables",
     [

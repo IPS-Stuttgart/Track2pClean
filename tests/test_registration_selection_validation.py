@@ -34,6 +34,10 @@ class _OverflowingFloat:
             "min_fov_correlation_gain must be a finite non-negative value",
         ),
         (
+            {"min_fov_correlation_gain": memoryview(b"0.05")},
+            "min_fov_correlation_gain must be a finite non-negative value",
+        ),
+        (
             {"min_fov_correlation_gain": np.asarray([0.05])},
             "min_fov_correlation_gain must be a finite non-negative value",
         ),
@@ -79,6 +83,10 @@ class _OverflowingFloat:
         ),
         (
             {"complexity_penalty": {"none": "0.0"}},
+            r"complexity_penalty\['none'\] must be a finite non-negative value",
+        ),
+        (
+            {"complexity_penalty": {"none": memoryview(b"0.0")}},
             r"complexity_penalty\['none'\] must be a finite non-negative value",
         ),
         (

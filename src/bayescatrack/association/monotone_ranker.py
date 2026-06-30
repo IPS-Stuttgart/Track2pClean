@@ -48,8 +48,15 @@ class MonotoneRankerOptions:
     tolerance: float = 1.0e-8
 
     def __post_init__(self) -> None:
+        monotone_feature_names = self.monotone_feature_names
+        if monotone_feature_names is None:
+            normalized_feature_names: tuple[str, ...] = ()
+        elif isinstance(monotone_feature_names, str):
+            normalized_feature_names = (monotone_feature_names,)
+        else:
+            normalized_feature_names = tuple(monotone_feature_names)
         object.__setattr__(
-            self, "monotone_feature_names", tuple(self.monotone_feature_names or ())
+            self, "monotone_feature_names", normalized_feature_names
         )
         object.__setattr__(
             self, "margin", _finite_positive_float(self.margin, name="margin")

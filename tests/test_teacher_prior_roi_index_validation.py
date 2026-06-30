@@ -41,3 +41,15 @@ def test_teacher_prior_treats_vector_roi_index_cells_as_missing():
     )
 
     assert not np.any(masks[(0, 1)])
+
+
+def test_teacher_prior_treats_invalid_utf8_byte_roi_cells_as_missing():
+    sessions = (_session("s0"), _session("s1"))
+
+    masks = teacher_edge_masks_from_track_matrix(
+        [[b"\xff", 2], [1, b"\xfe"]],
+        sessions,
+        session_edges=[(0, 1)],
+    )
+
+    assert not np.any(masks[(0, 1)])
