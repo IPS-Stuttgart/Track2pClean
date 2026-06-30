@@ -22,7 +22,9 @@ def install_track_refinement_binary_token_validation() -> None:
 
     from . import track_refinement as module  # pylint: disable=import-outside-toplevel
 
-    original_contains_ambiguous_tokens = module._contains_ambiguous_track_row_tokens  # pylint: disable=protected-access
+    original_contains_ambiguous_tokens = (
+        module._contains_ambiguous_track_row_tokens  # pylint: disable=protected-access
+    )
     if getattr(original_contains_ambiguous_tokens, _PATCH_MARKER, False):
         return
 
@@ -36,13 +38,19 @@ def install_track_refinement_binary_token_validation() -> None:
             return False
         return any(isinstance(value, _BINARY_TEXTLIKE_TYPES) for value in rows.ravel())
 
-    setattr(contains_ambiguous_track_row_tokens_with_binary_validation, _PATCH_MARKER, True)
+    setattr(
+        contains_ambiguous_track_row_tokens_with_binary_validation,
+        _PATCH_MARKER,
+        True,
+    )
     setattr(
         contains_ambiguous_track_row_tokens_with_binary_validation,
         "_bayescatrack_original",
         original_contains_ambiguous_tokens,
     )
-    module._contains_ambiguous_track_row_tokens = contains_ambiguous_track_row_tokens_with_binary_validation  # pylint: disable=protected-access
+    module._contains_ambiguous_track_row_tokens = (  # pylint: disable=protected-access
+        contains_ambiguous_track_row_tokens_with_binary_validation
+    )
 
 
 __all__ = ["install_track_refinement_binary_token_validation"]
