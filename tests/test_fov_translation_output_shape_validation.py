@@ -32,6 +32,8 @@ _ROI_TRANSLATION_FUNCTIONS = [
         (4,),
         [[4, 4]],
         ("4", 4),
+        bytearray([3, 4]),
+        memoryview(bytes([3, 4])),
     ],
 )
 def test_image_translation_rejects_malformed_output_shape(
@@ -59,6 +61,8 @@ def test_image_translation_rejects_malformed_output_shape(
         (4,),
         [[4, 4]],
         ("4", 4),
+        bytearray([3, 4]),
+        memoryview(bytes([3, 4])),
     ],
 )
 def test_roi_translation_rejects_malformed_output_shape(

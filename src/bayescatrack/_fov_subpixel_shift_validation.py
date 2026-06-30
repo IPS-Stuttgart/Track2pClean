@@ -16,8 +16,10 @@ _PATCH_MARKER = "_bayescatrack_fov_subpixel_shift_validation_patch"
 _MASK_INTERPOLATION_PATCH_MARKER = (
     "_bayescatrack_fov_mask_interpolation_validation_patch"
 )
+_FLOAT_CONTROL_PATCH_MARKER = "_bayescatrack_fov_float_control_validation_patch"
 _SHIFT_ERROR = "shift_yx must contain exactly two finite numeric values"
 _MASK_INTERPOLATION_ERROR = "mask_interpolation must be either 'nearest' or 'bilinear'"
+_FLOAT_CONTROL_ERROR = "{name} must be a finite non-negative value"
 
 
 def install_fov_subpixel_shift_validation() -> None:
@@ -30,6 +32,7 @@ def install_fov_subpixel_shift_validation() -> None:
     _wrap_shift_argument(_fov_registration, "apply_subpixel_image_translation")
     _wrap_shift_argument(_fov_registration, "apply_subpixel_roi_mask_translation")
     _wrap_mask_interpolation_validation(_fov_registration)
+    _wrap_finite_nonnegative_float_validation(_fov_registration)
 
 
 def _wrap_shift_argument(module: Any, function_name: str) -> None:
@@ -62,6 +65,23 @@ def _wrap_mask_interpolation_validation(module: Any) -> None:
     module._validate_mask_interpolation = wrapper  # pylint: disable=protected-access
 
 
+def _wrap_finite_nonnegative_float_validation(module: Any) -> None:
+    original = module._finite_nonnegative_float  # pylint: disable=protected-access
+    if getattr(original, _FLOAT_CONTROL_PATCH_MARKER, False):
+        return
+
+    @wraps(original)
+    def wrapper(value: Any, *, name: str) -> float:
+        try:
+            return original(value, name=name)
+        except OverflowError as exc:
+            raise ValueError(_FLOAT_CONTROL_ERROR.format(name=name)) from exc
+
+    setattr(wrapper, _FLOAT_CONTROL_PATCH_MARKER, True)
+    setattr(wrapper, "_bayescatrack_original", original)
+    module._finite_nonnegative_float = wrapper  # pylint: disable=protected-access
+
+
 def _normalize_subpixel_shift_yx(shift_yx: Any) -> np.ndarray:
     if isinstance(shift_yx, (str, bytes, bytearray)):
         raise ValueError(_SHIFT_ERROR)
@@ -88,7 +108,7 @@ def _normalize_subpixel_shift_component(value: Any) -> float:
         raise ValueError(_SHIFT_ERROR)
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(_SHIFT_ERROR) from exc
     if not np.isfinite(numeric_value):
         raise ValueError(_SHIFT_ERROR)

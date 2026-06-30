@@ -244,6 +244,12 @@ def posterior_probability_matrix(
 
     temperature = _validate_positive(temperature, name="temperature")
     costs = _as_cost_matrix(cost_matrix)
+    if 0 in costs.shape:
+        if reliability_matrix is not None:
+            reliability = np.asarray(reliability_matrix, dtype=float)
+            if reliability.shape != costs.shape:
+                raise ValueError("reliability_matrix must match cost_matrix shape")
+        return np.zeros_like(costs, dtype=float)
     finite = np.isfinite(costs)
     shifted = np.where(finite, costs, np.inf)
     row_min = np.min(np.where(finite, shifted, np.inf), axis=1, keepdims=True)
