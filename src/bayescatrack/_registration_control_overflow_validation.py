@@ -15,7 +15,9 @@ _TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 def install_registration_control_overflow_validation() -> None:
     """Normalize overflow failures from registration-control coercion."""
 
-    from . import registration as _registration  # pylint: disable=import-outside-toplevel
+    from . import (
+        registration as _registration,  # pylint: disable=import-outside-toplevel
+    )
 
     original = _registration.register_measurement_plane_to_reference
     if getattr(original, _PATCH_MARKER, False):

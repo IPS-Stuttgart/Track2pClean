@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from bayescatrack.experiments import benchmark_manifest as bm
 from bayescatrack.experiments.benchmark_manifest import load_benchmark_manifest
 
@@ -33,8 +32,8 @@ def test_teacher_rescue_manifest_rejects_boolean_min_side_observations(
     _write_manifest(manifest_path, _teacher_rescue_manifest(True))
     run = load_benchmark_manifest(manifest_path).runs[0]
 
-    from bayescatrack.experiments import (  # pylint: disable=import-outside-toplevel
-        track2p_policy_teacher_adjacent_rescue as rescue_module,
+    from bayescatrack.experiments import (
+        track2p_policy_teacher_adjacent_rescue as rescue_module,  # pylint: disable=import-outside-toplevel
     )
 
     def _fake_runner(_config, **_kwargs):
@@ -57,8 +56,8 @@ def test_teacher_rescue_manifest_accepts_string_min_side_observations(
     _write_manifest(manifest_path, _teacher_rescue_manifest("3"))
     run = load_benchmark_manifest(manifest_path).runs[0]
 
-    from bayescatrack.experiments import (  # pylint: disable=import-outside-toplevel
-        track2p_policy_teacher_adjacent_rescue as rescue_module,
+    from bayescatrack.experiments import (
+        track2p_policy_teacher_adjacent_rescue as rescue_module,  # pylint: disable=import-outside-toplevel
     )
 
     captured: dict[str, object] = {}

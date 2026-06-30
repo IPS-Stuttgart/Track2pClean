@@ -19,7 +19,9 @@ from bayescatrack.association.consensus_priors import (
         "01",
     ],
 )
-def test_edge_votes_from_tracks_rejects_malformed_session_edges(session_edges: object) -> None:
+def test_edge_votes_from_tracks_rejects_malformed_session_edges(
+    session_edges: object,
+) -> None:
     with pytest.raises(ValueError, match="session_edges"):
         edge_votes_from_tracks([[{0: 10, 1: 20}]], session_edges=session_edges)  # type: ignore[arg-type]
 
