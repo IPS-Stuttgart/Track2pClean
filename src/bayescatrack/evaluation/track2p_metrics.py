@@ -73,14 +73,27 @@ def score_track_matrices(
 def normalize_track_matrix(track_matrix: Any) -> np.ndarray:
     """Normalize a track matrix after strict BayesCaTrack ROI-index validation."""
 
+    observations = _normalize_track_matrix_observations(track_matrix, "track_matrix")
     normalized = _pyrecest_normalize_track_matrix(
-        _normalize_track_matrix_observations(track_matrix, "track_matrix")
+        _normalize_track_matrix_shape(observations)
     )
     matrix = np.full(normalized.shape, -1, dtype=int)
     for index, value in np.ndenumerate(normalized):
         if value is not None:
             matrix[index] = int(value)
     return matrix
+
+
+def _normalize_track_matrix_shape(observations: np.ndarray) -> np.ndarray:
+    """Keep public matrix normalization consistent with aggregate scoring."""
+
+    if observations.ndim == 1:
+        if observations.size == 0:
+            return np.empty((0, 0), dtype=object)
+        return observations.reshape(1, -1)
+    if observations.ndim != 2:
+        raise ValueError("track_matrix must be two-dimensional or a single track vector")
+    return observations
 
 
 def score_track_matrix_against_reference(
