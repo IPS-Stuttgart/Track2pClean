@@ -1,12 +1,4 @@
-"""Validate growth-analysis target-session selectors.
-
-The radial and affine growth helpers iterate once per requested target session.
-If two raw selectors normalize to the same session index, output rows and
-summaries are emitted more than once and downstream aggregate counts are
-inflated.  A bare string is also a sequence in Python; without explicit
-rejection, programmatic calls such as ``target_sessions="10"`` are interpreted
-as the two independent selectors ``"1"`` and ``"0"``.
-"""
+"""Validate growth-analysis target-session selectors."""
 
 from __future__ import annotations
 
@@ -14,6 +6,7 @@ from collections.abc import Sequence
 from functools import wraps
 from typing import Any
 
+_TEXT_OR_BINARY_SEQUENCE_TYPES = (str, bytes, bytearray, memoryview)
 _PATCH_MARKER = "_bayescatrack_growth_target_sessions_validation_patch"
 
 
@@ -33,7 +26,7 @@ def install_growth_target_sessions_validation() -> None:
         source_session: int,
         target_sessions: Sequence[Any] | None,
     ) -> tuple[int, ...]:
-        if isinstance(target_sessions, (str, bytes, bytearray)):
+        if isinstance(target_sessions, _TEXT_OR_BINARY_SEQUENCE_TYPES):
             raise ValueError(
                 "target_sessions must be a sequence of session indices, "
                 "not a string-like value"
