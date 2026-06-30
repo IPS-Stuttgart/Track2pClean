@@ -5,6 +5,11 @@ import pytest
 from bayescatrack.evaluation.calibration_metrics import brier_score
 
 
+_BINARY_PROBABILITY_TOKEN = memoryview(bytes([48, 46, 53]))
+_BINARY_ONE_TOKEN = memoryview(bytes([49]))
+_BINARY_WEIGHT_TOKEN = memoryview(bytes([49, 46, 48]))
+
+
 def test_brier_score_matches_mean_squared_probability_error():
     probabilities = np.array([0.0, 0.25, 0.75, 1.0])
     labels = np.array([0, 0, 1, 1])
@@ -59,9 +64,11 @@ def test_brier_score_rejects_boolean_sample_weights(sample_weight):
     [
         ["0.5"],
         [b"0.5"],
+        _BINARY_PROBABILITY_TOKEN,
         np.asarray(["0.5"], dtype=str),
         np.asarray("0.5"),
         np.asarray([np.str_("0.5")], dtype=object),
+        np.asarray([_BINARY_PROBABILITY_TOKEN], dtype=object),
     ],
 )
 def test_brier_score_rejects_text_probabilities(probabilities):
@@ -74,8 +81,10 @@ def test_brier_score_rejects_text_probabilities(probabilities):
     [
         ["1"],
         [b"1"],
+        _BINARY_ONE_TOKEN,
         np.asarray(["1"], dtype=str),
         np.asarray("1"),
+        np.asarray([_BINARY_ONE_TOKEN], dtype=object),
     ],
 )
 def test_brier_score_rejects_text_labels(labels):
@@ -88,8 +97,10 @@ def test_brier_score_rejects_text_labels(labels):
     [
         ["1.0"],
         [b"1.0"],
+        _BINARY_WEIGHT_TOKEN,
         np.asarray(["1.0"], dtype=str),
         np.asarray("1.0"),
+        np.asarray([_BINARY_WEIGHT_TOKEN], dtype=object),
     ],
 )
 def test_brier_score_rejects_text_sample_weights(sample_weight):
