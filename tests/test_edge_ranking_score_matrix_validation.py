@@ -22,10 +22,10 @@ def test_rank_labeled_edges_normalizes_encoded_score_names_before_direction_infe
 def test_rank_labeled_edges_normalizes_encoded_score_direction_names() -> None:
     rows = rank_labeled_edges(
         np.asarray([[1, 0]], dtype=int),
-        {"teacher_probability": np.asarray([[0.1, 0.9]], dtype=float)},
+        {"teacher_score": np.asarray([[0.1, 0.9]], dtype=float)},
         reference_roi_indices=np.asarray([7], dtype=int),
         measurement_roi_indices=np.asarray([1, 2], dtype=int),
-        score_directions={"teacher_probability".encode("utf-8"): "similarity"},
+        score_directions={"teacher_score".encode("utf-8"): "similarity"},
     )
 
     assert rows[0]["score_direction"] == "similarity"
