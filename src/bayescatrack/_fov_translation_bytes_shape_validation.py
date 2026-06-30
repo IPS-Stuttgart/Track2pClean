@@ -6,7 +6,7 @@ from functools import wraps
 from typing import Any
 
 _PATCH_MARKER = "_bayescatrack_fov_translation_bytes_shape_validation_patch"
-_BYTES_LIKE_SHAPE_TYPES = (bytearray, memoryview)
+_BYTES_LIKE_SHAPE_TYPES = (bytes, bytearray, memoryview)
 _OUTPUT_SHAPE_ERROR = "output_shape must contain exactly two positive integer dimensions"
 
 
