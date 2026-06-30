@@ -43,6 +43,9 @@ from ._summary_output_format_integration import (
 from ._teacher_rescue_edit_cap_manifest_integration import (
     install_teacher_rescue_edit_cap_manifest_integration,
 )
+from ._teacher_rescue_min_side_manifest_validation import (
+    install_teacher_rescue_min_side_manifest_validation,
+)
 from ._teacher_rescue_repair_preset_manifest_integration import (
     install_teacher_rescue_repair_preset_manifest_integration,
 )
@@ -57,6 +60,7 @@ install_calibration_feature_registry_integration()
 install_comparison_count_validation()
 install_comparison_limit_validation()
 _teacher_rescue_manifest_integration.install_teacher_rescue_manifest_integration()
+install_teacher_rescue_min_side_manifest_validation()
 install_teacher_rescue_edit_cap_manifest_integration()
 install_teacher_rescue_repair_preset_manifest_integration()
 install_summary_output_format_integration()
