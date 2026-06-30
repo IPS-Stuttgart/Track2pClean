@@ -28,6 +28,9 @@ from ._benchmark_suite2p_defaults import (
 from ._calibration_feature_registry_integration import (
     install_calibration_feature_registry_integration,
 )
+from ._comparison_count_validation import (
+    install_comparison_count_validation,
+)
 from ._comparison_limit_validation import (
     install_comparison_limit_validation,
 )
@@ -51,6 +54,7 @@ install_benchmark_roi_index_validation()
 install_benchmark_suite2p_defaults()
 install_seed_sensitivity_audit_validation()
 install_calibration_feature_registry_integration()
+install_comparison_count_validation()
 install_comparison_limit_validation()
 _teacher_rescue_manifest_integration.install_teacher_rescue_manifest_integration()
 install_teacher_rescue_edit_cap_manifest_integration()
