@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from bayescatrack._progress_reporter_validation import install_progress_reporter_validation
+from bayescatrack._progress_reporter_validation import (
+    install_progress_reporter_validation,
+)
 from bayescatrack.experiments.track2p_benchmark import ProgressReporter
 
 
