@@ -1,9 +1,10 @@
 """Reject ambiguous string-like values for core numeric scalar controls.
 
 The core scalar validator accepts numeric Python and NumPy scalars, but string-like
-values are configuration artefacts rather than numeric controls.  Python's
-``float(...)`` accepts values such as ``"1.0"`` and ``b"1.0"``, so reject them
-before they can silently alter pairwise costs or exported state covariances.
+and binary buffer values are configuration artefacts rather than numeric controls.
+Python's ``float(...)`` accepts values such as ``"1.0"``, ``b"1.0"``, and
+``memoryview(b"1")``, so reject them before they can silently alter pairwise
+costs or exported state covariances.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_core_string_scalar_validation_patch"
 _ORIGINAL_ATTR = "_bayescatrack_original"
-_STRINGLIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_STRINGLIKE_SCALAR_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 
 def install_core_string_scalar_validation(core_scalar_validation_module: Any) -> None:
