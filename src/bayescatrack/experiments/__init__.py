@@ -8,6 +8,9 @@ from . import _activity_sweep_defaults as _activity_sweep_defaults
 from . import _assignment_prior_sweep_validation as _assignment_prior_sweep_validation
 from . import _cost_sweep_defaults as _cost_sweep_defaults
 from . import _diag_defaults as _diag_defaults
+from . import (
+    _full_mht_sparse_source_index_alignment as _full_mht_sparse_source_index_alignment,
+)
 from . import _mask_input_sweep_option_validation as _mask_input_sweep_option_validation
 from . import _seed_session_validation as _seed_session_validation
 from . import (
@@ -69,6 +72,7 @@ _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
 _diag_defaults.install_diagnostic_suite2p_defaults()
 _mask_input_sweep_option_validation.install_mask_input_sweep_option_validation()
 _tracklet_graph_mask_cache_validation.install_tracklet_graph_mask_cache_validation()
+_full_mht_sparse_source_index_alignment.install_full_mht_sparse_source_index_alignment()
 install_raw_benchmark_exclude_subjects_validation()
 
 __all__: list[str] = []
