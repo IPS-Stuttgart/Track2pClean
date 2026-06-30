@@ -119,11 +119,12 @@ def _normalize_roi_index_sequence(values: Any, *, field_name: str) -> tuple[int,
         raise ValueError(f"{field_name} must be a sequence of integer ROI indices")
 
     array = np.asarray(values, dtype=object)
-    if array.ndim == 0:
-        raise ValueError(f"{field_name} must be a sequence of integer ROI indices")
+    if array.ndim != 1:
+        raise ValueError(
+            f"{field_name} must be a one-dimensional sequence of integer ROI indices"
+        )
     return tuple(
-        _normalize_roi_index(value, field_name=field_name)
-        for value in array.reshape(-1).tolist()
+        _normalize_roi_index(value, field_name=field_name) for value in array.tolist()
     )
 
 
