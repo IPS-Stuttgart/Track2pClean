@@ -240,7 +240,7 @@ def _normalize_session_index(value: Any, *, context: str, session_count: int) ->
     else:
         try:
             index = int(operator.index(value))
-        except TypeError as exc:
+        except (TypeError, OverflowError) as exc:
             raise ValueError(f"{context} must be an integer session index") from exc
 
     if index < 0 or index >= session_count:
