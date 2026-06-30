@@ -35,6 +35,8 @@ def test_apply_integer_image_translation_accepts_integer_like_float_shift():
         np.array([1.5, 0.0]),
         np.array([np.nan, 0.0]),
         [True, 0],
+        ["1", "0"],
+        np.array(["1", "0"], dtype=object),
         np.array([1, 0, 2]),
         [[1, 0]],
         np.array([[1, 0]]),
