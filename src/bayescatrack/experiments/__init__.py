@@ -22,6 +22,9 @@ from . import (
 from ._benchmark_roi_index_validation import (
     install_benchmark_roi_index_validation,
 )
+from ._benchmark_string_list_validation import (
+    install_benchmark_string_list_validation,
+)
 from ._benchmark_suite2p_defaults import (
     install_benchmark_suite2p_defaults,
 )
@@ -43,6 +46,9 @@ from ._summary_output_format_integration import (
 from ._teacher_rescue_edit_cap_manifest_integration import (
     install_teacher_rescue_edit_cap_manifest_integration,
 )
+from ._teacher_rescue_min_side_manifest_validation import (
+    install_teacher_rescue_min_side_manifest_validation,
+)
 from ._teacher_rescue_repair_preset_manifest_integration import (
     install_teacher_rescue_repair_preset_manifest_integration,
 )
@@ -52,11 +58,13 @@ _assignment_prior_sweep_validation.install_assignment_prior_sweep_validation()
 _seed_session_validation.install_seed_session_validation()
 install_benchmark_roi_index_validation()
 install_benchmark_suite2p_defaults()
+install_benchmark_string_list_validation()
 install_seed_sensitivity_audit_validation()
 install_calibration_feature_registry_integration()
 install_comparison_count_validation()
 install_comparison_limit_validation()
 _teacher_rescue_manifest_integration.install_teacher_rescue_manifest_integration()
+install_teacher_rescue_min_side_manifest_validation()
 install_teacher_rescue_edit_cap_manifest_integration()
 install_teacher_rescue_repair_preset_manifest_integration()
 install_summary_output_format_integration()
