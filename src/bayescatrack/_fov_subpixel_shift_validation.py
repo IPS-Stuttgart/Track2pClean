@@ -44,7 +44,7 @@ def install_fov_subpixel_shift_validation() -> None:
 
 def _wrap_shift_argument(module: Any, function_name: str) -> None:
     original = getattr(module, function_name)
-    if getattr(original, _PATCH_MARKER, False):
+    if _wrapper_chain_has_marker(original, _PATCH_MARKER):
         return
 
     @wraps(original)
@@ -58,7 +58,7 @@ def _wrap_shift_argument(module: Any, function_name: str) -> None:
 
 def _wrap_mask_interpolation_validation(module: Any) -> None:
     original = module._validate_mask_interpolation  # pylint: disable=protected-access
-    if getattr(original, _MASK_INTERPOLATION_PATCH_MARKER, False):
+    if _wrapper_chain_has_marker(original, _MASK_INTERPOLATION_PATCH_MARKER):
         return
 
     @wraps(original)
@@ -74,7 +74,7 @@ def _wrap_mask_interpolation_validation(module: Any) -> None:
 
 def _wrap_subpixel_interpolation_order_validation(module: Any) -> None:
     original = module._validate_subpixel_interpolation_order  # pylint: disable=protected-access
-    if getattr(original, _INTERPOLATION_ORDER_PATCH_MARKER, False):
+    if _wrapper_chain_has_marker(original, _INTERPOLATION_ORDER_PATCH_MARKER):
         return
 
     @wraps(original)
@@ -91,7 +91,7 @@ def _wrap_subpixel_interpolation_order_validation(module: Any) -> None:
 
 def _wrap_finite_nonnegative_float_validation(module: Any) -> None:
     original = module._finite_nonnegative_float  # pylint: disable=protected-access
-    if getattr(original, _FLOAT_CONTROL_PATCH_MARKER, False):
+    if _wrapper_chain_has_marker(original, _FLOAT_CONTROL_PATCH_MARKER):
         return
 
     @wraps(original)
@@ -104,6 +104,20 @@ def _wrap_finite_nonnegative_float_validation(module: Any) -> None:
     setattr(wrapper, _FLOAT_CONTROL_PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
     module._finite_nonnegative_float = wrapper  # pylint: disable=protected-access
+
+
+def _wrapper_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _normalize_subpixel_shift_yx(shift_yx: Any) -> np.ndarray:
