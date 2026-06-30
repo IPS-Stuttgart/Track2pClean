@@ -28,6 +28,7 @@ from . import _growth_coordinate_validation as _growth_coordinate_validation
 from . import _growth_prior_scalar_validation as _growth_prior_scalar_validation
 from . import _hypotheses_to_matrix_validation as _hypotheses_to_matrix_validation
 from . import _monotone_ranker_feature_validation as _monotone_ranker_feature_validation
+from . import _multi_hypothesis_bytes_like_validation as _multi_hypothesis_bytes_like_validation
 from . import _neuropil_ratio_shape_validation as _neuropil_ratio_shape_validation
 from . import (
     _postsolve_relinking_input_validation as _postsolve_relinking_input_validation,
@@ -69,6 +70,7 @@ _triplet_support_validation.install_triplet_support_validation()
 _global_assignment_input_validation.install_global_assignment_input_validation()
 _global_solver_track_validation.install_global_solver_track_validation()
 _hypotheses_to_matrix_validation.install_hypotheses_to_matrix_validation()
+_multi_hypothesis_bytes_like_validation.install_multi_hypothesis_bytes_like_validation()
 _monotone_ranker_feature_validation.install_monotone_ranker_feature_validation()
 _roi_aware_local_validation.install_roi_aware_local_validation()
 _registered_component_shape_validation.install_registered_component_shape_validation()
@@ -102,6 +104,7 @@ _PATCH_MODULES = (
     _growth_prior_scalar_validation,
     _hypotheses_to_matrix_validation,
     _monotone_ranker_feature_validation,
+    _multi_hypothesis_bytes_like_validation,
     _neuropil_ratio_shape_validation,
     _postsolve_relinking_input_validation,
     _registered_component_shape_validation,
