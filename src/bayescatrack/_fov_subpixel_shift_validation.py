@@ -17,9 +17,15 @@ _MASK_INTERPOLATION_PATCH_MARKER = (
     "_bayescatrack_fov_mask_interpolation_validation_patch"
 )
 _FLOAT_CONTROL_PATCH_MARKER = "_bayescatrack_fov_float_control_validation_patch"
+_INTERPOLATION_ORDER_PATCH_MARKER = (
+    "_bayescatrack_fov_interpolation_order_validation_patch"
+)
 _SHIFT_ERROR = "shift_yx must contain exactly two finite numeric values"
 _MASK_INTERPOLATION_ERROR = "mask_interpolation must be either 'nearest' or 'bilinear'"
 _FLOAT_CONTROL_ERROR = "{name} must be a finite non-negative value"
+_INTERPOLATION_ORDER_ERROR = (
+    "subpixel interpolation order must be an integer between 0 and 5"
+)
 
 
 def install_fov_subpixel_shift_validation() -> None:
@@ -32,6 +38,7 @@ def install_fov_subpixel_shift_validation() -> None:
     _wrap_shift_argument(_fov_registration, "apply_subpixel_image_translation")
     _wrap_shift_argument(_fov_registration, "apply_subpixel_roi_mask_translation")
     _wrap_mask_interpolation_validation(_fov_registration)
+    _wrap_subpixel_interpolation_order_validation(_fov_registration)
     _wrap_finite_nonnegative_float_validation(_fov_registration)
 
 
@@ -63,6 +70,23 @@ def _wrap_mask_interpolation_validation(module: Any) -> None:
     setattr(wrapper, _MASK_INTERPOLATION_PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
     module._validate_mask_interpolation = wrapper  # pylint: disable=protected-access
+
+
+def _wrap_subpixel_interpolation_order_validation(module: Any) -> None:
+    original = module._validate_subpixel_interpolation_order  # pylint: disable=protected-access
+    if getattr(original, _INTERPOLATION_ORDER_PATCH_MARKER, False):
+        return
+
+    @wraps(original)
+    def wrapper(interpolation_order: Any) -> int:
+        try:
+            return original(interpolation_order)
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(_INTERPOLATION_ORDER_ERROR) from exc
+
+    setattr(wrapper, _INTERPOLATION_ORDER_PATCH_MARKER, True)
+    setattr(wrapper, "_bayescatrack_original", original)
+    module._validate_subpixel_interpolation_order = wrapper  # pylint: disable=protected-access
 
 
 def _wrap_finite_nonnegative_float_validation(module: Any) -> None:
