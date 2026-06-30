@@ -8,6 +8,7 @@ import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_calibration_threshold_validation_patch"
 _ERROR_MESSAGE = "thresholds must be finite numeric values in [0, 1]"
+_TEXT_TYPES = (str, bytes, np.str_, np.bytes_)
 
 
 def install_calibration_threshold_validation(module: ModuleType) -> None:
@@ -17,7 +18,7 @@ def install_calibration_threshold_validation(module: ModuleType) -> None:
 
     @wraps(original)
     def threshold_with_text_rejection(threshold: Any) -> float:
-        if isinstance(threshold, (str, np.str_)):
+        if isinstance(threshold, _TEXT_TYPES):
             raise ValueError(_ERROR_MESSAGE)
         return original(threshold)
 
