@@ -51,6 +51,9 @@ from . import (
 from . import (
     _track_refinement_row_sentinel_validation as _track_refinement_row_sentinel_validation,
 )
+from . import (
+    _track_refinement_track_row_range_validation as _track_refinement_track_row_range_validation,
+)
 from . import _triplet_support_validation as _triplet_support_validation
 from . import absence_model as _absence_model
 
@@ -80,6 +83,7 @@ _track2p_policy_session_gap_validation.install_track2p_policy_session_gap_valida
 _track_refinement_fill_value_validation.install_track_refinement_fill_value_validation()
 _track_refinement_numeric_control_validation.install_track_refinement_numeric_control_validation()
 _track_refinement_row_sentinel_validation.install_track_refinement_row_sentinel_validation()
+_track_refinement_track_row_range_validation.install_track_refinement_track_row_range_validation()
 _growth_coordinate_validation.install_growth_coordinate_validation()
 _growth_prior_scalar_validation.install_growth_prior_scalar_validation()
 _postsolve_relinking_input_validation.install_postsolve_relinking_input_validation()
@@ -113,6 +117,7 @@ _PATCH_MODULES = (
     _track_refinement_fill_value_validation,
     _track_refinement_numeric_control_validation,
     _track_refinement_row_sentinel_validation,
+    _track_refinement_track_row_range_validation,
     _triplet_support_validation,
 )
 
