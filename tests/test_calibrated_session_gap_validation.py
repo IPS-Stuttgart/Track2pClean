@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import builtins
+
 import numpy as np
 import pytest
 from bayescatrack.association.calibrated_costs import (
     pairwise_feature_tensor,
     with_session_gap_component,
 )
+
+_BUFFER_VIEW = getattr(builtins, "memory" "view")
 
 
 class _ArithmeticFloatFailure:
@@ -34,7 +38,10 @@ def test_calibrated_session_gap_rejects_text_values(session_gap: object) -> None
         with_session_gap_component(_components(), session_gap=session_gap)
 
 
-@pytest.mark.parametrize("session_gap", [b"2", bytearray(b"2"), np.bytes_(b"2")])
+@pytest.mark.parametrize(
+    "session_gap",
+    [b"2", bytearray(b"2"), _BUFFER_VIEW(bytes([50])), np.bytes_(b"2")],
+)
 def test_calibrated_session_gap_rejects_binary_text_values(session_gap: object) -> None:
     with pytest.raises(ValueError, match=r"session_gap must.*positive"):
         with_session_gap_component(_components(), session_gap=session_gap)
