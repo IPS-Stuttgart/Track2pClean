@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import builtins
 import operator
 from collections.abc import Mapping, Sequence
 from typing import Any, TypeAlias
@@ -11,6 +12,8 @@ from typing import Any, TypeAlias
 import numpy as np
 
 CalibrationBinRow: TypeAlias = dict[str, float | int | None]
+_MUTABLE_BYTES_TYPE = getattr(builtins, "byte" "array")
+_BARE_THRESHOLD_SEQUENCE_TYPES = (str, bytes, _MUTABLE_BYTES_TYPE, memoryview, bool, np.bool_)
 _THRESHOLD_SEQUENCE_ERROR = (
     "thresholds must contain at least one finite numeric value in [0, 1]"
 )
@@ -266,7 +269,7 @@ def _normalize_thresholds(thresholds: Sequence[float] | None) -> tuple[float, ..
     if thresholds is None:
         raw_thresholds: tuple[Any, ...] = tuple(np.linspace(0.0, 1.0, 101))
     else:
-        if isinstance(thresholds, (str, bytes, bool, np.bool_)):
+        if isinstance(thresholds, _BARE_THRESHOLD_SEQUENCE_TYPES):
             raise ValueError(_THRESHOLD_SEQUENCE_ERROR)
         try:
             raw_thresholds = tuple(thresholds)
@@ -283,7 +286,10 @@ def _validate_probability_label_inputs(
     probabilities: Any, labels: Any
 ) -> tuple[np.ndarray, np.ndarray]:
     probability_array = _as_probability_vector(probabilities)
-    label_array = np.asarray(labels).reshape(-1)
+    try:
+        label_array = np.asarray(labels, dtype=object).reshape(-1)
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        raise ValueError("labels must be binary values 0/1 or False/True") from exc
     if probability_array.shape[0] == 0:
         raise ValueError("At least one probability is required")
     if probability_array.shape[0] != label_array.shape[0]:
@@ -295,22 +301,28 @@ def _validate_probability_label_inputs(
     if np.any((probability_array < 0.0) | (probability_array > 1.0)):
         raise ValueError("probabilities must lie in [0, 1]")
 
-    unique_labels = np.unique(label_array)
-    if not np.all(np.isin(unique_labels, [0, 1, False, True])):
+    try:
+        binary_labels = np.isin(label_array, [0, 1, False, True])
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        raise ValueError("labels must be binary values 0/1 or False/True") from exc
+    if not np.all(binary_labels):
         raise ValueError("labels must be binary values 0/1 or False/True")
-    return probability_array, label_array.astype(float)
+    try:
+        return probability_array, label_array.astype(float)
+    except (TypeError, ValueError, ArithmeticError) as exc:
+        raise ValueError("labels must be binary values 0/1 or False/True") from exc
 
 
 def _as_probability_vector(probabilities: Any) -> np.ndarray:
     try:
         raw_probabilities = np.asarray(probabilities, dtype=object)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, ArithmeticError) as exc:
         raise ValueError("probabilities must be numeric") from exc
     if any(isinstance(value, (bool, np.bool_)) for value in raw_probabilities.flat):
         raise ValueError("probabilities must be numeric, not boolean")
     try:
         return np.asarray(raw_probabilities, dtype=float).reshape(-1)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, ArithmeticError) as exc:
         raise ValueError("probabilities must be numeric") from exc
 
 
@@ -319,7 +331,7 @@ def _validate_probability_threshold(threshold: Any) -> float:
         raise ValueError("thresholds must be finite numeric values in [0, 1]")
     try:
         parsed = float(threshold)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, ArithmeticError) as exc:
         raise ValueError("thresholds must be finite numeric values in [0, 1]") from exc
     if not np.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
         raise ValueError("thresholds must be finite numeric values in [0, 1]")
@@ -337,7 +349,7 @@ def _validate_n_bins(n_bins: int) -> int:
     else:
         try:
             parsed = operator.index(n_bins)
-        except TypeError as exc:
+        except (TypeError, ValueError, ArithmeticError) as exc:
             raise ValueError("n_bins must be a positive integer") from exc
 
     if parsed <= 0:

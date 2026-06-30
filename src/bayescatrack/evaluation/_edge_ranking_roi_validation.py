@@ -19,6 +19,7 @@ import numpy as np
 _PATCH_MARKER = "_bayescatrack_edge_ranking_roi_validation_patch"
 _ROI_ERROR_SUFFIX = "must contain non-negative integer ROI identifiers"
 _LABEL_ERROR = "labels must be a binary matrix containing only 0/1 or boolean values"
+_CONVERSION_ERRORS = (TypeError, ValueError, ArithmeticError)
 
 
 def install_edge_ranking_roi_validation() -> None:
@@ -108,7 +109,10 @@ def install_edge_ranking_roi_validation() -> None:
 
 
 def _normalize_label_matrix(labels: Any) -> np.ndarray:
-    label_array = np.asarray(labels, dtype=object)
+    try:
+        label_array = np.asarray(labels, dtype=object)
+    except _CONVERSION_ERRORS as exc:
+        raise ValueError("labels must be a two-dimensional matrix") from exc
     if label_array.ndim != 2:
         raise ValueError("labels must be a two-dimensional matrix")
     normalized = np.zeros(label_array.shape, dtype=bool)
@@ -123,13 +127,16 @@ def _normalize_label_value(value: Any) -> bool:
     if isinstance(value, (str, bytes, np.str_, np.bytes_)):
         raise ValueError(_LABEL_ERROR)
     if isinstance(value, (float, np.floating)):
-        numeric_value = float(value)
+        try:
+            numeric_value = float(value)
+        except _CONVERSION_ERRORS as exc:
+            raise ValueError(_LABEL_ERROR) from exc
         if not np.isfinite(numeric_value) or numeric_value not in {0.0, 1.0}:
             raise ValueError(_LABEL_ERROR)
         return bool(int(numeric_value))
     try:
         integer_value = operator.index(value)
-    except TypeError as exc:
+    except _CONVERSION_ERRORS as exc:
         raise ValueError(_LABEL_ERROR) from exc
     integer_value = int(integer_value)
     if integer_value not in {0, 1}:
@@ -138,8 +145,13 @@ def _normalize_label_value(value: Any) -> bool:
 
 
 def _normalize_reference_matches(reference_matches: Any) -> tuple[tuple[int, int], ...]:
+    try:
+        match_iter = iter(reference_matches)
+    except TypeError as exc:
+        raise ValueError("reference_matches must contain ROI-index pairs") from exc
+
     normalized_matches: list[tuple[int, int]] = []
-    for match in reference_matches:
+    for match in match_iter:
         try:
             reference_roi_index, measurement_roi_index = match
         except (TypeError, ValueError) as exc:
@@ -159,7 +171,10 @@ def _normalize_roi_index_array(
     *,
     require_unique: bool,
 ) -> np.ndarray:
-    array = np.asarray(values, dtype=object)
+    try:
+        array = np.asarray(values, dtype=object)
+    except _CONVERSION_ERRORS as exc:
+        raise ValueError(f"{field_name} must be one-dimensional") from exc
     if array.ndim != 1:
         raise ValueError(f"{field_name} must be one-dimensional")
 
@@ -174,14 +189,17 @@ def _normalize_roi_index(value: Any, field_name: str) -> int:
         raise ValueError(f"{field_name} {_ROI_ERROR_SUFFIX}")
 
     if isinstance(value, (float, np.floating)):
-        numeric_value = float(value)
+        try:
+            numeric_value = float(value)
+        except _CONVERSION_ERRORS as exc:
+            raise ValueError(f"{field_name} {_ROI_ERROR_SUFFIX}") from exc
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
             raise ValueError(f"{field_name} {_ROI_ERROR_SUFFIX}")
         integer_value = int(numeric_value)
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except _CONVERSION_ERRORS as exc:
             raise ValueError(f"{field_name} {_ROI_ERROR_SUFFIX}") from exc
 
     integer_value = int(integer_value)

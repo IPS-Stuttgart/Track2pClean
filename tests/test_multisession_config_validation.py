@@ -61,5 +61,7 @@ def test_multisession_config_normalizes_numpy_scalar_controls():
     ],
 )
 def test_multisession_config_normalizes_decimal_overflow_controls(field_name):
-    with pytest.raises(ValueError, match=rf"{field_name} must be a finite non-negative value"):
+    with pytest.raises(
+        ValueError, match=rf"{field_name} must be a finite non-negative value"
+    ):
         MultisessionTrackingConfig(**{field_name: Decimal("1e999999")})

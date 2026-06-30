@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-
 from bayescatrack import load_suite2p_plane
 
 

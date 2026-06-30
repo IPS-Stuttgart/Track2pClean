@@ -61,7 +61,7 @@ def _reject_ambiguous_numeric_value(value: Any, field_name: str) -> None:
         raise ValueError(f"{field_name} must be numeric, not text")
     try:
         value_array = np.asarray(value, dtype=object)
-    except (TypeError, ValueError) as exc:
+    except Exception as exc:
         raise ValueError(f"{field_name} must be a numeric scalar") from exc
     if value_array.shape != ():
         raise ValueError(f"{field_name} must be a numeric scalar")

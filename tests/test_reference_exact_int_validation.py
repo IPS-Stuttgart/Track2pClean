@@ -59,5 +59,9 @@ def test_strict_reference_integer_scalar_rejects_textual_decimal_nan():
 
 
 def test_optional_reference_roi_textual_decimal_nan_stays_missing():
-    assert reference._parse_optional_int("NaN") is None  # pylint: disable=protected-access
-    assert reference._parse_optional_int("sNaN") is None  # pylint: disable=protected-access
+    assert (
+        reference._parse_optional_int("NaN") is None
+    )  # pylint: disable=protected-access
+    assert (
+        reference._parse_optional_int("sNaN") is None
+    )  # pylint: disable=protected-access
