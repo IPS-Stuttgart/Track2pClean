@@ -272,7 +272,10 @@ def _parse_roi_index(value: Any) -> int | None:
     if isinstance(value, (bool, np.bool_)):
         return None
     if isinstance(value, bytes):
-        value = value.decode("utf-8")
+        try:
+            value = value.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
     if isinstance(value, str):
         text = value.strip()
         if text.casefold() in {"", "none", "nan", "null"}:
