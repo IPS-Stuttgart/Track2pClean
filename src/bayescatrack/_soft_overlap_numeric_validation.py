@@ -52,19 +52,19 @@ def _strict_numeric_scalar(value: Any, *, message: str) -> Any:
         raise ValueError(message)
     try:
         array_value = np.asarray(value)
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(message) from exc
     if array_value.ndim > 0 or array_value.dtype.kind == "?":
         raise ValueError(message)
     try:
         scalar_value = array_value.item()
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(message) from exc
     if isinstance(scalar_value, (bool, np.bool_, bytes, bytearray)):
         raise ValueError(message)
     try:
         scalar_kind = np.asarray(scalar_value).dtype.kind
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(message) from exc
     if scalar_kind == "?":
         raise ValueError(message)
@@ -79,7 +79,7 @@ def _strict_finite_float(
     scalar_value = _strict_numeric_scalar(value, message=message)
     try:
         numeric_value = float(scalar_value)
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(message) from exc
     violates_bound = (
         numeric_value <= lower_bound if positive else numeric_value < lower_bound
@@ -109,15 +109,15 @@ def _strict_nonnegative_int(value: Any, *, name: str) -> int:
         except TypeError:
             try:
                 numeric_candidate = float(scalar_value)
-            except (TypeError, ValueError, OverflowError) as exc:
+            except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
                 raise ValueError(message) from exc
-        except (ValueError, OverflowError) as exc:
+        except (ValueError, OverflowError, ArithmeticError) as exc:
             raise ValueError(message) from exc
         else:
             return _reject_negative_int(integer_value, name=name)
     try:
         numeric_value = float(numeric_candidate)
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(message) from exc
     if not np.isfinite(numeric_value) or not numeric_value.is_integer():
         raise ValueError(message)
