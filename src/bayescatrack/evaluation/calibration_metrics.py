@@ -8,7 +8,7 @@ import numpy as np
 
 __all__ = ("brier_score",)
 
-_TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_TEXT_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 
 def brier_score(
