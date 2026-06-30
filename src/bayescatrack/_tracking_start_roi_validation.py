@@ -33,65 +33,86 @@ def install_tracking_start_roi_validation() -> None:
         _tracking._restrict_track_rows_to_start_rois
     )  # pylint: disable=protected-access
 
-    if getattr(original_run, _PATCH_MARKER, False) and getattr(
-        original_restrict,
-        _PATCH_MARKER,
-        False,
-    ):
+    run_has_patch = _has_patch_marker(original_run, _PATCH_MARKER)
+    restrict_has_patch = _has_patch_marker(original_restrict, _PATCH_MARKER)
+    if run_has_patch and restrict_has_patch:
         return
 
-    @wraps(original_run)
-    def run_registered_subject_tracking_with_start_roi_validation(
-        subject_dir: Any,
-        *args: Any,
-        start_roi_indices: Any | None = None,
-        start_session_index: Any = 0,
-        **kwargs: Any,
-    ) -> Any:
-        if start_roi_indices is not None:
-            start_roi_indices = _normalize_start_roi_indices(start_roi_indices)
-        start_session_index = _normalize_start_session_index(start_session_index)
-        return original_run(
-            subject_dir,
-            *args,
-            start_roi_indices=start_roi_indices,
-            start_session_index=start_session_index,
-            **kwargs,
+    if not run_has_patch:
+
+        @wraps(original_run)
+        def run_registered_subject_tracking_with_start_roi_validation(
+            subject_dir: Any,
+            *args: Any,
+            start_roi_indices: Any | None = None,
+            start_session_index: Any = 0,
+            **kwargs: Any,
+        ) -> Any:
+            if start_roi_indices is not None:
+                start_roi_indices = _normalize_start_roi_indices(start_roi_indices)
+            start_session_index = _normalize_start_session_index(start_session_index)
+            return original_run(
+                subject_dir,
+                *args,
+                start_roi_indices=start_roi_indices,
+                start_session_index=start_session_index,
+                **kwargs,
+            )
+
+        _mark_patch(
+            run_registered_subject_tracking_with_start_roi_validation,
+            original_run,
+        )
+        _tracking.run_registered_subject_tracking = (
+            run_registered_subject_tracking_with_start_roi_validation
         )
 
-    @wraps(original_restrict)
-    def restrict_track_rows_to_start_rois_with_validation(
-        track_rows: Any,
-        *,
-        start_roi_indices: Any,
-        start_session_index: Any,
-        fill_value: int,
-    ) -> np.ndarray:
-        num_sessions = _infer_track_row_session_count(track_rows)
-        return original_restrict(
-            track_rows,
-            start_roi_indices=_normalize_start_roi_indices(start_roi_indices),
-            start_session_index=_normalize_start_session_index(
-                start_session_index,
-                num_sessions=num_sessions,
-            ),
-            fill_value=fill_value,
+    if not restrict_has_patch:
+
+        @wraps(original_restrict)
+        def restrict_track_rows_to_start_rois_with_validation(
+            track_rows: Any,
+            *,
+            start_roi_indices: Any,
+            start_session_index: Any,
+            fill_value: int,
+        ) -> np.ndarray:
+            num_sessions = _infer_track_row_session_count(track_rows)
+            return original_restrict(
+                track_rows,
+                start_roi_indices=_normalize_start_roi_indices(start_roi_indices),
+                start_session_index=_normalize_start_session_index(
+                    start_session_index,
+                    num_sessions=num_sessions,
+                ),
+                fill_value=fill_value,
+            )
+
+        _mark_patch(restrict_track_rows_to_start_rois_with_validation, original_restrict)
+        _tracking._restrict_track_rows_to_start_rois = (  # pylint: disable=protected-access
+            restrict_track_rows_to_start_rois_with_validation
         )
-
-    _mark_patch(run_registered_subject_tracking_with_start_roi_validation, original_run)
-    _mark_patch(restrict_track_rows_to_start_rois_with_validation, original_restrict)
-
-    _tracking.run_registered_subject_tracking = (
-        run_registered_subject_tracking_with_start_roi_validation
-    )
-    _tracking._restrict_track_rows_to_start_rois = (  # pylint: disable=protected-access
-        restrict_track_rows_to_start_rois_with_validation
-    )
 
 
 def _mark_patch(wrapper: Any, original: Any) -> None:
     setattr(wrapper, _PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
+
+
+def _has_patch_marker(function: Any, marker: str) -> bool:
+    """Return whether ``function`` or a wrapped original already has ``marker``."""
+
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            return True
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _normalize_start_roi_indices(values: Any) -> tuple[int, ...]:
