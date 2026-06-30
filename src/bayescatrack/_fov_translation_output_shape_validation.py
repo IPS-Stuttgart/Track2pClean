@@ -112,6 +112,8 @@ def _normalize_output_shape_dimension(value: Any) -> int:
                 raise ValueError(_OUTPUT_SHAPE_ERROR) from None
         else:
             raise ValueError(_OUTPUT_SHAPE_ERROR) from None
+    except (ValueError, ArithmeticError) as exc:
+        raise ValueError(_OUTPUT_SHAPE_ERROR) from exc
 
     if dimension <= 0:
         raise ValueError(_OUTPUT_SHAPE_ERROR)
