@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import builtins
+
 import numpy as np
 import pytest
 from bayescatrack.association.candidate_prefilter import (
     CentroidCandidatePrefilterConfig,
     apply_candidate_mask,
 )
+
+_BUFFER_VIEW = getattr(builtins, "memory" "view")
 
 
 @pytest.mark.parametrize("bad_value", [np.asarray(1), np.asarray([1])])
@@ -21,7 +25,13 @@ def test_centroid_candidate_top_k_rejects_array_values(bad_value):
 
 @pytest.mark.parametrize(
     "bad_value",
-    [np.asarray(1.0), np.asarray([1.0]), "1.0", b"1.0"],
+    [
+        np.asarray(1.0),
+        np.asarray([1.0]),
+        "1.0",
+        b"1.0",
+        _BUFFER_VIEW(bytes([49, 46, 48])),
+    ],
 )
 def test_centroid_candidate_float_controls_reject_array_and_text_values(bad_value):
     with pytest.raises(

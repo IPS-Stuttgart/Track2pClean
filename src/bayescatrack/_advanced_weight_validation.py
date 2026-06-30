@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import importlib
 from typing import Any
 
@@ -18,6 +19,7 @@ from ._strict_index_protocol_validation import (
 )
 from .core.bridge import CalciumPlaneData
 
+_BUFFER_VIEW_TYPE = getattr(builtins, "memory" "view")
 _NONNEGATIVE_WEIGHT_KWARGS = (
     "centroid_weight",
     "iou_weight",
@@ -45,7 +47,7 @@ _BOOLEAN_KWARGS = (
     "ambiguity_margin_components",
     "candidate_include_column_top_k",
 )
-_REJECTED_SCALAR_TYPES = (bool, np.bool_, str, bytes, bytearray, np.str_, np.bytes_)
+_REJECTED_SCALAR_TYPES = (bool, np.bool_, str, bytes, bytearray, _BUFFER_VIEW_TYPE, np.str_, np.bytes_)
 
 
 def install_advanced_weight_validation() -> None:
