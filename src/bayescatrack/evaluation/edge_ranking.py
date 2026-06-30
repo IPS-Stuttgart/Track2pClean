@@ -29,6 +29,9 @@ SIMILARITY_SCORE_NAMES = frozenset(
     }
 )
 
+_SCORE_NAMES_ERROR = "score_names must be a non-empty sequence of unique names"
+_BARE_SCORE_NAME_SEQUENCE_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
+
 
 def rank_labeled_edges(
     labels: Any,
@@ -83,12 +86,8 @@ def rank_labeled_edges(
         measurement_roi_index = int(measurement_indices[column_index])
         for score_name, matrix in matrices.items():
             direction = directions[score_name]
-            row_details = _rank_details(
-                matrix[row_index, :], int(column_index), direction
-            )
-            column_details = _rank_details(
-                matrix[:, column_index], int(row_index), direction
-            )
+            row_details = _rank_details(matrix[row_index, :], int(column_index), direction)
+            column_details = _rank_details(matrix[:, column_index], int(row_index), direction)
             output_row: dict[str, float | int | str] = {
                 **base_metadata,
                 "reference_roi_index": reference_roi_index,
@@ -107,22 +106,12 @@ def rank_labeled_edges(
                 "column_tie_count": int(column_details["tie_count"]),
                 "row_candidate_count": int(row_details["candidate_count"]),
                 "column_candidate_count": int(column_details["candidate_count"]),
-                "row_finite_candidate_count": int(
-                    row_details["finite_candidate_count"]
-                ),
-                "column_finite_candidate_count": int(
-                    column_details["finite_candidate_count"]
-                ),
+                "row_finite_candidate_count": int(row_details["finite_candidate_count"]),
+                "column_finite_candidate_count": int(column_details["finite_candidate_count"]),
                 "best_false_row_score": _float_or_nan(row_details["best_false_score"]),
-                "best_false_column_score": _float_or_nan(
-                    column_details["best_false_score"]
-                ),
-                "best_false_row_roi_index": _roi_index_or_minus_one(
-                    measurement_indices, row_details["best_false_index"]
-                ),
-                "best_false_column_roi_index": _roi_index_or_minus_one(
-                    reference_indices, column_details["best_false_index"]
-                ),
+                "best_false_column_score": _float_or_nan(column_details["best_false_score"]),
+                "best_false_row_roi_index": _roi_index_or_minus_one(measurement_indices, row_details["best_false_index"]),
+                "best_false_column_roi_index": _roi_index_or_minus_one(reference_indices, column_details["best_false_index"]),
                 "row_margin": _float_or_nan(row_details["margin"]),
                 "column_margin": _float_or_nan(column_details["margin"]),
             }
@@ -141,17 +130,17 @@ def missing_reference_edge_rows(
 ) -> list[dict[str, float | int | str]]:
     """Return diagnostic rows for manual-GT edges absent from the candidate matrix."""
 
+    normalized_score_names = _normalize_score_names(score_names)
     reference_indices = {
         int(value) for value in np.asarray(reference_roi_indices, dtype=int).reshape(-1)
     }
     measurement_indices = {
-        int(value)
-        for value in np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
+        int(value) for value in np.asarray(measurement_roi_indices, dtype=int).reshape(-1)
     }
     base_metadata = dict(metadata or {})
     directions = {
         score_name: _score_direction(score_name, score_directions)
-        for score_name in score_names
+        for score_name in normalized_score_names
     }
     rows: list[dict[str, float | int | str]] = []
     seen: set[tuple[int, int, str]] = set()
@@ -168,7 +157,7 @@ def missing_reference_edge_rows(
             reason = "reference_roi_missing"
         else:
             reason = "measurement_roi_missing"
-        for score_name in score_names:
+        for score_name in normalized_score_names:
             key = (reference_roi_index, measurement_roi_index, score_name)
             if key in seen:
                 continue
@@ -217,7 +206,7 @@ def summarize_edge_ranking_rows(
     candidate edges. ``*_present`` variants use only present, finite true edges.
     """
 
-    groups: "OrderedDict[tuple[Any, ...], list[Mapping[str, Any]]]" = OrderedDict()
+    groups: OrderedDict[tuple[Any, ...], list[Mapping[str, Any]]] = OrderedDict()
     for row in rows:
         key = tuple(row.get(group_key, "") for group_key in group_keys)
         groups.setdefault(key, []).append(row)
@@ -227,10 +216,10 @@ def summarize_edge_ranking_rows(
     for key, group_rows in groups.items():
         summary: dict[str, float | int | str] = dict(zip(group_keys, key))
         present_rows = [
-            _row for _row in group_rows if _truthy_int(_row.get("edge_present", 0))
+            row for row in group_rows if _truthy_int(row.get("edge_present", 0))
         ]
         finite_rows = [
-            _row for _row in present_rows if _truthy_int(_row.get("true_is_finite", 0))
+            row for row in present_rows if _truthy_int(row.get("true_is_finite", 0))
         ]
         n_gt_edges = len(group_rows)
         n_present = len(present_rows)
@@ -288,9 +277,7 @@ def summarize_edge_ranking_rows(
             )
             summary[f"column_hit_at_{k_value}_present"] = _rate(
                 finite_rows,
-                lambda row, k_value=k_value: _safe_int(
-                    row.get("column_rank"), default=0
-                )
+                lambda row, k_value=k_value: _safe_int(row.get("column_rank"), default=0)
                 <= k_value,
             )
         summaries.append(summary)
@@ -441,6 +428,38 @@ def _rank_details(
     }
 
 
+def _normalize_score_names(score_names: Sequence[str]) -> tuple[str, ...]:
+    if isinstance(score_names, _BARE_SCORE_NAME_SEQUENCE_TYPES):
+        raise ValueError(_SCORE_NAMES_ERROR)
+    try:
+        raw_score_names = tuple(score_names)
+    except TypeError as exc:
+        raise ValueError(_SCORE_NAMES_ERROR) from exc
+    if not raw_score_names:
+        raise ValueError(_SCORE_NAMES_ERROR)
+
+    normalized = tuple(_normalize_score_name(score_name) for score_name in raw_score_names)
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(_SCORE_NAMES_ERROR)
+    return normalized
+
+
+def _normalize_score_name(score_name: Any) -> str:
+    if isinstance(score_name, (bytes, bytearray, np.bytes_)):
+        try:
+            text = bytes(score_name).decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError(_SCORE_NAMES_ERROR) from exc
+    elif isinstance(score_name, str):
+        text = str(score_name)
+    else:
+        raise ValueError(_SCORE_NAMES_ERROR)
+    text = text.strip()
+    if not text:
+        raise ValueError(_SCORE_NAMES_ERROR)
+    return text
+
+
 def _roi_index_or_minus_one(indices: np.ndarray, position: Any) -> int:
     position_int = _safe_int(position, default=-1)
     if position_int < 0 or position_int >= len(indices):
@@ -509,9 +528,7 @@ def _float_or_nan(value: Any) -> float:
 
 
 def _finite_values(rows: Sequence[Mapping[str, Any]], field_name: str) -> np.ndarray:
-    values = np.asarray(
-        [_finite_float(row.get(field_name)) for row in rows], dtype=float
-    )
+    values = np.asarray([_finite_float(row.get(field_name)) for row in rows], dtype=float)
     return values[np.isfinite(values)]
 
 
