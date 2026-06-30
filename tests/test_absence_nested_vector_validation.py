@@ -4,14 +4,15 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.absence_model import (
     absence_cost_vector,
     gap_penalty_matrix,
 )
 
 
-def _plane(n_rois: int, *, cell_probabilities: np.ndarray | None = None) -> SimpleNamespace:
+def _plane(
+    n_rois: int, *, cell_probabilities: np.ndarray | None = None
+) -> SimpleNamespace:
     return SimpleNamespace(
         n_rois=n_rois,
         cell_probabilities=cell_probabilities,
@@ -28,8 +29,16 @@ def _plane(n_rois: int, *, cell_probabilities: np.ndarray | None = None) -> Simp
             {},
             "plane.cell_probabilities",
         ),
-        ({}, {"registered_empty_mask": np.asarray([[True], [False]])}, "registered_empty_mask"),
-        ({}, {"local_density": np.asarray([[0.0], [1.0]], dtype=float)}, "local_density"),
+        (
+            {},
+            {"registered_empty_mask": np.asarray([[True], [False]])},
+            "registered_empty_mask",
+        ),
+        (
+            {},
+            {"local_density": np.asarray([[0.0], [1.0]], dtype=float)},
+            "local_density",
+        ),
     ),
 )
 def test_absence_cost_vector_rejects_nested_optional_cues(
