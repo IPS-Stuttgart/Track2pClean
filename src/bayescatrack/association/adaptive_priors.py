@@ -20,6 +20,7 @@ from bayescatrack.reference import Track2pReference
 
 SessionEdge = tuple[int, int]
 _CONVERSION_ERRORS = (TypeError, ValueError, OverflowError)
+_TEXT_OR_BINARY_SEQUENCE_TYPES = (str, bytes, bytearray, memoryview)
 
 
 @dataclass(frozen=True)
@@ -202,7 +203,7 @@ def _finite_costs(costs: np.ndarray, *, large_cost: float) -> np.ndarray:
 
 
 def _validate_session_edge_key(edge: Any) -> SessionEdge:
-    if isinstance(edge, (str, bytes, bytearray)):
+    if isinstance(edge, _TEXT_OR_BINARY_SEQUENCE_TYPES):
         raise ValueError("pairwise_costs keys must be length-2 session-edge pairs")
     try:
         values = tuple(edge)
@@ -219,7 +220,7 @@ def _validate_session_edge_key(edge: Any) -> SessionEdge:
 
 
 def _nonnegative_session_index(value: Any, *, name: str) -> int:
-    if isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, _TEXT_OR_BINARY_SEQUENCE_TYPES):
         raise ValueError(f"{name} must be a non-negative integer")
     return _nonnegative_int(value, name=name)
 
