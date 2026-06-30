@@ -29,7 +29,7 @@ def install_integer_image_translation_validation() -> None:
     )
 
     image_original = _fov_registration.apply_integer_image_translation
-    if not getattr(image_original, _PATCH_MARKER, False):
+    if not _wrapper_chain_has_marker(image_original, _PATCH_MARKER):
 
         @wraps(image_original)
         def apply_integer_image_translation_with_shift_validation(
@@ -55,7 +55,7 @@ def install_integer_image_translation_validation() -> None:
         )
 
     roi_original = _fov_registration.apply_integer_roi_mask_translation
-    if not getattr(roi_original, _ROI_PATCH_MARKER, False):
+    if not _wrapper_chain_has_marker(roi_original, _ROI_PATCH_MARKER):
 
         @wraps(roi_original)
         def apply_integer_roi_mask_translation_with_shift_validation(
@@ -79,6 +79,20 @@ def install_integer_image_translation_validation() -> None:
         _fov_registration.apply_integer_roi_mask_translation = (
             apply_integer_roi_mask_translation_with_shift_validation
         )
+
+
+def _wrapper_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _mark_patch(wrapper: Any, original: Any, marker: str) -> None:
