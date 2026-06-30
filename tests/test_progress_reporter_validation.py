@@ -6,6 +6,11 @@ from bayescatrack._progress_reporter_validation import install_progress_reporter
 from bayescatrack.experiments.track2p_benchmark import ProgressReporter
 
 
+class _ArithmeticIndex:
+    def __index__(self) -> int:
+        raise ArithmeticError("index conversion failed")
+
+
 @pytest.mark.parametrize(
     "invalid_enabled",
     [
@@ -33,6 +38,7 @@ def test_progress_reporter_rejects_non_boolean_enabled(invalid_enabled: object) 
         1.5,
         np.nan,
         np.array([1, 2]),
+        _ArithmeticIndex(),
     ],
 )
 def test_progress_reporter_rejects_invalid_total(invalid_total: object) -> None:
