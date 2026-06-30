@@ -53,7 +53,28 @@ def _minimal_covariance_bundle() -> SimpleNamespace:
     )
 
 
-@pytest.mark.parametrize("covariance_epsilon", [True, 0.0, -1.0, np.nan, np.inf])
+def _encoded_numeric_token() -> bytes:
+    return "1.0e-6".encode("ascii")
+
+
+@pytest.mark.parametrize(
+    "covariance_epsilon",
+    [
+        True,
+        0.0,
+        -1.0,
+        np.nan,
+        np.inf,
+        "1.0e-6",
+        _encoded_numeric_token(),
+        bytearray(_encoded_numeric_token()),
+        memoryview(_encoded_numeric_token()),
+        np.str_("1.0e-6"),
+        np.bytes_(_encoded_numeric_token()),
+        np.asarray("1.0e-6"),
+        [1.0e-6],
+    ],
+)
 def test_pairwise_components_from_bundle_rejects_invalid_covariance_epsilon(
     covariance_epsilon,
 ):
