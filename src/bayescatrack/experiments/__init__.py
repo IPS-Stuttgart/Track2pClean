@@ -8,6 +8,9 @@ from . import _activity_sweep_defaults as _activity_sweep_defaults
 from . import _assignment_prior_sweep_validation as _assignment_prior_sweep_validation
 from . import _cost_sweep_defaults as _cost_sweep_defaults
 from . import _diag_defaults as _diag_defaults
+from . import (
+    _growth_veto_diagnostic_local_index_validation as _growth_veto_diagnostic_local_index_validation,
+)
 from . import _mask_input_sweep_option_validation as _mask_input_sweep_option_validation
 from . import _seed_session_validation as _seed_session_validation
 from . import (
@@ -67,6 +70,7 @@ install_summary_output_format_integration()
 _cost_sweep_defaults.install_cost_sweep_suite2p_defaults()
 _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
 _diag_defaults.install_diagnostic_suite2p_defaults()
+_growth_veto_diagnostic_local_index_validation.install_growth_veto_diagnostic_local_index_validation()
 _mask_input_sweep_option_validation.install_mask_input_sweep_option_validation()
 _tracklet_graph_mask_cache_validation.install_tracklet_graph_mask_cache_validation()
 install_raw_benchmark_exclude_subjects_validation()
