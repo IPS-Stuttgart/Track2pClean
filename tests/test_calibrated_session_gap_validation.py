@@ -8,6 +8,11 @@ from bayescatrack.association.calibrated_costs import (
 )
 
 
+class _ArithmeticFloatFailure:
+    def __float__(self) -> float:
+        raise ArithmeticError("cannot convert")
+
+
 def _components() -> dict[str, np.ndarray]:
     return {"centroid_distance": np.zeros((1, 2), dtype=float)}
 
@@ -27,6 +32,17 @@ def test_calibrated_session_gap_rejects_nonfinite_and_boolean_values(
 def test_calibrated_session_gap_rejects_text_values(session_gap: object) -> None:
     with pytest.raises(ValueError, match=r"session_gap must.*positive"):
         with_session_gap_component(_components(), session_gap=session_gap)
+
+
+@pytest.mark.parametrize("session_gap", [b"2", bytearray(b"2"), np.bytes_(b"2")])
+def test_calibrated_session_gap_rejects_binary_text_values(session_gap: object) -> None:
+    with pytest.raises(ValueError, match=r"session_gap must.*positive"):
+        with_session_gap_component(_components(), session_gap=session_gap)
+
+
+def test_calibrated_session_gap_normalizes_arithmetic_conversion_errors() -> None:
+    with pytest.raises(ValueError, match=r"session_gap must.*positive"):
+        with_session_gap_component(_components(), session_gap=_ArithmeticFloatFailure())
 
 
 def test_calibrated_session_gap_accepts_positive_integer_like_values() -> None:
