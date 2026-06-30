@@ -19,6 +19,19 @@ _ROI_TRANSLATION_FUNCTIONS = [
     apply_subpixel_roi_mask_translation,
 ]
 
+_ALL_TRANSLATION_FUNCTIONS = [
+    *[(function, False) for function in _IMAGE_TRANSLATION_FUNCTIONS],
+    *[(function, True) for function in _ROI_TRANSLATION_FUNCTIONS],
+]
+
+
+class _RaisingIndex:
+    def __init__(self, exception_type: type[Exception]) -> None:
+        self._exception_type = exception_type
+
+    def __index__(self) -> int:
+        raise self._exception_type("bad index")
+
 
 @pytest.mark.parametrize("translation_function", _IMAGE_TRANSLATION_FUNCTIONS)
 @pytest.mark.parametrize(
@@ -75,6 +88,27 @@ def test_roi_translation_rejects_malformed_output_shape(
             roi_masks,
             (0, 0),
             output_shape=bad_output_shape,
+        )
+
+
+@pytest.mark.parametrize("translation_function,is_roi", _ALL_TRANSLATION_FUNCTIONS)
+@pytest.mark.parametrize("exception_type", [ValueError, OverflowError, ArithmeticError])
+def test_translation_rejects_bad_index_protocol_output_shape_dimensions(
+    translation_function,
+    is_roi,
+    exception_type,
+):
+    image_or_masks = (
+        np.zeros((1, 3, 4), dtype=bool)
+        if is_roi
+        else np.arange(12, dtype=float).reshape(3, 4)
+    )
+
+    with pytest.raises(ValueError, match="output_shape"):
+        translation_function(
+            image_or_masks,
+            (0, 0),
+            output_shape=(_RaisingIndex(exception_type), 4),
         )
 
 
