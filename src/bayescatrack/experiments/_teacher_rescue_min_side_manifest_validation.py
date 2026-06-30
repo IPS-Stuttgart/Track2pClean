@@ -17,28 +17,51 @@ def install_teacher_rescue_min_side_manifest_validation() -> None:
     from bayescatrack.experiments import (  # pylint: disable=import-outside-toplevel
         _teacher_rescue_manifest_integration as base,
     )
+    from bayescatrack.experiments import benchmark_manifest as manifest
 
     current_runner = base._run_track2p_policy_teacher_adjacent_rows
-    if _callable_chain_has_patch(current_runner):
-        return
+    if not _callable_chain_has_patch(current_runner):
+        original_runner = current_runner
 
-    original_runner = current_runner
+        @wraps(original_runner)
+        def _run_teacher_rows_with_min_side_validation(
+            config: Any, options: Mapping[str, Any]
+        ) -> list[dict[str, Any]]:
+            _validate_min_side_options(options)
+            return original_runner(config, options)
 
-    @wraps(original_runner)
-    def _run_teacher_rows_with_min_side_validation(
-        config: Any, options: Mapping[str, Any]
-    ) -> list[dict[str, Any]]:
-        if "min_side_observations" in options:
-            _positive_int_value(
-                options["min_side_observations"], name="min_side_observations"
-            )
-        return original_runner(config, options)
+        setattr(_run_teacher_rows_with_min_side_validation, _PATCH_MARKER, True)
+        setattr(_run_teacher_rows_with_min_side_validation, _ORIGINAL_ATTR, original_runner)
+        base._run_track2p_policy_teacher_adjacent_rows = (
+            _run_teacher_rows_with_min_side_validation
+        )
 
-    setattr(_run_teacher_rows_with_min_side_validation, _PATCH_MARKER, True)
-    setattr(_run_teacher_rows_with_min_side_validation, _ORIGINAL_ATTR, original_runner)
-    base._run_track2p_policy_teacher_adjacent_rows = (
-        _run_teacher_rows_with_min_side_validation
-    )
+    current_benchmark_runner = manifest._run_benchmark_rows
+    if not _callable_chain_has_patch(current_benchmark_runner):
+        original_benchmark_runner = current_benchmark_runner
+
+        @wraps(original_benchmark_runner)
+        def _run_benchmark_rows_with_min_side_validation(
+            run_spec: Any,
+        ) -> list[dict[str, Any]]:
+            if getattr(run_spec, "runner", None) == base.TEACHER_ADJACENT_RESCUE_RUNNER:
+                _validate_min_side_options(dict(getattr(run_spec, "runner_kwargs", {}) or {}))
+            return original_benchmark_runner(run_spec)
+
+        setattr(_run_benchmark_rows_with_min_side_validation, _PATCH_MARKER, True)
+        setattr(
+            _run_benchmark_rows_with_min_side_validation,
+            _ORIGINAL_ATTR,
+            original_benchmark_runner,
+        )
+        manifest._run_benchmark_rows = _run_benchmark_rows_with_min_side_validation
+
+
+def _validate_min_side_options(options: Mapping[str, Any]) -> None:
+    if "min_side_observations" in options:
+        _positive_int_value(
+            options["min_side_observations"], name="min_side_observations"
+        )
 
 
 def _callable_chain_has_patch(function: Any) -> bool:
