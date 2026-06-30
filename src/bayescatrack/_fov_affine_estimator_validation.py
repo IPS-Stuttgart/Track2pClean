@@ -29,7 +29,7 @@ def install_fov_affine_estimator_validation() -> None:
     from . import fov_affine_registration as _fov_affine_registration
 
     original = _fov_affine_registration.estimate_fov_affine_transform
-    if getattr(original, _PATCH_MARKER, False):
+    if _function_chain_has_patch(original, _PATCH_MARKER):
         return
 
     @wraps(original)
@@ -74,6 +74,20 @@ def install_fov_affine_estimator_validation() -> None:
     _fov_affine_registration.estimate_fov_affine_transform = (
         estimate_fov_affine_transform_with_validation
     )
+
+
+def _function_chain_has_patch(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            return True
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _identity_fallback_estimate(affine_registration_module: Any) -> Any:
