@@ -32,13 +32,21 @@ def install_track_refinement_track_row_range_validation() -> None:
         return
 
     @wraps(original)
-    def _validated_track_row_matrix_with_range_validation(track_rows: Any) -> np.ndarray:
+    def _validated_track_row_matrix_with_range_validation(
+        track_rows: Any,
+    ) -> np.ndarray:
         _validate_track_row_integer_range(track_rows)
         return original(track_rows)
 
     setattr(_validated_track_row_matrix_with_range_validation, _PATCH_MARKER, True)
-    setattr(_validated_track_row_matrix_with_range_validation, "_bayescatrack_original", original)
-    module._validated_track_row_matrix = _validated_track_row_matrix_with_range_validation
+    setattr(
+        _validated_track_row_matrix_with_range_validation,
+        "_bayescatrack_original",
+        original,
+    )
+    module._validated_track_row_matrix = (
+        _validated_track_row_matrix_with_range_validation
+    )
 
 
 def _validate_track_row_integer_range(track_rows: Any) -> None:

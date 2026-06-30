@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 import track2pclean  # noqa: F401  # installs the compatibility validation patch
 from bayescatrack import fov_registration
 
-_OUTPUT_SHAPE_ERROR = "output_shape must contain exactly two positive integer dimensions"
+_OUTPUT_SHAPE_ERROR = (
+    "output_shape must contain exactly two positive integer dimensions"
+)
 
 
 @pytest.mark.parametrize(
