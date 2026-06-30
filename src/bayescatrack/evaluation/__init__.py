@@ -7,6 +7,7 @@ from . import (
 )
 from . import _edge_ranking_hit_k_validation as _edge_ranking_hit_k_validation
 from . import _edge_ranking_roi_validation as _edge_ranking_roi_validation
+from . import _edge_ranking_score_name_validation as _edge_ranking_score_name_validation
 from . import (
     _edge_ranking_score_matrix_validation as _edge_ranking_score_matrix_validation,
 )
@@ -54,6 +55,7 @@ _edge_ranking_roi_validation.install_edge_ranking_roi_validation()
 _edge_ranking_feature_name_validation.install_edge_ranking_feature_name_validation()
 _edge_ranking_score_matrix_validation.install_edge_ranking_score_matrix_validation()
 _edge_ranking_hit_k_validation.install_edge_ranking_hit_k_validation(_edge_ranking)
+_edge_ranking_score_name_validation.install_edge_ranking_score_name_validation(_edge_ranking)
 _track_matrix_vector_validation.install_track_matrix_vector_input_validation(_scores)
 _subset_string_validation.install_track_subset_string_validation(_scores)
 _subset_validation.install_track_subset_duplicate_validation(_scores)
