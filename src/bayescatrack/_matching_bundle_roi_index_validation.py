@@ -38,7 +38,7 @@ def install_matching_bundle_roi_index_validation() -> None:
     """Install idempotent validation around matching bundle ROI metadata."""
 
     original = _matching.solve_bundle_linear_assignment
-    if getattr(original, _PATCH_MARKER, False):
+    if _method_chain_has_patch(original):
         return
 
     @wraps(original)
@@ -79,6 +79,20 @@ def install_matching_bundle_roi_index_validation() -> None:
     _matching.solve_bundle_linear_assignment = (
         solve_bundle_linear_assignment_with_bundle_roi_index_validation
     )
+
+
+def _method_chain_has_patch(method: Any) -> bool:
+    seen: set[int] = set()
+    current: Any = method
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, _PATCH_MARKER, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _normalize_bundle_roi_indices(
