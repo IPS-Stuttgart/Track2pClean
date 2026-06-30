@@ -134,6 +134,7 @@ def fit_gap_costs_from_reference(
     """
 
     max_gap = _positive_int(max_gap, name="max_gap")
+    curated_only = _strict_bool(curated_only, name="curated_only")
     smoothing = _finite_positive_float(smoothing, name="smoothing")
     matrix = reference.filtered_indices(curated_only=curated_only)
     present = np.vectorize(lambda value: value is not None, otypes=[bool])(matrix)
@@ -299,6 +300,12 @@ def _finite_positive_float(value: Any, *, name: str) -> float:
     if not np.isfinite(numeric) or numeric <= 0.0:
         raise ValueError(f"{name} must be a positive finite value")
     return numeric
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError(f"{name} must be a boolean")
 
 
 def _coerce_config(
