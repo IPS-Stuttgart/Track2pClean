@@ -19,6 +19,7 @@ from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.reference import Track2pReference
 
 SessionEdge = tuple[int, int]
+_CONVERSION_ERRORS = (TypeError, ValueError, OverflowError)
 
 
 @dataclass(frozen=True)
@@ -246,7 +247,7 @@ def _nonnegative_int(value: Any, *, name: str) -> int:
         raise ValueError(f"{name} must be a non-negative integer")
     try:
         numeric = float(value)
-    except (TypeError, ValueError) as exc:
+    except _CONVERSION_ERRORS as exc:
         raise ValueError(f"{name} must be a non-negative integer") from exc
     if not np.isfinite(numeric) or not numeric.is_integer() or numeric < 0.0:
         raise ValueError(f"{name} must be a non-negative integer")
@@ -269,7 +270,7 @@ def _positive_int(value: Any, *, name: str) -> int:
         raise ValueError(f"{name} must be a positive integer")
     try:
         numeric = float(value)
-    except (TypeError, ValueError) as exc:
+    except _CONVERSION_ERRORS as exc:
         raise ValueError(f"{name} must be a positive integer") from exc
     if not np.isfinite(numeric) or not numeric.is_integer() or numeric < 1.0:
         raise ValueError(f"{name} must be a positive integer")
@@ -279,7 +280,10 @@ def _positive_int(value: Any, *, name: str) -> int:
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite and non-negative")
-    numeric = float(value)
+    try:
+        numeric = float(value)
+    except _CONVERSION_ERRORS as exc:
+        raise ValueError(f"{name} must be finite and non-negative") from exc
     if not np.isfinite(numeric) or numeric < 0.0:
         raise ValueError(f"{name} must be finite and non-negative")
     return numeric
@@ -288,7 +292,10 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
 def _finite_positive_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a positive finite value")
-    numeric = float(value)
+    try:
+        numeric = float(value)
+    except _CONVERSION_ERRORS as exc:
+        raise ValueError(f"{name} must be a positive finite value") from exc
     if not np.isfinite(numeric) or numeric <= 0.0:
         raise ValueError(f"{name} must be a positive finite value")
     return numeric
