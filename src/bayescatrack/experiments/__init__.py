@@ -37,6 +37,9 @@ from ._comparison_count_validation import (
 from ._comparison_limit_validation import (
     install_comparison_limit_validation,
 )
+from ._manifest_optional_float_validation import (
+    install_optional_float_manifest_validation,
+)
 from ._seed_sensitivity_validation import (
     install_seed_sensitivity_audit_validation,
 )
@@ -64,6 +67,7 @@ install_calibration_feature_registry_integration()
 install_comparison_count_validation()
 install_comparison_limit_validation()
 _teacher_rescue_manifest_integration.install_teacher_rescue_manifest_integration()
+install_optional_float_manifest_validation()
 install_teacher_rescue_min_side_manifest_validation()
 install_teacher_rescue_edit_cap_manifest_integration()
 install_teacher_rescue_repair_preset_manifest_integration()
