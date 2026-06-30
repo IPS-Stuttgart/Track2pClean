@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_registration_selection_validation_patch"
-_STRING_LIKE_TYPES = (str, bytes, bytearray)
+_STRING_LIKE_TYPES = (str, bytes, bytearray, memoryview)
 
 
 def install_registration_selection_validation() -> None:
