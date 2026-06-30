@@ -44,6 +44,9 @@ from . import (
     _track2p_policy_session_gap_validation as _track2p_policy_session_gap_validation,
 )
 from . import (
+    _track_refinement_binary_token_validation as _track_refinement_binary_token_validation,
+)
+from . import (
     _track_refinement_fill_value_validation as _track_refinement_fill_value_validation,
 )
 from . import (
@@ -82,6 +85,7 @@ _teacher_prior_index_validation.install_teacher_prior_index_validation()
 _dynamic_edge_prior_validation.install_dynamic_edge_prior_bool_validation()
 _dynamic_activity_component_validation.install_dynamic_activity_component_shape_validation()
 _track2p_policy_session_gap_validation.install_track2p_policy_session_gap_validation()
+_track_refinement_binary_token_validation.install_track_refinement_binary_token_validation()
 _track_refinement_fill_value_validation.install_track_refinement_fill_value_validation()
 _track_refinement_numeric_control_validation.install_track_refinement_numeric_control_validation()
 _track_refinement_row_sentinel_validation.install_track_refinement_row_sentinel_validation()
@@ -117,6 +121,7 @@ _PATCH_MODULES = (
     _shifted_iou_preset_validation,
     _teacher_prior_index_validation,
     _track2p_policy_session_gap_validation,
+    _track_refinement_binary_token_validation,
     _track_refinement_fill_value_validation,
     _track_refinement_numeric_control_validation,
     _track_refinement_row_sentinel_validation,
