@@ -131,6 +131,28 @@ def test_track_geometry_flags_isolated_outlier_when_mad_is_zero() -> None:
     assert np.isinf(issues[0].robust_z)
 
 
+def test_track_geometry_respects_disabled_split_bad_edges_toggle() -> None:
+    rows = np.asarray([[0, 0, 0, 0, 0]], dtype=int)
+    position_tables = tuple(
+        {0: np.asarray([float(x), 0.0], dtype=float)}
+        for x in (0.0, 10.0, 80.0, 30.0, 40.0)
+    )
+
+    enabled_issues = track_geometry_issues(
+        rows,
+        position_tables,
+        config=TrackSmoothingConfig(split_bad_edges=True),
+    )
+    disabled_issues = track_geometry_issues(
+        rows,
+        position_tables,
+        config=TrackSmoothingConfig(split_bad_edges=False),
+    )
+
+    assert enabled_issues
+    assert disabled_issues == []
+
+
 def test_track_geometry_keeps_clean_linear_tracks_unflagged() -> None:
     rows = np.asarray([[0, 0, 0, 0, 0]], dtype=int)
     position_tables = tuple(
