@@ -43,6 +43,9 @@ from ._summary_output_format_integration import (
 from ._teacher_rescue_edit_cap_manifest_integration import (
     install_teacher_rescue_edit_cap_manifest_integration,
 )
+from ._teacher_rescue_feature_gate_manifest_validation import (
+    install_teacher_rescue_feature_gate_manifest_validation,
+)
 from ._teacher_rescue_min_side_manifest_validation import (
     install_teacher_rescue_min_side_manifest_validation,
 )
@@ -63,6 +66,7 @@ _teacher_rescue_manifest_integration.install_teacher_rescue_manifest_integration
 install_teacher_rescue_min_side_manifest_validation()
 install_teacher_rescue_edit_cap_manifest_integration()
 install_teacher_rescue_repair_preset_manifest_integration()
+install_teacher_rescue_feature_gate_manifest_validation()
 install_summary_output_format_integration()
 _cost_sweep_defaults.install_cost_sweep_suite2p_defaults()
 _activity_sweep_defaults.install_activity_sweep_suite2p_defaults()
