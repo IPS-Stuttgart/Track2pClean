@@ -1,14 +1,16 @@
 """Strict validation for track-refinement numeric control scalars.
 
-``TrackSmoothingConfig`` thresholds are scalar controls, but the underlying
-implementation normalizes them with ``float(...)``.  NumPy currently allows
+``TrackSmoothingConfig`` thresholds and detection-count controls are scalar
+controls, but the underlying implementation normalizes them with permissive
+``float(...)`` and ``operator.index(...)`` coercions. NumPy currently allows
 ``float(np.array([3.5]))`` and ``float(np.array([True]))`` with only a warning,
-which can silently turn array-like or boolean controls into valid-looking
-thresholds.  Validate the controls before that coercion happens.
+and custom integer-like objects can raise low-level index-protocol exceptions.
+Validate these controls before that coercion happens.
 """
 
 from __future__ import annotations
 
+import operator
 from functools import wraps
 from typing import Any
 
@@ -33,13 +35,20 @@ def install_track_refinement_numeric_control_validation() -> None:
             name="residual_z_threshold",
             allow_zero=False,
         )
+        min_track_detections = _normalize_integer_control(
+            self.min_track_detections,
+            name="min_track_detections",
+            minimum=2,
+        )
         min_edge_residual = _normalize_float_control(
             self.min_edge_residual,
             name="min_edge_residual",
             allow_zero=True,
         )
+        object.__setattr__(self, "min_track_detections", min_track_detections)
         original_post_init(self)
         object.__setattr__(self, "residual_z_threshold", residual_z_threshold)
+        object.__setattr__(self, "min_track_detections", min_track_detections)
         object.__setattr__(self, "min_edge_residual", min_edge_residual)
 
     setattr(checked_post_init, _PATCH_MARKER, True)
@@ -85,6 +94,54 @@ def _normalize_float_control(value: Any, *, name: str, allow_zero: bool) -> floa
     elif normalized <= 0.0:
         raise ValueError(message)
     return normalized
+
+
+def _normalize_integer_control(value: Any, *, name: str, minimum: int) -> int:
+    integer_message = f"{name} must be an integer"
+    minimum_message = f"{name} must be at least {minimum}"
+
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(integer_message)
+
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(integer_message)
+        value = value.item()
+        if isinstance(value, (bool, np.bool_)):
+            raise ValueError(integer_message)
+
+    if isinstance(value, (int, np.integer)):
+        integer_value = int(value)
+    elif isinstance(value, (float, np.floating)):
+        integer_value = _integer_from_float(float(value), message=integer_message)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError(integer_message)
+        try:
+            integer_value = _integer_from_float(
+                float(stripped),
+                message=integer_message,
+            )
+        except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
+            raise ValueError(integer_message) from exc
+    elif isinstance(value, (bytes, bytearray, np.bytes_)):
+        raise ValueError(integer_message)
+    else:
+        try:
+            integer_value = int(operator.index(value))
+        except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
+            raise ValueError(integer_message) from exc
+
+    if integer_value < minimum:
+        raise ValueError(minimum_message)
+    return integer_value
+
+
+def _integer_from_float(value: float, *, message: str) -> int:
+    if not np.isfinite(value) or not value.is_integer():
+        raise ValueError(message)
+    return int(value)
 
 
 __all__ = ["install_track_refinement_numeric_control_validation"]

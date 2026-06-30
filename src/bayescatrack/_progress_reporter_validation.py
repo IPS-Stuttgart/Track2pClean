@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import operator
 from functools import wraps
 from typing import Any
 
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_progress_reporter_validation_patch"
+_REJECTED_INTEGER_SCALAR_TYPES = (bool, np.bool_, str, bytes, bytearray)
 
 
 def install_progress_reporter_validation() -> None:
-    """Install strict validation for ``ProgressReporter.enabled``."""
+    """Install strict validation for ``ProgressReporter`` constructor inputs."""
 
     from .experiments import track2p_benchmark as benchmark_module
 
@@ -27,7 +29,7 @@ def install_progress_reporter_validation() -> None:
     ) -> None:
         original_init(
             self,
-            total,
+            _positive_integer(total, name="total"),
             enabled=_strict_bool(enabled, name="enabled"),
             label=label,
         )
@@ -45,6 +47,37 @@ def _strict_bool(value: Any, *, name: str) -> bool:
     if isinstance(value, (bool, np.bool_)):
         return bool(value)
     raise ValueError(f"{name} must be a boolean")
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    error_message = f"{name} must be a positive integer"
+    if isinstance(value, _REJECTED_INTEGER_SCALAR_TYPES):
+        raise ValueError(error_message)
+
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(error_message)
+        value = value.item()
+        if isinstance(value, _REJECTED_INTEGER_SCALAR_TYPES):
+            raise ValueError(error_message)
+
+    if isinstance(value, (float, np.floating)):
+        numeric = float(value)
+        if not np.isfinite(numeric) or not numeric.is_integer():
+            raise ValueError(error_message)
+        normalized = int(numeric)
+    else:
+        try:
+            normalized = operator.index(value)
+        except TypeError as exc:
+            raise ValueError(error_message) from exc
+        except (ValueError, OverflowError) as exc:
+            raise ValueError(error_message) from exc
+
+    normalized = int(normalized)
+    if normalized <= 0:
+        raise ValueError(error_message)
+    return normalized
 
 
 __all__ = ["install_progress_reporter_validation"]

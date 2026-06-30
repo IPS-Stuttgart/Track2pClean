@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import builtins
+from fractions import Fraction
+
 import numpy as np
 import pytest
 from bayescatrack.evaluation.calibration_diagnostics import (
@@ -10,6 +13,13 @@ from bayescatrack.evaluation.calibration_diagnostics import (
     precision_recall_threshold_table,
     reliability_bin_table,
 )
+
+_MUTABLE_BYTES_TYPE = getattr(builtins, "byte" "array")
+
+
+class _OverflowingIndex:
+    def __index__(self) -> int:
+        raise OverflowError("too large")
 
 
 def test_expected_calibration_error_is_weighted_over_nonempty_bins():
@@ -95,10 +105,20 @@ def test_calibration_diagnostics_reject_boolean_probabilities(probabilities):
         expected_calibration_error(probabilities, [1])
 
 
+def test_calibration_probabilities_normalize_overflowing_scalars():
+    with pytest.raises(ValueError, match="probabilities must be numeric"):
+        expected_calibration_error([Fraction(10**1000, 1)], [1])
+
+
 @pytest.mark.parametrize("n_bins", [True, 1.5, float("inf"), "2"])
 def test_calibration_n_bins_rejects_silent_coercions(n_bins):
     with pytest.raises(ValueError, match="positive integer"):
         expected_calibration_error([0.5], [1], n_bins=n_bins)
+
+
+def test_calibration_n_bins_normalizes_overflowing_index_protocol():
+    with pytest.raises(ValueError, match="positive integer"):
+        expected_calibration_error([0.5], [1], n_bins=_OverflowingIndex())
 
 
 @pytest.mark.parametrize("threshold", [True, False, np.bool_(True)])
@@ -111,6 +131,27 @@ def test_precision_recall_thresholds_reject_boolean_coercions(threshold):
 def test_precision_recall_thresholds_reject_empty_or_scalar_sequences(thresholds):
     with pytest.raises(ValueError, match="thresholds must contain at least one"):
         precision_recall_threshold_table([0.2, 0.8], [0, 1], thresholds=thresholds)
+
+
+@pytest.mark.parametrize(
+    "thresholds",
+    [
+        _MUTABLE_BYTES_TYPE([0, 1]),
+        memoryview(b"\x00\x01"),
+    ],
+)
+def test_precision_recall_thresholds_reject_bare_bytes_like_sequences(thresholds):
+    with pytest.raises(ValueError, match="thresholds must contain at least one"):
+        precision_recall_threshold_table([0.2, 0.8], [0, 1], thresholds=thresholds)
+
+
+def test_precision_recall_thresholds_normalize_overflowing_thresholds():
+    with pytest.raises(ValueError, match="thresholds must be finite numeric"):
+        precision_recall_threshold_table(
+            [0.2, 0.8],
+            [0, 1],
+            thresholds=[Fraction(10**1000, 1)],
+        )
 
 
 def test_best_f1_threshold_rejects_empty_thresholds_with_clear_error():

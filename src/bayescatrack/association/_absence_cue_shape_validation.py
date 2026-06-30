@@ -115,7 +115,7 @@ def _check_roi_vector_shape(values: Any, field_name: str, n_rois: int) -> None:
     if array.ndim != 1:
         if field_name.endswith("_absence_costs"):
             raise ValueError(
-                "absence cost vectors must be one-dimensional with one value per ROI"
+                f"{field_name} absence cost vectors must be one-dimensional with one value per ROI"
             )
         raise ValueError(
             f"{field_name} must be a one-dimensional vector with one value per ROI"

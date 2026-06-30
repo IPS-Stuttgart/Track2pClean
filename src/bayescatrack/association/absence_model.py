@@ -198,7 +198,8 @@ def absence_summary(plane: Any, *, costs: Any | None = None) -> dict[str, float 
     if costs is None:
         cost_values = absence_cost_vector(plane)
     else:
-        cost_values = np.asarray(costs, dtype=float).reshape(-1)
+        n_rois = _validated_roi_count(plane, "plane")
+        cost_values = _validated_absence_cost_vector("costs", costs, n_rois)
     return {
         "n_rois": int(cost_values.size),
         "mean_absence_cost": (
