@@ -8,6 +8,11 @@ from bayescatrack.association.track_refinement import (
 )
 
 
+class _OverflowingIndex:
+    def __index__(self) -> int:
+        raise OverflowError("synthetic index overflow")
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
@@ -65,6 +70,11 @@ def test_track_smoothing_config_rejects_silent_control_coercions(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         TrackSmoothingConfig(**kwargs)
+
+
+def test_track_smoothing_config_wraps_min_detection_index_errors() -> None:
+    with pytest.raises(ValueError, match="min_track_detections must be an integer"):
+        TrackSmoothingConfig(min_track_detections=_OverflowingIndex())
 
 
 def test_track_smoothing_config_normalizes_integer_like_controls() -> None:
