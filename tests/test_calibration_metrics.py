@@ -59,9 +59,11 @@ def test_brier_score_rejects_boolean_sample_weights(sample_weight):
     [
         ["0.5"],
         [b"0.5"],
+        [memoryview(b"0.5")],
         np.asarray(["0.5"], dtype=str),
         np.asarray("0.5"),
         np.asarray([np.str_("0.5")], dtype=object),
+        np.asarray([memoryview(b"0.5")], dtype=object),
     ],
 )
 def test_brier_score_rejects_text_probabilities(probabilities):
@@ -74,8 +76,10 @@ def test_brier_score_rejects_text_probabilities(probabilities):
     [
         ["1"],
         [b"1"],
+        [memoryview(b"1")],
         np.asarray(["1"], dtype=str),
         np.asarray("1"),
+        np.asarray([memoryview(b"1")], dtype=object),
     ],
 )
 def test_brier_score_rejects_text_labels(labels):
@@ -88,8 +92,10 @@ def test_brier_score_rejects_text_labels(labels):
     [
         ["1.0"],
         [b"1.0"],
+        [memoryview(b"1.0")],
         np.asarray(["1.0"], dtype=str),
         np.asarray("1.0"),
+        np.asarray([memoryview(b"1.0")], dtype=object),
     ],
 )
 def test_brier_score_rejects_text_sample_weights(sample_weight):
