@@ -91,3 +91,40 @@ def test_missing_reference_edges_are_counted_in_summary_denominator():
     assert summary[0]["missing_edges"] == 1
     assert summary[0]["row_hit_at_1"] == pytest.approx(0.5)
     assert summary[0]["row_hit_at_1_present"] == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(
+    "score_names",
+    [
+        "iou",
+        np.str_("iou"),
+        b"iou",
+        np.bytes_(b"iou"),
+        memoryview(b"iou"),
+        (),
+        ("",),
+        ("cost", "cost"),
+        (1,),
+    ],
+)
+def test_missing_reference_edge_rows_rejects_invalid_score_names(score_names):
+    with pytest.raises(ValueError, match="score_names"):
+        missing_reference_edge_rows(
+            [(3, 4)],
+            reference_roi_indices=np.array([1]),
+            measurement_roi_indices=np.array([2]),
+            score_names=score_names,
+        )
+
+
+def test_missing_reference_edge_rows_decodes_bytes_score_names():
+    rows = missing_reference_edge_rows(
+        [(3, 4)],
+        reference_roi_indices=np.array([1]),
+        measurement_roi_indices=np.array([2]),
+        score_names=(b"iou",),
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["score_name"] == "iou"
+    assert rows[0]["score_direction"] == "similarity"
