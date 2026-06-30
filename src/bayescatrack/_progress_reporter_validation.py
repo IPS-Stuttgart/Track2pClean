@@ -71,7 +71,7 @@ def _positive_integer(value: Any, *, name: str) -> int:
             normalized = operator.index(value)
         except TypeError as exc:
             raise ValueError(error_message) from exc
-        except (ValueError, OverflowError) as exc:
+        except (ValueError, ArithmeticError) as exc:
             raise ValueError(error_message) from exc
 
     normalized = int(normalized)
