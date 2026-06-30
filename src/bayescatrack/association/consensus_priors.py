@@ -11,6 +11,8 @@ import numpy as np
 from ._numeric_validation import (
     finite_nonnegative_float,
     finite_positive_float,
+    integer,
+    nonnegative_integer,
     positive_integer,
 )
 
@@ -91,15 +93,23 @@ def edge_votes_from_tracks(
 ) -> dict[TrackEdge, int]:
     """Count assignment edges that recur across multiple solved variants."""
 
-    edges = tuple((int(source), int(target)) for source, target in session_edges)
+    edges = tuple(
+        _normalize_forward_session_edge(edge, field_name="session_edges")
+        for edge in _sequence_values(session_edges, field_name="session_edges")
+    )
     votes: dict[TrackEdge, int] = {}
-    for tracks in track_sets:
+    for tracks in _sequence_values(track_sets, field_name="track_sets"):
         seen_this_variant: set[TrackEdge] = set()
-        for track in tracks:
+        for track in _sequence_values(tracks, field_name="track_sets entries"):
+            if not isinstance(track, Mapping):
+                raise ValueError("track_sets entries must contain track mappings")
             normalized: dict[int, int] = {}
             for session, roi in track.items():
-                session_index = int(session)
-                roi_index = int(roi)
+                session_index = nonnegative_integer(
+                    session,
+                    name="track session index",
+                )
+                roi_index = integer(roi, name="track ROI index")
                 if roi_index < 0:
                     # Dense track matrices conventionally use -1 for missing detections.
                     # Missing detections must not vote for consensus edges.
@@ -127,7 +137,7 @@ def apply_consensus_edge_priors(
     cfg = consensus_prior_config_from_mapping(config) or ConsensusPriorConfig()
     adjusted: dict[SessionEdge, np.ndarray] = {}
     for edge, matrix in pairwise_costs.items():
-        session_edge = (int(edge[0]), int(edge[1]))
+        session_edge = _normalize_forward_session_edge(edge, field_name="pairwise_costs")
         adjusted[session_edge] = _normalize_pairwise_cost_matrix(
             matrix,
             session_edge,
@@ -135,14 +145,14 @@ def apply_consensus_edge_priors(
     if cfg.relief <= 0.0 or not votes:
         return adjusted
 
-    for (source, target, source_roi, target_roi), vote_count in votes.items():
-        if int(vote_count) < cfg.min_votes:
+    for raw_edge, raw_vote_count in votes.items():
+        source, target, source_roi, target_roi = _normalize_track_edge(raw_edge)
+        vote_count = nonnegative_integer(raw_vote_count, name="votes value")
+        if vote_count < cfg.min_votes:
             continue
-        matrix = adjusted.get((int(source), int(target)))
+        matrix = adjusted.get((source, target))
         if matrix is None:
             continue
-        source_roi = int(source_roi)
-        target_roi = int(target_roi)
         if not (
             0 <= source_roi < matrix.shape[0] and 0 <= target_roi < matrix.shape[1]
         ):
@@ -150,7 +160,7 @@ def apply_consensus_edge_priors(
         old_value = float(matrix[source_roi, target_roi])
         if not np.isfinite(old_value) or old_value >= cfg.large_cost:
             continue
-        relief = min(cfg.max_relief, cfg.relief * int(vote_count))
+        relief = min(cfg.max_relief, cfg.relief * vote_count)
         matrix[source_roi, target_roi] = max(0.0, old_value - relief)
     return adjusted
 
@@ -167,6 +177,41 @@ def _normalize_pairwise_cost_matrix(matrix: Any, edge: SessionEdge) -> np.ndarra
             f"pairwise cost matrix for session edge {edge!r} must be two-dimensional"
         )
     return costs.copy()
+
+
+def _sequence_values(values: Any, *, field_name: str) -> tuple[Any, ...]:
+    if isinstance(values, (str, bytes, bytearray, np.str_, np.bytes_)):
+        raise ValueError(f"{field_name} must be a sequence")
+    try:
+        return tuple(values)
+    except TypeError as exc:
+        raise ValueError(f"{field_name} must be a sequence") from exc
+
+
+def _normalize_forward_session_edge(edge: Any, *, field_name: str) -> SessionEdge:
+    values = _sequence_values(edge, field_name=f"{field_name} edge")
+    if len(values) != 2:
+        raise ValueError(f"{field_name} must contain length-2 session edges")
+    source = nonnegative_integer(values[0], name=f"{field_name} source")
+    target = nonnegative_integer(values[1], name=f"{field_name} target")
+    if target <= source:
+        raise ValueError(f"{field_name} must contain forward session edges")
+    return (source, target)
+
+
+def _normalize_track_edge(edge: Any) -> TrackEdge:
+    values = _sequence_values(edge, field_name="votes key")
+    if len(values) != 4:
+        raise ValueError(
+            "votes keys must be (source, target, source_roi, target_roi) edges"
+        )
+    source, target = _normalize_forward_session_edge(
+        values[:2],
+        field_name="votes key session edge",
+    )
+    source_roi = nonnegative_integer(values[2], name="votes key source ROI")
+    target_roi = nonnegative_integer(values[3], name="votes key target ROI")
+    return (source, target, source_roi, target_roi)
 
 
 def _normalize_variant_costs(values: Sequence[str] | str) -> tuple[str, ...]:

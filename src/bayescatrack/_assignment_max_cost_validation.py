@@ -36,7 +36,7 @@ def normalize_assignment_max_cost(value: Any) -> float | None:
         raise ValueError(_ERROR_MESSAGE)
     try:
         normalized = float(scalar)
-    except (TypeError, ValueError, OverflowError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(_ERROR_MESSAGE) from exc
     if not np.isfinite(normalized) or normalized < 0.0:
         raise ValueError(_ERROR_MESSAGE)

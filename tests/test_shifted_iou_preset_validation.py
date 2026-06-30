@@ -5,6 +5,21 @@ import pytest
 from bayescatrack.association import pyrecest_global_assignment as global_assignment
 
 
+class RaisesDuringFloat:
+    def __float__(self) -> float:
+        raise OverflowError
+
+
+class RaisesDuringIndex:
+    def __index__(self) -> int:
+        raise OverflowError
+
+
+class RejectsDuringIndex:
+    def __index__(self) -> int:
+        raise ValueError
+
+
 def test_registered_shifted_iou_cost_kwargs_preserve_numeric_inputs():
     kwargs = global_assignment.registered_shifted_iou_cost_kwargs(
         similarity_epsilon="1e-5",
@@ -32,6 +47,8 @@ def test_registered_shifted_iou_cost_kwargs_preserve_numeric_inputs():
         np.inf,
         "",
         object(),
+        RaisesDuringIndex(),
+        RejectsDuringIndex(),
     ],
 )
 def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
@@ -49,6 +66,7 @@ def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
         ({"similarity_epsilon": np.nan}, "similarity_epsilon"),
         ({"similarity_epsilon": np.asarray(1.0)}, "similarity_epsilon"),
         ({"similarity_epsilon": np.asarray([1.0])}, "similarity_epsilon"),
+        ({"similarity_epsilon": RaisesDuringFloat()}, "similarity_epsilon"),
         (
             {"shifted_iou_shift_penalty_weight": True},
             "shifted_iou_shift_penalty_weight",
@@ -69,6 +87,10 @@ def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
             {"shifted_iou_shift_penalty_weight": np.asarray([0.25])},
             "shifted_iou_shift_penalty_weight",
         ),
+        (
+            {"shifted_iou_shift_penalty_weight": RaisesDuringFloat()},
+            "shifted_iou_shift_penalty_weight",
+        ),
         ({"shifted_iou_shift_penalty_scale": True}, "shifted_iou_shift_penalty_scale"),
         ({"shifted_iou_shift_penalty_scale": 0.0}, "shifted_iou_shift_penalty_scale"),
         (
@@ -85,6 +107,10 @@ def test_registered_shifted_iou_cost_kwargs_reject_invalid_radius(bad_radius):
         ),
         (
             {"shifted_iou_shift_penalty_scale": np.asarray([2.5])},
+            "shifted_iou_shift_penalty_scale",
+        ),
+        (
+            {"shifted_iou_shift_penalty_scale": RaisesDuringFloat()},
             "shifted_iou_shift_penalty_scale",
         ),
     ],
