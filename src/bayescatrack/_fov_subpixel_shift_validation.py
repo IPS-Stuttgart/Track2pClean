@@ -74,7 +74,7 @@ def _wrap_finite_nonnegative_float_validation(module: Any) -> None:
     def wrapper(value: Any, *, name: str) -> float:
         try:
             return original(value, name=name)
-        except OverflowError as exc:
+        except ArithmeticError as exc:
             raise ValueError(_FLOAT_CONTROL_ERROR.format(name=name)) from exc
 
     setattr(wrapper, _FLOAT_CONTROL_PATCH_MARKER, True)
