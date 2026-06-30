@@ -91,6 +91,8 @@ def test_adaptive_edge_prior_config_rejects_invalid_large_cost(
         ({"smoothing": 0.0}, "smoothing must be a positive finite value"),
         ({"smoothing": np.nan}, "smoothing must be a positive finite value"),
         ({"smoothing": np.inf}, "smoothing must be a positive finite value"),
+        ({"curated_only": "yes"}, "curated_only must be a boolean"),
+        ({"curated_only": 1}, "curated_only must be a boolean"),
     ],
 )
 def test_fit_gap_costs_from_reference_rejects_invalid_controls(
