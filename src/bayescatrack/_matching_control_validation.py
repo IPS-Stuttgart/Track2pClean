@@ -40,15 +40,6 @@ def install_matching_control_validation() -> None:
         _matching._normalize_session_index
     )  # pylint: disable=protected-access
 
-    if (
-        getattr(original_solve, _PATCH_MARKER, False)
-        and getattr(original_build_matches, _PATCH_MARKER, False)
-        and getattr(original_bundle_roi_indices, _PATCH_MARKER, False)
-        and getattr(original_normalize_roi_index, _PATCH_MARKER, False)
-        and getattr(original_normalize_session_index, _PATCH_MARKER, False)
-    ):
-        return
-
     @wraps(original_solve)
     def solve_bundle_linear_assignment_with_control_validation(
         bundle: Any,
@@ -136,36 +127,72 @@ def install_matching_control_validation() -> None:
                 raise
             raise ValueError(f"{field_name} must be an integer session index") from exc
 
-    _mark_patch(solve_bundle_linear_assignment_with_control_validation, original_solve)
-    _mark_patch(
-        build_track_rows_from_matches_with_control_validation, original_build_matches
-    )
-    _mark_patch(
-        bundle_roi_indices_for_session_with_control_validation,
-        original_bundle_roi_indices,
-    )
-    _mark_patch(normalize_roi_index_with_array_validation, original_normalize_roi_index)
-    _mark_patch(
-        normalize_session_index_with_array_validation,
-        original_normalize_session_index,
-    )
+    if not _method_chain_has_patch(original_solve):
+        _mark_patch(
+            solve_bundle_linear_assignment_with_control_validation,
+            original_solve,
+        )
+        _matching.solve_bundle_linear_assignment = (
+            solve_bundle_linear_assignment_with_control_validation
+        )
 
-    _matching.solve_bundle_linear_assignment = (
-        solve_bundle_linear_assignment_with_control_validation
-    )
-    _matching.build_track_rows_from_matches = (
-        build_track_rows_from_matches_with_control_validation
-    )
-    _matching._bundle_roi_indices_for_session = bundle_roi_indices_for_session_with_control_validation  # pylint: disable=protected-access
-    _matching._normalize_roi_index = (
-        normalize_roi_index_with_array_validation  # pylint: disable=protected-access
-    )
-    _matching._normalize_session_index = normalize_session_index_with_array_validation  # pylint: disable=protected-access
+    if not _method_chain_has_patch(original_build_matches):
+        _mark_patch(
+            build_track_rows_from_matches_with_control_validation,
+            original_build_matches,
+        )
+        _matching.build_track_rows_from_matches = (
+            build_track_rows_from_matches_with_control_validation
+        )
+
+    if not _method_chain_has_patch(original_bundle_roi_indices):
+        _mark_patch(
+            bundle_roi_indices_for_session_with_control_validation,
+            original_bundle_roi_indices,
+        )
+        # pylint: disable=protected-access
+        _matching._bundle_roi_indices_for_session = (
+            bundle_roi_indices_for_session_with_control_validation
+        )
+
+    if not _method_chain_has_patch(original_normalize_roi_index):
+        _mark_patch(
+            normalize_roi_index_with_array_validation,
+            original_normalize_roi_index,
+        )
+        # pylint: disable=protected-access
+        _matching._normalize_roi_index = (
+            normalize_roi_index_with_array_validation
+        )
+
+    if not _method_chain_has_patch(original_normalize_session_index):
+        _mark_patch(
+            normalize_session_index_with_array_validation,
+            original_normalize_session_index,
+        )
+        # pylint: disable=protected-access
+        _matching._normalize_session_index = (
+            normalize_session_index_with_array_validation
+        )
 
 
 def _mark_patch(wrapper: Any, original: Any) -> None:
     setattr(wrapper, _PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
+
+
+def _method_chain_has_patch(method: Any) -> bool:
+    seen: set[int] = set()
+    current: Any = method
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, _PATCH_MARKER, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _normalize_empty_match_collections(matches: Any) -> Any:
@@ -240,7 +267,8 @@ def _normalize_session_index(value: Any, n_sessions: int) -> int:
     session_index = _normalize_integer_control(value, "start_session_index")
     if session_index < 0 or session_index >= n_sessions:
         raise IndexError(
-            f"start_session_index {session_index} out of bounds for {n_sessions} sessions"
+            f"start_session_index {session_index} out of bounds "
+            f"for {n_sessions} sessions"
         )
     return session_index
 
