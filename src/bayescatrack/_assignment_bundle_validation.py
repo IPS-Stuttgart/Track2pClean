@@ -29,7 +29,7 @@ def install_assignment_bundle_validation() -> None:
     from . import matching as _matching  # pylint: disable=import-outside-toplevel
 
     original_solve = _matching.solve_bundle_linear_assignment
-    if getattr(original_solve, _PATCH_MARKER, False):
+    if _method_chain_has_patch(original_solve):
         return
 
     @wraps(original_solve)
@@ -55,6 +55,20 @@ def install_assignment_bundle_validation() -> None:
     _matching.solve_bundle_linear_assignment = (
         solve_bundle_linear_assignment_with_bundle_validation
     )
+
+
+def _method_chain_has_patch(method: Any) -> bool:
+    seen: set[int] = set()
+    current: Any = method
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, _PATCH_MARKER, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _validate_assignment_bundle_roi_indices(bundle: Any) -> None:
