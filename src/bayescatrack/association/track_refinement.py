@@ -96,6 +96,8 @@ def track_geometry_issues(
 
     cfg = config or TrackSmoothingConfig()
     rows = _validated_track_rows_and_position_tables(track_rows, position_tables)
+    if not cfg.split_bad_edges:
+        return []
 
     issues: list[TrackGeometryIssue] = []
     for track_index, row in enumerate(rows):

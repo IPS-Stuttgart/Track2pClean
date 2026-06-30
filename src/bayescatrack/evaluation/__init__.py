@@ -1,6 +1,7 @@
 """Evaluation helpers for BayesCaTrack benchmarks."""
 
 from . import _calibration_label_validation as _calibration_label_validation
+from . import _calibration_threshold_validation as _calibration_threshold_validation
 from . import (
     _edge_ranking_feature_name_validation as _edge_ranking_feature_name_validation,
 )
@@ -43,6 +44,9 @@ _SCORE_EXPORTS = (
     "track_lengths",
 )
 
+_calibration_threshold_validation.install_calibration_threshold_validation(
+    _calibration_diagnostics
+)
 _edge_ranking_roi_validation.install_edge_ranking_roi_validation()
 _edge_ranking_feature_name_validation.install_edge_ranking_feature_name_validation()
 _edge_ranking_hit_k_validation.install_edge_ranking_hit_k_validation(_edge_ranking)

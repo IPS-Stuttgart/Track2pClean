@@ -23,8 +23,19 @@ def _plane(
     )
 
 
+def _array_data_buffer() -> object:
+    return np.asarray([1, 0], dtype=np.uint8).data
+
+
 def test_absence_cost_vector_rejects_cell_probability_length_mismatch() -> None:
     plane = _plane(2, cell_probabilities=np.asarray([1.0], dtype=float))
+
+    with pytest.raises(ValueError, match="plane.cell_probabilities"):
+        absence_cost_vector(plane)
+
+
+def test_absence_cost_vector_rejects_bare_buffer_cell_probabilities() -> None:
+    plane = _plane(2, cell_probabilities=_array_data_buffer())
 
     with pytest.raises(ValueError, match="plane.cell_probabilities"):
         absence_cost_vector(plane)
@@ -45,6 +56,16 @@ def test_absence_cost_vector_rejects_optional_cue_length_mismatch(
 
     with pytest.raises(ValueError, match=kwarg):
         absence_cost_vector(plane, **{kwarg: value})
+
+
+@pytest.mark.parametrize("kwarg", ["registered_empty_mask", "local_density"])
+def test_absence_cost_vector_rejects_bare_buffer_optional_cues(
+    kwarg: str,
+) -> None:
+    plane = _plane(2)
+
+    with pytest.raises(ValueError, match=kwarg):
+        absence_cost_vector(plane, **{kwarg: _array_data_buffer()})
 
 
 def test_gap_penalty_matrix_rejects_registered_empty_mask_length_mismatch() -> None:

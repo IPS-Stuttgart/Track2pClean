@@ -8,6 +8,16 @@ from bayescatrack.association.pyrecest_global_assignment import (
 )
 
 
+class _OverflowingFloat:
+    def __float__(self) -> float:
+        raise OverflowError("too large")
+
+
+class _OverflowingIndex:
+    def __index__(self) -> int:
+        raise OverflowError("too large")
+
+
 def _triplet_costs() -> dict[tuple[int, int], np.ndarray]:
     return {
         (0, 1): np.asarray([[5.0]], dtype=float),
@@ -22,8 +32,21 @@ def _triplet_costs() -> dict[tuple[int, int], np.ndarray]:
         (TripletSupportConsistencyConfig(triplet_weight=True), "triplet_weight"),
         (
             TripletSupportConsistencyConfig(
+                triplet_weight=_OverflowingFloat(),
+            ),
+            "triplet_weight",
+        ),
+        (
+            TripletSupportConsistencyConfig(
                 triplet_weight=1.0,
                 support_top_k=True,
+            ),
+            "support_top_k",
+        ),
+        (
+            TripletSupportConsistencyConfig(
+                triplet_weight=1.0,
+                support_top_k=_OverflowingIndex(),
             ),
             "support_top_k",
         ),

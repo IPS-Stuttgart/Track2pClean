@@ -13,7 +13,17 @@ class _OverflowingFloat:
         raise OverflowError("too large")
 
 
+class _ArithmeticFloat:
+    def __float__(self) -> float:
+        raise ArithmeticError("bad numeric conversion")
+
+
 class _BadIndexWithFloatFallback:
+    def __float__(self) -> float:
+        return 1.0
+
+
+class _ArithmeticIndexWithFloatFallback:
     def __float__(self) -> float:
         return 1.0
 
@@ -26,7 +36,12 @@ def _raise_bad_index(_self: object) -> int:
     raise ValueError("bad index")
 
 
+def _raise_arithmetic_index(_self: object) -> int:
+    raise ArithmeticError("bad index")
+
+
 setattr(_BadIndexWithFloatFallback, _dunder("index"), _raise_bad_index)
+setattr(_ArithmeticIndexWithFloatFallback, _dunder("index"), _raise_arithmetic_index)
 
 
 def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
@@ -46,6 +61,10 @@ def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
             "distance_transform_overlap_weight must be a finite non-negative value",
         ),
         (
+            {"distance_transform_overlap_weight": _ArithmeticFloat()},
+            "distance_transform_overlap_weight must be a finite non-negative value",
+        ),
+        (
             {"similarity_epsilon": object()},
             "similarity_epsilon must be a finite positive value",
         ),
@@ -59,6 +78,10 @@ def _single_roi_plane(mask: np.ndarray) -> CalciumPlaneData:
         ),
         (
             {"soft_iou_radius": _BadIndexWithFloatFallback()},
+            "soft_iou_radius must be an integer",
+        ),
+        (
+            {"soft_iou_radius": _ArithmeticIndexWithFloatFallback()},
             "soft_iou_radius must be an integer",
         ),
     ],
@@ -86,6 +109,10 @@ def test_registered_soft_iou_preset_rejects_invalid_numeric_controls(
             "large_cost must be a finite positive value",
         ),
         (
+            {"large_cost": _ArithmeticFloat()},
+            "large_cost must be a finite positive value",
+        ),
+        (
             {"soft_iou_radius": b"1"},
             "soft_iou_radius must be an integer",
         ),
@@ -95,6 +122,14 @@ def test_registered_soft_iou_preset_rejects_invalid_numeric_controls(
         ),
         (
             {"distance_transform_overlap_radius": _BadIndexWithFloatFallback()},
+            "distance_transform_overlap_radius must be an integer",
+        ),
+        (
+            {
+                "distance_transform_overlap_radius": (
+                    _ArithmeticIndexWithFloatFallback()
+                )
+            },
             "distance_transform_overlap_radius must be an integer",
         ),
     ],

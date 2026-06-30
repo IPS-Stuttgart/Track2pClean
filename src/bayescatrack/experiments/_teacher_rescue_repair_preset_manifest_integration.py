@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from functools import wraps
+from numbers import Integral
 from typing import Any
 
 TEACHER_REPAIR_PRESET_FIELD = "teacher_repair_preset"
@@ -82,7 +83,27 @@ def _expand_teacher_repair_preset(options: Mapping[str, Any]) -> dict[str, Any]:
 
     for key, value in defaults.items():
         if key == "min_component_observations":
-            expanded[key] = max(int(value), int(expanded.get(key, 1)))
+            expanded[key] = max(
+                _positive_int_value(value, name=key),
+                _positive_int_value(expanded.get(key, 1), name=key),
+            )
         else:
             expanded.setdefault(key, value)
     return expanded
+
+
+def _positive_int_value(value: Any, *, name: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a positive integer")
+    if isinstance(value, Integral):
+        normalized = int(value)
+    elif isinstance(value, str):
+        try:
+            normalized = int(value, 10)
+        except ValueError as exc:
+            raise ValueError(f"{name} must be a positive integer") from exc
+    else:
+        raise ValueError(f"{name} must be a positive integer")
+    if normalized <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return normalized

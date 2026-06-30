@@ -144,10 +144,15 @@ def _integer_control(
     except TypeError:
         if not isinstance(value, (float, np.floating)):
             raise ValueError(message) from None
-        numeric_value = float(value)
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(message) from exc
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
             raise ValueError(message)
         integer_value = int(numeric_value)
+    except (ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
 
     integer_value = int(integer_value)
     if integer_value < minimum:

@@ -19,6 +19,7 @@ from bayescatrack.core.bridge import Track2pSession
 from bayescatrack.reference import Track2pReference
 
 SessionEdge = tuple[int, int]
+_CONVERSION_ERRORS = (TypeError, ValueError, OverflowError)
 
 
 @dataclass(frozen=True)
@@ -133,6 +134,7 @@ def fit_gap_costs_from_reference(
     """
 
     max_gap = _positive_int(max_gap, name="max_gap")
+    curated_only = _strict_bool(curated_only, name="curated_only")
     smoothing = _finite_positive_float(smoothing, name="smoothing")
     matrix = reference.filtered_indices(curated_only=curated_only)
     present = np.vectorize(lambda value: value is not None, otypes=[bool])(matrix)
@@ -246,7 +248,7 @@ def _nonnegative_int(value: Any, *, name: str) -> int:
         raise ValueError(f"{name} must be a non-negative integer")
     try:
         numeric = float(value)
-    except (TypeError, ValueError) as exc:
+    except _CONVERSION_ERRORS as exc:
         raise ValueError(f"{name} must be a non-negative integer") from exc
     if not np.isfinite(numeric) or not numeric.is_integer() or numeric < 0.0:
         raise ValueError(f"{name} must be a non-negative integer")
@@ -269,7 +271,7 @@ def _positive_int(value: Any, *, name: str) -> int:
         raise ValueError(f"{name} must be a positive integer")
     try:
         numeric = float(value)
-    except (TypeError, ValueError) as exc:
+    except _CONVERSION_ERRORS as exc:
         raise ValueError(f"{name} must be a positive integer") from exc
     if not np.isfinite(numeric) or not numeric.is_integer() or numeric < 1.0:
         raise ValueError(f"{name} must be a positive integer")
@@ -279,7 +281,10 @@ def _positive_int(value: Any, *, name: str) -> int:
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be finite and non-negative")
-    numeric = float(value)
+    try:
+        numeric = float(value)
+    except _CONVERSION_ERRORS as exc:
+        raise ValueError(f"{name} must be finite and non-negative") from exc
     if not np.isfinite(numeric) or numeric < 0.0:
         raise ValueError(f"{name} must be finite and non-negative")
     return numeric
@@ -288,10 +293,19 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
 def _finite_positive_float(value: Any, *, name: str) -> float:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a positive finite value")
-    numeric = float(value)
+    try:
+        numeric = float(value)
+    except _CONVERSION_ERRORS as exc:
+        raise ValueError(f"{name} must be a positive finite value") from exc
     if not np.isfinite(numeric) or numeric <= 0.0:
         raise ValueError(f"{name} must be a positive finite value")
     return numeric
+
+
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    raise ValueError(f"{name} must be a boolean")
 
 
 def _coerce_config(
