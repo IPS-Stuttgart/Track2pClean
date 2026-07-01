@@ -85,8 +85,12 @@ def test_sparse_pair_matrices_source_indices_match_filtered_rows(monkeypatch):
         "_sparse_cross_iou_diagnostic_matrices",
         diagnostic_matrices,
     )
-    monkeypatch.setattr(full_mht.rank, "_pairwise_shifted_iou_from_support", shifted_iou)
-    monkeypatch.setattr(full_mht.rank, "_assignment_threshold", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(
+        full_mht.rank, "_pairwise_shifted_iou_from_support", shifted_iou
+    )
+    monkeypatch.setattr(
+        full_mht.rank, "_assignment_threshold", lambda *_args, **_kwargs: 0.0
+    )
     monkeypatch.setattr(full_mht, "_growth_residual_matrices", growth_residuals)
 
     feature_cache = SimpleNamespace(

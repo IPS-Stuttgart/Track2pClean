@@ -92,7 +92,9 @@ def _normalize_track_matrix_shape(observations: np.ndarray) -> np.ndarray:
             return np.empty((0, 0), dtype=object)
         return observations.reshape(1, -1)
     if observations.ndim != 2:
-        raise ValueError("track_matrix must be two-dimensional or a single track vector")
+        raise ValueError(
+            "track_matrix must be two-dimensional or a single track vector"
+        )
     return observations
 
 

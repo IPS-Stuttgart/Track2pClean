@@ -55,9 +55,7 @@ class MonotoneRankerOptions:
             normalized_feature_names = (monotone_feature_names,)
         else:
             normalized_feature_names = tuple(monotone_feature_names)
-        object.__setattr__(
-            self, "monotone_feature_names", normalized_feature_names
-        )
+        object.__setattr__(self, "monotone_feature_names", normalized_feature_names)
         object.__setattr__(
             self, "margin", _finite_positive_float(self.margin, name="margin")
         )
