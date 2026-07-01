@@ -7,7 +7,7 @@ from types import ModuleType
 from typing import Any
 
 _PATCH_ATTR = "_bayescatrack_track_subset_string_validation_patch"
-_STRING_LIKE_TYPES = (str, bytes, bytearray)
+_STRING_LIKE_TYPES = (str, bytes, bytearray, memoryview)
 
 
 def install_track_subset_string_validation(scores_module: ModuleType) -> None:
