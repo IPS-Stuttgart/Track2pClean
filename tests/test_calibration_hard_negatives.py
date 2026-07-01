@@ -125,6 +125,10 @@ def test_candidate_limited_hard_negatives_ignore_unsupervised_pairs():
             "negative_to_positive_ratio must be finite",
         ),
         (
+            {"negative_to_positive_ratio": memoryview(bytes([49, 46, 48]))},
+            "negative_to_positive_ratio must be finite",
+        ),
+        (
             {"candidate_top_k_per_anchor": 1.5},
             "candidate_top_k_per_anchor must be positive or None",
         ),
@@ -142,6 +146,10 @@ def test_candidate_limited_hard_negatives_ignore_unsupervised_pairs():
         ),
         (
             {"candidate_top_k_per_anchor": np.asarray([1])},
+            "candidate_top_k_per_anchor must be positive or None",
+        ),
+        (
+            {"candidate_top_k_per_anchor": memoryview(bytes([49]))},
             "candidate_top_k_per_anchor must be positive or None",
         ),
         (
