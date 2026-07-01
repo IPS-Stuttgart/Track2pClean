@@ -35,6 +35,16 @@ class _Bundle:
         np.bool_(True),
         np.bool_(False),
         bytearray(b"1.0"),
+        np.str_("1.0"),
+        np.bytes_(b"1.0"),
+        pytest.param(
+            np.asarray(np.str_("1.0"), dtype=object),
+            id="numpy-string-object-scalar",
+        ),
+        pytest.param(
+            np.asarray(np.bytes_(b"1.0"), dtype=object),
+            id="numpy-bytes-object-scalar",
+        ),
         pytest.param(OVERFLOWING_INTEGER, id="overflowing-integer"),
         pytest.param(
             np.array(OVERFLOWING_INTEGER, dtype=object),
@@ -43,7 +53,7 @@ class _Bundle:
         pytest.param(_BadFloat(), id="arithmetic-float"),
     ],
 )
-def test_solve_bundle_linear_assignment_rejects_boolean_max_cost(bad_max_cost):
+def test_solve_bundle_linear_assignment_rejects_ambiguous_max_cost(bad_max_cost):
     with pytest.raises(
         ValueError,
         match=r"max_cost must.*finite non-negative",
@@ -57,11 +67,13 @@ def test_solve_bundle_linear_assignment_rejects_boolean_max_cost(bad_max_cost):
         True,
         np.bool_(False),
         bytearray(b"1.0"),
+        np.str_("1.0"),
+        np.bytes_(b"1.0"),
         pytest.param(OVERFLOWING_INTEGER, id="overflowing-integer"),
         pytest.param(_BadFloat(), id="arithmetic-float"),
     ],
 )
-def test_build_track_rows_from_bundles_rejects_boolean_max_cost(bad_max_cost):
+def test_build_track_rows_from_bundles_rejects_ambiguous_max_cost(bad_max_cost):
     with pytest.raises(
         ValueError,
         match=r"max_cost must.*finite non-negative",
