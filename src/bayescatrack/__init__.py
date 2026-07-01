@@ -10,6 +10,9 @@ console entry point use the Track2pClean name.
 from . import _strict_config_validation as _strict_config_validation
 from . import cli as _cli
 from . import matching as _matching
+from ._accuracy_preset_scalar_validation import (
+    install_accuracy_preset_scalar_validation as _install_accuracy_preset_scalar_validation,
+)
 from ._advanced_weight_validation import (
     install_advanced_weight_validation as _install_advanced_weight_validation,
 )
@@ -231,6 +234,7 @@ find_track2p_session_dirs = _bridge.find_track2p_session_dirs
 load_raw_npy_plane = _bridge.load_raw_npy_plane
 load_suite2p_plane = _bridge.load_suite2p_plane
 load_track2p_subject = _bridge.load_track2p_subject
+from . import accuracy_presets as _accuracy_presets  # noqa: E402
 from . import fov_affine_registration as _fov_affine_registration  # noqa: E402
 from . import registration as _registration  # noqa: E402
 
@@ -327,6 +331,7 @@ _install_shifted_overlap_scalar_validation()
 _install_pyrecest_shifted_validation()
 _install_global_cost_preset_validation()
 _install_candidate_centroid_validation(_candidate_prefilter)
+_install_accuracy_preset_scalar_validation(_accuracy_presets)
 _install_advanced_roi_components()
 _install_advanced_weight_validation()
 _install_assignment_bundle_validation()
