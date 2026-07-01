@@ -196,7 +196,10 @@ def _session_index_to_int(index: object) -> int:
     if isinstance(index, (bool, np.bool_)):
         raise ValueError("session index must be integer-like, got boolean")
     if isinstance(index, bytes):
-        index = index.decode("utf-8")
+        try:
+            index = index.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("session index must be integer-like, got bytes") from exc
     if isinstance(index, (int, np.integer)):
         return int(index)
     if isinstance(index, (float, np.floating)):
