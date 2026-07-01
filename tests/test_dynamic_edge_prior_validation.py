@@ -40,6 +40,26 @@ def test_dynamic_edge_prior_rejects_invalid_session_gap_when_gap_weighted():
             )
 
 
+def test_dynamic_edge_prior_rejects_text_like_session_gap_when_gap_weighted():
+    costs = np.asarray([[3.0, 4.0]], dtype=float)
+
+    for invalid_gap in (
+        "2",
+        b"2",
+        bytearray(b"2"),
+        np.str_("2"),
+        np.bytes_(b"2"),
+        np.asarray("2"),
+    ):
+        with pytest.raises(ValueError, match="session_gap must be a finite value"):
+            apply_dynamic_edge_priors(
+                costs,
+                {},
+                session_gap=invalid_gap,
+                config=DynamicEdgePriorConfig(session_gap_weight=0.25),
+            )
+
+
 def test_dynamic_edge_prior_rejects_array_valued_session_gap_when_gap_weighted():
     costs = np.asarray([[3.0, 4.0]], dtype=float)
 
