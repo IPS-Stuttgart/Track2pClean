@@ -16,6 +16,8 @@ import numpy as np
 from .association import dynamic_edge_priors as _dynamic_edge_priors
 from .association import track2p_policy_priors as _track2p_policy_priors
 
+_TEXT_LIKE_SESSION_GAP_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+
 
 def install_session_gap_validation() -> None:
     """Install idempotent validation around edge-prior ``session_gap`` arguments."""
@@ -45,7 +47,7 @@ def install_session_gap_validation() -> None:
         return original_dynamic(
             cost_matrix,
             pairwise_components,
-            session_gap=_positive_session_gap(session_gap),
+            session_gap=_positive_session_gap(session_gap, reject_text_like=True),
             empty_registered_rois=empty_registered_rois,
             config=config,
         )
@@ -60,7 +62,7 @@ def install_session_gap_validation() -> None:
         return original_policy(
             cost_matrix,
             pairwise_components,
-            session_gap=_positive_session_gap(session_gap),
+            session_gap=_positive_session_gap(session_gap, reject_text_like=False),
             config=config,
         )
 
@@ -95,15 +97,21 @@ def install_session_gap_validation() -> None:
     setattr(_track2p_policy_priors, "_bayescatrack_session_gap_validation_patch", True)
 
 
-def _positive_session_gap(value: Any) -> int:
-    integer_value = _integer_like(value, name="session_gap")
+def _positive_session_gap(value: Any, *, reject_text_like: bool) -> int:
+    integer_value = _integer_like(
+        value,
+        name="session_gap",
+        reject_text_like=reject_text_like,
+    )
     if integer_value < 1:
         raise ValueError("session_gap must be a finite value")
     return integer_value
 
 
-def _integer_like(value: Any, *, name: str) -> int:
+def _integer_like(value: Any, *, name: str, reject_text_like: bool) -> int:
     if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be a finite value")
+    if reject_text_like and isinstance(value, _TEXT_LIKE_SESSION_GAP_TYPES):
         raise ValueError(f"{name} must be a finite value")
     try:
         array_value = np.asarray(value)
@@ -111,8 +119,12 @@ def _integer_like(value: Any, *, name: str) -> int:
         array_value = None
     if array_value is not None and array_value.ndim > 0:
         raise ValueError(f"{name} must be a finite value")
-    if array_value is not None and isinstance(array_value.item(), (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite value")
+    if array_value is not None:
+        scalar_value = array_value.item()
+        if isinstance(scalar_value, (bool, np.bool_)):
+            raise ValueError(f"{name} must be a finite value")
+        if reject_text_like and isinstance(scalar_value, _TEXT_LIKE_SESSION_GAP_TYPES):
+            raise ValueError(f"{name} must be a finite value")
 
     try:
         return int(operator.index(value))
