@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.testing as npt
+import pytest
 from bayescatrack import CalciumPlaneData, load_suite2p_plane
 
 
@@ -45,24 +46,9 @@ def test_load_suite2p_plane_without_iscell_leaves_cell_probabilities_unknown(
     assert plane.cell_probabilities is None
 
 
-def test_cell_probability_cost_ignores_unknown_values():
-    reference = _single_roi_plane(cell_probabilities=[np.nan])
-    measurement = _single_roi_plane(cell_probabilities=[0.9])
-
-    cost_matrix, components = reference.build_pairwise_cost_matrix(
-        measurement,
-        centroid_weight=0.0,
-        iou_weight=0.0,
-        mask_cosine_weight=0.0,
-        area_weight=0.0,
-        roi_feature_weight=0.0,
-        cell_probability_weight=1.0,
-        return_components=True,
-    )
-
-    npt.assert_allclose(components["cell_probability_available"], np.array([[0.0]]))
-    npt.assert_allclose(components["cell_probability_cost"], np.array([[0.0]]))
-    npt.assert_allclose(cost_matrix, np.array([[0.0]]))
+def test_cell_probability_cost_rejects_unknown_values():
+    with pytest.raises(ValueError, match="cell_probabilities"):
+        _single_roi_plane(cell_probabilities=[np.nan])
 
 
 def test_roi_feature_distance_uses_per_pair_available_dimensions():

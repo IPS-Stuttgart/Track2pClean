@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack import CalciumPlaneData
 
 
@@ -45,14 +46,6 @@ def test_pairwise_cell_probability_cost_preserves_valid_probabilities() -> None:
     )
 
 
-def test_pairwise_cell_probability_cost_ignores_above_one_probabilities() -> None:
-    components = _cell_probability_components(1.2, 0.8)
-
-    np.testing.assert_allclose(
-        components["cell_probability_available"],
-        np.asarray([[0.0]]),
-    )
-    np.testing.assert_allclose(
-        components["cell_probability_cost"],
-        np.asarray([[0.0]]),
-    )
+def test_pairwise_cell_probability_cost_rejects_above_one_probabilities() -> None:
+    with pytest.raises(ValueError, match="cell_probabilities"):
+        _cell_probability_components(1.2, 0.8)

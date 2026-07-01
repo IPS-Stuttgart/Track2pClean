@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from bayescatrack.core.bridge import CalciumPlaneData, load_suite2p_plane
 
 
@@ -43,30 +44,9 @@ def test_load_suite2p_plane_without_iscell_omits_cell_probabilities(tmp_path):
     assert plane.cell_probabilities is None
 
 
-def test_pairwise_cell_probability_cost_ignores_nonfinite_entries():
-    reference = CalciumPlaneData(
-        roi_masks=_minimal_masks(),
-        cell_probabilities=np.array([0.5, np.nan]),
-    )
-    measurement = CalciumPlaneData(
-        roi_masks=_minimal_masks(),
-        cell_probabilities=np.array([np.nan, 0.25]),
-    )
-
-    costs, components = reference.build_pairwise_cost_matrix(
-        measurement,
-        centroid_weight=0.0,
-        iou_weight=0.0,
-        mask_cosine_weight=0.0,
-        area_weight=0.0,
-        roi_feature_weight=0.0,
-        cell_probability_weight=1.0,
-        return_components=True,
-    )
-
-    assert np.all(np.isfinite(costs))
-    assert np.array_equal(costs, components["cell_probability_cost"])
-    assert costs[0, 0] == 0.0
-    assert costs[1, 0] == 0.0
-    assert costs[1, 1] == 0.0
-    assert costs[0, 1] > 0.0
+def test_pairwise_cell_probability_cost_rejects_nonfinite_entries():
+    with pytest.raises(ValueError, match="cell_probabilities"):
+        CalciumPlaneData(
+            roi_masks=_minimal_masks(),
+            cell_probabilities=np.array([0.5, np.nan]),
+        )
