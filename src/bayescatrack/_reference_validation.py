@@ -33,7 +33,7 @@ def _install_optional_int_parser_validation(reference_module: ModuleType) -> Non
     original_parse_optional_int = (
         reference_module._parse_optional_int
     )  # pylint: disable=protected-access
-    if getattr(original_parse_optional_int, _PATCH_ATTR, False):
+    if _wrapper_chain_has_marker(original_parse_optional_int, _PATCH_ATTR):
         return
 
     missing_strings = frozenset(
@@ -71,7 +71,7 @@ def _install_optional_int_parser_validation(reference_module: ModuleType) -> Non
 def _install_curated_mask_validation(reference_module: ModuleType) -> None:
     reference_cls = reference_module.Track2pReference
     original_post_init = reference_cls.__post_init__
-    if getattr(original_post_init, _PATCH_ATTR, False):
+    if _wrapper_chain_has_marker(original_post_init, _PATCH_ATTR):
         return
 
     def _post_init_with_reference_validation(self: Any) -> None:
@@ -101,7 +101,7 @@ def _install_curated_mask_validation(reference_module: ModuleType) -> None:
 def _install_curated_only_validation(reference_module: ModuleType) -> None:
     reference_cls = reference_module.Track2pReference
     original_filtered_indices = reference_cls._filtered_indices
-    if getattr(original_filtered_indices, _PATCH_ATTR, False):
+    if _wrapper_chain_has_marker(original_filtered_indices, _PATCH_ATTR):
         return
 
     def _filtered_indices_with_curated_only_validation(
@@ -127,7 +127,7 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
     original_normalize_session_indices = (
         reference_module._normalize_session_indices
     )  # pylint: disable=protected-access
-    if not getattr(original_normalize_session_indices, _PATCH_ATTR, False):
+    if not _wrapper_chain_has_marker(original_normalize_session_indices, _PATCH_ATTR):
 
         def _normalize_session_indices_with_validation(
             session_indices: Iterable[Any] | None,
@@ -162,7 +162,7 @@ def _install_session_index_validation(reference_module: ModuleType) -> None:
     original_validate_session_index = (
         reference_module._validate_session_index
     )  # pylint: disable=protected-access
-    if getattr(original_validate_session_index, _PATCH_ATTR, False):
+    if _wrapper_chain_has_marker(original_validate_session_index, _PATCH_ATTR):
         return
 
     def _validate_session_index_with_validation(
@@ -191,8 +191,8 @@ def _install_track_ops_session_path_normalization(reference_module: ModuleType) 
     original_session_names_from_track_ops = (
         reference_module._session_names_from_track_ops
     )  # pylint: disable=protected-access
-    if getattr(
-        original_session_names_from_track_ops, _TRACK_OPS_PATH_PATCH_ATTR, False
+    if _wrapper_chain_has_marker(
+        original_session_names_from_track_ops, _TRACK_OPS_PATH_PATCH_ATTR
     ):
         return
 
@@ -267,7 +267,7 @@ def _track_ops_path(raw_path: str) -> Path | PureWindowsPath:
 
 def _install_complete_track_vector_normalization(reference_module: ModuleType) -> None:
     original_score_complete_tracks = reference_module.score_complete_tracks
-    if getattr(original_score_complete_tracks, _PATCH_ATTR, False):
+    if _wrapper_chain_has_marker(original_score_complete_tracks, _PATCH_ATTR):
         return
 
     def _score_complete_tracks_with_vector_normalization(
@@ -293,7 +293,7 @@ def _install_complete_track_vector_normalization(reference_module: ModuleType) -
 def _install_track_label_fill_value_validation(reference_module: ModuleType) -> None:
     reference_cls = reference_module.Track2pReference
     original_to_session_track_labels = reference_cls.to_session_track_labels
-    if getattr(original_to_session_track_labels, _PATCH_ATTR, False):
+    if _wrapper_chain_has_marker(original_to_session_track_labels, _PATCH_ATTR):
         return
 
     def _to_session_track_labels_with_fill_value_validation(
@@ -304,12 +304,12 @@ def _install_track_label_fill_value_validation(reference_module: ModuleType) -> 
         curated_only: Any = False,
     ) -> list[np.ndarray]:
         fill_value_int = (
-            reference_module._parse_integer_scalar(  # pylint: disable=protected-access
-                fill_value,
-                name="fill_value",
-                allow_negative=True,
-                allow_string=False,
-            )
+            reference_module._parse_integer_scalar  # pylint: disable=protected-access
+        )(
+            fill_value,
+            name="fill_value",
+            allow_negative=True,
+            allow_string=False,
         )
         if fill_value_int >= 0:
             raise ValueError(
@@ -331,6 +331,20 @@ def _install_track_label_fill_value_validation(reference_module: ModuleType) -> 
     reference_cls.to_session_track_labels = (
         _to_session_track_labels_with_fill_value_validation
     )
+
+
+def _wrapper_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _normalize_complete_track_matrix(track_matrix: Any) -> Any:
