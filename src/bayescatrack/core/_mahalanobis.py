@@ -8,6 +8,7 @@ import numpy as np
 from bayescatrack._pyrecest_pairwise_features import pairwise_mahalanobis_distances
 
 _MAHALANOBIS_INSTALLED_ATTR = "_bayescatrack_mahalanobis_installed"
+_TEXT_SCALAR_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 
 def install_mahalanobis_pairwise_features(calcium_plane_cls: type[Any]) -> None:
@@ -171,11 +172,13 @@ def install_mahalanobis_pairwise_features(calcium_plane_cls: type[Any]) -> None:
 
 def _validate_nonnegative_finite_scalar(name: str, raw_value: Any) -> float:
     message = f"{name} must be a finite non-negative value"
+    if isinstance(raw_value, _TEXT_SCALAR_TYPES):
+        raise ValueError(message)
     array = np.asarray(raw_value)
     if array.shape != ():
         raise ValueError(message)
     scalar = array.item()
-    if isinstance(scalar, (bool, np.bool_)):
+    if isinstance(scalar, (bool, np.bool_, *_TEXT_SCALAR_TYPES)):
         raise ValueError(message)
     try:
         value = float(scalar)
