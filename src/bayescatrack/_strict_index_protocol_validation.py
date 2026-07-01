@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 _PATCH_MARKER = "_bayescatrack_strict_index_protocol_validation_patch"
 _ORIGINAL_ATTR = "_bayescatrack_original"
@@ -12,7 +12,9 @@ _ORIGINAL_ATTR = "_bayescatrack_original"
 def install_strict_index_protocol_validation() -> None:
     """Normalize malformed ``__index__`` failures in strict integer controls."""
 
-    from . import _strict_config_validation as strict  # pylint: disable=import-outside-toplevel
+    from . import (
+        _strict_config_validation as strict,  # pylint: disable=import-outside-toplevel
+    )
 
     original = strict._positive_int  # pylint: disable=protected-access
     if getattr(original, _PATCH_MARKER, False):
@@ -31,7 +33,9 @@ def install_strict_index_protocol_validation() -> None:
 
     setattr(positive_int_with_index_error_normalization, _PATCH_MARKER, True)
     setattr(positive_int_with_index_error_normalization, _ORIGINAL_ATTR, original)
-    strict._positive_int = positive_int_with_index_error_normalization  # pylint: disable=protected-access
+    strict._positive_int = (
+        positive_int_with_index_error_normalization  # pylint: disable=protected-access
+    )
 
 
 def _is_existing_strict_integer_error(exc: ValueError, *, name: str) -> bool:

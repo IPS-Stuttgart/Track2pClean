@@ -19,7 +19,9 @@ def _valid_match_result(**overrides):
 
 
 def test_session_match_result_rejects_duplicate_reference_positions() -> None:
-    with pytest.raises(ValueError, match="reference_positions.*unique assignment positions"):
+    with pytest.raises(
+        ValueError, match="reference_positions.*unique assignment positions"
+    ):
         _valid_match_result(reference_positions=[0, 0])
 
 

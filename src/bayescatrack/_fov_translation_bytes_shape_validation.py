@@ -7,13 +7,17 @@ from typing import Any
 
 _PATCH_MARKER = "_bayescatrack_fov_translation_bytes_shape_validation_patch"
 _BYTES_LIKE_SHAPE_TYPES = (bytes, bytearray, memoryview)
-_OUTPUT_SHAPE_ERROR = "output_shape must contain exactly two positive integer dimensions"
+_OUTPUT_SHAPE_ERROR = (
+    "output_shape must contain exactly two positive integer dimensions"
+)
 
 
 def install_fov_translation_bytes_shape_validation() -> None:
     """Install idempotent bytes-like output-shape validation."""
 
-    from . import fov_registration as _fov_registration  # pylint: disable=import-outside-toplevel
+    from . import (
+        fov_registration as _fov_registration,  # pylint: disable=import-outside-toplevel
+    )
 
     for function_name in (
         "apply_integer_image_translation",
