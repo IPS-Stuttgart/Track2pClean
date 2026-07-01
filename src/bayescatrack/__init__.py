@@ -52,6 +52,9 @@ from ._empty_registered_roi_mask_validation import (
 from ._fov_affine_estimator_validation import (
     install_fov_affine_estimator_validation as _install_fov_affine_estimator_validation,
 )
+from ._fov_affine_index_error_validation import (
+    install_fov_affine_index_error_validation as _install_fov_affine_index_error_validation,
+)
 from ._fov_affine_validation import (
     install_fov_affine_warp_validation as _install_fov_affine_warp_validation,
 )
@@ -344,6 +347,7 @@ _install_aligned_roi_index_validation()
 _install_edge_ranking_label_validation(_edge_ranking)
 _install_fov_affine_estimator_validation()
 _install_fov_affine_warp_validation()
+_install_fov_affine_index_error_validation()
 _install_fov_affine_choice_validation()
 _install_fov_translation_output_shape_validation()
 _install_fov_subpixel_shift_validation()
