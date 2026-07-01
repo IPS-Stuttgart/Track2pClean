@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -16,6 +18,44 @@ def _reference(*, curated_mask=None) -> Track2pReference:
         suite2p_indices=np.array([[0, 10], [1, 11]], dtype=object),
         curated_mask=curated_mask,
         source="unit_test",
+    )
+
+
+def _wrapper_marker_count(function, marker: str) -> int:
+    count = 0
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            raise AssertionError("cycle in wrapper chain")
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            count += 1
+        current = getattr(current, "_bayescatrack_original", None)
+    return count
+
+
+def test_reference_session_selector_patches_are_reload_idempotent() -> None:
+    import bayescatrack
+    import bayescatrack.reference as reference
+
+    importlib.reload(bayescatrack)
+    importlib.reload(bayescatrack)
+
+    assert (
+        _wrapper_marker_count(
+            reference._normalize_session_indices,
+            "_bayescatrack_reference_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_marker_count(
+            reference._normalize_session_indices,
+            "_bayescatrack_reference_session_selector_validation_patch",
+        )
+        == 1
     )
 
 
