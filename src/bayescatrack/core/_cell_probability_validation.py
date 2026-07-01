@@ -22,7 +22,7 @@ def _install_calcium_plane_cell_probability_validation(calcium_plane_cls: type[A
     """Reject invalid cell-probability arrays at plane construction time."""
 
     original_post_init = calcium_plane_cls.__post_init__
-    if getattr(original_post_init, _CELL_PROBABILITY_INIT_PATCH_ATTR, False):
+    if _wrapper_chain_has_attr(original_post_init, _CELL_PROBABILITY_INIT_PATCH_ATTR):
         return
 
     def __post_init__(self: Any) -> None:
@@ -49,7 +49,7 @@ def _install_pairwise_cell_probability_cost_validation(bridge_impl: ModuleType) 
     original = (
         bridge_impl._pairwise_cell_probability_cost
     )  # pylint: disable=protected-access
-    if getattr(original, _CELL_PROBABILITY_COST_PATCH_ATTR, False):
+    if _wrapper_chain_has_attr(original, _CELL_PROBABILITY_COST_PATCH_ATTR):
         return
 
     def _pairwise_cell_probability_cost(
@@ -105,6 +105,20 @@ def _install_pairwise_cell_probability_cost_validation(bridge_impl: ModuleType) 
     bridge_impl._pairwise_cell_probability_cost = (
         _pairwise_cell_probability_cost  # pylint: disable=protected-access
     )
+
+
+def _wrapper_chain_has_attr(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            return True
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _is_valid_probability_vector(values: np.ndarray) -> np.ndarray:
