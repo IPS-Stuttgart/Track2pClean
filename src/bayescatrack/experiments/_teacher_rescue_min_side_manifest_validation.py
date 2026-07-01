@@ -14,8 +14,8 @@ _ORIGINAL_ATTR = "_bayescatrack_original"
 def install_teacher_rescue_min_side_manifest_validation() -> None:
     """Install idempotent validation for manifest ``min_side_observations``."""
 
-    from bayescatrack.experiments import (  # pylint: disable=import-outside-toplevel
-        _teacher_rescue_manifest_integration as base,
+    from bayescatrack.experiments import (
+        _teacher_rescue_manifest_integration as base,  # pylint: disable=import-outside-toplevel
     )
     from bayescatrack.experiments import benchmark_manifest as manifest
 
@@ -31,7 +31,9 @@ def install_teacher_rescue_min_side_manifest_validation() -> None:
             return original_runner(config, options)
 
         setattr(_run_teacher_rows_with_min_side_validation, _PATCH_MARKER, True)
-        setattr(_run_teacher_rows_with_min_side_validation, _ORIGINAL_ATTR, original_runner)
+        setattr(
+            _run_teacher_rows_with_min_side_validation, _ORIGINAL_ATTR, original_runner
+        )
         base._run_track2p_policy_teacher_adjacent_rows = (
             _run_teacher_rows_with_min_side_validation
         )
@@ -45,7 +47,9 @@ def install_teacher_rescue_min_side_manifest_validation() -> None:
             run_spec: Any,
         ) -> list[dict[str, Any]]:
             if getattr(run_spec, "runner", None) == base.TEACHER_ADJACENT_RESCUE_RUNNER:
-                _validate_min_side_options(dict(getattr(run_spec, "runner_kwargs", {}) or {}))
+                _validate_min_side_options(
+                    dict(getattr(run_spec, "runner_kwargs", {}) or {})
+                )
             return original_benchmark_runner(run_spec)
 
         setattr(_run_benchmark_rows_with_min_side_validation, _PATCH_MARKER, True)

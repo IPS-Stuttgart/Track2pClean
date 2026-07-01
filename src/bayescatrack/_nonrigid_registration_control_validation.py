@@ -104,7 +104,9 @@ def install_nonrigid_registration_control_validation() -> None:
 
 
 def _normalize_grid_shape(value: Any) -> tuple[int, int]:
-    error_message = "grid_shape must contain exactly two integer dimensions of at least 2"
+    error_message = (
+        "grid_shape must contain exactly two integer dimensions of at least 2"
+    )
     if isinstance(value, (str, bytes, bytearray, memoryview)):
         raise ValueError(error_message)
     try:
