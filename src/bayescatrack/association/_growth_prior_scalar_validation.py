@@ -40,6 +40,8 @@ def _install_finite_float_validation(_growth_priors: Any) -> None:
 
     @wraps(original_finite_float)
     def _finite_float_with_scalar_validation(value: Any, *, name: str) -> float:
+        if isinstance(value, (str, np.str_)):
+            return original_finite_float(value, name=name)
         return validated_numeric_float(value, name=name)
 
     setattr(_finite_float_with_scalar_validation, _FINITE_FLOAT_PATCH_MARKER, True)
