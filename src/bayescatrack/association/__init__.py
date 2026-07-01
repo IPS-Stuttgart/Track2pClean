@@ -33,6 +33,7 @@ from . import _neuropil_ratio_shape_validation as _neuropil_ratio_shape_validati
 from . import (
     _postsolve_relinking_input_validation as _postsolve_relinking_input_validation,
 )
+from . import _prior_config_mapping_validation as _prior_config_mapping_validation
 from . import (
     _registered_component_shape_validation as _registered_component_shape_validation,
 )
@@ -95,6 +96,7 @@ _track_refinement_track_row_range_validation.install_track_refinement_track_row_
 _growth_coordinate_validation.install_growth_coordinate_validation()
 _growth_prior_scalar_validation.install_growth_prior_scalar_validation()
 _postsolve_relinking_input_validation.install_postsolve_relinking_input_validation()
+_prior_config_mapping_validation.install_prior_config_mapping_validation()
 
 _PATCH_MODULES = (
     _absence_config_scalar_validation,
@@ -117,6 +119,7 @@ _PATCH_MODULES = (
     _multi_hypothesis_bytes_like_validation,
     _neuropil_ratio_shape_validation,
     _postsolve_relinking_input_validation,
+    _prior_config_mapping_validation,
     _registered_component_shape_validation,
     _roi_aware_local_validation,
     _session_edge_pair_validation,
