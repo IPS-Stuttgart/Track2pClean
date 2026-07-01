@@ -28,7 +28,7 @@ def install_registration_control_validation(registration_module: Any) -> None:
     """Install strict validation around ``register_measurement_plane_to_reference``."""
 
     original = registration_module.register_measurement_plane_to_reference
-    if getattr(original, _PATCH_ATTR, False):
+    if _function_chain_has_patch(original, _PATCH_ATTR):
         return
 
     @wraps(original)
@@ -93,6 +93,20 @@ def install_registration_control_validation(registration_module: Any) -> None:
     registration_module.register_measurement_plane_to_reference = (
         register_measurement_plane_to_reference
     )
+
+
+def _function_chain_has_patch(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            return True
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _registration_model(value: Any) -> RegistrationModel:
