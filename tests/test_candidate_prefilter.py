@@ -49,6 +49,19 @@ def test_centroid_candidate_mask_can_require_column_top_k_intersection():
     assert mask.tolist() == [[True, False], [False, False], [False, True]]
 
 
+@pytest.mark.parametrize("field_name", ["row_top_k", "column_top_k"])
+@pytest.mark.parametrize(
+    "bad_value",
+    ["1", np.str_("1"), b"1", bytearray(b"1"), memoryview(b"1")],
+)
+def test_centroid_candidate_config_rejects_text_like_top_k_controls(
+    field_name,
+    bad_value,
+):
+    with pytest.raises(ValueError, match=field_name):
+        CentroidCandidatePrefilterConfig(**{field_name: bad_value})
+
+
 def test_apply_candidate_mask_replaces_non_candidates_with_large_cost():
     costs = np.array([[1.0, 2.0], [3.0, 4.0]])
     mask = np.array([[True, False], [False, True]])
