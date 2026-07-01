@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 _STRING_LIKE_TARGET_SESSIONS = (str, bytes, bytearray, memoryview)
 
