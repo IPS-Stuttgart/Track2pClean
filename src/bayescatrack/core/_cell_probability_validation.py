@@ -3,19 +3,53 @@
 from __future__ import annotations
 
 from types import ModuleType
+from typing import Any
 
 import numpy as np
 
-_CELL_PROBABILITY_PATCH_ATTR = "_bayescatrack_cell_probability_bounds_patch"
+_CELL_PROBABILITY_COST_PATCH_ATTR = "_bayescatrack_cell_probability_bounds_patch"
+_CELL_PROBABILITY_INIT_PATCH_ATTR = "_bayescatrack_cell_probability_init_bounds_patch"
 
 
 def install_cell_probability_cost_patch(bridge_impl: ModuleType) -> None:
-    """Install an idempotent bounded-probability cost helper."""
+    """Install idempotent bounded-probability validation and cost helpers."""
+
+    _install_calcium_plane_cell_probability_validation(bridge_impl.CalciumPlaneData)
+    _install_pairwise_cell_probability_cost_validation(bridge_impl)
+
+
+def _install_calcium_plane_cell_probability_validation(calcium_plane_cls: type[Any]) -> None:
+    """Reject invalid cell-probability arrays at plane construction time."""
+
+    original_post_init = calcium_plane_cls.__post_init__
+    if getattr(original_post_init, _CELL_PROBABILITY_INIT_PATCH_ATTR, False):
+        return
+
+    def __post_init__(self: Any) -> None:
+        original_post_init(self)
+        probabilities = self.cell_probabilities
+        if probabilities is None:
+            return
+
+        probabilities_array = np.asarray(probabilities, dtype=float)
+        if probabilities_array.shape != (self.n_rois,):
+            raise ValueError("cell_probabilities must have shape (n_roi,)")
+        if not np.all(_is_valid_probability_vector(probabilities_array)):
+            raise ValueError("cell_probabilities must be finite probabilities between 0 and 1")
+        object.__setattr__(self, "cell_probabilities", probabilities_array)
+
+    setattr(__post_init__, _CELL_PROBABILITY_INIT_PATCH_ATTR, True)
+    setattr(__post_init__, "_bayescatrack_original", original_post_init)
+    calcium_plane_cls.__post_init__ = __post_init__
+
+
+def _install_pairwise_cell_probability_cost_validation(bridge_impl: ModuleType) -> None:
+    """Reject invalid probability cues before computing pairwise costs."""
 
     original = (
         bridge_impl._pairwise_cell_probability_cost
     )  # pylint: disable=protected-access
-    if getattr(original, _CELL_PROBABILITY_PATCH_ATTR, False):
+    if getattr(original, _CELL_PROBABILITY_COST_PATCH_ATTR, False):
         return
 
     def _pairwise_cell_probability_cost(
@@ -25,7 +59,7 @@ def install_cell_probability_cost_patch(bridge_impl: ModuleType) -> None:
         cost_shape: tuple[int, int],
         similarity_epsilon: float,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Return cell-probability costs, ignoring invalid probability cues."""
+        """Return cell-probability costs for validated bounded probabilities."""
 
         zero_cost = np.zeros(cost_shape, dtype=float)
         zero_available = np.zeros(cost_shape, dtype=float)
@@ -46,24 +80,27 @@ def install_cell_probability_cost_patch(bridge_impl: ModuleType) -> None:
             raise ValueError(
                 "cell_probabilities for the measurement plane must have shape (n_roi,)"
             )
+        if not np.all(_is_valid_probability_vector(probabilities_self_array)):
+            raise ValueError(
+                "cell_probabilities for the reference plane must be finite probabilities between 0 and 1"
+            )
+        if not np.all(_is_valid_probability_vector(probabilities_other_array)):
+            raise ValueError(
+                "cell_probabilities for the measurement plane must be finite probabilities between 0 and 1"
+            )
 
-        valid_self = _is_valid_probability_vector(probabilities_self_array)
-        valid_other = _is_valid_probability_vector(probabilities_other_array)
-        available = valid_self[:, None] & valid_other[None, :]
+        available = np.ones(cost_shape, dtype=bool)
         if not np.any(available):
             return zero_cost, zero_available
 
         clipped_self = np.clip(probabilities_self_array, similarity_epsilon, 1.0)
         clipped_other = np.clip(probabilities_other_array, similarity_epsilon, 1.0)
-        raw_cost = -0.5 * (
+        cost = -0.5 * (
             np.log(clipped_self[:, None]) + np.log(clipped_other[None, :])
         )
-
-        cost = np.zeros(cost_shape, dtype=float)
-        cost[available] = raw_cost[available]
         return cost, available.astype(float)
 
-    setattr(_pairwise_cell_probability_cost, _CELL_PROBABILITY_PATCH_ATTR, True)
+    setattr(_pairwise_cell_probability_cost, _CELL_PROBABILITY_COST_PATCH_ATTR, True)
     setattr(_pairwise_cell_probability_cost, "_bayescatrack_original", original)
     bridge_impl._pairwise_cell_probability_cost = (
         _pairwise_cell_probability_cost  # pylint: disable=protected-access
