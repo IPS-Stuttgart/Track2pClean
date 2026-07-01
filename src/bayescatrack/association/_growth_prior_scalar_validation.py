@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from ._numeric_validation import validated_numeric_float
+
 _FINITE_FLOAT_PATCH_MARKER = "_bayescatrack_growth_prior_finite_float_validation_patch"
 _TRACK_ROW_PATCH_MARKER = "_bayescatrack_growth_prior_track_row_validation_patch"
 _SESSION_COLUMN_PATCH_MARKER = (
@@ -38,19 +40,7 @@ def _install_finite_float_validation(_growth_priors: Any) -> None:
 
     @wraps(original_finite_float)
     def _finite_float_with_scalar_validation(value: Any, *, name: str) -> float:
-        message = f"{name} must be finite"
-        if isinstance(value, (bool, np.bool_)):
-            raise ValueError(message)
-        if isinstance(value, np.ndarray):
-            if value.shape != ():
-                raise ValueError(message)
-            value = value.item()
-            if isinstance(value, (bool, np.bool_)):
-                raise ValueError(message)
-        try:
-            return original_finite_float(value, name=name)
-        except OverflowError as exc:
-            raise ValueError(message) from exc
+        return validated_numeric_float(value, name=name)
 
     setattr(_finite_float_with_scalar_validation, _FINITE_FLOAT_PATCH_MARKER, True)
     setattr(
