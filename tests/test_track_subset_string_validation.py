@@ -11,18 +11,32 @@ def _one_track_matrices() -> tuple[np.ndarray, np.ndarray]:
     return predicted, reference
 
 
-def test_score_track_matrices_rejects_bare_string_session_pairs():
+def _memoryview_selector() -> memoryview:
+    return memoryview(np.array([48, 49], dtype=np.uint8))
+
+
+@pytest.mark.parametrize(
+    "bad_session_pairs",
+    ["01", _memoryview_selector()],
+)
+def test_score_track_matrices_rejects_bare_string_session_pairs(bad_session_pairs):
     predicted, reference = _one_track_matrices()
 
     with pytest.raises(ValueError, match="session_pairs must be"):
-        score_track_matrices(predicted, reference, session_pairs="01")
+        score_track_matrices(predicted, reference, session_pairs=bad_session_pairs)
 
 
-def test_score_track_matrices_rejects_string_like_session_pair_entries():
+@pytest.mark.parametrize(
+    "bad_session_pair",
+    ["01", _memoryview_selector()],
+)
+def test_score_track_matrices_rejects_string_like_session_pair_entries(
+    bad_session_pair,
+):
     predicted, reference = _one_track_matrices()
 
     with pytest.raises(ValueError, match="session_pairs entries must be"):
-        score_track_matrices(predicted, reference, session_pairs=["01"])
+        score_track_matrices(predicted, reference, session_pairs=[bad_session_pair])
 
 
 @pytest.mark.parametrize("bad_session_pairs", [0, 1.5])
@@ -41,11 +55,21 @@ def test_score_track_matrices_rejects_malformed_session_pair_entries(bad_session
         score_track_matrices(predicted, reference, session_pairs=[bad_session_pair])
 
 
-def test_score_track_matrices_rejects_bare_string_complete_session_indices():
+@pytest.mark.parametrize(
+    "bad_session_indices",
+    ["01", _memoryview_selector()],
+)
+def test_score_track_matrices_rejects_bare_string_complete_session_indices(
+    bad_session_indices,
+):
     predicted, reference = _one_track_matrices()
 
     with pytest.raises(ValueError, match="complete_session_indices must be"):
-        score_track_matrices(predicted, reference, complete_session_indices="01")
+        score_track_matrices(
+            predicted,
+            reference,
+            complete_session_indices=bad_session_indices,
+        )
 
 
 @pytest.mark.parametrize("bad_session_indices", [0, 1.5])
