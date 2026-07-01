@@ -2,9 +2,6 @@
 
 from . import growth as _growth
 from ._growth_target_sessions_validation import install_growth_target_sessions_validation
-
-install_growth_target_sessions_validation(_growth)
-
 from .growth import (
     AffineGrowthSummary,
     RadialDisplacementRow,
@@ -13,6 +10,8 @@ from .growth import (
     radial_displacement_rows,
     radial_growth_summaries,
 )
+
+install_growth_target_sessions_validation(_growth)
 
 __all__ = [
     "AffineGrowthSummary",
