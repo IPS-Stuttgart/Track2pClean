@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 from bayescatrack.association.calibrated_costs import ReferencePairwiseExamples
-from bayescatrack.association.monotone_ranker import MonotoneRankerOptions, fit_monotone_ranking_association_model_from_blocks
+from bayescatrack.association.monotone_ranker import (
+    MonotoneRankerOptions,
+    fit_monotone_ranking_association_model_from_blocks,
+)
 
 
 def test_single_monotone_feature_name_string_is_not_split() -> None:
@@ -23,7 +26,9 @@ def test_single_monotone_feature_name_string_is_not_split() -> None:
 
     model = fit_monotone_ranking_association_model_from_blocks(
         [block],
-        options=MonotoneRankerOptions(monotone_feature_names="centroid_distance", max_iter=1),
+        options=MonotoneRankerOptions(
+            monotone_feature_names="centroid_distance", max_iter=1
+        ),
     )
 
     assert model.monotone_feature_names == ("centroid_distance",)

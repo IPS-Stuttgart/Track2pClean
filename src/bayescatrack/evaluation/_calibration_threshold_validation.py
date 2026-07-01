@@ -12,7 +12,9 @@ _TEXT_TYPES = (str, bytes, np.str_, np.bytes_)
 
 
 def install_calibration_threshold_validation(module: ModuleType) -> None:
-    original = module._validate_probability_threshold  # pylint: disable=protected-access
+    original = (
+        module._validate_probability_threshold
+    )  # pylint: disable=protected-access
     if getattr(original, _PATCH_MARKER, False):
         return
 
@@ -24,7 +26,9 @@ def install_calibration_threshold_validation(module: ModuleType) -> None:
 
     setattr(threshold_with_text_rejection, _PATCH_MARKER, True)
     setattr(threshold_with_text_rejection, "_bayescatrack_original", original)
-    module._validate_probability_threshold = threshold_with_text_rejection  # pylint: disable=protected-access
+    module._validate_probability_threshold = (
+        threshold_with_text_rejection  # pylint: disable=protected-access
+    )
 
 
 __all__ = ["install_calibration_threshold_validation"]
