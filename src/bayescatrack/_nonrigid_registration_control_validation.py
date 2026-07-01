@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 import sys
 from numbers import Integral
 from typing import Any
@@ -27,9 +28,9 @@ def install_nonrigid_registration_control_validation() -> None:
         measurement_plane: Any,
         *,
         transform_type: Any = "bspline",
-        grid_shape: tuple[int, int] = (5, 5),
-        min_tile_size: int = 24,
-        max_shift_fraction: float = 0.75,
+        grid_shape: Any = (5, 5),
+        min_tile_size: Any = 24,
+        max_shift_fraction: Any = 0.75,
         tps_regularization: Any = 1.0e-3,
         bspline_regularization: Any = 1.0e-2,
         optical_flow_iterations: Any = 12,
@@ -55,9 +56,15 @@ def install_nonrigid_registration_control_validation() -> None:
             reference_plane,
             measurement_plane,
             transform_type=transform_type,
-            grid_shape=grid_shape,
-            min_tile_size=min_tile_size,
-            max_shift_fraction=max_shift_fraction,
+            grid_shape=_normalize_grid_shape(grid_shape),
+            min_tile_size=_positive_integer(
+                min_tile_size,
+                name="min_tile_size",
+            ),
+            max_shift_fraction=_finite_nonnegative_float(
+                max_shift_fraction,
+                name="max_shift_fraction",
+            ),
             tps_regularization=_finite_nonnegative_float(
                 tps_regularization,
                 name="tps_regularization",
@@ -94,6 +101,48 @@ def install_nonrigid_registration_control_validation() -> None:
             validated_register_measurement_plane_by_nonrigid_fov,
         )
     setattr(_nonrigid_registration, _PATCH_MARKER, True)
+
+
+def _normalize_grid_shape(value: Any) -> tuple[int, int]:
+    error_message = "grid_shape must contain exactly two integer dimensions of at least 2"
+    if isinstance(value, (str, bytes, bytearray, memoryview)):
+        raise ValueError(error_message)
+    try:
+        parts = np.asarray(value, dtype=object).reshape(-1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(error_message) from exc
+    if parts.size != 2:
+        raise ValueError(error_message)
+    return tuple(_integer_at_least(part, minimum=2, error_message=error_message) for part in parts.tolist())
+
+
+def _positive_integer(value: Any, *, name: str) -> int:
+    return _integer_at_least(
+        value,
+        minimum=1,
+        error_message=f"{name} must be a positive integer",
+    )
+
+
+def _integer_at_least(value: Any, *, minimum: int, error_message: str) -> int:
+    if isinstance(value, (bool, np.bool_, str, bytes, bytearray, memoryview)):
+        raise ValueError(error_message)
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(error_message)
+        value = value.item()
+    try:
+        integer_value = int(operator.index(value))
+    except (TypeError, ValueError, OverflowError):
+        if not isinstance(value, (float, np.floating)):
+            raise ValueError(error_message) from None
+        numeric_value = float(value)
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(error_message)
+        integer_value = int(numeric_value)
+    if integer_value < minimum:
+        raise ValueError(error_message)
+    return integer_value
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
