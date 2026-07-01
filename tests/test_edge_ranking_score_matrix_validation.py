@@ -5,7 +5,9 @@ import pytest
 from bayescatrack.evaluation.edge_ranking import rank_labeled_edges
 
 
-def test_rank_labeled_edges_normalizes_encoded_score_names_before_direction_inference() -> None:
+def test_rank_labeled_edges_normalizes_encoded_score_names_before_direction_inference() -> (
+    None
+):
     rows = rank_labeled_edges(
         np.asarray([[1, 0]], dtype=int),
         {"iou".encode("utf-8"): np.asarray([[0.1, 0.9]], dtype=float)},
