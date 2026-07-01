@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 
 __all__ = ("brier_score",)
 
-_TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_TEXT_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 
 def brier_score(
@@ -73,7 +74,7 @@ def _validate_sample_weight(
 
 
 def _as_float_vector(values: Any, *, name: str, reject_bool: bool) -> np.ndarray:
-    if _is_text_like(values):
+    if _contains_text_like(values):
         raise ValueError(f"{name} must be numeric, not text")
     try:
         raw_values = np.asarray(values, dtype=object)
@@ -89,6 +90,25 @@ def _as_float_vector(values: Any, *, name: str, reject_bool: bool) -> np.ndarray
         return np.asarray(raw_values, dtype=float).reshape(-1)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be numeric") from exc
+
+
+def _contains_text_like(value: Any) -> bool:
+    if _is_text_like(value):
+        return True
+
+    if isinstance(value, np.ndarray):
+        if value.shape == ():
+            return _contains_text_like(value.item())
+        if value.dtype.kind in {"S", "U"}:
+            return True
+        if value.dtype == object:
+            return any(_contains_text_like(item) for item in value.flat)
+        return False
+
+    if isinstance(value, Sequence):
+        return any(_contains_text_like(item) for item in value)
+
+    return False
 
 
 def _is_text_like(value: Any) -> bool:
