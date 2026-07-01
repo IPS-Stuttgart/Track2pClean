@@ -47,7 +47,16 @@ _BOOLEAN_KWARGS = (
     "ambiguity_margin_components",
     "candidate_include_column_top_k",
 )
-_REJECTED_SCALAR_TYPES = (bool, np.bool_, str, bytes, bytearray, _BUFFER_VIEW_TYPE, np.str_, np.bytes_)
+_REJECTED_SCALAR_TYPES = (
+    bool,
+    np.bool_,
+    str,
+    bytes,
+    bytearray,
+    _BUFFER_VIEW_TYPE,
+    np.str_,
+    np.bytes_,
+)
 
 
 def install_advanced_weight_validation() -> None:

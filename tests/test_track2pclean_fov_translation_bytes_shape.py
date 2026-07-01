@@ -10,10 +10,9 @@ from bayescatrack.fov_registration import (
     apply_subpixel_roi_mask_translation,
 )
 
-
 _BYTES_LIKE_OUTPUT_SHAPES = [
-    builtins.bytearray(b'ab'),
-    builtins.memoryview(b'ab'),
+    builtins.bytearray(b"ab"),
+    builtins.memoryview(b"ab"),
 ]
 
 
