@@ -141,6 +141,16 @@ def test_session_gap_component_requires_positive_gap():
         )
 
 
+@pytest.mark.parametrize("session_gap", [1, 2.0, np.float64(3.0)])
+def test_session_gap_component_accepts_positive_discrete_gap_values(session_gap):
+    components = with_session_gap_component(
+        {"centroid_distance": np.zeros((1, 1))},
+        session_gap=session_gap,
+    )
+
+    npt.assert_allclose(components["session_gap"], [[float(session_gap)]])
+
+
 @pytest.mark.parametrize(
     "bad_session_gap",
     [
