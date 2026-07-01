@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
 import pytest
 from bayescatrack.fov_affine_registration import (
@@ -12,6 +14,72 @@ _AFFINE_IDENTITY_XY = np.asarray(
     [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
     dtype=float,
 )
+
+
+def _wrapper_marker_count(function, marker: str) -> int:
+    count = 0
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            raise AssertionError("cycle in wrapper chain")
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            count += 1
+        current = getattr(current, "_bayescatrack_original", None)
+    return count
+
+
+def test_fov_affine_validation_patches_are_reload_idempotent():
+    import bayescatrack
+    import bayescatrack.fov_affine_registration as fov_affine_registration
+
+    importlib.reload(bayescatrack)
+    importlib.reload(bayescatrack)
+
+    assert (
+        _wrapper_marker_count(
+            fov_affine_registration.apply_affine_image_warp,
+            "_bayescatrack_fov_affine_image_warp_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_marker_count(
+            fov_affine_registration.apply_affine_image_warp,
+            "_bayescatrack_fov_affine_image_choice_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_marker_count(
+            fov_affine_registration.apply_affine_roi_mask_warp,
+            "_bayescatrack_fov_affine_roi_mask_warp_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_marker_count(
+            fov_affine_registration.apply_affine_roi_mask_warp,
+            "_bayescatrack_fov_affine_mask_choice_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_marker_count(
+            fov_affine_registration.estimate_fov_affine_transform,
+            "_bayescatrack_fov_affine_estimator_validation",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_marker_count(
+            fov_affine_registration.estimate_fov_affine_transform,
+            "_bayescatrack_fov_affine_estimate_control_validation_patch",
+        )
+        == 1
+    )
 
 
 def test_apply_affine_image_warp_rejects_nonfinite_matrix_before_all_fill_output():
