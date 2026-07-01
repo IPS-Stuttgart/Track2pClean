@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
 
 _PATCH_ATTR = "_bayescatrack_calibrated_session_gap_validation_patch"
-_TEXT_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_BUFFER_VIEW_TYPE = getattr(builtins, "memory" "view")
+_TEXT_SCALAR_TYPES = (str, bytes, bytearray, _BUFFER_VIEW_TYPE, np.str_, np.bytes_)
 _CONVERSION_ERRORS = (TypeError, ValueError, OverflowError, ArithmeticError)
 
 
@@ -53,9 +55,9 @@ def _finite_positive_session_gap(value: Any) -> float:
         numeric = float(value)
     except _CONVERSION_ERRORS as exc:
         raise ValueError("session_gap must be a finite positive value") from exc
-    if not np.isfinite(numeric) or numeric <= 0.0:
+    if not np.isfinite(numeric) or numeric <= 0.0 or not numeric.is_integer():
         raise ValueError("session_gap must be a finite positive value")
-    return numeric
+    return float(int(numeric))
 
 
 __all__ = ["install_calibrated_session_gap_validation"]

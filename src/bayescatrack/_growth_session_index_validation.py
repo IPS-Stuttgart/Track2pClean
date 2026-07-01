@@ -13,11 +13,11 @@ from typing import Any
 
 import numpy as np
 
-_PATCH_MARKER = "_bayescatrack_growth_session_index_validation_patch"
+_PATCH_MARKER = "_bayescatrack_growth_session_index_strict_validation_patch"
 
 
 def install_growth_session_index_validation() -> None:
-    """Install idempotent boolean rejection for growth-analysis session indices."""
+    """Install idempotent strict validation for growth-analysis session indices."""
 
     from .analysis import growth as _growth  # pylint: disable=import-outside-toplevel
 
@@ -31,7 +31,10 @@ def install_growth_session_index_validation() -> None:
     ) -> int:
         if _is_boolean_scalar(index):
             raise ValueError("session index must be an integer, got boolean")
-        return original_validate_session_index(index, n_sessions)
+        try:
+            return original_validate_session_index(index, n_sessions)
+        except UnicodeDecodeError as exc:
+            raise ValueError("session index must be an integer-like UTF-8 value") from exc
 
     setattr(_validate_session_index_without_boolean_scalars, _PATCH_MARKER, True)
     setattr(
