@@ -2,7 +2,8 @@
 
 The wrappers normalize public subpixel shift vectors before low-level resampling
 so malformed, boolean, non-finite, and string-like values fail with ``ValueError``.
-They also validate mask-interpolation controls before delegation.
+They also validate mask-interpolation and interpolation-order controls before
+delegation.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ _FLOAT_CONTROL_PATCH_MARKER = "_bayescatrack_fov_float_control_validation_patch"
 _INTERPOLATION_ORDER_PATCH_MARKER = (
     "_bayescatrack_fov_interpolation_order_validation_patch"
 )
-_TEXT_OR_BYTES_LIKE_TYPES = (str, bytes, bytearray, memoryview)
+_TEXT_OR_BYTES_LIKE_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 _SHIFT_ERROR = "shift_yx must contain exactly two finite numeric values"
 _MASK_INTERPOLATION_ERROR = "mask_interpolation must be either 'nearest' or 'bilinear'"
 _FLOAT_CONTROL_ERROR = "{name} must be a finite non-negative value"
@@ -80,6 +81,8 @@ def _wrap_subpixel_interpolation_order_validation(module: Any) -> None:
 
     @wraps(original)
     def wrapper(interpolation_order: Any) -> int:
+        if _is_text_or_bytes_like_scalar(interpolation_order):
+            raise ValueError(_INTERPOLATION_ORDER_ERROR)
         try:
             return original(interpolation_order)
         except (ValueError, OverflowError) as exc:
@@ -107,8 +110,16 @@ def _wrap_finite_nonnegative_float_validation(module: Any) -> None:
     module._finite_nonnegative_float = wrapper  # pylint: disable=protected-access
 
 
+def _is_text_or_bytes_like_scalar(value: Any) -> bool:
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            return False
+        value = value.item()
+    return isinstance(value, _TEXT_OR_BYTES_LIKE_TYPES)
+
+
 def _normalize_subpixel_shift_yx(shift_yx: Any) -> np.ndarray:
-    if isinstance(shift_yx, _TEXT_OR_BYTES_LIKE_TYPES):
+    if _is_text_or_bytes_like_scalar(shift_yx):
         raise ValueError(_SHIFT_ERROR)
     try:
         shift_array = np.asarray(shift_yx, dtype=object)
@@ -129,9 +140,7 @@ def _normalize_subpixel_shift_component(value: Any) -> float:
         if value.shape != ():
             raise ValueError(_SHIFT_ERROR)
         value = value.item()
-    if isinstance(value, (bool, np.bool_)) or isinstance(
-        value, _TEXT_OR_BYTES_LIKE_TYPES
-    ):
+    if isinstance(value, (bool, np.bool_)) or _is_text_or_bytes_like_scalar(value):
         raise ValueError(_SHIFT_ERROR)
     try:
         numeric_value = float(value)
