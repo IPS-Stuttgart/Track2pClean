@@ -34,7 +34,9 @@ def install_growth_session_index_validation() -> None:
         try:
             return original_validate_session_index(index, n_sessions)
         except UnicodeDecodeError as exc:
-            raise ValueError("session index must be an integer-like UTF-8 value") from exc
+            raise ValueError(
+                "session index must be an integer-like UTF-8 value"
+            ) from exc
 
     setattr(_validate_session_index_without_boolean_scalars, _PATCH_MARKER, True)
     setattr(

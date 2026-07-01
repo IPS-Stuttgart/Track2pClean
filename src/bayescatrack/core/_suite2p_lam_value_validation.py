@@ -182,7 +182,9 @@ def _suite2p_keep_mask(
             else:
                 is_cell = bool(iscell[roi_index])
                 probability = float(iscell[roi_index])
-            keep[roi_index] = bool(is_cell and probability >= cell_probability_threshold)
+            keep[roi_index] = bool(
+                is_cell and probability >= cell_probability_threshold
+            )
     except (TypeError, ValueError):
         return None
     return keep

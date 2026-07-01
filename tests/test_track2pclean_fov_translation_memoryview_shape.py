@@ -10,7 +10,7 @@ from bayescatrack.fov_registration import apply_subpixel_image_translation
 
 def test_track2pclean_rejects_memoryview_image_output_shape():
     image = np.arange(12, dtype=float).reshape(3, 4)
-    bad_shape = builtins.memoryview(b'ab')
+    bad_shape = builtins.memoryview(b"ab")
 
     with pytest.raises(ValueError, match="output_shape"):
         apply_subpixel_image_translation(

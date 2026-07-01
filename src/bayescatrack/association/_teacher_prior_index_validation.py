@@ -34,8 +34,12 @@ def install_teacher_prior_index_validation() -> None:
         )
 
     setattr(_normalize_session_index_with_validation, _PATCH_MARKER, True)
-    setattr(_normalize_session_index_with_validation, "_bayescatrack_original", original)
-    module._normalize_session_index = _normalize_session_index_with_validation  # pylint: disable=protected-access
+    setattr(
+        _normalize_session_index_with_validation, "_bayescatrack_original", original
+    )
+    module._normalize_session_index = (
+        _normalize_session_index_with_validation  # pylint: disable=protected-access
+    )
 
 
 def _normalize_session_index(value: Any, *, context: str, session_count: int) -> int:
@@ -59,7 +63,9 @@ def _normalize_session_index(value: Any, *, context: str, session_count: int) ->
 
     index = int(index)
     if index < 0 or index >= session_count:
-        raise ValueError(f"{context} {index} out of bounds for {session_count} sessions")
+        raise ValueError(
+            f"{context} {index} out of bounds for {session_count} sessions"
+        )
     return index
 
 
