@@ -113,7 +113,9 @@ def _normalize_grid_shape(value: Any) -> tuple[int, int]:
         raise ValueError(error_message) from exc
     if parts.size != 2:
         raise ValueError(error_message)
-    return tuple(_integer_at_least(part, minimum=2, error_message=error_message) for part in parts.tolist())
+    row_tiles = _integer_at_least(parts[0], minimum=2, error_message=error_message)
+    column_tiles = _integer_at_least(parts[1], minimum=2, error_message=error_message)
+    return row_tiles, column_tiles
 
 
 def _positive_integer(value: Any, *, name: str) -> int:
