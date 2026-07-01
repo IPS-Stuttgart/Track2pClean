@@ -39,6 +39,17 @@ def _identity_estimate() -> SimpleNamespace:
 @pytest.mark.parametrize(
     ("kwarg", "value"),
     [
+        ("grid_shape", (2.5, 3)),
+        ("grid_shape", (1, 3)),
+        ("grid_shape", (3,)),
+        ("grid_shape", "2,3"),
+        ("min_tile_size", True),
+        ("min_tile_size", 0),
+        ("min_tile_size", 1.5),
+        ("max_shift_fraction", True),
+        ("max_shift_fraction", "0.75"),
+        ("max_shift_fraction", np.nan),
+        ("max_shift_fraction", -0.1),
         ("tps_regularization", True),
         ("tps_regularization", np.nan),
         ("tps_regularization", -1.0e-3),
@@ -85,6 +96,9 @@ def test_nonrigid_registration_accepts_valid_numpy_scalar_controls() -> None:
         registration = register_measurement_plane_by_nonrigid_fov(
             reference,
             measurement,
+            grid_shape=(np.int64(2), np.float64(2.0)),
+            min_tile_size=np.int64(1),
+            max_shift_fraction=np.float64(0.75),
             tps_regularization=np.asarray(0.0),
             bspline_regularization=np.float64(0.01),
             optical_flow_iterations=np.int64(0),
@@ -92,6 +106,9 @@ def test_nonrigid_registration_accepts_valid_numpy_scalar_controls() -> None:
         )
 
     estimator.assert_called_once()
+    assert estimator.call_args.kwargs["grid_shape"] == (2, 2)
+    assert estimator.call_args.kwargs["min_tile_size"] == 1
+    assert estimator.call_args.kwargs["max_shift_fraction"] == 0.75
     assert registration.transform_type == "bspline"
     assert registration.registered_measurement_plane.ops is not None
     assert (
