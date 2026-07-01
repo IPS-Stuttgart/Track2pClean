@@ -31,6 +31,7 @@ _OPTIONAL_STRICTLY_POSITIVE_PAIRWISE_CONTROLS = (
     "max_centroid_distance",
 )
 _PATCHED_METHOD_NAMES = (
+    "__post_init__",
     "roi_areas",
     "centroids",
     "pairwise_centroid_distances",
@@ -55,6 +56,7 @@ def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None
     if installed and current_methods_are_patched:
         return
 
+    original_post_init = calcium_plane_cls.__post_init__
     original_roi_areas = calcium_plane_cls.roi_areas
     original_centroids = calcium_plane_cls.centroids
     original_pairwise_centroid_distances = calcium_plane_cls.pairwise_centroid_distances
@@ -65,6 +67,11 @@ def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None
     )
     original_to_export_dict = calcium_plane_cls.to_export_dict
     original_build_pairwise_cost_matrix = calcium_plane_cls.build_pairwise_cost_matrix
+
+    @wraps(original_post_init)
+    def __post_init__(self: Any) -> None:
+        original_post_init(self)
+        _validate_cell_probabilities(self)
 
     @wraps(original_roi_areas)
     def roi_areas(
@@ -188,6 +195,7 @@ def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None
         kwargs = _validate_pairwise_cost_kwargs(kwargs)
         return original_build_pairwise_cost_matrix(self, *args, **kwargs)
 
+    _mark_wrapper(__post_init__, original_post_init)
     _mark_wrapper(roi_areas, original_roi_areas)
     _mark_wrapper(centroids, original_centroids)
     _mark_wrapper(pairwise_centroid_distances, original_pairwise_centroid_distances)
@@ -199,6 +207,7 @@ def install_core_scalar_validation_patches(calcium_plane_cls: type[Any]) -> None
     _mark_wrapper(to_export_dict, original_to_export_dict)
     _mark_wrapper(build_pairwise_cost_matrix, original_build_pairwise_cost_matrix)
 
+    calcium_plane_cls.__post_init__ = __post_init__
     calcium_plane_cls.roi_areas = roi_areas
     calcium_plane_cls.centroids = centroids
     calcium_plane_cls.pairwise_centroid_distances = pairwise_centroid_distances
@@ -229,6 +238,23 @@ def _function_chain_has_patch(function: Any) -> bool:
         seen.add(current_id)
         current = getattr(current, _ORIGINAL_ATTR, None)
     return False
+
+
+def _validate_cell_probabilities(plane: Any) -> None:
+    probabilities = getattr(plane, "cell_probabilities", None)
+    if probabilities is None:
+        return
+    probability_array = np.asarray(probabilities, dtype=float)
+    expected_shape = (int(plane.n_rois),)
+    if probability_array.shape != expected_shape:
+        raise ValueError("cell_probabilities must have shape (n_roi,)")
+    invalid = (
+        ~np.isfinite(probability_array)
+        | (probability_array < 0.0)
+        | (probability_array > 1.0)
+    )
+    if np.any(invalid):
+        raise ValueError("cell_probabilities must contain finite values between 0 and 1")
 
 
 def _validated_positional_or_keyword_bool(
