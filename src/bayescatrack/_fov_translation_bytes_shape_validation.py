@@ -29,7 +29,7 @@ def _wrap_output_shape_kwarg(module: Any, function_name: str) -> None:
     if _wrapper_chain_has_marker(original, _PATCH_MARKER):
         return
 
-    @wraps(original)
+    @wraps(original, updated=())
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         output_shape = kwargs.get("output_shape")
         if isinstance(output_shape, _BYTES_LIKE_SHAPE_TYPES):

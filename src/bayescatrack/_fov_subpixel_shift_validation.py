@@ -49,7 +49,7 @@ def _wrap_shift_argument(module: Any, function_name: str) -> None:
     if _wrapper_chain_has_marker(original, _PATCH_MARKER):
         return
 
-    @wraps(original)
+    @wraps(original, updated=())
     def wrapper(source: Any, shift_yx: Any, *args: Any, **kwargs: Any) -> Any:
         return original(source, _normalize_subpixel_shift_yx(shift_yx), *args, **kwargs)
 
@@ -63,7 +63,7 @@ def _wrap_mask_interpolation_validation(module: Any) -> None:
     if _wrapper_chain_has_marker(original, _MASK_INTERPOLATION_PATCH_MARKER):
         return
 
-    @wraps(original)
+    @wraps(original, updated=())
     def wrapper(interpolation: Any) -> None:
         if not isinstance(interpolation, str):
             raise ValueError(_MASK_INTERPOLATION_ERROR)
@@ -79,7 +79,7 @@ def _wrap_subpixel_interpolation_order_validation(module: Any) -> None:
     if _wrapper_chain_has_marker(original, _INTERPOLATION_ORDER_PATCH_MARKER):
         return
 
-    @wraps(original)
+    @wraps(original, updated=())
     def wrapper(interpolation_order: Any) -> int:
         if _is_text_or_bytes_like_scalar(interpolation_order):
             raise ValueError(_INTERPOLATION_ORDER_ERROR)
@@ -98,7 +98,7 @@ def _wrap_finite_nonnegative_float_validation(module: Any) -> None:
     if _wrapper_chain_has_marker(original, _FLOAT_CONTROL_PATCH_MARKER):
         return
 
-    @wraps(original)
+    @wraps(original, updated=())
     def wrapper(value: Any, *, name: str) -> float:
         try:
             return original(value, name=name)

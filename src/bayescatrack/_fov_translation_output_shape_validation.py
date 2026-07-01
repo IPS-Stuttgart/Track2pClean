@@ -62,7 +62,7 @@ def _wrap_output_shape_kwarg(module: Any, function_name: str) -> None:
     if _wrapper_chain_has_marker(original, _PATCH_MARKER):
         return
 
-    @wraps(original)
+    @wraps(original, updated=())
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         normalized_kwargs = _normalize_output_shape_kwarg(kwargs)
         return original(*args, **normalized_kwargs)
