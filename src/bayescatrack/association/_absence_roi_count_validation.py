@@ -14,8 +14,11 @@ from functools import wraps
 from types import ModuleType
 from typing import Any
 
+import numpy as np
+
 _PATCH_ATTR = "_track2pclean_absence_roi_count_validation"
 _ORIGINAL_ATTR = "_track2pclean_absence_roi_count_validation_original"
+_TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 
 
 def install_absence_roi_count_validation(absence_model: ModuleType) -> None:
@@ -27,6 +30,7 @@ def install_absence_roi_count_validation(absence_model: ModuleType) -> None:
 
     @wraps(original_validator)
     def _validated_roi_count(plane: Any, plane_name: str) -> int:
+        _reject_text_roi_count(getattr(plane, "n_rois", 0), plane_name)
         try:
             return original_validator(plane, plane_name)
         except (ValueError, OverflowError) as exc:
@@ -35,6 +39,19 @@ def install_absence_roi_count_validation(absence_model: ModuleType) -> None:
     setattr(_validated_roi_count, _PATCH_ATTR, True)
     setattr(_validated_roi_count, _ORIGINAL_ATTR, original_validator)
     absence_model._validated_roi_count = _validated_roi_count
+
+
+def _reject_text_roi_count(raw_count: Any, plane_name: str) -> None:
+    if isinstance(raw_count, _TEXT_TYPES):
+        raise ValueError(_message(plane_name))
+    try:
+        raw_array = np.asarray(raw_count, dtype=object)
+    except (TypeError, ValueError):
+        return
+    if raw_array.shape != ():
+        return
+    if isinstance(raw_array.item(), _TEXT_TYPES):
+        raise ValueError(_message(plane_name))
 
 
 def _message(plane_name: str) -> str:
