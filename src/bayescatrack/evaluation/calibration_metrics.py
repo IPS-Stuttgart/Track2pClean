@@ -63,7 +63,11 @@ def _validate_sample_weight(
         raise ValueError("sample_weight must be finite")
     if np.any(weights < 0.0):
         raise ValueError("sample_weight must be non-negative")
-    if float(np.sum(weights)) <= 0.0:
+    with np.errstate(over="ignore", invalid="ignore"):
+        weight_sum = float(np.sum(weights, dtype=float))
+    if not np.isfinite(weight_sum):
+        raise ValueError("sample_weight total must be finite")
+    if weight_sum <= 0.0:
         raise ValueError("At least one sample weight must be positive")
     return weights
 
