@@ -21,6 +21,21 @@ class _Session:
         self.plane_data = _Plane()
 
 
+class _ValueErrorIndex:
+    def __index__(self) -> int:
+        raise ValueError("session index unavailable")
+
+
+class _OverflowingIndex:
+    def __index__(self) -> int:
+        raise OverflowError("session index too large")
+
+
+class _ArithmeticErrorIndex:
+    def __index__(self) -> int:
+        raise ArithmeticError("session index unavailable")
+
+
 def _make_tracking_result(
     *, global_link_edges, global_link_costs=None
 ) -> SubjectTrackingResult:
@@ -53,6 +68,15 @@ def test_subject_tracking_result_rejects_invalid_global_link_edges(
 ) -> None:
     with pytest.raises(ValueError, match="global_link_edges"):
         _make_tracking_result(global_link_edges=global_link_edges)
+
+
+@pytest.mark.parametrize(
+    "bad_index",
+    [_ValueErrorIndex(), _OverflowingIndex(), _ArithmeticErrorIndex()],
+)
+def test_subject_tracking_result_rejects_index_conversion_failures(bad_index) -> None:
+    with pytest.raises(ValueError, match="global_link_edges"):
+        _make_tracking_result(global_link_edges=((0, bad_index),))
 
 
 def test_subject_tracking_result_normalizes_integer_like_global_link_edges() -> None:

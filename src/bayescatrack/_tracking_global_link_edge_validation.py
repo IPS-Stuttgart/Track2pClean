@@ -202,7 +202,7 @@ def _normalize_session_index(value: Any, *, context: str) -> int:
     else:
         try:
             integer_value = operator.index(value)
-        except TypeError as exc:
+        except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
             raise ValueError(f"{context} must be an integer") from exc
 
     integer_value = int(integer_value)
