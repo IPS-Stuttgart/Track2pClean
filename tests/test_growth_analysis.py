@@ -126,7 +126,7 @@ def test_growth_optional_roi_rejects_boolean_values():
 
 
 @pytest.mark.parametrize(
-    "bad_index", [True, False, np.bool_(True), 1.5, "1.5", np.nan, np.inf]
+    "bad_index", [True, False, np.bool_(True), 1.5, "1.5", np.nan, np.inf, bytes([255])]
 )
 def test_growth_session_index_rejects_bool_fractional_and_nonfinite_values(bad_index):
     with pytest.raises(ValueError, match="session index"):
