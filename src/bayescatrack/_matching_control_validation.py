@@ -21,6 +21,8 @@ import numpy as np
 from ._assignment_max_cost_validation import normalize_assignment_max_cost
 
 _PATCH_MARKER = "_bayescatrack_matching_control_validation_patch"
+_TEXT_LIKE_TYPES = (str, bytes, bytearray, memoryview)
+_INTEGER_REJECT_TYPES = (bool, np.bool_, str, bytes, bytearray, memoryview, np.ndarray)
 
 
 def install_matching_control_validation() -> None:
@@ -171,7 +173,7 @@ def _mark_patch(wrapper: Any, original: Any) -> None:
 def _normalize_empty_match_collections(matches: Any) -> Any:
     """Normalize explicit empty match collections to an empty pair matrix."""
 
-    if isinstance(matches, (str, bytes, bytearray)):
+    if isinstance(matches, _TEXT_LIKE_TYPES):
         return matches
     try:
         match_iterator = iter(matches)
@@ -185,7 +187,7 @@ def _normalize_unique_session_names(
     *,
     field_name: str,
 ) -> tuple[str, ...]:
-    if isinstance(session_names, (str, bytes, bytearray)):
+    if isinstance(session_names, _TEXT_LIKE_TYPES):
         raise ValueError(
             f"{field_name} must be a sequence of session-name values, not a bare string"
         )
@@ -246,7 +248,7 @@ def _normalize_session_index(value: Any, n_sessions: int) -> int:
 
 
 def _normalize_integer_control(value: Any, field_name: str) -> int:
-    if isinstance(value, (bool, np.bool_, str, bytes, bytearray, np.ndarray)):
+    if isinstance(value, _INTEGER_REJECT_TYPES):
         raise ValueError(f"{field_name} must be an integer")
 
     try:
