@@ -15,7 +15,9 @@ def test_uncertainty_aware_cost_matrix_accepts_mapping_config() -> None:
         config={"temperature": 1.0, "uncertainty_penalty_weight": 0.0},
     )
 
-    np.testing.assert_allclose(result.adjusted_cost_matrix, np.asarray([[0.0, 1.0]], dtype=float))
+    np.testing.assert_allclose(
+        result.adjusted_cost_matrix, np.asarray([[0.0, 1.0]], dtype=float)
+    )
     assert result.posterior_probability_matrix.shape == (1, 2)
 
 

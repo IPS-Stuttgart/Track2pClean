@@ -56,7 +56,10 @@ def test_adaptive_prior_config_normalizes_overflowing_numeric_controls(
     ("kwargs", "message"),
     [
         ({"max_gap": _overflowing_fraction()}, "max_gap must be a positive integer"),
-        ({"smoothing": _overflowing_fraction()}, "smoothing must be a positive finite value"),
+        (
+            {"smoothing": _overflowing_fraction()},
+            "smoothing must be a positive finite value",
+        ),
     ],
 )
 def test_gap_cost_fitting_normalizes_overflowing_numeric_controls(
