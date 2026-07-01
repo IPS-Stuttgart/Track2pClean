@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 _LAM_VALUE_VALIDATION_MARKER = "_bayescatrack_suite2p_lam_value_validation_patch"
+_TEXT_OR_BYTES_LIKE_TYPES = (str, bytes, bytearray, memoryview)
 
 _ERROR_MESSAGE = (
     "Suite2p lam values used for weighted masks must be finite and non-negative"
@@ -193,13 +194,30 @@ def _validate_weighted_mask_values(roi_masks: Any) -> None:
 
 
 def _validate_lam_values(values: Any) -> None:
+    if isinstance(values, _TEXT_OR_BYTES_LIKE_TYPES):
+        raise ValueError(_ERROR_MESSAGE)
+
     try:
-        mask_values = np.asarray(values, dtype=float)
+        object_values = np.asarray(values, dtype=object)
     except (TypeError, ValueError) as exc:
+        raise ValueError(_ERROR_MESSAGE) from exc
+
+    if _contains_text_or_bytes_like(object_values):
+        raise ValueError(_ERROR_MESSAGE)
+
+    try:
+        mask_values = np.asarray(object_values, dtype=float)
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(_ERROR_MESSAGE) from exc
 
     if not np.all(np.isfinite(mask_values)) or np.any(mask_values < 0.0):
         raise ValueError(_ERROR_MESSAGE)
+
+
+def _contains_text_or_bytes_like(values: np.ndarray) -> bool:
+    return any(
+        isinstance(value, _TEXT_OR_BYTES_LIKE_TYPES) for value in values.reshape(-1)
+    )
 
 
 def _strict_bool(value: Any, *, name: str) -> bool:
