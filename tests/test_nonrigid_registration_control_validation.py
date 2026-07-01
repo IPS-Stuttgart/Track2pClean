@@ -47,7 +47,7 @@ def _identity_estimate() -> SimpleNamespace:
         ("min_tile_size", 0),
         ("min_tile_size", 1.5),
         ("max_shift_fraction", True),
-        ("max_shift_fraction", "0.75"),
+        ("max_shift_fraction", np.array([0.75])),
         ("max_shift_fraction", np.nan),
         ("max_shift_fraction", -0.1),
         ("tps_regularization", True),
