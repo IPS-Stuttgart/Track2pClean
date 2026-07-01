@@ -38,7 +38,7 @@ def install_fov_affine_warp_validation() -> None:
     )
 
     original_image_warp = _fov_affine_registration.apply_affine_image_warp
-    if not getattr(original_image_warp, _IMAGE_PATCH_MARKER, False):
+    if not _wrapper_chain_has_marker(original_image_warp, _IMAGE_PATCH_MARKER):
 
         @wraps(original_image_warp)
         def apply_affine_image_warp_with_validation(
@@ -64,7 +64,7 @@ def install_fov_affine_warp_validation() -> None:
         )
 
     original_mask_warp = _fov_affine_registration.apply_affine_roi_mask_warp
-    if not getattr(original_mask_warp, _MASK_PATCH_MARKER, False):
+    if not _wrapper_chain_has_marker(original_mask_warp, _MASK_PATCH_MARKER):
 
         @wraps(original_mask_warp)
         def apply_affine_roi_mask_warp_with_validation(
@@ -94,7 +94,7 @@ def install_fov_affine_warp_validation() -> None:
 
 def _patch_estimate_controls(module: Any) -> None:
     original_estimate = module.estimate_fov_affine_transform
-    if getattr(original_estimate, _ESTIMATE_PATCH_MARKER, False):
+    if _wrapper_chain_has_marker(original_estimate, _ESTIMATE_PATCH_MARKER):
         return
 
     @wraps(original_estimate)
@@ -115,6 +115,20 @@ def _patch_estimate_controls(module: Any) -> None:
 def _mark_patch(wrapper: Any, original: Any, marker: str) -> None:
     setattr(wrapper, marker, True)
     setattr(wrapper, "_bayescatrack_original", original)
+
+
+def _wrapper_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _normalize_output_shape_kwarg(kwargs: dict[str, Any]) -> dict[str, Any]:
