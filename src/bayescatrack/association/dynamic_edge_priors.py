@@ -180,7 +180,8 @@ def _validated_positive_integer_session_gap(session_gap: Any) -> int:
         "session_gap must be a finite value representing an integer "
         "greater than or equal to 1"
     )
-    if isinstance(session_gap, (bool, np.bool_)):
+    text_like_types = (str, bytes, bytearray, np.str_, np.bytes_)
+    if isinstance(session_gap, (bool, np.bool_, *text_like_types)):
         raise ValueError(message)
     try:
         session_gap_array = np.asarray(session_gap)
@@ -188,25 +189,17 @@ def _validated_positive_integer_session_gap(session_gap: Any) -> int:
         raise ValueError(message) from exc
     if session_gap_array.shape != ():
         raise ValueError(message)
-    if isinstance(session_gap_array.item(), (bool, np.bool_)):
+    session_gap_scalar = session_gap_array.item()
+    if isinstance(session_gap_scalar, (bool, np.bool_, *text_like_types)):
         raise ValueError(message)
 
     try:
-        gap = int(operator.index(session_gap))
-    except TypeError:
-        if isinstance(session_gap, str):
-            text = session_gap.strip()
-            if not text:
-                raise ValueError(message) from None
-            try:
-                numeric_gap = float(text)
-            except ValueError as exc:
-                raise ValueError(message) from exc
-        else:
-            try:
-                numeric_gap = float(session_gap)
-            except (TypeError, ValueError) as exc:
-                raise ValueError(message) from exc
+        gap = int(operator.index(session_gap_scalar))
+    except (TypeError, ValueError, OverflowError):
+        try:
+            numeric_gap = float(session_gap_scalar)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(message) from exc
         if not np.isfinite(numeric_gap) or not numeric_gap.is_integer():
             raise ValueError(message)
         gap = int(numeric_gap)
