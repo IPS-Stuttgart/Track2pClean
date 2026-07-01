@@ -18,7 +18,9 @@ def install_cell_probability_cost_patch(bridge_impl: ModuleType) -> None:
     _install_pairwise_cell_probability_cost_validation(bridge_impl)
 
 
-def _install_calcium_plane_cell_probability_validation(calcium_plane_cls: type[Any]) -> None:
+def _install_calcium_plane_cell_probability_validation(
+    calcium_plane_cls: type[Any],
+) -> None:
     """Reject invalid cell-probability arrays at plane construction time."""
 
     original_post_init = calcium_plane_cls.__post_init__
@@ -35,7 +37,9 @@ def _install_calcium_plane_cell_probability_validation(calcium_plane_cls: type[A
         if probabilities_array.shape != (self.n_rois,):
             raise ValueError("cell_probabilities must have shape (n_roi,)")
         if not np.all(_is_valid_probability_vector(probabilities_array)):
-            raise ValueError("cell_probabilities must be finite probabilities between 0 and 1")
+            raise ValueError(
+                "cell_probabilities must be finite probabilities between 0 and 1"
+            )
         object.__setattr__(self, "cell_probabilities", probabilities_array)
 
     setattr(__post_init__, _CELL_PROBABILITY_INIT_PATCH_ATTR, True)
@@ -95,9 +99,7 @@ def _install_pairwise_cell_probability_cost_validation(bridge_impl: ModuleType) 
 
         clipped_self = np.clip(probabilities_self_array, similarity_epsilon, 1.0)
         clipped_other = np.clip(probabilities_other_array, similarity_epsilon, 1.0)
-        cost = -0.5 * (
-            np.log(clipped_self[:, None]) + np.log(clipped_other[None, :])
-        )
+        cost = -0.5 * (np.log(clipped_self[:, None]) + np.log(clipped_other[None, :]))
         return cost, available.astype(float)
 
     setattr(_pairwise_cell_probability_cost, _CELL_PROBABILITY_COST_PATCH_ATTR, True)

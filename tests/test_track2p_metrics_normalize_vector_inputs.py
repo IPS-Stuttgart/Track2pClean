@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.evaluation import normalize_track_matrix
 from bayescatrack.evaluation.track2p_metrics import (
     normalize_track_matrix as normalize_track_matrix_facade,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack.association.multi_hypothesis import (
     edge_union_costs,
     enumerate_track_hypotheses,
@@ -33,7 +32,9 @@ def test_enumerate_track_hypotheses_rejects_bytes_like_edge_keys() -> None:
     "candidate",
     [bytearray(b"abc"), memoryview(b"abc")],
 )
-def test_enumerate_track_hypotheses_rejects_bytes_like_edge_candidates(candidate: object) -> None:
+def test_enumerate_track_hypotheses_rejects_bytes_like_edge_candidates(
+    candidate: object,
+) -> None:
     with pytest.raises(ValueError, match=_EDGE_CANDIDATE_ERROR):
         enumerate_track_hypotheses(
             ("s0", "s1"),
