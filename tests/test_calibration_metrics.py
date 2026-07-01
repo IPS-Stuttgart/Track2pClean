@@ -97,6 +97,11 @@ def test_brier_score_rejects_text_sample_weights(sample_weight):
         brier_score([0.5], [1], sample_weight=sample_weight)
 
 
+def test_brier_score_rejects_overflowed_sample_weight_total():
+    with pytest.raises(ValueError, match="sample_weight total must be finite"):
+        brier_score([0.0, 1.0], [0, 1], sample_weight=[1.0e308, 1.0e308])
+
+
 @pytest.mark.parametrize(
     ("probabilities", "labels", "message"),
     [
