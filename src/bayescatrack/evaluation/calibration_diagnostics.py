@@ -13,7 +13,14 @@ import numpy as np
 
 CalibrationBinRow: TypeAlias = dict[str, float | int | None]
 _MUTABLE_BYTES_TYPE = getattr(builtins, "byte" "array")
-_BARE_THRESHOLD_SEQUENCE_TYPES = (str, bytes, _MUTABLE_BYTES_TYPE, memoryview, bool, np.bool_)
+_BARE_THRESHOLD_SEQUENCE_TYPES = (
+    str,
+    bytes,
+    _MUTABLE_BYTES_TYPE,
+    memoryview,
+    bool,
+    np.bool_,
+)
 _THRESHOLD_SEQUENCE_ERROR = (
     "thresholds must contain at least one finite numeric value in [0, 1]"
 )

@@ -78,7 +78,9 @@ def test_missing_reference_edge_rows_rejects_malformed_reference_match() -> None
     "bad_roi",
     [_BadIndex(ValueError("bad match")), _BadIndex(OverflowError("bad match"))],
 )
-def test_missing_reference_edge_rows_normalizes_malformed_match_index_errors(bad_roi) -> None:
+def test_missing_reference_edge_rows_normalizes_malformed_match_index_errors(
+    bad_roi,
+) -> None:
     with pytest.raises(ValueError, match="reference_matches"):
         missing_reference_edge_rows(
             [(bad_roi, 2)],

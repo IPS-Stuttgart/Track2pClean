@@ -75,7 +75,9 @@ def _wrap_mask_interpolation_validation(module: Any) -> None:
 
 
 def _wrap_subpixel_interpolation_order_validation(module: Any) -> None:
-    original = module._validate_subpixel_interpolation_order  # pylint: disable=protected-access
+    original = (
+        module._validate_subpixel_interpolation_order
+    )  # pylint: disable=protected-access
     if _wrapper_chain_has_marker(original, _INTERPOLATION_ORDER_PATCH_MARKER):
         return
 
@@ -90,7 +92,9 @@ def _wrap_subpixel_interpolation_order_validation(module: Any) -> None:
 
     setattr(wrapper, _INTERPOLATION_ORDER_PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
-    module._validate_subpixel_interpolation_order = wrapper  # pylint: disable=protected-access
+    module._validate_subpixel_interpolation_order = (
+        wrapper  # pylint: disable=protected-access
+    )
 
 
 def _wrap_finite_nonnegative_float_validation(module: Any) -> None:

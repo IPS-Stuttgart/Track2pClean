@@ -15,7 +15,9 @@ def install_track_error_taxonomy_session_pair_validation(
 ) -> None:
     """Reject malformed taxonomy ``session_pairs`` before link counting."""
 
-    original_session_pairs = taxonomy_module._session_pairs  # pylint: disable=protected-access
+    original_session_pairs = (
+        taxonomy_module._session_pairs
+    )  # pylint: disable=protected-access
     if getattr(original_session_pairs, _PATCH_ATTR, False):
         return
 
@@ -37,7 +39,9 @@ def install_track_error_taxonomy_session_pair_validation(
         "_bayescatrack_original",
         original_session_pairs,
     )
-    taxonomy_module._session_pairs = _session_pairs_with_strict_indices  # pylint: disable=protected-access
+    taxonomy_module._session_pairs = (
+        _session_pairs_with_strict_indices  # pylint: disable=protected-access
+    )
 
 
 def _coerce_session_index(value: object) -> int:

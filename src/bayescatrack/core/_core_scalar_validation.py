@@ -254,7 +254,9 @@ def _validate_cell_probabilities(plane: Any) -> None:
         | (probability_array > 1.0)
     )
     if np.any(invalid):
-        raise ValueError("cell_probabilities must contain finite values between 0 and 1")
+        raise ValueError(
+            "cell_probabilities must contain finite values between 0 and 1"
+        )
 
 
 def _validated_positional_or_keyword_bool(

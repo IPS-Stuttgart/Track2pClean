@@ -17,8 +17,12 @@ from typing import Any, Callable
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_edge_ranking_score_matrix_validation_patch"
-_SCORE_MATRIX_ERROR = "score_matrices must be a mapping with unique, non-empty string keys"
-_SCORE_DIRECTION_ERROR = "score_directions must map unique score names to 'cost' or 'similarity'"
+_SCORE_MATRIX_ERROR = (
+    "score_matrices must be a mapping with unique, non-empty string keys"
+)
+_SCORE_DIRECTION_ERROR = (
+    "score_directions must map unique score names to 'cost' or 'similarity'"
+)
 
 
 def install_edge_ranking_score_matrix_validation() -> None:
@@ -66,7 +70,9 @@ def _normalize_score_matrices(score_matrices: Any) -> dict[str, Any]:
 
     normalized: dict[str, Any] = {}
     for score_name, score_values in score_matrices.items():
-        normalized_name = _normalize_score_name(score_name, error_message=_SCORE_MATRIX_ERROR)
+        normalized_name = _normalize_score_name(
+            score_name, error_message=_SCORE_MATRIX_ERROR
+        )
         if normalized_name in normalized:
             raise ValueError(_SCORE_MATRIX_ERROR)
         normalized[normalized_name] = score_values
