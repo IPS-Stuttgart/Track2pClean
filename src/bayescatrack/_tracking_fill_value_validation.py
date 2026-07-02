@@ -25,7 +25,7 @@ def install_tracking_fill_value_validation() -> None:
     from . import tracking as _tracking  # pylint: disable=import-outside-toplevel
 
     original_post_init = _tracking.SubjectTrackingResult.__post_init__
-    if not getattr(original_post_init, _PATCH_MARKER, False):
+    if not _function_chain_has_marker(original_post_init, _PATCH_MARKER):
 
         @wraps(original_post_init)
         def subject_tracking_result_post_init_with_fill_value_validation(
@@ -62,7 +62,7 @@ def install_tracking_fill_value_validation() -> None:
 
 def _patch_fill_value_keyword_function(module: Any, name: str) -> None:
     original = getattr(module, name)
-    if getattr(original, _PATCH_MARKER, False):
+    if _function_chain_has_marker(original, _PATCH_MARKER):
         return
 
     @wraps(original)
@@ -75,6 +75,20 @@ def _patch_fill_value_keyword_function(module: Any, name: str) -> None:
     setattr(function_with_fill_value_validation, _PATCH_MARKER, True)
     setattr(function_with_fill_value_validation, "_bayescatrack_original", original)
     setattr(module, name, function_with_fill_value_validation)
+
+
+def _function_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _normalize_fill_value(value: Any) -> int:
