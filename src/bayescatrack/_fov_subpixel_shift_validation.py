@@ -50,8 +50,18 @@ def _wrap_shift_argument(module: Any, function_name: str) -> None:
         return
 
     @wraps(original, updated=())
-    def wrapper(source: Any, shift_yx: Any, *args: Any, **kwargs: Any) -> Any:
-        return original(source, _normalize_subpixel_shift_yx(shift_yx), *args, **kwargs)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        normalized_args = list(args)
+        normalized_kwargs = dict(kwargs)
+        if len(normalized_args) >= 2:
+            normalized_args[1] = _normalize_subpixel_shift_yx(normalized_args[1])
+        elif "shift_yx" in normalized_kwargs:
+            normalized_kwargs["shift_yx"] = _normalize_subpixel_shift_yx(
+                normalized_kwargs["shift_yx"]
+            )
+        else:
+            return original(*args, **kwargs)
+        return original(*normalized_args, **normalized_kwargs)
 
     setattr(wrapper, _PATCH_MARKER, True)
     setattr(wrapper, "_bayescatrack_original", original)
