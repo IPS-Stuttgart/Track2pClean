@@ -100,6 +100,8 @@ def _wrap_finite_nonnegative_float_validation(module: Any) -> None:
 
     @wraps(original, updated=())
     def wrapper(value: Any, *, name: str) -> float:
+        if _is_text_or_bytes_like_scalar(value):
+            raise ValueError(_FLOAT_CONTROL_ERROR.format(name=name))
         try:
             return original(value, name=name)
         except ArithmeticError as exc:
