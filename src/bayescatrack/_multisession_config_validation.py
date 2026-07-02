@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_multisession_config_validation_patch"
+_TEXT_LIKE_SCALAR_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 
 def install_multisession_config_validation() -> None:
@@ -89,32 +90,33 @@ def install_multisession_config_validation() -> None:
     setattr(config_cls, _PATCH_MARKER, True)
 
 
+def _scalar_value(value: Any, *, message: str) -> Any:
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError(message)
+        return value.item()
+    return value
+
+
 def _positive_int(value: Any, *, name: str) -> int:
+    message = f"{name} must be a positive integer"
+    value = _scalar_value(value, message=message)
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a positive integer")
+        raise ValueError(message)
+    if isinstance(value, _TEXT_LIKE_SCALAR_TYPES):
+        raise ValueError(message)
     if isinstance(value, (float, np.floating)):
         numeric_value = float(value)
         if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-            raise ValueError(f"{name} must be a positive integer")
-        integer_value = int(numeric_value)
-    elif isinstance(value, str):
-        text = value.strip()
-        if not text:
-            raise ValueError(f"{name} must be a positive integer")
-        try:
-            numeric_value = float(text)
-        except (TypeError, ValueError, OverflowError) as exc:
-            raise ValueError(f"{name} must be a positive integer") from exc
-        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-            raise ValueError(f"{name} must be a positive integer")
+            raise ValueError(message)
         integer_value = int(numeric_value)
     else:
         try:
             integer_value = operator.index(value)
         except (TypeError, ValueError, OverflowError) as exc:
-            raise ValueError(f"{name} must be a positive integer") from exc
+            raise ValueError(message) from exc
     if integer_value < 1:
-        raise ValueError(f"{name} must be a positive integer")
+        raise ValueError(message)
     return int(integer_value)
 
 
@@ -125,14 +127,18 @@ def _strict_bool(value: Any, *, name: str) -> bool:
 
 
 def _finite_nonnegative_float(value: Any, *, name: str) -> float:
+    message = f"{name} must be a finite non-negative value"
+    value = _scalar_value(value, message=message)
     if isinstance(value, (bool, np.bool_)):
-        raise ValueError(f"{name} must be a finite non-negative value")
+        raise ValueError(message)
+    if isinstance(value, _TEXT_LIKE_SCALAR_TYPES):
+        raise ValueError(message)
     try:
         numeric_value = float(value)
     except (TypeError, ValueError, OverflowError, DecimalException) as exc:
-        raise ValueError(f"{name} must be a finite non-negative value") from exc
+        raise ValueError(message) from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
-        raise ValueError(f"{name} must be a finite non-negative value")
+        raise ValueError(message)
     return numeric_value
 
 
