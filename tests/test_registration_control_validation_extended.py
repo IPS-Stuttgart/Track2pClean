@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from bayescatrack import CalciumPlaneData
-from bayescatrack import registration
+from bayescatrack import CalciumPlaneData, registration
 
 
 def _single_roi_plane() -> CalciumPlaneData:
@@ -17,9 +15,18 @@ def _single_roi_plane() -> CalciumPlaneData:
     ("kwargs", "message"),
     [
         ({"order": np.asarray(["xy"])}, "order must be either 'xy' or 'yx'"),
-        ({"binarize_registered_masks": "false"}, "binarize_registered_masks must be a boolean"),
-        ({"registered_mask_threshold": True}, "registered_mask_threshold must be a finite scalar in \\[0, 1\\]"),
-        ({"registered_mask_threshold": 1.5}, "registered_mask_threshold must be a finite scalar in \\[0, 1\\]"),
+        (
+            {"binarize_registered_masks": "false"},
+            "binarize_registered_masks must be a boolean",
+        ),
+        (
+            {"registered_mask_threshold": True},
+            "registered_mask_threshold must be a finite scalar in \\[0, 1\\]",
+        ),
+        (
+            {"registered_mask_threshold": 1.5},
+            "registered_mask_threshold must be a finite scalar in \\[0, 1\\]",
+        ),
     ],
 )
 def test_register_measurement_plane_rejects_malformed_boundary_controls(

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import importlib
 
+import bayescatrack.association.candidate_prefilter as candidate_prefilter_module
 import numpy as np
 import pytest
-import bayescatrack.association.candidate_prefilter as candidate_prefilter_module
-from bayescatrack._candidate_centroid_validation import install_candidate_centroid_validation
+from bayescatrack._candidate_centroid_validation import (
+    install_candidate_centroid_validation,
+)
 from bayescatrack.association.candidate_prefilter import (
     CentroidCandidatePrefilterConfig,
     apply_candidate_mask,

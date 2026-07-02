@@ -22,7 +22,9 @@ def install_accuracy_preset_scalar_validation(accuracy_presets_module: Any) -> N
 
 
 def _patch_integer_value(accuracy_presets_module: Any) -> None:
-    original = accuracy_presets_module._integer_value  # pylint: disable=protected-access
+    original = (
+        accuracy_presets_module._integer_value
+    )  # pylint: disable=protected-access
     if getattr(original, _PATCH_MARKER, False):
         return
 
@@ -39,7 +41,9 @@ def _patch_integer_value(accuracy_presets_module: Any) -> None:
 
 
 def _patch_float_or_none(accuracy_presets_module: Any) -> None:
-    original = accuracy_presets_module._finite_nonnegative_float_or_none  # pylint: disable=protected-access
+    original = (
+        accuracy_presets_module._finite_nonnegative_float_or_none
+    )  # pylint: disable=protected-access
     if getattr(original, _PATCH_MARKER, False):
         return
 
