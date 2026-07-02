@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
-
-from bayescatrack.reference import Track2pReference, score_complete_tracks_against_reference
+from bayescatrack.reference import (
+    Track2pReference,
+    score_complete_tracks_against_reference,
+)
 
 
 def test_reference_subset_ct_uses_same_seed_restricted_universe():
