@@ -41,6 +41,13 @@ def _plane() -> CalciumPlaneData:
             ),
         ),
         (
+            "similarity_epsilon",
+            lambda plane: plane.build_pairwise_cost_matrix(
+                plane,
+                similarity_epsilon=memoryview(b"1"),
+            ),
+        ),
+        (
             "max_centroid_distance",
             lambda plane: plane.build_pairwise_cost_matrix(
                 plane,
