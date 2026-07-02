@@ -14,7 +14,9 @@ _STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 _TARGET_NAME = "_" + "finite_probability"
 
 
-def install_loader_numeric_conversion_validation(loader_validation_module: ModuleType) -> None:
+def install_loader_numeric_conversion_validation(
+    loader_validation_module: ModuleType,
+) -> None:
     """Wrap loader probability conversion errors in public ValueError messages."""
 
     original_probability = getattr(loader_validation_module, _TARGET_NAME)
