@@ -35,7 +35,7 @@ def install_tracking_start_roi_validation() -> None:
 
     if not _function_chain_has_marker(original_run, _PATCH_MARKER):
 
-        @wraps(original_run)
+        @wraps(original_run, updated=())
         def run_registered_subject_tracking_with_start_roi_validation(
             subject_dir: Any,
             *args: Any,
@@ -64,7 +64,7 @@ def install_tracking_start_roi_validation() -> None:
 
     if not _function_chain_has_marker(original_restrict, _PATCH_MARKER):
 
-        @wraps(original_restrict)
+        @wraps(original_restrict, updated=())
         def restrict_track_rows_to_start_rois_with_validation(
             track_rows: Any,
             *,
