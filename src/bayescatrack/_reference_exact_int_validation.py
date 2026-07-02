@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import operator
 from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 from types import ModuleType
 from typing import Any
 
@@ -168,6 +169,10 @@ def _coerce_scalar_to_integer(
 ) -> int:
     if isinstance(scalar, (int, np.integer)):
         return int(scalar)
+    if isinstance(scalar, Decimal):
+        return _coerce_decimal_to_integer(scalar, message=message)
+    if isinstance(scalar, Fraction):
+        return _coerce_fraction_to_integer(scalar, message=message)
     if isinstance(scalar, str):
         if not allow_string:
             raise ValueError(message)
@@ -186,6 +191,18 @@ def _coerce_scalar_to_integer(
         if not numeric_value.is_integer():
             raise ValueError(message)
         return int(numeric_value)
+
+
+def _coerce_decimal_to_integer(value: Decimal, *, message: str) -> int:
+    if not value.is_finite() or value != value.to_integral_value():
+        raise ValueError(message)
+    return int(value)
+
+
+def _coerce_fraction_to_integer(value: Fraction, *, message: str) -> int:
+    if value.denominator != 1:
+        raise ValueError(message)
+    return value.numerator
 
 
 def _finite_float(value: Any, *, message: str) -> float:
