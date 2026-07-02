@@ -18,6 +18,7 @@ import numpy as np
 
 RegistrationModel = Literal["translation", "rigid", "affine"]
 _VALID_REGISTRATION_MODELS = {"translation", "rigid", "affine"}
+_VALID_COORDINATE_ORDERS = {"xy", "yx"}
 _PATCH_ATTR = "_bayescatrack_registration_control_validation_patch"
 
 
@@ -64,7 +65,7 @@ def install_registration_control_validation(registration_module: Any) -> None:
         return original(
             reference_plane,
             measurement_plane,
-            order=order,
+            order=_coordinate_order(order),
             weighted_centroids=_boolean_flag(
                 weighted_centroids,
                 name="weighted_centroids",
@@ -84,8 +85,14 @@ def install_registration_control_validation(registration_module: Any) -> None:
                 allow_reflection,
                 name="allow_reflection",
             ),
-            binarize_registered_masks=binarize_registered_masks,
-            registered_mask_threshold=registered_mask_threshold,
+            binarize_registered_masks=_boolean_flag(
+                binarize_registered_masks,
+                name="binarize_registered_masks",
+            ),
+            registered_mask_threshold=_unit_interval_float(
+                registered_mask_threshold,
+                name="registered_mask_threshold",
+            ),
         )
 
     setattr(register_measurement_plane_to_reference, _PATCH_ATTR, True)
@@ -101,6 +108,18 @@ def _registration_model(value: Any) -> RegistrationModel:
             "registration_model must be one of 'translation', 'rigid', or 'affine'"
         )
     return cast(RegistrationModel, value)
+
+
+def _coordinate_order(value: Any) -> str:
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            raise ValueError("order must be either 'xy' or 'yx'")
+        value = value.item()
+    if isinstance(value, np.str_):
+        value = str(value)
+    if not isinstance(value, str) or value not in _VALID_COORDINATE_ORDERS:
+        raise ValueError("order must be either 'xy' or 'yx'")
+    return value
 
 
 def _boolean_flag(value: Any, *, name: str) -> bool:
@@ -124,6 +143,21 @@ def _finite_nonnegative_float(value: Any, *, name: str) -> float:
         raise ValueError(f"{name} must be a finite non-negative scalar") from exc
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
         raise ValueError(f"{name} must be a finite non-negative scalar")
+    return float(numeric_value)
+
+
+def _unit_interval_float(value: Any, *, name: str) -> float:
+    if isinstance(value, (bool, np.bool_, str, bytes, bytearray)):
+        raise ValueError(f"{name} must be a finite scalar in [0, 1]")
+    array = np.asarray(value)
+    if array.shape != ():
+        raise ValueError(f"{name} must be a finite scalar in [0, 1]")
+    try:
+        numeric_value = float(array)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite scalar in [0, 1]") from exc
+    if not np.isfinite(numeric_value) or numeric_value < 0.0 or numeric_value > 1.0:
+        raise ValueError(f"{name} must be a finite scalar in [0, 1]")
     return float(numeric_value)
 
 
