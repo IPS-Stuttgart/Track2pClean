@@ -1,4 +1,4 @@
-"""Exact ROI-index parsing for Track2p reference helpers.
+"""Exact and overflow-safe scalar parsing for Track2p reference helpers.
 
 Reference tables can arrive from CSV/NumPy object arrays with integer ROI IDs
 encoded as text, but programmatic benchmark helpers also receive Python and NumPy
@@ -6,6 +6,10 @@ integer scalars.  The base parser historically accepted decimal strings and
 non-text scalars by going through ``float(...)``. That silently rounds
 integer-valued values above the IEEE-754 exact-integer range, which can turn a
 valid ROI ID into a neighboring one before scoring.
+
+Curated-mask flags use the same reference-validation boundary.  Numeric adapter
+objects must therefore fail with the public ``ValueError`` contract instead of
+leaking raw arithmetic exceptions from ``float(...)`` coercion.
 """
 
 from __future__ import annotations
@@ -19,6 +23,9 @@ import numpy as np
 
 _OPTIONAL_PATCH_ATTR = "_bayescatrack_reference_exact_int_validation_patch"
 _SCALAR_PATCH_ATTR = "_bayescatrack_reference_exact_scalar_validation_patch"
+_CURATED_MASK_PATCH_ATTR = (
+    "_bayescatrack_reference_curated_mask_arithmetic_validation_patch"
+)
 _PLATFORM_INT_MIN = int(np.iinfo(np.intp).min)
 _PLATFORM_INT_MAX = int(np.iinfo(np.intp).max)
 
@@ -34,6 +41,7 @@ def install_reference_exact_int_validation(
         )
 
     _install_parse_integer_scalar_exact(reference_module)
+    _install_curated_mask_arithmetic_validation(reference_module)
 
     original_parse_optional_int = (
         reference_module._parse_optional_int
@@ -102,6 +110,40 @@ def _install_parse_integer_scalar_exact(reference_module: ModuleType) -> None:
     )
     reference_module._parse_integer_scalar = (
         _parse_integer_scalar_with_exact_validation  # pylint: disable=protected-access
+    )
+
+
+def _install_curated_mask_arithmetic_validation(reference_module: ModuleType) -> None:
+    original_parse_curated_mask_value = (
+        reference_module._parse_curated_mask_value
+    )  # pylint: disable=protected-access
+    if getattr(original_parse_curated_mask_value, _CURATED_MASK_PATCH_ATTR, False):
+        return
+
+    def _parse_curated_mask_value_with_arithmetic_validation(
+        value: Any,
+        *,
+        name: str,
+    ) -> bool:
+        try:
+            return original_parse_curated_mask_value(value, name=name)
+        except ArithmeticError as exc:
+            raise ValueError(
+                f"{name} must contain only boolean or 0/1 values"
+            ) from exc
+
+    setattr(
+        _parse_curated_mask_value_with_arithmetic_validation,
+        _CURATED_MASK_PATCH_ATTR,
+        True,
+    )
+    setattr(
+        _parse_curated_mask_value_with_arithmetic_validation,
+        "_bayescatrack_original",
+        original_parse_curated_mask_value,
+    )
+    reference_module._parse_curated_mask_value = (  # pylint: disable=protected-access
+        _parse_curated_mask_value_with_arithmetic_validation
     )
 
 
