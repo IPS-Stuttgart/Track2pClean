@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_candidate_centroid_validation_patch"
+_TEXT_OR_BINARY_LIKE_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 
 def install_candidate_centroid_validation(candidate_prefilter_module: Any) -> None:
@@ -94,23 +95,14 @@ def _validate_finite_centroid_coordinates(values: Any, *, name: str) -> None:
 def _positive_int(value: Any, *, name: str) -> int:
     if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be an integer")
+    if isinstance(value, _TEXT_OR_BINARY_LIKE_TYPES):
+        raise ValueError(f"{name} must be an integer")
     if isinstance(value, np.ndarray):
         raise ValueError(f"{name} must be an integer")
     if isinstance(value, (float, np.floating)):
         if not np.isfinite(value) or not float(value).is_integer():
             raise ValueError(f"{name} must be an integer")
         integer_value = int(value)
-    elif isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError(f"{name} must be an integer")
-        try:
-            numeric_value = float(stripped)
-        except ValueError as exc:
-            raise ValueError(f"{name} must be an integer") from exc
-        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
-            raise ValueError(f"{name} must be an integer")
-        integer_value = int(numeric_value)
     else:
         try:
             integer_value = operator.index(value)
