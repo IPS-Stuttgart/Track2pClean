@@ -16,7 +16,10 @@ from typing import Any
 import numpy as np
 
 _PATCH_MARKER = "_bayescatrack_tracking_duplicate_start_roi_validation_patch"
-_ERROR_MESSAGE = "track_rows must not contain duplicate non-missing ROI entries in start_session_index"
+_ERROR_MESSAGE = (
+    "track_rows must not contain duplicate non-missing ROI entries in "
+    "start_session_index"
+)
 
 
 def install_tracking_duplicate_start_roi_validation() -> None:
@@ -25,7 +28,7 @@ def install_tracking_duplicate_start_roi_validation() -> None:
     from . import tracking as _tracking  # pylint: disable=import-outside-toplevel
 
     original_restrict = _tracking._restrict_track_rows_to_start_rois
-    if getattr(original_restrict, _PATCH_MARKER, False):
+    if _function_chain_has_marker(original_restrict, _PATCH_MARKER):
         return
 
     @wraps(original_restrict)
@@ -61,6 +64,20 @@ def install_tracking_duplicate_start_roi_validation() -> None:
     _tracking._restrict_track_rows_to_start_rois = (
         restrict_track_rows_to_start_rois_without_duplicate_starts
     )
+
+
+def _function_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _reject_duplicate_start_session_rois(
