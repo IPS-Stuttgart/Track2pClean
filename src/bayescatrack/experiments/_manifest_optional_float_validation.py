@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from functools import wraps
-import math
 from typing import Any
 
 _PATCH_MARKER = "_bayescatrack_optional_float_manifest_validation_patch"
@@ -15,11 +15,11 @@ _BENCHMARK_EMPTY_TEXT = frozenset({"", "none", "null", "off", "disabled"})
 def install_optional_float_manifest_validation() -> None:
     """Install idempotent optional-float guards for benchmark manifests."""
 
-    from bayescatrack.experiments import (  # pylint: disable=import-outside-toplevel
-        _teacher_rescue_manifest_integration as teacher_rescue,
+    from bayescatrack.experiments import (
+        _teacher_rescue_manifest_integration as teacher_rescue,  # pylint: disable=import-outside-toplevel
     )
-    from bayescatrack.experiments import (  # pylint: disable=import-outside-toplevel
-        benchmark_manifest as manifest,
+    from bayescatrack.experiments import (
+        benchmark_manifest as manifest,  # pylint: disable=import-outside-toplevel
     )
 
     _patch_benchmark_manifest_optional_float(manifest)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Any
 
 _PATCH_ATTR = "_track2pclean_benchmark_string_list_validation_patch"
 
@@ -25,12 +24,16 @@ def install_benchmark_string_list_validation() -> None:
             raise ValueError(f"{name} must be a comma-separated list of strings")
         tokens = tuple(token.strip() for token in raw.split(","))
         if any(not token for token in tokens):
-            raise ValueError(f"{name} must be a comma-separated list of non-empty values")
+            raise ValueError(
+                f"{name} must be a comma-separated list of non-empty values"
+            )
         return tokens
 
     setattr(_parse_string_list, _PATCH_ATTR, True)
     setattr(_parse_string_list, "_track2pclean_original", original)
-    benchmark._parse_string_list = _parse_string_list  # pylint: disable=protected-access
+    benchmark._parse_string_list = (
+        _parse_string_list  # pylint: disable=protected-access
+    )
 
 
 __all__ = ["install_benchmark_string_list_validation"]

@@ -1,5 +1,4 @@
 import numpy as np
-
 from bayescatrack.multisession_tracking import (
     LongitudinalTrackingResult,
     save_tracking_result_npz,
