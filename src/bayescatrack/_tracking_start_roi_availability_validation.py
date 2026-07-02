@@ -30,7 +30,7 @@ def install_tracking_start_roi_availability_validation() -> None:
     if _function_chain_has_marker(original_run, _PATCH_MARKER):
         return
 
-    @wraps(original_run)
+    @wraps(original_run, updated=())
     def run_registered_subject_tracking_with_start_roi_availability_validation(
         subject_dir: Any,
         *args: Any,
