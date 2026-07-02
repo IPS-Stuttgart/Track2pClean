@@ -28,6 +28,7 @@ _GRID_SHAPE_ERROR = "grid_shape must contain exactly two positive integer dimens
 _MIN_TILE_SIZE_ERROR = "min_tile_size must be a positive integer"
 _MAX_SHIFT_FRACTION_ERROR = "max_shift_fraction must be a finite non-negative value"
 _TEXT_OR_BYTES_LIKE_TYPES = (str, bytes, bytearray, memoryview)
+_AMBIGUOUS_AFFINE_MATRIX_ENTRY_TYPES = (*_TEXT_OR_BYTES_LIKE_TYPES, bool, np.bool_)
 
 
 def install_fov_affine_warp_validation() -> None:
@@ -287,7 +288,7 @@ def _normalize_affine_matrix_xy(matrix_xy: Any) -> np.ndarray:
         raise ValueError(_MATRIX_ERROR) from exc
     if matrix_array.shape != (2, 3):
         raise ValueError(_MATRIX_ERROR)
-    if _contains_text_or_bytes_like(matrix_array):
+    if _contains_ambiguous_affine_matrix_entries(matrix_array):
         raise ValueError(_MATRIX_ERROR)
     try:
         numeric_matrix = np.asarray(matrix_array, dtype=float)
@@ -298,9 +299,10 @@ def _normalize_affine_matrix_xy(matrix_xy: Any) -> np.ndarray:
     return numeric_matrix
 
 
-def _contains_text_or_bytes_like(values: np.ndarray) -> bool:
+def _contains_ambiguous_affine_matrix_entries(values: np.ndarray) -> bool:
     return any(
-        isinstance(value, _TEXT_OR_BYTES_LIKE_TYPES) for value in values.reshape(-1)
+        isinstance(value, _AMBIGUOUS_AFFINE_MATRIX_ENTRY_TYPES)
+        for value in values.reshape(-1)
     )
 
 

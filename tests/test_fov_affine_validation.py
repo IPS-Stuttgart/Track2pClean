@@ -59,6 +59,26 @@ def test_apply_affine_image_warp_rejects_bytes_like_matrix_entries(
         apply_affine_image_warp(image, bad_matrix, output_shape=(4, 4))
 
 
+@pytest.mark.parametrize("bad_matrix_entry", [True, np.bool_(False)])
+def test_apply_affine_image_warp_rejects_boolean_matrix_entries(bad_matrix_entry):
+    image = np.ones((4, 4), dtype=float)
+    bad_matrix = np.asarray(
+        [[1.0, 0.0, 0.0], [0.0, 1.0, bad_matrix_entry]],
+        dtype=object,
+    )
+
+    with pytest.raises(ValueError, match="finite 2-by-3 affine matrix"):
+        apply_affine_image_warp(image, bad_matrix, output_shape=(4, 4))
+
+
+def test_apply_affine_roi_mask_warp_rejects_boolean_matrix_arrays():
+    masks = np.zeros((1, 4, 4), dtype=bool)
+    bad_matrix = np.asarray([[True, False, False], [False, True, False]])
+
+    with pytest.raises(ValueError, match="finite 2-by-3 affine matrix"):
+        apply_affine_roi_mask_warp(masks, bad_matrix, output_shape=(4, 4))
+
+
 @pytest.mark.parametrize(
     "bad_output_shape",
     [
