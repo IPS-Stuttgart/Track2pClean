@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from importlib import reload as reload_module
 from pathlib import Path
 
+import bayescatrack
 import bayescatrack.tracking as tracking
 import numpy as np
 import numpy.testing as npt
@@ -33,6 +35,76 @@ def _write_single_session_subject(subject_dir: Path) -> None:
     np.save(plane_dir / "rois.npy", roi_masks)
     np.save(plane_dir / "F.npy", np.ones((2, 2), dtype=float))
     np.save(plane_dir / "fov.npy", np.zeros((4, 4), dtype=float))
+
+
+def _wrapper_count(function, marker: str) -> int:
+    count = 0
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            raise AssertionError("cycle in tracking wrapper chain")
+        if getattr(current, marker, False):
+            count += 1
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return count
+
+
+def test_tracking_seed_and_fill_value_wrappers_are_reload_idempotent():
+    reload_module(bayescatrack)
+    reload_module(bayescatrack)
+
+    assert (
+        _wrapper_count(
+            tracking.run_registered_subject_tracking,
+            "_bayescatrack_start_roi_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_count(
+            tracking.run_registered_subject_tracking,
+            "_bayescatrack_tracking_start_roi_availability_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_count(
+            tracking.run_registered_subject_tracking,
+            "_bayescatrack_tracking_fill_value_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_count(
+            tracking._restrict_track_rows_to_start_rois,
+            "_bayescatrack_start_roi_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_count(
+            tracking._restrict_track_rows_to_start_rois,
+            "_bayescatrack_tracking_duplicate_start_roi_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_count(
+            tracking._restrict_track_rows_to_start_rois,
+            "_bayescatrack_tracking_fill_value_validation_patch",
+        )
+        == 1
+    )
+    assert (
+        _wrapper_count(
+            tracking.SubjectTrackingResult.__post_init__,
+            "_bayescatrack_tracking_fill_value_validation_patch",
+        )
+        == 1
+    )
 
 
 def test_tracking_start_roi_restriction_preserves_valid_seed_order():
