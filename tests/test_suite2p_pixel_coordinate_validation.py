@@ -21,6 +21,12 @@ def _write_suite2p_stat(tmp_path, *, ypix: object, xpix: object) -> None:
     np.save(tmp_path / "ops.npy", {"Ly": 4, "Lx": 5})
 
 
+def _object_array_token(value: object) -> np.ndarray:
+    array = np.empty((1,), dtype=object)
+    array[0] = value
+    return array
+
+
 @pytest.mark.parametrize(
     ("ypix", "xpix", "message"),
     [
@@ -42,6 +48,27 @@ def test_load_suite2p_plane_rejects_malformed_pixel_coordinates(
     _write_suite2p_stat(tmp_path, ypix=ypix, xpix=xpix)
 
     with pytest.raises(ValueError, match=message):
+        load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        bytearray(b"1"),
+        memoryview(b"1"),
+        np.asarray("1"),
+        np.asarray(b"1"),
+        np.asarray(True),
+        np.asarray([1]),
+    ],
+)
+def test_load_suite2p_plane_rejects_object_pixel_coordinate_tokens(
+    tmp_path,
+    token: object,
+) -> None:
+    _write_suite2p_stat(tmp_path, ypix=_object_array_token(token), xpix=[0])
+
+    with pytest.raises(ValueError, match="ypix.*finite integer pixel coordinates"):
         load_suite2p_plane(tmp_path, load_traces=False, load_spike_traces=False)
 
 

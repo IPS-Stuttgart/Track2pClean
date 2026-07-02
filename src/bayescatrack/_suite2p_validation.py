@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-_STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 
 def install_suite2p_stat_validation(bridge_module: Any) -> None:
@@ -243,6 +243,10 @@ def _validate_integer_pixel_coordinate_array(value: Any, *, name: str) -> np.nda
             f"Suite2p ROI {name} must contain finite integer pixel coordinates"
         ) from exc
 
+    if numeric.ndim != 1 or numeric.shape != array.shape:
+        raise ValueError(
+            f"Suite2p ROI {name} must contain finite integer pixel coordinates"
+        )
     if not np.all(np.isfinite(numeric)) or not np.all(numeric == np.floor(numeric)):
         raise ValueError(
             f"Suite2p ROI {name} must contain finite integer pixel coordinates"
@@ -255,7 +259,15 @@ def _contains_ambiguous_pixel_coordinate_tokens(array: np.ndarray) -> bool:
         return True
     if array.dtype != object:
         return False
-    return any(isinstance(item, (bool, np.bool_, str, bytes)) for item in array.ravel())
+    return any(_is_ambiguous_pixel_coordinate_token(item) for item in array.ravel())
+
+
+def _is_ambiguous_pixel_coordinate_token(value: Any) -> bool:
+    if isinstance(value, np.ndarray):
+        if value.shape != ():
+            return True
+        value = value.item()
+    return isinstance(value, (bool, np.bool_)) or _is_string_like_scalar(value)
 
 
 def _original_load_suite2p_plane() -> Callable[..., Any]:
