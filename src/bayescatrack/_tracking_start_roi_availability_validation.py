@@ -27,7 +27,7 @@ def install_tracking_start_roi_availability_validation() -> None:
     from . import tracking as _tracking  # pylint: disable=import-outside-toplevel
 
     original_run = _tracking.run_registered_subject_tracking
-    if getattr(original_run, _PATCH_MARKER, False):
+    if _function_chain_has_marker(original_run, _PATCH_MARKER):
         return
 
     @wraps(original_run)
@@ -66,6 +66,20 @@ def install_tracking_start_roi_availability_validation() -> None:
     _tracking.run_registered_subject_tracking = (
         run_registered_subject_tracking_with_start_roi_availability_validation
     )
+
+
+def _function_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 def _validate_start_roi_indices_available(
