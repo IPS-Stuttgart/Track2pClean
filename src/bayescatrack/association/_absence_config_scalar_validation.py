@@ -28,7 +28,7 @@ _NUMERIC_FIELDS = (
 )
 
 
-_TEXT_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_TEXT_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
 
 def install_absence_config_scalar_validation(absence_model: ModuleType) -> None:
