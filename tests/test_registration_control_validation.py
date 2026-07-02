@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import importlib
 from fractions import Fraction
 
+import bayescatrack
+import bayescatrack.registration as registration_module
 import numpy as np
 import pytest
 from bayescatrack.registration import register_measurement_plane_to_reference
@@ -44,3 +47,27 @@ def test_register_measurement_plane_rejects_invalid_registration_controls(
 ):
     with pytest.raises(ValueError, match=message):
         register_measurement_plane_to_reference(object(), object(), **kwargs)
+
+
+def _wrapper_marker_count(function, marker: str) -> int:
+    count = 0
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            raise AssertionError("cycle in registration wrapper chain")
+        seen.add(current_id)
+        if getattr(current, marker, False):
+            count += 1
+        current = getattr(current, "_bayescatrack_original", None)
+    return count
+
+
+def test_registration_control_wrappers_are_reload_idempotent():
+    importlib.reload(bayescatrack)
+    importlib.reload(bayescatrack)
+
+    method = registration_module.register_measurement_plane_to_reference
+    assert _wrapper_marker_count(method, "_bayescatrack_registration_control_validation_patch") == 1
+    assert _wrapper_marker_count(method, "_bayescatrack_registration_control_overflow_validation_patch") == 1
