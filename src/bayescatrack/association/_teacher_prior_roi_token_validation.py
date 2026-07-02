@@ -41,8 +41,12 @@ def install_teacher_prior_roi_token_validation() -> None:
         return original(value)
 
     setattr(_parse_roi_index_with_binary_buffer_guard, _PATCH_MARKER, True)
-    setattr(_parse_roi_index_with_binary_buffer_guard, "_bayescatrack_original", original)
-    module._parse_roi_index = _parse_roi_index_with_binary_buffer_guard  # pylint: disable=protected-access
+    setattr(
+        _parse_roi_index_with_binary_buffer_guard, "_bayescatrack_original", original
+    )
+    module._parse_roi_index = (
+        _parse_roi_index_with_binary_buffer_guard  # pylint: disable=protected-access
+    )
 
 
 __all__ = ["install_teacher_prior_roi_token_validation"]

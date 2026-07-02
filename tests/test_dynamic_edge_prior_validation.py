@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from importlib import reload as reload_module
 
+import bayescatrack.association as association
 import numpy as np
 import pytest
-import bayescatrack.association as association
 from bayescatrack.association import (
     _dynamic_edge_prior_validation as dynamic_edge_prior_validation,
 )
-from bayescatrack.association import dynamic_edge_priors
+from bayescatrack.association import (
+    dynamic_edge_priors,
+)
 from bayescatrack.association.dynamic_edge_priors import (
     DynamicEdgePriorConfig,
     apply_dynamic_edge_priors,

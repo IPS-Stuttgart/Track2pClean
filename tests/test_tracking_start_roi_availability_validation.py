@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from bayescatrack._tracking_start_roi_availability_validation import (
     _normalize_roi_index_sequence,
 )
