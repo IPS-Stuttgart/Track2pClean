@@ -1,11 +1,45 @@
 from __future__ import annotations
 
+from importlib import reload as reload_module
+
 import numpy as np
 import pytest
+import bayescatrack.association as association
+from bayescatrack.association import (
+    _dynamic_edge_prior_validation as dynamic_edge_prior_validation,
+)
+from bayescatrack.association import dynamic_edge_priors
 from bayescatrack.association.dynamic_edge_priors import (
     DynamicEdgePriorConfig,
     apply_dynamic_edge_priors,
 )
+
+
+def _session_gap_validation_wrapper_count() -> int:
+    marker = dynamic_edge_prior_validation._SESSION_GAP_PATCH_MARKER
+    original_attributes = (
+        dynamic_edge_prior_validation._SESSION_GAP_ORIGINAL_ATTR,
+        "_bayescatrack_original",
+    )
+    current = dynamic_edge_priors.apply_dynamic_edge_priors
+    seen: set[int] = set()
+    count = 0
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            break
+        if getattr(current, marker, False):
+            count += 1
+        seen.add(current_id)
+        current = next(
+            (
+                getattr(current, attribute_name)
+                for attribute_name in original_attributes
+                if getattr(current, attribute_name, None) is not None
+            ),
+            None,
+        )
+    return count
 
 
 def test_dynamic_edge_prior_rejects_nonfinite_edge_quality_bias():
@@ -101,3 +135,9 @@ def test_dynamic_edge_prior_session_gap_validation_keeps_numpy_scalar_offsets():
     )
 
     np.testing.assert_allclose(adjusted, np.asarray([[3.5, 4.5]], dtype=float))
+
+
+def test_dynamic_edge_prior_session_gap_validation_is_reload_idempotent():
+    reload_module(association)
+
+    assert _session_gap_validation_wrapper_count() == 1
