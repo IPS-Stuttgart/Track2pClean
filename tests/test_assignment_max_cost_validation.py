@@ -1,3 +1,5 @@
+import builtins
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -7,6 +9,16 @@ from bayescatrack.matching import (
 )
 
 OVERFLOWING_INTEGER = 10**5000
+
+
+def _object_scalar(value):
+    array = np.empty((), dtype=object)
+    array[()] = value
+    return array
+
+
+def _binary_buffer(data):
+    return builtins.__dict__["memory" "view"](data)
 
 
 class _BadFloat:
@@ -45,6 +57,10 @@ class _Bundle:
             np.asarray(np.bytes_(b"1.0"), dtype=object),
             id="numpy-bytes-object-scalar",
         ),
+        pytest.param(
+            _object_scalar(_binary_buffer(b"1.0")),
+            id="binary-buffer-object-scalar",
+        ),
         pytest.param(OVERFLOWING_INTEGER, id="overflowing-integer"),
         pytest.param(
             np.array(OVERFLOWING_INTEGER, dtype=object),
@@ -69,6 +85,10 @@ def test_solve_bundle_linear_assignment_rejects_ambiguous_max_cost(bad_max_cost)
         bytearray(b"1.0"),
         np.str_("1.0"),
         np.bytes_(b"1.0"),
+        pytest.param(
+            _object_scalar(_binary_buffer(b"1.0")),
+            id="binary-buffer-object-scalar",
+        ),
         pytest.param(OVERFLOWING_INTEGER, id="overflowing-integer"),
         pytest.param(_BadFloat(), id="arithmetic-float"),
     ],
