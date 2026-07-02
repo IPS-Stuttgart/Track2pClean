@@ -247,9 +247,16 @@ def _normalize_nonnegative_float(value: Any, error_message: str) -> float:
     if value_array.shape != ():
         raise ValueError(error_message)
 
+    scalar_value = value_array.item()
+    if isinstance(scalar_value, (bool, np.bool_)) or isinstance(
+        scalar_value,
+        _TEXT_OR_BYTES_LIKE_TYPES,
+    ):
+        raise ValueError(error_message)
+
     try:
-        numeric_value = float(value_array.item())
-    except (TypeError, ValueError) as exc:
+        numeric_value = float(scalar_value)
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(error_message) from exc
 
     if not np.isfinite(numeric_value) or numeric_value < 0.0:
