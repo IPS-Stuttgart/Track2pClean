@@ -23,11 +23,13 @@ def install_full_mht_sparse_source_index_alignment() -> None:
     """Install an idempotent source-index alignment guard for full-MHT matrices."""
 
     try:
-        from . import (  # pylint: disable=import-outside-toplevel
-            track2p_policy_full_mht_benchmark as _full_mht,
+        from . import (
+            track2p_policy_full_mht_benchmark as _full_mht,  # pylint: disable=import-outside-toplevel
         )
     except ImportError as exc:  # pragma: no cover - optional PyRecEst dependency
-        if "pyrecest" in str(exc).lower() or "track2p-policy-full-mht requires" in str(exc):
+        if "pyrecest" in str(exc).lower() or "track2p-policy-full-mht requires" in str(
+            exc
+        ):
             return
         raise
 
@@ -66,7 +68,9 @@ def install_full_mht_sparse_source_index_alignment() -> None:
             raise ValueError(
                 "Full-MHT sparse source ROI metadata does not match feature matrix rows"
             )
-        current_source_indices = np.asarray(matrices.source_indices, dtype=int).reshape(-1)
+        current_source_indices = np.asarray(matrices.source_indices, dtype=int).reshape(
+            -1
+        )
         if np.array_equal(current_source_indices, aligned_source_indices):
             return matrices
 
@@ -99,8 +103,7 @@ def _aligned_source_indices(
     source_rois: Sequence[int],
 ) -> np.ndarray:
     available = {
-        int(roi)
-        for roi in full_mht_module._roi_indices(sessions[int(source_session)])
+        int(roi) for roi in full_mht_module._roi_indices(sessions[int(source_session)])
     }
     return np.asarray(
         [int(roi) for roi in source_rois if int(roi) in available],

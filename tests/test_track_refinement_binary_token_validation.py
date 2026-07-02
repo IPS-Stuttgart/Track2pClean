@@ -21,7 +21,9 @@ def _object_track_rows_with(binary_token):
 
 
 @pytest.mark.parametrize("binary_token", [bytearray(b"1"), memoryview(b"1")])
-def test_smoothed_track_positions_rejects_binary_text_like_track_row_tokens(binary_token):
+def test_smoothed_track_positions_rejects_binary_text_like_track_row_tokens(
+    binary_token,
+):
     with pytest.raises(ValueError, match=_ERROR_MESSAGE):
         smoothed_track_positions(
             _object_track_rows_with(binary_token),

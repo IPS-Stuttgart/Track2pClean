@@ -11,7 +11,9 @@ def _object_array(values):
     return array
 
 
-def _write_suite2p_stat(plane_dir, lam: np.ndarray, *, coerce_lam_to_float: bool = True) -> None:
+def _write_suite2p_stat(
+    plane_dir, lam: np.ndarray, *, coerce_lam_to_float: bool = True
+) -> None:
     lam_values = np.asarray(lam, dtype=float) if coerce_lam_to_float else lam
     stat = np.asarray(
         [
