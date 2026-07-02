@@ -31,7 +31,7 @@ def install_tracking_duplicate_start_roi_validation() -> None:
     if _function_chain_has_marker(original_restrict, _PATCH_MARKER):
         return
 
-    @wraps(original_restrict)
+    @wraps(original_restrict, updated=())
     def restrict_track_rows_to_start_rois_without_duplicate_starts(
         track_rows: Any,
         *,
