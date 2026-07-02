@@ -276,7 +276,7 @@ def _install_fov_affine_choice_validation() -> None:
     original_image_warp = _fov_affine_registration.apply_affine_image_warp
     if not has_marker_in_wrapper_chain(original_image_warp, image_marker):
 
-        @_wraps(original_image_warp)
+        @_wraps(original_image_warp, updated=())
         def apply_affine_image_warp_with_choice_validation(
             image,
             matrix_xy,
@@ -304,7 +304,7 @@ def _install_fov_affine_choice_validation() -> None:
     original_mask_warp = _fov_affine_registration.apply_affine_roi_mask_warp
     if not has_marker_in_wrapper_chain(original_mask_warp, mask_marker):
 
-        @_wraps(original_mask_warp)
+        @_wraps(original_mask_warp, updated=())
         def apply_affine_roi_mask_warp_with_choice_validation(
             roi_masks,
             matrix_xy,

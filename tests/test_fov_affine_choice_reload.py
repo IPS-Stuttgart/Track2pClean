@@ -8,6 +8,8 @@ from bayescatrack import fov_affine_registration
 
 _IMAGE_CHOICE_MARKER = "_bayescatrack_fov_affine_image_choice_validation_patch"
 _MASK_CHOICE_MARKER = "_bayescatrack_fov_affine_mask_choice_validation_patch"
+_IMAGE_WARP_MARKER = "_bayescatrack_fov_affine_image_warp_validation_patch"
+_MASK_WARP_MARKER = "_bayescatrack_fov_affine_roi_mask_warp_validation_patch"
 
 
 def _count_marker_in_wrapper_chain(function, marker: str) -> int:
@@ -37,6 +39,20 @@ def test_fov_affine_choice_validation_remains_reload_idempotent():
         _count_marker_in_wrapper_chain(
             fov_affine_registration.apply_affine_roi_mask_warp,
             _MASK_CHOICE_MARKER,
+        )
+        == 1
+    )
+    assert (
+        _count_marker_in_wrapper_chain(
+            fov_affine_registration.apply_affine_image_warp,
+            _IMAGE_WARP_MARKER,
+        )
+        == 1
+    )
+    assert (
+        _count_marker_in_wrapper_chain(
+            fov_affine_registration.apply_affine_roi_mask_warp,
+            _MASK_WARP_MARKER,
         )
         == 1
     )
