@@ -17,7 +17,9 @@ def test_auto_registration_candidates_preserve_valid_tokens() -> None:
         ]
     )
 
-    config = track2p_benchmark._config_from_args(args)  # pylint: disable=protected-access
+    config = track2p_benchmark._config_from_args(
+        args
+    )  # pylint: disable=protected-access
 
     assert config.auto_registration_candidates == (
         "none",

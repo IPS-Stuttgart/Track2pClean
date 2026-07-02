@@ -56,8 +56,12 @@ def test_estimate_subpixel_fov_shift_rejects_text_like_refinement_radius(
 
 def test_register_measurement_plane_normalizes_float_conversion_overflow():
     reference_fov, measurement_fov = _shifted_fov_pair()
-    reference_plane = CalciumPlaneData((reference_fov > 0.0)[None, :, :], fov=reference_fov)
-    measurement_plane = CalciumPlaneData((measurement_fov > 0.0)[None, :, :], fov=measurement_fov)
+    reference_plane = CalciumPlaneData(
+        (reference_fov > 0.0)[None, :, :], fov=reference_fov
+    )
+    measurement_plane = CalciumPlaneData(
+        (measurement_fov > 0.0)[None, :, :], fov=measurement_fov
+    )
 
     with pytest.raises(ValueError, match="subpixel_refinement_radius"):
         register_measurement_plane_by_fov_translation(
@@ -83,8 +87,12 @@ def test_register_measurement_plane_rejects_text_like_subpixel_refinement_radius
     bad_radius,
 ):
     reference_fov, measurement_fov = _shifted_fov_pair()
-    reference_plane = CalciumPlaneData((reference_fov > 0.0)[None, :, :], fov=reference_fov)
-    measurement_plane = CalciumPlaneData((measurement_fov > 0.0)[None, :, :], fov=measurement_fov)
+    reference_plane = CalciumPlaneData(
+        (reference_fov > 0.0)[None, :, :], fov=reference_fov
+    )
+    measurement_plane = CalciumPlaneData(
+        (measurement_fov > 0.0)[None, :, :], fov=measurement_fov
+    )
 
     with pytest.raises(ValueError, match="subpixel_refinement_radius"):
         register_measurement_plane_by_fov_translation(

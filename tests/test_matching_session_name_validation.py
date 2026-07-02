@@ -18,7 +18,9 @@ _DUPLICATE_ERROR = "unique session names"
     "session_names",
     ["s0", memoryview(bytes([115, 48]))],
 )
-def test_build_track_rows_from_matches_rejects_bare_session_name_containers(session_names):
+def test_build_track_rows_from_matches_rejects_bare_session_name_containers(
+    session_names,
+):
     with pytest.raises(ValueError, match=_SEQUENCE_ERROR):
         build_track_rows_from_matches(
             session_names,
