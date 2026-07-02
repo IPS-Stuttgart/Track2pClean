@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-_TEXT_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
+_TEXT_SCALAR_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 _INDEX = getattr(operator, "index")
 _CONVERSION_ERRORS = (TypeError, ValueError, OverflowError, ArithmeticError)
 
