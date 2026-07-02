@@ -28,3 +28,20 @@ def test_reference_subset_ct_uses_same_seed_restricted_universe():
     assert scores["T_c"] == 1
     assert scores["T_gt"] == 1
     assert scores["ct"] == pytest.approx(1.0)
+
+
+def test_reference_complete_track_scoring_accepts_reference_keyword():
+    reference = Track2pReference(
+        session_names=("s0", "s1"),
+        suite2p_indices=np.array([[0, 10]], dtype=object),
+    )
+
+    scores = score_complete_tracks_against_reference(
+        predicted_suite2p_indices=np.array([[0, 10]], dtype=object),
+        reference=reference,
+    )
+
+    assert scores["T_rc"] == 1
+    assert scores["T_c"] == 1
+    assert scores["T_gt"] == 1
+    assert scores["ct"] == pytest.approx(1.0)
