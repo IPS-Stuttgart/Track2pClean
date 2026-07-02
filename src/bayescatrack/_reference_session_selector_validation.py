@@ -28,7 +28,7 @@ def install_reference_session_selector_validation(
     original_normalize_session_indices = (
         reference_module._normalize_session_indices
     )  # pylint: disable=protected-access
-    if getattr(original_normalize_session_indices, _PATCH_ATTR, False):
+    if _wrapper_chain_has_marker(original_normalize_session_indices, _PATCH_ATTR):
         return
 
     @wraps(original_normalize_session_indices)
@@ -49,6 +49,20 @@ def install_reference_session_selector_validation(
     reference_module._normalize_session_indices = (  # pylint: disable=protected-access
         _normalize_session_indices_with_selector_validation
     )
+
+
+def _wrapper_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = getattr(current, "_bayescatrack_original", None)
+    return False
 
 
 __all__ = ["install_reference_session_selector_validation"]
