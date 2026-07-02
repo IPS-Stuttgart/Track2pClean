@@ -108,7 +108,10 @@ def _contains_text_tokens(values: np.ndarray) -> bool:
         return True
     if values.dtype != object:
         return False
-    return any(isinstance(value, (str, bytes)) for value in values.ravel())
+    return any(
+        isinstance(value, (str, bytes, bytearray, memoryview))
+        for value in values.ravel()
+    )
 
 
 def _invalid_iscell_message(column_name: str) -> str:
