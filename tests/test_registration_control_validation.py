@@ -26,7 +26,10 @@ class _OverflowingIndex:
         ({"registration_max_iterations": True}, "registration_max_iterations"),
         ({"registration_max_iterations": 0}, "registration_max_iterations"),
         ({"registration_max_iterations": 1.5}, "registration_max_iterations"),
-        ({"registration_max_iterations": _OverflowingIndex()}, "registration_max_iterations"),
+        (
+            {"registration_max_iterations": _OverflowingIndex()},
+            "registration_max_iterations",
+        ),
         ({"registration_tolerance": True}, "registration_tolerance"),
         ({"registration_tolerance": -1.0}, "registration_tolerance"),
         ({"registration_tolerance": np.inf}, "registration_tolerance"),

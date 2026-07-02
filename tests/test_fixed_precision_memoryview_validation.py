@@ -4,7 +4,9 @@ from array import array
 
 import numpy as np
 import pytest
-from bayescatrack.evaluation.fixed_precision import score_complete_tracks_at_fixed_precision
+from bayescatrack.evaluation.fixed_precision import (
+    score_complete_tracks_at_fixed_precision,
+)
 
 
 def test_fixed_precision_rejects_memoryview_session_indices() -> None:

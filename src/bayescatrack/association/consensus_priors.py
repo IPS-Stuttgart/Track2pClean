@@ -137,7 +137,9 @@ def apply_consensus_edge_priors(
     cfg = consensus_prior_config_from_mapping(config) or ConsensusPriorConfig()
     adjusted: dict[SessionEdge, np.ndarray] = {}
     for edge, matrix in pairwise_costs.items():
-        session_edge = _normalize_forward_session_edge(edge, field_name="pairwise_costs")
+        session_edge = _normalize_forward_session_edge(
+            edge, field_name="pairwise_costs"
+        )
         adjusted[session_edge] = _normalize_pairwise_cost_matrix(
             matrix,
             session_edge,

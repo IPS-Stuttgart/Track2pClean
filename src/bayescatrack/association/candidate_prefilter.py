@@ -280,7 +280,9 @@ def _strict_bool(value: Any, *, name: str) -> bool:
 
 
 def _strict_float_scalar(value: Any, *, message: str) -> float:
-    if isinstance(value, (bool, np.bool_, str, bytes, bytearray, memoryview, np.ndarray)):
+    if isinstance(
+        value, (bool, np.bool_, str, bytes, bytearray, memoryview, np.ndarray)
+    ):
         raise ValueError(message)
     try:
         return float(value)
