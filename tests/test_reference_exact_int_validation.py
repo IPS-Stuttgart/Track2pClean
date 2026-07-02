@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -33,12 +35,48 @@ def test_reference_preserves_large_textual_decimal_roi_indices():
     )
 
 
+def test_reference_preserves_large_non_text_exact_roi_scalars():
+    first_roi = 2**53 + 1
+    second_roi = first_roi + 2
+
+    reference_obj = Track2pReference(
+        session_names=("day0", "day1"),
+        suite2p_indices=np.array(
+            [[Decimal(f"{first_roi}.0"), Fraction(second_roi, 1)]],
+            dtype=object,
+        ),
+    )
+
+    npt.assert_array_equal(
+        reference_obj.suite2p_indices,
+        np.array([[first_roi, second_roi]], dtype=object),
+    )
+    npt.assert_array_equal(
+        reference_obj.pairwise_matches(0, 1), np.array([[first_roi, second_roi]])
+    )
+
+
 def test_score_complete_tracks_preserves_large_textual_decimal_indices():
     first_roi = 2**53 + 1
     second_roi = first_roi + 2
 
     scores = score_complete_tracks(
         np.array([[f"{first_roi}.0", str(second_roi)]], dtype=object),
+        np.array([[first_roi, second_roi]], dtype=object),
+    )
+
+    assert scores["T_rc"] == 1
+    assert scores["T_c"] == 1
+    assert scores["T_gt"] == 1
+    assert scores["ct"] == 1.0
+
+
+def test_score_complete_tracks_preserves_large_non_text_decimal_indices():
+    first_roi = 2**53 + 1
+    second_roi = first_roi + 2
+
+    scores = score_complete_tracks(
+        np.array([[Decimal(f"{first_roi}.0"), Decimal(second_roi)]], dtype=object),
         np.array([[first_roi, second_roi]], dtype=object),
     )
 
@@ -55,6 +93,23 @@ def test_strict_reference_integer_scalar_rejects_textual_decimal_nan():
             name="fill_value",
             allow_negative=True,
             allow_string=True,
+        )
+
+
+def test_strict_reference_integer_scalar_rejects_non_text_fractional_exact_scalars():
+    with pytest.raises(ValueError, match="fill_value must be an integer scalar"):
+        reference._parse_integer_scalar(  # pylint: disable=protected-access
+            Decimal("1.5"),
+            name="fill_value",
+            allow_negative=True,
+            allow_string=False,
+        )
+    with pytest.raises(ValueError, match="fill_value must be an integer scalar"):
+        reference._parse_integer_scalar(  # pylint: disable=protected-access
+            Fraction(3, 2),
+            name="fill_value",
+            allow_negative=True,
+            allow_string=False,
         )
 
 
