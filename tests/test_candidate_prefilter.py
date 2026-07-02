@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import importlib
+
 import numpy as np
 import pytest
+import bayescatrack.association.candidate_prefilter as candidate_prefilter_module
+from bayescatrack._candidate_centroid_validation import install_candidate_centroid_validation
 from bayescatrack.association.candidate_prefilter import (
     CentroidCandidatePrefilterConfig,
     apply_candidate_mask,
@@ -130,3 +134,21 @@ def test_candidate_prefilter_rejects_invalid_shapes():
 
     with pytest.raises(ValueError, match="candidate_mask shape"):
         apply_candidate_mask(np.zeros((2, 2)), np.zeros((2, 3), dtype=bool))
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"max_distance": "1.0"}, "max_distance"),
+        ({"max_distance": b"1.0"}, "max_distance"),
+        ({"large_cost": "99.0"}, "large_cost"),
+        ({"large_cost": memoryview(b"99.0")}, "large_cost"),
+    ],
+)
+def test_base_candidate_prefilter_rejects_text_like_float_controls(kwargs, message):
+    reloaded = importlib.reload(candidate_prefilter_module)
+    try:
+        with pytest.raises(ValueError, match=message):
+            reloaded.CentroidCandidatePrefilterConfig(**kwargs)
+    finally:
+        install_candidate_centroid_validation(reloaded)
