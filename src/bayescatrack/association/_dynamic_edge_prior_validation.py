@@ -17,6 +17,7 @@ _SESSION_GAP_PATCH_MARKER = (
 _SESSION_GAP_ORIGINAL_ATTR = (
     "_bayescatrack_dynamic_edge_prior_session_gap_validation_original"
 )
+_ORIGINAL_CHAIN_ATTRS = (_SESSION_GAP_ORIGINAL_ATTR, "_bayescatrack_original")
 _BINARY_TEXT_LIKE_TYPES = (bytes, bytearray, memoryview, np.bytes_)
 _TEXT_OR_BINARY_LIKE_TYPES = (str, bytes, bytearray, memoryview, np.str_, np.bytes_)
 
@@ -70,7 +71,7 @@ def _install_config_numeric_validation() -> None:
 
 def _install_session_gap_binary_validation() -> None:
     original_apply = _dynamic_edge_priors.apply_dynamic_edge_priors
-    if getattr(original_apply, _SESSION_GAP_PATCH_MARKER, False):
+    if _function_chain_has_marker(original_apply, _SESSION_GAP_PATCH_MARKER):
         return
 
     @wraps(original_apply)
@@ -106,6 +107,28 @@ def _install_session_gap_binary_validation() -> None:
     _dynamic_edge_priors.apply_dynamic_edge_priors = (
         apply_dynamic_edge_priors_with_session_gap_validation
     )
+
+
+def _function_chain_has_marker(function: Any, marker: str) -> bool:
+    seen: set[int] = set()
+    current = function
+    while current is not None:
+        current_id = id(current)
+        if current_id in seen:
+            return False
+        if getattr(current, marker, False):
+            return True
+        seen.add(current_id)
+        current = _next_function_in_chain(current)
+    return False
+
+
+def _next_function_in_chain(function: Any) -> Any | None:
+    for attribute_name in _ORIGINAL_CHAIN_ATTRS:
+        original = getattr(function, attribute_name, None)
+        if original is not None:
+            return original
+    return None
 
 
 def _reject_ambiguous_numeric_value(value: Any, field_name: str) -> None:
