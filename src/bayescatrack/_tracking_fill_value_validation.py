@@ -27,7 +27,7 @@ def install_tracking_fill_value_validation() -> None:
     original_post_init = _tracking.SubjectTrackingResult.__post_init__
     if not _function_chain_has_marker(original_post_init, _PATCH_MARKER):
 
-        @wraps(original_post_init)
+        @wraps(original_post_init, updated=())
         def subject_tracking_result_post_init_with_fill_value_validation(
             self: Any,
         ) -> Any:
@@ -65,7 +65,7 @@ def _patch_fill_value_keyword_function(module: Any, name: str) -> None:
     if _function_chain_has_marker(original, _PATCH_MARKER):
         return
 
-    @wraps(original)
+    @wraps(original, updated=())
     def function_with_fill_value_validation(*args: Any, **kwargs: Any) -> Any:
         if "fill_value" in kwargs:
             kwargs = dict(kwargs)
