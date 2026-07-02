@@ -24,6 +24,10 @@ from bayescatrack.advanced_roi_components import (
             {"large_cost": np.asarray([1.0])},
             "large_cost must be a positive finite value",
         ),
+        (
+            {"large_cost": 10**10000},
+            "large_cost must be a positive finite value",
+        ),
     ],
 )
 def test_candidate_pruning_config_rejects_ambiguous_float_scalars(kwargs, message):
@@ -45,6 +49,10 @@ def test_candidate_pruning_config_rejects_ambiguous_float_scalars(kwargs, messag
         ),
         (
             {"large_cost": np.asarray([1.0])},
+            "large_cost must be a finite positive value",
+        ),
+        (
+            {"large_cost": 10**10000},
             "large_cost must be a finite positive value",
         ),
     ],

@@ -263,7 +263,7 @@ def _strict_float_scalar(value: Any, *, message: str) -> float:
         raise ValueError(message)
     try:
         return float(array.item())
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(message) from exc
 
 
