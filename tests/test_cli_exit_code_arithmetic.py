@@ -5,7 +5,6 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
-
 from bayescatrack._cli_exit_code_validation import _coerce_exit_code
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -75,14 +75,18 @@ def _score_against_seed_filtered_reference_if_needed(
     if not bound.arguments.get("restrict_to_reference_seed_rois", True):
         return original(*bound.args, **bound.kwargs)
 
-    from . import reference as reference_module  # pylint: disable=import-outside-toplevel
+    from . import (
+        reference as reference_module,  # pylint: disable=import-outside-toplevel
+    )
 
     reference_obj = bound.arguments["reference"]
     predicted_suite2p_indices = bound.arguments["predicted_suite2p_indices"]
     curated_only = bound.arguments.get("curated_only", False)
-    seed_session = reference_module._validate_session_index(  # pylint: disable=protected-access
-        bound.arguments.get("seed_session", 0),
-        reference_obj.n_sessions,
+    seed_session = (
+        reference_module._validate_session_index(  # pylint: disable=protected-access
+            bound.arguments.get("seed_session", 0),
+            reference_obj.n_sessions,
+        )
     )
     reference_indices = reference_obj.filtered_indices(curated_only=curated_only)
     seed_filtered_reference_indices = reference_module._filter_tracks_by_seed_rois(  # pylint: disable=protected-access

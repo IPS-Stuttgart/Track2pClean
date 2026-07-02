@@ -21,9 +21,15 @@ _ORIGINAL_ATTR = "_bayescatrack_prior_config_mapping_validation_original"
 def install_prior_config_mapping_validation() -> None:
     """Install idempotent mapping validation on remaining prior config helpers."""
 
-    from . import absence_model as _absence_model  # pylint: disable=import-outside-toplevel
-    from . import teacher_priors as _teacher_priors  # pylint: disable=import-outside-toplevel
-    from . import track2p_policy_priors as _track2p_policy_priors  # pylint: disable=import-outside-toplevel
+    from . import (
+        absence_model as _absence_model,  # pylint: disable=import-outside-toplevel
+    )
+    from . import (
+        teacher_priors as _teacher_priors,  # pylint: disable=import-outside-toplevel
+    )
+    from . import (
+        track2p_policy_priors as _track2p_policy_priors,  # pylint: disable=import-outside-toplevel
+    )
 
     _patch_config_normalizer(
         _absence_model,
