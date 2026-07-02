@@ -214,7 +214,7 @@ def _integer_value(
         raise ValueError(f"{name} must be {qualifier}")
     try:
         return int(operator.index(value))
-    except (TypeError, ValueError, OverflowError):
+    except (TypeError, ValueError, OverflowError, ArithmeticError):
         pass
     candidate: Any = value
     if isinstance(value, str):
@@ -223,7 +223,7 @@ def _integer_value(
             raise ValueError(f"{name} must be {qualifier}")
     try:
         numeric_value = float(candidate)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(f"{name} must be {qualifier}") from exc
     if not np.isfinite(numeric_value) or not numeric_value.is_integer():
         raise ValueError(f"{name} must be {qualifier}")
@@ -271,7 +271,7 @@ def _finite_float(
         raise ValueError(f"{name} must be a finite {qualifier} value")
     try:
         numeric_value = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError, ArithmeticError) as exc:
         raise ValueError(f"{name} must be a finite {qualifier} value") from exc
     violates_bound = (
         numeric_value <= lower_bound if positive else numeric_value < lower_bound
