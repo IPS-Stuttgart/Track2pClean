@@ -193,6 +193,8 @@ def test_estimate_fov_affine_transform_rejects_malformed_min_tile_size(
         np.nan,
         np.inf,
         "0.5",
+        np.array("0.5", dtype=object),
+        np.array(b"0.5", dtype=object),
         [0.5],
     ],
 )
