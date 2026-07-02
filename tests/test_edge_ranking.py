@@ -41,6 +41,17 @@ def test_rank_labeled_edges_reports_row_column_ranks_and_margins():
     assert second["column_margin"] == pytest.approx(-2.0)
 
 
+@pytest.mark.parametrize("invalid_label", [memoryview(b"0"), memoryview(b"1")])
+def test_rank_labeled_edges_rejects_memoryview_labels(invalid_label):
+    with pytest.raises(ValueError, match="labels must contain only 0/1 values"):
+        rank_labeled_edges(
+            [[invalid_label]],
+            {"cost": np.array([[0.0]])},
+            reference_roi_indices=np.array([7]),
+            measurement_roi_indices=np.array([8]),
+        )
+
+
 def test_rank_labeled_edges_supports_similarity_scores():
     labels = np.array([[1, 0, 0]])
     iou = np.array([[0.8, 0.6, 0.1]])
