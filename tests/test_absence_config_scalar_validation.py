@@ -5,6 +5,12 @@ import pytest
 from bayescatrack.association.absence_model import AbsenceModelConfig
 
 
+def _object_scalar(value: object) -> np.ndarray:
+    array = np.empty((), dtype=object)
+    array[()] = value
+    return array
+
+
 @pytest.mark.parametrize(
     "bad_value",
     (
@@ -14,6 +20,7 @@ from bayescatrack.association.absence_model import AbsenceModelConfig
         np.str_("1.0"),
         np.bytes_(b"1.0"),
         np.asarray("1.0"),
+        _object_scalar(memoryview(b"1.0")),
         [1.0],
         (1.0,),
         np.asarray([1.0], dtype=float),
