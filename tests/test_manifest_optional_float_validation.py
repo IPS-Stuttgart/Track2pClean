@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from bayescatrack.experiments import benchmark_manifest as bm
 from bayescatrack.experiments.benchmark_manifest import load_benchmark_manifest
 
@@ -43,8 +42,8 @@ def test_teacher_rescue_manifest_rejects_container_feature_gate_value(
     )
     run = load_benchmark_manifest(manifest_path).runs[0]
 
-    from bayescatrack.experiments import (  # pylint: disable=import-outside-toplevel
-        track2p_policy_teacher_adjacent_rescue as rescue_module,
+    from bayescatrack.experiments import (
+        track2p_policy_teacher_adjacent_rescue as rescue_module,  # pylint: disable=import-outside-toplevel
     )
 
     def _fake_runner(_config, **_kwargs):

@@ -5,7 +5,6 @@ import importlib
 import bayescatrack
 from bayescatrack import fov_affine_registration
 
-
 _IMAGE_CHOICE_MARKER = "_bayescatrack_fov_affine_image_choice_validation_patch"
 _MASK_CHOICE_MARKER = "_bayescatrack_fov_affine_mask_choice_validation_patch"
 

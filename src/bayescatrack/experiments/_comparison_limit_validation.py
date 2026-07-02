@@ -13,7 +13,10 @@ _MESSAGE = "limit must be a positive integer"
 def install_comparison_limit_validation() -> None:
     from . import benchmark_comparison as module
 
-    for name in ("build_subject_gap_summary_rows", "build_subject_deficit_summary_rows"):
+    for name in (
+        "build_subject_gap_summary_rows",
+        "build_subject_deficit_summary_rows",
+    ):
         original = getattr(module, name)
         if getattr(original, _MARKER, False):
             continue
