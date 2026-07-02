@@ -3,6 +3,7 @@
 # pylint: disable=duplicate-code
 
 from .._exports import BRIDGE_PUBLIC_NAMES
+from .. import _pairwise_return_components_validation as _pairwise_bool_validation
 from . import _association_bundle_bool_validation as _association_bundle_bool_validation
 from . import (
     _bridge_impl,
@@ -67,6 +68,7 @@ _local_evidence_roi_feature_short_circuit.install_roi_feature_zero_weight_short_
 _local_evidence_control_validation.install_local_evidence_control_validation(
     _bridge_impl.CalciumPlaneData
 )
+_pairwise_bool_validation.install_return_components_validation(_bridge_impl)
 _core_scalar_validation.install_core_scalar_validation_patches(
     _bridge_impl.CalciumPlaneData
 )
