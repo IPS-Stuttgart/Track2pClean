@@ -601,8 +601,14 @@ def save_tracking_result_npz(
         output_path,
         track_matrix=result.track_matrix,
         track_roi_index_matrix=result.track_roi_index_matrix,
-        session_names=np.asarray(result.session_names, dtype=object),
-        session_dates=np.asarray(result.session_dates, dtype=object),
+        session_names=np.asarray(result.session_names, dtype=np.str_),
+        session_dates=np.asarray(
+            [
+                "" if session_date is None else session_date
+                for session_date in result.session_dates
+            ],
+            dtype=np.str_,
+        ),
     )
     summary = result.summary()
     summary.update({"output_path": str(output_path)})
