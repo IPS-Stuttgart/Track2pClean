@@ -263,8 +263,18 @@ def _install_fov_affine_choice_validation() -> None:
             raise ValueError(error_message)
         return value
 
+    def has_marker_in_wrapper_chain(function, marker: str) -> bool:
+        seen: set[int] = set()
+        current = function
+        while current is not None and id(current) not in seen:
+            if getattr(current, marker, False):
+                return True
+            seen.add(id(current))
+            current = getattr(current, "_bayescatrack_original", None)
+        return False
+
     original_image_warp = _fov_affine_registration.apply_affine_image_warp
-    if not getattr(original_image_warp, image_marker, False):
+    if not has_marker_in_wrapper_chain(original_image_warp, image_marker):
 
         @_wraps(original_image_warp)
         def apply_affine_image_warp_with_choice_validation(
@@ -292,7 +302,7 @@ def _install_fov_affine_choice_validation() -> None:
         )
 
     original_mask_warp = _fov_affine_registration.apply_affine_roi_mask_warp
-    if not getattr(original_mask_warp, mask_marker, False):
+    if not has_marker_in_wrapper_chain(original_mask_warp, mask_marker):
 
         @_wraps(original_mask_warp)
         def apply_affine_roi_mask_warp_with_choice_validation(
