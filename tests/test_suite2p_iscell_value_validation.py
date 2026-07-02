@@ -19,6 +19,12 @@ def _write_minimal_suite2p_stat(plane_dir) -> None:
     np.save(plane_dir / "stat.npy", stat)
 
 
+def _object_array(values) -> np.ndarray:
+    array = np.empty(np.asarray(values, dtype=object).shape, dtype=object)
+    array[...] = values
+    return array
+
+
 @pytest.mark.parametrize(
     "iscell",
     [
@@ -26,6 +32,7 @@ def _write_minimal_suite2p_stat(plane_dir) -> None:
         np.asarray([[1.0, np.inf]], dtype=float),
         np.asarray([[1.0, 1.2]], dtype=float),
         np.asarray([["False", "0.9"]], dtype=object),
+        _object_array([[1.0, bytearray(b"1.0")]]),
     ],
 )
 def test_suite2p_loader_rejects_invalid_iscell_values(tmp_path, iscell):
