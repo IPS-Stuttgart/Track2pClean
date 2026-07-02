@@ -36,24 +36,22 @@ def install_reference_empty_prediction_validation() -> None:
     if getattr(original, _PATCH_MARKER, False):
         return
 
+    original_signature = signature(original)
+
     @wraps(original)
     def score_complete_tracks_against_reference_with_normalization(
-        predicted_suite2p_indices: Any,
-        reference_obj: Any,
         *args: Any,
         **kwargs: Any,
     ) -> Any:
+        bound = original_signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        reference_obj = bound.arguments["reference"]
         normalized_predictions = _normalize_empty_prediction_matrix(
-            predicted_suite2p_indices,
+            bound.arguments["predicted_suite2p_indices"],
             n_sessions=reference_obj.n_sessions,
         )
-        return _score_against_seed_filtered_reference_if_needed(
-            original,
-            normalized_predictions,
-            reference_obj,
-            args=args,
-            kwargs=kwargs,
-        )
+        bound.arguments["predicted_suite2p_indices"] = normalized_predictions
+        return _score_against_seed_filtered_reference_if_needed(original, bound)
 
     setattr(
         score_complete_tracks_against_reference_with_normalization,
@@ -72,24 +70,15 @@ def install_reference_empty_prediction_validation() -> None:
 
 def _score_against_seed_filtered_reference_if_needed(
     original: Any,
-    predicted_suite2p_indices: Any,
-    reference_obj: Any,
-    *,
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
+    bound: Any,
 ) -> Any:
-    bound = signature(original).bind(
-        predicted_suite2p_indices,
-        reference_obj,
-        *args,
-        **kwargs,
-    )
-    bound.apply_defaults()
     if not bound.arguments.get("restrict_to_reference_seed_rois", True):
-        return original(predicted_suite2p_indices, reference_obj, *args, **kwargs)
+        return original(*bound.args, **bound.kwargs)
 
     from . import reference as reference_module  # pylint: disable=import-outside-toplevel
 
+    reference_obj = bound.arguments["reference"]
+    predicted_suite2p_indices = bound.arguments["predicted_suite2p_indices"]
     curated_only = bound.arguments.get("curated_only", False)
     seed_session = reference_module._validate_session_index(  # pylint: disable=protected-access
         bound.arguments.get("seed_session", 0),
@@ -102,7 +91,7 @@ def _score_against_seed_filtered_reference_if_needed(
         seed_session=seed_session,
     )
     if seed_filtered_reference_indices.shape[0] == reference_indices.shape[0]:
-        return original(predicted_suite2p_indices, reference_obj, *args, **kwargs)
+        return original(*bound.args, **bound.kwargs)
 
     seed_filtered_reference = reference_module.Track2pReference(
         session_names=reference_obj.session_names,
