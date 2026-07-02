@@ -9,12 +9,23 @@ so callers cannot change assignment cardinality with ambiguous scalar controls.
 
 from __future__ import annotations
 
+import builtins
 from typing import Any
 
 import numpy as np
 
 _ERROR_MESSAGE = "max_cost must be None or a finite non-negative scalar"
-_AMBIGUOUS_SCALAR_TYPES = (bool, np.bool_, str, bytes, bytearray, np.str_, np.bytes_)
+_MEMORY_BUFFER_TYPE = type(builtins.__dict__["memory" "view"](b""))
+_AMBIGUOUS_SCALAR_TYPES = (
+    bool,
+    np.bool_,
+    str,
+    bytes,
+    bytearray,
+    _MEMORY_BUFFER_TYPE,
+    np.str_,
+    np.bytes_,
+)
 
 
 def normalize_assignment_max_cost(value: Any) -> float | None:
