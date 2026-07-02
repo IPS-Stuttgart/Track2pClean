@@ -68,6 +68,8 @@ def test_estimator_rejects_invalid_min_tile_size(min_tile_size):
         float("nan"),
         float("inf"),
         "0.5",
+        np.array("0.5"),
+        np.array(b"0.5"),
         [0.5],
     ],
 )

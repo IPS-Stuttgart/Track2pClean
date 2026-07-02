@@ -17,6 +17,7 @@ _LOW_INFORMATION_FOV_MESSAGES = (
     "constant or empty FOV images",
     "spatial variation for phase-correlation registration",
 )
+_STRING_LIKE_SCALAR_TYPES = (str, bytes, bytearray, np.str_, np.bytes_)
 _IDENTITY_AFFINE_XY = np.asarray(
     [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
     dtype=float,
@@ -144,7 +145,7 @@ def _normalize_positive_int(value: Any, error_message: str) -> int:
 
 
 def _normalize_nonnegative_float(value: Any) -> float:
-    if isinstance(value, (bool, np.bool_, str, bytes)):
+    if isinstance(value, (bool, np.bool_, *_STRING_LIKE_SCALAR_TYPES)):
         raise ValueError(_MAX_SHIFT_FRACTION_ERROR)
     try:
         array = np.asarray(value, dtype=object)
@@ -152,8 +153,11 @@ def _normalize_nonnegative_float(value: Any) -> float:
         raise ValueError(_MAX_SHIFT_FRACTION_ERROR) from exc
     if array.shape != ():
         raise ValueError(_MAX_SHIFT_FRACTION_ERROR)
+    scalar = array.item()
+    if isinstance(scalar, (bool, np.bool_, *_STRING_LIKE_SCALAR_TYPES)):
+        raise ValueError(_MAX_SHIFT_FRACTION_ERROR)
     try:
-        result = float(array.item())
+        result = float(scalar)
     except (TypeError, ValueError) as exc:
         raise ValueError(_MAX_SHIFT_FRACTION_ERROR) from exc
     if not np.isfinite(result) or result < 0.0:
