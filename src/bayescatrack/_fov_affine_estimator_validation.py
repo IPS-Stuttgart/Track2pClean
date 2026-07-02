@@ -13,6 +13,7 @@ _SUBTRACT_MEAN_ERROR = "subtract_mean must be a boolean"
 _GRID_SHAPE_ERROR = "grid_shape must contain exactly two positive integer dimensions"
 _MIN_TILE_SIZE_ERROR = "min_tile_size must be a positive integer"
 _MAX_SHIFT_FRACTION_ERROR = "max_shift_fraction must be a finite non-negative scalar"
+_BINARY_GRID_SHAPE_TYPES = (bytes, bytearray, memoryview, str)
 _LOW_INFORMATION_FOV_MESSAGES = (
     "constant or empty FOV images",
     "spatial variation for phase-correlation registration",
@@ -112,7 +113,7 @@ def _normalize_bool(value: Any, error_message: str) -> bool:
 
 
 def _normalize_grid_shape(value: Any) -> tuple[int, int]:
-    if isinstance(value, (str, bytes)):
+    if isinstance(value, _BINARY_GRID_SHAPE_TYPES):
         raise ValueError(_GRID_SHAPE_ERROR)
     try:
         values = np.asarray(value, dtype=object).reshape(-1)

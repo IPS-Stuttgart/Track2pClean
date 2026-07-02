@@ -43,6 +43,8 @@ def test_estimator_accepts_numpy_bool_subtract_mean():
         (2.5, 3),
         (3,),
         "3,3",
+        bytearray(b"\x03\x03"),
+        memoryview(b"\x03\x03"),
     ],
 )
 def test_estimator_rejects_invalid_grid_shape(grid_shape):
